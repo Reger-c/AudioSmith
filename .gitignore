@@ -1,0 +1,9 @@
+/build/
+/.mygo/
+mygo_windows_*.syso
+.DS_Store
+
+# Swift engine: build output, and the staged copy mygo ships (scripts/build-engine.sh)
+/engine/.build/
+/engine/.swiftpm/
+/resources/darwin-arm64/engine/
