@@ -83,7 +83,7 @@ func (a *app) voicesPage(c *ui.Context) {
 func (a *app) voicesToolbar(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Padding(px(t, 12), px(t, 20), px(t, 4)).Children(func() {
-		ui.TextInput(c.Key("voices-search"), &a.voiceQuery).Placeholder(i18n.T("Search voices")).Label(i18n.T("Search voices")).Grow(1).MaxWidth(px(t, 320))
+		ui.TextInput(c.Key("voices-search"), &a.voiceQuery).Placeholder(i18n.T("Search voices")).Label(i18n.T("Search voices")).Grow(1).MinWidth(px(t, 140)).MaxWidth(px(t, 320))
 		ui.Segmented(c.Key("voices-kind"), &a.voiceKind, i18n.T("All"), i18n.T("Cloned"), i18n.T("Designed")).Label(i18n.T("Kind"))
 		ui.Box(c).Grow(1)
 		ui.Text(c, i18n.N(len(a.voices), "%d voice", "%d voices", len(a.voices))).FontSize(px(t, 12)).TextColor(t.TextMuted)

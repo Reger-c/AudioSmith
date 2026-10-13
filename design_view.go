@@ -286,6 +286,7 @@ func (a *app) designTarget(c *ui.Context) {
 func (a *app) designScript(c *ui.Context) {
 	t := c.Theme()
 	d := &a.design
+	ui.Text(c, i18n.T("Script")).Bold()
 	ui.TextArea(c.Key("design-script"), &d.script).Lines(3, 8).Placeholder(i18n.T("What should this voice say?")).Label(i18n.T("Script"))
 	j := a.voiceJob("design", "")
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {

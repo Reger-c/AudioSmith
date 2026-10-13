@@ -232,20 +232,20 @@ func (a *app) voiceEditor(c *ui.Context) {
 // editorAudio plays the voice's reference or sample, and replaces it.
 func (a *app) editorAudio(c *ui.Context, v *core.Voice) {
 	t := c.Theme()
-	ui.Row(c.Key("editor-audio")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		what := i18n.T("Reference clip")
-		switch {
-		case v.Locked && v.Sample != "":
-			what = i18n.T("Locked take")
-		case v.Kind == core.VoiceDesigned && v.Sample != "":
-			what = i18n.T("Voice sample")
-		case v.Kind == core.VoiceDesigned:
-			what = i18n.T("No sample yet")
-		}
-		if v.Kind == core.VoiceCloned && !v.Locked && v.RefSeconds > 0 {
-			what += " · " + i18n.T("%.1f s", v.RefSeconds)
-		}
-		ui.Text(c, what).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
+	what := i18n.T("Reference clip")
+	switch {
+	case v.Locked && v.Sample != "":
+		what = i18n.T("Locked take")
+	case v.Kind == core.VoiceDesigned && v.Sample != "":
+		what = i18n.T("Voice sample")
+	case v.Kind == core.VoiceDesigned:
+		what = i18n.T("No sample yet")
+	}
+	if v.Kind == core.VoiceCloned && !v.Locked && v.RefSeconds > 0 {
+		what += " · " + i18n.T("%.1f s", v.RefSeconds)
+	}
+	ui.Text(c, what).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	ui.Row(c.Key("editor-audio")).Gap(px(t, 8)).AlignItems(ui.Center).Wrap().Children(func() {
 		if j := a.voiceJob("sample", v.ID); j.running() {
 			ui.Spinner(c)
 			ui.Text(c, j.status).FontSize(px(t, 12))
@@ -331,8 +331,8 @@ func (a *app) editorTry(c *ui.Context, v *core.Voice) {
 		}
 		ui.Column(c).Gap(px(t, 8)).Children(func() {
 			ui.TextArea(c.Key("try-text"), &e.tryText).Lines(2, 4).Label(i18n.T("Test phrase"))
-			ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-				ui.Select(c.Key("try-model"), &e.tryModel, labels).Label(i18n.T("Model")).Grow(1)
+			ui.Select(c.Key("try-model"), &e.tryModel, labels).Label(i18n.T("Model"))
+			ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Justify(ui.End).Children(func() {
 				j := a.voiceJob("try", v.ID)
 				if ui.PrimaryButton(c.Key("try-go"), i18n.T("Generate preview")).Disabled(j.running() || strings.TrimSpace(e.tryText) == "").Clicked() {
 					a.tryVoice(v.ID)
@@ -416,9 +416,11 @@ func (a *app) editorConsent(c *ui.Context, v *core.Voice) {
 			case v.Verified():
 				ui.Text(c, i18n.T("You recorded the consent statement on %s.", i18n.Date(v.Consent.At))).FontSize(px(t, 12))
 				ui.Text(c, "“"+v.Consent.Statement+"”").FontSize(px(t, 12)).TextColor(t.TextMuted)
-				if ui.Button(c.Key("consent-revoke"), i18n.T("Revoke")).Clicked() {
-					e.revokeOpen = true
-				}
+				ui.Row(c).Children(func() {
+					if ui.Button(c.Key("consent-revoke"), i18n.T("Revoke")).Clicked() {
+						e.revokeOpen = true
+					}
+				})
 				return
 			case v.Consent.State == core.ConsentIncluded:
 				ui.Text(c, i18n.T("The imported file says the speaker consented. Record the statement yourself to verify the voice here.")).
@@ -457,8 +459,12 @@ func (a *app) editorUsage(c *ui.Context, v *core.Voice) {
 		for _, p := range u.Projects {
 			ui.Text(c, p.Title+" · "+i18n.N(p.Segments, "%d segment", "%d segments", p.Segments)).FontSize(px(t, 12))
 		}
-		if u.Takes > 0 && ui.Button(c.Key("usage-history"), i18n.T("Show in History")).Clicked() {
-			a.navigate("/history")
+		if u.Takes > 0 {
+			ui.Row(c).Children(func() {
+				if ui.Button(c.Key("usage-history"), i18n.T("Show in History")).Clicked() {
+					a.navigate("/history")
+				}
+			})
 		}
 	})
 }
@@ -486,9 +492,11 @@ func (a *app) editorExport(c *ui.Context, v *core.Voice) {
 			if note := ncNote(v); note != "" {
 				ui.Text(c, note).FontSize(px(t, 12)).TextColor(t.Warning)
 			}
-			if ui.Button(c.Key("export-go"), i18n.T("Export…")).Clicked() {
-				a.exportVoice(v.ID, e.exportRef && v.Kind == core.VoiceCloned, e.exportLicence)
-			}
+			ui.Row(c).Children(func() {
+				if ui.Button(c.Key("export-go"), i18n.T("Export…")).Clicked() {
+					a.exportVoice(v.ID, e.exportRef && v.Kind == core.VoiceCloned, e.exportLicence)
+				}
+			})
 		})
 	})
 }

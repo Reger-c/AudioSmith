@@ -275,10 +275,26 @@ func TestCloneRules(t *testing.T) {
 	if w := bestWindow([]span{{1, 2}}, 9, 15); w != (span{0, 9}) {
 		t.Errorf("short %v", w)
 	}
-	// A word straddling the end is left out.
+	// The most speech wins…
 	w := bestWindow([]span{{2, 9}, {10, 20}}, 40, 15)
-	if w.Start < 1.89 || w.Start > 1.91 || w.End != 10 {
-		t.Errorf("straddle %v", w)
+	if w.Start < 9.89 || w.Start > 9.91 || w.End < 24.89 || w.End > 24.91 {
+		t.Errorf("most speech %v", w)
+	}
+	// …and a word straddling the end is left out.
+	for _, speech := range [][]span{
+		{{0.5, 3}, {4, 11}, {11.6, 19}, {20, 27}, {28, 31}},
+		{{1, 8}, {8.5, 12}, {12.5, 19}},
+		{{2, 6}, {7, 13}, {14, 18}, {30, 33}},
+	} {
+		w := bestWindow(speech, 40, 15)
+		if w.Len() > 15.0001 || w.Len() < 5 {
+			t.Errorf("%v: length %v", speech, w)
+		}
+		for _, s := range speech {
+			if s.Start < w.End && s.End > w.End && s.Start-w.Start >= refIdealLow {
+				t.Errorf("%v: %v cuts %v", speech, w, s)
+			}
+		}
 	}
 
 	a, eng := newVoiceTestApp(t)

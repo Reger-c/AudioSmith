@@ -49,11 +49,15 @@ func (d *designState) speechLang() string {
 	return firstOf(d.language, d.attrs.Language(), vd.TextLang(d.script))
 }
 
-// reparse maps a changed description. A pick the user made in a category
-// holds until the description changes what it says about that category.
-func (d *designState) reparse() []vd.Cleared {
+// reparse maps a changed description (capped at vd.MaxDescription
+// characters). A pick the user made in a category holds until the
+// description changes what it says about that category.
+func (d *designState) reparse() {
+	if r := []rune(d.description); len(r) > vd.MaxDescription {
+		d.description = string(r[:vd.MaxDescription])
+	}
 	if d.description == d.parsedFor {
-		return nil
+		return
 	}
 	old := d.parsed.Attrs
 	d.parsed, d.parsedFor = vd.Parse(d.description), d.description
@@ -73,7 +77,6 @@ func (d *designState) reparse() []vd.Cleared {
 		merged = now
 	}
 	d.attrs = merged.Canonical()
-	return nil
 }
 
 // pick sets a category's value ("" = Auto) and returns what it cleared.

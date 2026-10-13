@@ -404,29 +404,32 @@ func refAdvice(seconds float64, transcript bool) (string, string) {
 }
 
 // bestWindow picks the stretch of at most maxLen seconds with the most
-// speech in it: it starts just before a stretch of speech and, when a
-// word would be cut at its end, ends before that word. Clips no longer
-// than maxLen are kept whole.
+// speech in it. Windows start just before a stretch of speech and, when a
+// word would be cut at their end, end before that word; they are compared
+// after that. Clips no longer than maxLen are kept whole.
 func bestWindow(speech []span, total, maxLen float64) span {
 	if total <= maxLen {
 		return span{0, total}
 	}
-	best := span{0, maxLen}
-	bestSpeech := speechIn(speech, best)
-	for _, s := range speech {
-		start := max(0, s.Start-0.1)
+	window := func(start float64) span {
 		w := span{start, min(start+maxLen, total)}
 		if w.Len() < maxLen {
 			w.Start = max(0, w.End-maxLen)
 		}
+		for _, s := range speech {
+			if s.Start < w.End && s.End > w.End && s.Start-w.Start >= refIdealLow {
+				w.End = s.Start
+				break
+			}
+		}
+		return w
+	}
+	best := window(0)
+	bestSpeech := speechIn(speech, best)
+	for _, s := range speech {
+		w := window(max(0, s.Start-0.1))
 		if v := speechIn(speech, w); v > bestSpeech+1e-9 {
 			best, bestSpeech = w, v
-		}
-	}
-	for _, s := range speech {
-		if s.Start < best.End && s.End > best.End && s.Start-best.Start >= refIdealLow {
-			best.End = s.Start
-			break
 		}
 	}
 	return best

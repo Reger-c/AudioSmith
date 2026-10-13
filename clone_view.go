@@ -2,7 +2,9 @@ package main
 
 import (
 	"slices"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/gallery"
@@ -296,23 +298,22 @@ func (a *app) cloneDetails(c *ui.Context) {
 	})
 }
 
-// styleField is a style hint input with the presets' hints as chips.
+// styleField is a style hint input, with the presets' hints in a menu.
 func (a *app) styleField(c *ui.Context, key string, style *string) {
 	t := c.Theme()
 	ui.Field(c, i18n.T("Style"), func() {
-		ui.TextInput(c.Key(key), style).Placeholder(i18n.T("e.g. whisper, or calm and slow")).Label(i18n.T("Style"))
-	})
-	ui.Row(c.Key(key+"-presets")).Gap(px(t, 6)).Wrap().Children(func() {
-		loc := i18n.Locale()
-		for _, p := range gallery.Presets() {
-			hint := p.StyleHint.In(loc)
-			if hint == "" {
-				continue
-			}
-			if ui.Button(c.Key(key+"-"+p.ID), p.Name.In(loc)).Tooltip(hint).Clicked() {
-				*style = hint
-			}
-		}
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			ui.TextInput(c.Key(key), style).Placeholder(i18n.T("e.g. whisper, or calm and slow")).Label(i18n.T("Style")).Grow(1)
+			loc := i18n.Locale()
+			ui.MenuButton(c.Key(key+"-presets"), i18n.T("Presets"), func(m *ui.Menu) {
+				for _, p := range gallery.Presets() {
+					hint := p.StyleHint.In(loc)
+					if hint != "" && m.Item(p.Name.In(loc)+" — "+hint).Checked(*style == hint).Chosen() {
+						*style = hint
+					}
+				}
+			}).Label(i18n.T("Style presets"))
+		})
 	})
 }
 
@@ -376,10 +377,35 @@ func (a *app) portraitPicker(c *ui.Context, key, name string, bmp *ui.Bitmap, us
 			name = "?"
 		}
 		b.Children(func() {
-			ui.Avatar(c, name, bmp).Size(px(t, 64), px(t, 64))
+			if bmp != nil {
+				ui.Image(c, bmp).Size(px(t, 64), px(t, 64)).Fit(ui.Cover).Radius(px(t, 32))
+			} else {
+				ui.Column(c).Size(px(t, 64), px(t, 64)).Radius(px(t, 32)).Background(t.SurfaceHover).Border(1, t.Border).Center().Children(func() {
+					ui.Text(c, initials(name)).FontSize(px(t, 20)).Bold().TextColor(t.TextMuted)
+				})
+			}
 		})
-		if bmp != nil && ui.Button(c.Key(key+"-remove"), i18n.T("Remove photo")).Clicked() {
+		if bmp != nil && ui.Button(c.Key(key+"-remove"), i18n.T("Remove")).FontSize(px(t, 11)).Tooltip(i18n.T("Remove photo")).Clicked() {
 			remove()
 		}
 	})
+}
+
+// initials are up to two letters of a name, for a portrait placeholder.
+func initials(name string) string {
+	var out []rune
+	for _, w := range strings.Fields(name) {
+		r := []rune(w)
+		if len(r) == 0 {
+			continue
+		}
+		out = append(out, unicode.ToUpper(r[0]))
+		if len(out) == 2 || r[0] > 0x2E80 { // one CJK character is enough
+			break
+		}
+	}
+	if len(out) == 0 {
+		return "?"
+	}
+	return string(out)
 }
