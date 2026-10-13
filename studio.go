@@ -1,11 +1,14 @@
 package main
 
-// The Studio's form and its actions. Thread A moves generation onto
-// core.TakeService (a job per take) and drafts; until then generate builds
-// the take's recipe and the protocol-1 request and hands both to the
-// engine link (enginelink.go).
+// The Studio's form and its actions. The form autosaves as a draft
+// (core.DraftService, key "studio") and comes back at the next start.
+// Until generation runs on jobs (integration step I1: TakeService.Generate)
+// generate builds the take's recipe and the protocol-1 request and hands
+// both to the engine link (enginelink.go).
 
 import (
+	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,7 +17,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/i18n"
-	"github.com/hehehai/AudioSmith/internal/store/historyjson"
 )
 
 // studioState is the Studio form.
@@ -32,11 +34,14 @@ type studioState struct {
 	refAudio      string
 	refText       string
 	autoplay      bool
+
+	// savedDraft is the form as last handed to the draft service (or restored).
+	savedDraft studioDraft
 }
 
 func newStudioState() studioState {
 	first := catalog.Builtin().ForTask(catalog.TaskTTS)[0]
-	return studioState{
+	s := studioState{
 		modelLabel:    first.Label,
 		voice:         first.VoiceIDs()[0],
 		speed:         1,
@@ -47,6 +52,81 @@ func newStudioState() studioState {
 		autoplay:      true,
 		text:          "Hello from AudioSmith. This voice was generated on your Mac with MLX.",
 	}
+	s.savedDraft = s.toDraft()
+	return s
+}
+
+// studioDraft is the Studio form as saved between runs.
+type studioDraft struct {
+	Version       int     `json:"version"`
+	Text          string  `json:"text"`
+	ModelLabel    string  `json:"modelLabel"`
+	CustomRepo    string  `json:"customRepo,omitempty"`
+	Voice         string  `json:"voice"`
+	Language      string  `json:"language"`
+	Speed         float64 `json:"speed"`
+	ModelDefaults bool    `json:"modelDefaults"`
+	Temperature   float64 `json:"temperature"`
+	TopP          float64 `json:"topP"`
+	MaxTokens     float64 `json:"maxTokens"`
+	RefAudio      string  `json:"refAudio,omitempty"`
+	RefText       string  `json:"refText,omitempty"`
+	Autoplay      bool    `json:"autoplay"`
+}
+
+const studioDraftKey = "studio"
+
+func (s *studioState) toDraft() studioDraft {
+	return studioDraft{Version: 1, Text: s.text, ModelLabel: s.modelLabel, CustomRepo: s.customRepo,
+		Voice: s.voice, Language: s.language, Speed: s.speed, ModelDefaults: s.modelDefaults,
+		Temperature: s.temperature, TopP: s.topP, MaxTokens: s.maxTokens,
+		RefAudio: s.refAudio, RefText: s.refText, Autoplay: s.autoplay}
+}
+
+// applyDraft restores a draft, ignoring a model the catalogue no longer has.
+func (s *studioState) applyDraft(d studioDraft) {
+	if d.ModelLabel != catalog.CustomLabel && !slices.Contains(catalog.Builtin().Labels(catalog.TaskTTS), d.ModelLabel) {
+		return
+	}
+	s.text, s.modelLabel, s.customRepo = d.Text, d.ModelLabel, d.CustomRepo
+	s.voice, s.language = d.Voice, d.Language
+	if d.Speed > 0 {
+		s.speed = d.Speed
+	}
+	s.modelDefaults = d.ModelDefaults
+	if d.Temperature > 0 || d.TopP > 0 || d.MaxTokens > 0 {
+		s.temperature, s.topP, s.maxTokens = d.Temperature, d.TopP, d.MaxTokens
+	}
+	s.refAudio, s.refText, s.autoplay = d.RefAudio, d.RefText, d.Autoplay
+	s.savedDraft = s.toDraft()
+}
+
+// autosaveStudio hands the form to the draft service when it changed
+// since the last call. The service only remembers it here; it writes
+// after a pause in editing, on its own goroutine.
+func (a *app) autosaveStudio() {
+	if d := a.toDraft(); d != a.savedDraft {
+		a.savedDraft = d
+		a.lib.svc.Drafts.Save(studioDraftKey, d)
+	}
+}
+
+// restoreStudioDraft loads the saved form in the background and applies
+// it unless the form was edited meanwhile.
+func (a *app) restoreStudioDraft() {
+	drafts := a.lib.svc.Drafts
+	a.background(func() {
+		var d studioDraft
+		ok, err := drafts.Load(context.Background(), studioDraftKey, &d)
+		if err != nil || !ok {
+			return
+		}
+		a.post(func() {
+			if a.toDraft() == a.savedDraft {
+				a.applyDraft(d)
+			}
+		})
+	})
 }
 
 // preset is the catalogue entry the form has chosen.
@@ -81,7 +161,7 @@ func (a *app) generate() {
 	p := a.preset()
 	now := time.Now()
 	t := &core.Take{
-		ID:        historyjson.NewTakeID(now),
+		ID:        core.NewID(now),
 		CreatedAt: now,
 		Text:      strings.TrimSpace(a.text),
 		Model:     p.Repo,

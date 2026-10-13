@@ -1,8 +1,9 @@
 package main
 
 // Test helpers shared by the view tests: a fake protocol-1 engine, a test
-// app over a temporary history, and a WAV writer. Thread A owns this file;
-// B and C add their fakes in files of their own.
+// app over a temporary library (SQLite store + services), and a WAV
+// writer. Thread A owns this file; B and C add their fakes in files of
+// their own.
 
 import (
 	"context"
@@ -15,7 +16,6 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine"
-	"github.com/hehehai/AudioSmith/internal/store/historyjson"
 )
 
 // fakeEngine records requests instead of running audiosmith-engine.
@@ -43,28 +43,46 @@ func (f *fakeEngine) last(t *testing.T) engine.Request {
 	return f.sent[len(f.sent)-1]
 }
 
-func newTestApp(t *testing.T) (*app, *fakeEngine, *ui.Tester) {
+// openTestLibrary opens a library in a temporary directory, closed when
+// the test ends. dir may be "" for a new one.
+func openTestLibrary(t *testing.T, dir ...string) *library {
 	t.Helper()
-	lib, err := historyjson.Open(t.TempDir())
+	d := t.TempDir()
+	if len(dir) > 0 {
+		d = dir[0]
+	}
+	lib, err := openLibrary(d, filepath.Join(d, "cache"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(lib.close)
+	return lib
+}
+
+func newTestApp(t *testing.T) (*app, *fakeEngine, *ui.Tester) {
+	t.Helper()
+	return newTestAppWith(t, openTestLibrary(t))
+}
+
+func newTestAppWith(t *testing.T, lib *library) (*app, *fakeEngine, *ui.Tester) {
+	t.Helper()
 	eng := &fakeEngine{}
 	a := newApp(eng, lib)
 	a.autoplay = false
 	a.handleEvent(engine.Event{Event: "ready", Version: "test", PID: 42})
+	t.Cleanup(a.pl.Stop)
 	return a, eng, ui.NewTester(a.view, 1100, 720)
 }
 
-// addTake stores a take with a test WAV, as a finished generation would.
+// addTake stores a take with a test WAV, as a finished generation would;
+// the snapshot follows from the TakeCreated event.
 func addTake(t *testing.T, a *app, take core.Take, seconds float64) {
 	t.Helper()
 	take.File = take.ID + ".wav"
 	writeTestWAV(t, a.takeStore.AudioPath(take), 24000, seconds)
-	if err := a.takeStore.Put(context.Background(), take); err != nil {
+	if _, err := a.lib.svc.Takes.Add(context.Background(), take); err != nil {
 		t.Fatal(err)
 	}
-	a.reloadTakes()
 }
 
 // writeTestWAV writes a mono 16-bit sine, as the engine would write a take.

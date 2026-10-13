@@ -9,7 +9,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/audio"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/engine"
-	"github.com/hehehai/AudioSmith/internal/store/historyjson"
 )
 
 // TestEndToEnd drives the real audiosmith-engine through the app's state:
@@ -26,10 +25,7 @@ func TestEndToEnd(t *testing.T) {
 	if enginePath == "" {
 		t.Fatal("no engine: run scripts/build-engine.sh")
 	}
-	lib, err := historyjson.Open(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	lib := openTestLibrary(t)
 	events := make(chan func(), 64)
 	eng := &engine.Process{Bin: enginePath, LogPath: filepath.Join(t.TempDir(), "engine.log")}
 	a := newApp(eng, lib)

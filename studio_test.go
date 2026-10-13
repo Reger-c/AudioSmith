@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine"
-	"github.com/hehehai/AudioSmith/internal/store/historyjson"
 )
 
 // kokoro is the first catalogue entry, which the Studio starts on.
@@ -77,10 +81,13 @@ func TestGenerateTake(t *testing.T) {
 		t.Errorf("loaded model %q", a.loadedModel)
 	}
 
-	// The history survives a restart.
-	takes, err := historyjson.Read(a.takeStore.(*historyjson.Library).Dir())
-	if err != nil || len(takes) != 1 || takes[0].Text != "Testing one two three." {
-		t.Fatalf("reloaded history %v, %v", takes, err)
+	// The take is in the library (it survives a restart: TestDraftAndLibrarySurviveRestart).
+	takes, err := a.lib.svc.Takes.List(context.Background(), core.TakeQuery{})
+	if err != nil || len(takes) != 1 || takes[0].Text != "Testing one two three." || takes[0].SampleRate != 24000 {
+		t.Fatalf("stored takes %v, %v", takes, err)
+	}
+	if _, err := os.Stat(filepath.Join(a.lib.peaks.Dir, cl.ID+".f32")); err != nil {
+		t.Errorf("peaks not cached: %v", err)
 	}
 }
 
@@ -135,5 +142,34 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	if req.Temperature == nil || *req.Temperature != 0.5 || req.MaxTokens != 1200 || req.Speed != nil ||
 		req.RefAudio != "/tmp/ref.wav" || req.RefText != "Reference words" || req.Language != "Chinese" {
 		t.Fatalf("request %+v", req)
+	}
+}
+
+// TestDraftAndLibrarySurviveRestart: the form autosaves, and the next run
+// starts with it and with the takes.
+func TestDraftAndLibrarySurviveRestart(t *testing.T) {
+	dir := t.TempDir()
+	lib := openTestLibrary(t, dir)
+	a, _, tt := newTestAppWith(t, lib)
+	addTake(t, a, core.Take{ID: "T1", CreatedAt: time.Now(), Text: "Kept", Model: kokoro}, 0.2)
+	a.text = "A script in progress"
+	a.modelLabel = "Qwen3-TTS 0.6B Base (voice clone)"
+	a.modelChanged()
+	a.refText = "ref words"
+	tt.Frame()
+	tt.Frame() // unchanged: nothing more to save
+	if err := lib.svc.Drafts.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	lib.close()
+
+	b, _, tt2 := newTestAppWith(t, openTestLibrary(t, dir))
+	if b.text != "A script in progress" || b.modelLabel != "Qwen3-TTS 0.6B Base (voice clone)" ||
+		b.refText != "ref words" || b.language != "Chinese" || b.autoplay {
+		t.Errorf("restored form %+v", b.toDraft())
+	}
+	tt2.Frame()
+	if len(b.takes) != 1 || b.lastClip() == nil || !tt2.HasText("Latest take") {
+		t.Errorf("takes after restart %v", b.takes)
 	}
 }

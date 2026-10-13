@@ -39,6 +39,8 @@ func (a *app) studioPage(c *ui.Context) {
 			})
 		})
 	})
+	// After the inputs above applied this frame's edits.
+	a.autosaveStudio()
 }
 
 func (a *app) generateBar(c *ui.Context) {

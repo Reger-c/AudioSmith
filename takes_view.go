@@ -5,7 +5,6 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"github.com/hehehai/AudioSmith/internal/audio"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -56,16 +55,12 @@ func (a *app) clipCard(c *ui.Context, cl *core.Take, latest bool) {
 
 func (a *app) waveform(c *ui.Context, cl *core.Take) {
 	t := c.Theme()
-	peaks, ok := a.peaks[cl.ID]
-	if !ok {
-		// Decodes the whole file in the build pass, as the MVP did: thread A
-		// moves this to a cached background job.
-		p, err := audio.Peaks(a.takeStore.AudioPath(*cl), 160)
-		if err != nil || p == nil {
-			p = []float32{}
-		}
-		a.peaks[cl.ID] = p
-		peaks = p
+	peaks, ready := a.peaks[cl.ID]
+	if !ready {
+		// Computed (or read from the disk cache) in the background; a
+		// placeholder is drawn until then. Guarded: requested once.
+		a.requestPeaks(cl)
+		peaks, ready = a.peaks[cl.ID]
 	}
 	w := ui.ButtonBase(c.Key("wave")).Grow(1).MinWidth(0).Height(44).Label(i18n.T("Waveform")).Tooltip(i18n.T("Click to seek"))
 	if w.Clicked() {
@@ -80,6 +75,15 @@ func (a *app) waveform(c *ui.Context, cl *core.Take) {
 	pl := &a.pl
 	id := cl.ID
 	w.Draw(func(p *ui.Painter, r ui.Rect) {
+		if !ready {
+			// Placeholder: faint stubs where the bars will be.
+			step := r.W / peakCount
+			bar := max(step*0.6, 1)
+			for i := range peakCount {
+				p.Fill(ui.Rect{X: r.X + float32(i)*step, Y: r.Y + r.H/2 - 1, W: bar, H: 2}, muted.Alpha(0.5), bar/2)
+			}
+			return
+		}
 		n := len(peaks)
 		if n == 0 {
 			p.Line(r.X, r.Y+r.H/2, r.X+r.W, r.Y+r.H/2, 1, muted)
