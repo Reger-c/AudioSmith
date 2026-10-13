@@ -1,8 +1,16 @@
 # Engine protocol v2
 
-How AudioSmith (Go) talks to `audiosmith-engine` (Swift). This spec is the contract between the two sides. The Go types are in [`internal/engine/proto`](../internal/engine/proto). The golden transcripts in [`engine/Fixtures/`](../engine/Fixtures) are decoded by the Go tests now, and the Swift tests must decode them too. Thread B implements the Swift side and the Go supervisor.
+How AudioSmith (Go) talks to `audiosmith-engine` (Swift). This spec is the contract between the two sides.
 
-Protocol v1 (the MVP: flat `cmd`/`event` objects, one job, cancel without an id) stays in use until the Studio runs on jobs. §9 explains how the two versions are told apart.
+| Side | Code |
+|---|---|
+| Go wire types | [`internal/engine/proto`](../internal/engine/proto) |
+| Go supervisor (processes, handshake, routing, restarts) and job executors | [`internal/engine`](../internal/engine) (`supervise.go`, `executors.go`) |
+| Swift wire types (`Codable`, no dependencies) | [`engine/Sources/AudioSmithProtocol`](../engine/Sources/AudioSmithProtocol) |
+| Swift engine (session, jobs, models) | [`engine/Sources/AudioSmithEngine`](../engine/Sources/AudioSmithEngine) (`Server.swift`, `Synthesizer.swift`) |
+| Golden transcripts, decoded by both sides | [`engine/Fixtures/`](../engine/Fixtures) |
+
+Protocol v1 (the MVP: flat `cmd`/`event` objects, one job, cancel without an id) is gone from both sides since M0; §9 explains how a stale v1 engine is recognised.
 
 ## 1. Goals
 
@@ -22,6 +30,7 @@ Protocol v1 (the MVP: flat `cmd`/`event` objects, one job, cancel without an id)
 | stdout hygiene | stdout carries only protocol lines. The engine dups the real stdout for itself and points fd 1 at stderr, so stray prints from libraries can't corrupt the stream (the v1 engine already does this). |
 | Paths | Files are passed as absolute paths. The app owns every directory it names. Inputs are read-only; outputs are written to a temporary name in the same directory, then renamed. |
 | End | When stdin closes, the engine cancels its jobs and exits 0. `engine.shutdown` does the same after it answers. If it does not exit within 5 s, the app kills it. |
+| Environment | The app may add variables (`engine.Config.Env`), e.g. proxies. `HF_TOKEN` is used for downloads while the engine still downloads (§4.7). `AUDIOSMITH_MAX_MODELS` caps resident models (default 3). |
 
 ## 3. Messages
 
@@ -69,12 +78,14 @@ Unknown members must be ignored by both sides, so optional fields can be added w
 6. **Cancellation.** `job.cancel {job}` answers at once with `{cancelled: true}` if the job was running, or `false` if it is unknown or already finished.
    - The job itself then ends with error `cancelled`.
    - The engine checks for cancellation between generation chunks, as v1 does.
+   - A job ends only when its computation has: the engine must not take the next job while a cancelled one still runs on the GPU. Models that make a whole take in one call (Kokoro, Kitten) run in the job's own task, so cancelling them waits for the take (about 2 s for 25 s of audio on an M4). Streaming models stop at their next step; the engine waits 200 ms for it.
    - The app's supervisor gives a cancelled job 5 s to end, then kills and restarts the worker.
 7. **Models.** Job methods load the model they need if it is not resident, reporting stage `loading`.
    - With `hello.offline: true` they never download: missing files fail with `model_not_downloaded`, and the Go hub owns downloads.
    - The app sends `offline: true` once the hub's downloads are wired in (integration I4 in [architecture.md](architecture.md)). Until then it sends `false`, and the engine downloads on first use as v1 does.
    - `models.load` with a `path` loads that snapshot directory.
-   - Without a path, the engine resolves the repo in `hello.cacheDir`.
+   - Without a path, the engine resolves the repo in `hello.cacheDir` (it sets `HF_HUB_CACHE` to it). A repo counts as present when `<cacheDir>/mlx-audio/<owner>_<name>/config.json` exists or `<cacheDir>/models--<owner>--<name>/snapshots/` has a non-empty snapshot.
+   - The engine keeps several models resident (`AUDIOSMITH_MAX_MODELS`, least recently used first out). The supervisor polls `engine.stats` while jobs run and after each, and unloads the least recently used idle models when all workers' models together exceed `engine.Config.MemoryBudget`.
 
 ## 5. Requests
 
@@ -91,7 +102,8 @@ Every field is listed in [`methods.go`](../internal/engine/proto/methods.go). Th
 ```
 
 - `methods` lists the requests this build and role implement. The app hides features whose methods are missing.
-- `families` are the model families it can load. They match `catalog.Entry.Family`.
+- `families` are the model families it can load. They match `catalog.Entry.Family`. The M0 engine reports `kokoro`, `kitten`, `qwen3_tts`, `qwen3`, `marvis`, `soprano`, `omnivoice`, `chatterbox`, `pocket_tts`, `llama_tts`, `fish_speech`, `echo_tts`, `irodori_tts`, `moss_tts`, `moss_tts_nano`, `indextts`, `spark`, `breeze` (role `gpu`; other roles report none).
+- Roles: `gpu` implements every M0 method. `listen` and `media` implement only `engine.hello`, `engine.stats`, `engine.flush`, `engine.shutdown` and `job.cancel` until their milestones.
 
 ### `engine.stats` (control)
 
@@ -144,7 +156,9 @@ Parameters left unset use the model's defaults:
 
 A model that cannot honour a parameter ignores it, unless that parameter is the point of the request: `refAudio` on a model that cannot clone fails with `unsupported`, `data.capability:"clone"`.
 
-`result.seed` is the seed actually used, so the take can be reproduced.
+`result.seed` is the seed actually used, so the take can be reproduced: the engine seeds MLX's generator for every take, with a random seed when `seed` is unset.
+
+`output.bits` is 16 or 24 (PCM) or 32 (IEEE float); the file is mono WAV. With `stream`, chunks hold up to 1 s of audio each, and a last empty chunk carries `final:true` (the engine only knows the take ended after the last audio). The chunks' samples add up to `result.frames`.
 
 ### `job.cancel` (control)
 
@@ -231,8 +245,12 @@ These names are taken; `proto.Reserved` lists them. An engine that does not impl
 - chunk `seq` has no gaps, `fraction` is within 0–1, and error codes are known;
 - unknown methods are answered `method_not_found`.
 
-**Swift side (thread B):**
-- add `engine/Tests/AudioSmithEngineTests/FixtureTests.swift` that decodes every `msg` with the Swift `Codable` types and re-encodes it;
-- every engine change that touches the wire adds or updates a fixture in the same commit.
+**Swift side:** [`FixtureTests.swift`](../engine/Tests/AudioSmithEngineTests/FixtureTests.swift) decodes every `msg` with the Swift `Codable` types, re-encodes it and compares it with the fixture, so the Swift types carry every field. Run it with `scripts/test-engine.sh` (xcodebuild, on the Mac).
+
+**Supervisor:** `TestSupervisorReplaysFixtures` (`go test ./internal/engine`) runs a scripted engine ([`enginetest`](../internal/engine/enginetest)) that replays `tts_stream`, `tts_clone`, `models` and `cancel`, and checks that `Supervisor.Call` returns the fixture's results, errors and notifications in order; the cancel transcript is driven by cancelling the call's context.
+
+**Real engine:** `AUDIOSMITH_E2E=1 go test -run TestRealEngineConformance ./internal/engine` speaks raw protocol 2 with the built engine: handshake errors, every error code it can produce without special models, `busy`, control requests during a job, cancel by id, gapless chunks, shutdown and stdin EOF.
+
+Every engine change that touches the wire adds or updates a fixture in the same commit.
 
 Changing a fixture is changing the contract: both test suites must pass.

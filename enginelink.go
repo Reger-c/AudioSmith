@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -59,6 +60,7 @@ type engineHost struct {
 	logDir string
 	sup    engine.Supervisor
 	sched  jobs.Scheduler
+	stop   sync.Once
 }
 
 func (h *engineHost) Path() string { return h.bin }
@@ -66,17 +68,19 @@ func (h *engineHost) Path() string { return h.bin }
 // Stop interrupts the running jobs (they re-run or wait for Retry at the
 // next start) and shuts the engines down.
 func (h *engineHost) Stop() {
-	done := make(chan struct{})
-	go func() {
-		if h.sched != nil {
-			h.sched.Close()
+	h.stop.Do(func() {
+		done := make(chan struct{})
+		go func() {
+			if h.sched != nil {
+				h.sched.Close()
+			}
+			close(done)
+		}()
+		if h.sup != nil {
+			h.sup.Stop()
 		}
-		close(done)
-	}()
-	if h.sup != nil {
-		h.sup.Stop()
-	}
-	<-done
+		<-done
+	})
 }
 
 // engineLink is the engine's view state.
@@ -158,6 +162,9 @@ func (a *app) connectEngine(h *engineHost) {
 				}
 			},
 		})
+		// Before OnQuit, where the library closes the database the
+		// scheduler records the interrupted jobs in.
+		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { h.Stop() })
 	}
 	if h.sched == nil {
 		s := jobs.New(jobs.Options{

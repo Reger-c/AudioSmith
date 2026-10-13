@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -344,7 +345,11 @@ func TestSupervisorMissingBinary(t *testing.T) {
 }
 
 func TestSupervisorCrashAndRestart(t *testing.T) {
-	s, w := newTestSup(t, "", func(c *Config) { c.MaxRestarts = 1 })
+	var prepared atomic.Int32
+	s, w := newTestSup(t, "", func(c *Config) {
+		c.MaxRestarts = 1
+		c.Prepare = func(proto.Role) { prepared.Add(1) }
+	})
 	first := w.until(t, "ready", ready)
 	_, err := s.Call(context.Background(), proto.RoleGPU, "J1", proto.MethodTTSSynthesize, synth("crash", false), nil)
 	if !errors.Is(err, ErrWorkerExited) || !errors.Is(err, core.ErrEngine) {
@@ -362,6 +367,9 @@ func TestSupervisorCrashAndRestart(t *testing.T) {
 	st = w.until(t, "restarted", ready)
 	if st.Restarts != 1 || st.PID == first.PID {
 		t.Fatalf("after restart %+v", st)
+	}
+	if n := prepared.Load(); n != 2 {
+		t.Errorf("Prepare ran %d times for 2 starts", n)
 	}
 	log, _ := os.ReadFile(filepath.Join(s.(*supervisor).cfg.LogDir, "engine-gpu.log"))
 	if !strings.Contains(string(log), "fatal: boom") {
