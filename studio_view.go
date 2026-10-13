@@ -2,13 +2,11 @@ package main
 
 import (
 	"math"
-	"path/filepath"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
@@ -16,13 +14,18 @@ import (
 func (a *app) studioPage(c *ui.Context) {
 	t := c.Theme()
 	header(c, i18n.T("Studio"), nil)
+	if c.Shortcut(ui.Alt, ui.KeySlash) { // wherever the focus is, the script editor's too
+		a.composer.insertOpen = !a.composer.insertOpen
+	}
+	if msg := a.composer.undoToast; msg != "" {
+		a.composer.undoToast = ""
+		c.ToastAction(msg, i18n.T("Undo"), a.undoScript)
+	}
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, 16), px(t, 20)).Gap(px(t, 12)).Children(func() {
-			ui.TextArea(c.Key("script"), &a.text).
-				Placeholder(i18n.T("Type or paste the text to speak…")).
-				Label(i18n.T("Script")).
-				Grow(1).MinHeight(px(t, 120)).
-				FontSize(px(t, 15))
+		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, 14), px(t, 20)).Gap(px(t, 10)).Children(func() {
+			a.composerToolbar(c)
+			a.scriptView(c)
+			a.statsLine(c)
 			a.generateBar(c)
 			if a.job != nil {
 				a.jobStatus(c)
@@ -30,7 +33,7 @@ func (a *app) studioPage(c *ui.Context) {
 				a.jobProblem(c)
 			}
 			if cl := a.lastClip(); cl != nil {
-				a.clipCard(c, cl, true)
+				a.outputPanel(c, cl, true)
 			}
 		})
 		ui.Box(c).Width(1).Background(t.Border)
@@ -44,11 +47,136 @@ func (a *app) studioPage(c *ui.Context) {
 	a.autosaveStudio()
 }
 
+// composerToolbar: insert menu, import, and the script's language.
+func (a *app) composerToolbar(c *ui.Context) {
+	t := c.Theme()
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		a.insertMenu(c)
+		if ui.Button(c.Key("import"), i18n.T("Import script…")).Tooltip(i18n.T("TXT, Markdown, DOCX, EPUB, SRT or VTT, inserted at the caret")).Clicked() {
+			a.importScript()
+		}
+		ui.Spacer(c)
+		a.languagePicker(c)
+	})
+}
+
+// formatDuration is "45 s", "3 min 20 s", "1 h 05 min".
+func formatDuration(seconds float64) string {
+	s := int(math.Round(seconds))
+	switch {
+	case s < 60:
+		return i18n.T("%d s", s)
+	case s < 3600:
+		if s%60 == 0 {
+			return i18n.T("%d min", s/60)
+		}
+		return i18n.T("%d min %d s", s/60, s%60)
+	}
+	return i18n.T("%d h %02d min", s/3600, (s%3600)/60)
+}
+
+// typicalRTF is about how many seconds of audio a model makes per second
+// on an M-series Mac, for the slow-generation warning.
+func typicalRTF(family string) float64 {
+	switch family {
+	case "kokoro", "kitten":
+		return 20
+	case "soprano":
+		return 8
+	case "omnivoice":
+		return 3
+	case "marvis":
+		return 1.5
+	}
+	return 2
+}
+
+// statsLine: characters, estimated length, chunks, and the readiness or
+// slow-generation line.
+func (a *app) statsLine(c *ui.Context) {
+	t := c.Theme()
+	st := a.scriptStats()
+	speed := 1.0
+	if a.preset().Has(catalog.CapSpeed) && a.speed > 0 {
+		speed = a.speed
+	}
+	seconds := st.seconds / speed
+	if a.preset().Has(catalog.CapDuration) && a.duration > 0 {
+		seconds = a.duration
+	}
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		parts := i18n.T("%d characters", st.chars)
+		if st.chunks > 0 {
+			parts += " · " + i18n.T("≈ %s of audio", formatDuration(seconds))
+		}
+		if st.chunks > 1 {
+			parts += " · " + i18n.N(st.chunks, "%d chunk", "%d chunks", st.chunks)
+		}
+		ui.Text(c, parts).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		if n := len(st.diags); n > 0 {
+			msg := diagText(st.diags[0])
+			if n > 1 {
+				msg = i18n.N(n, "%d note about the markup", "%d notes about the markup", n) + ": " + msg
+			}
+			ui.Text(c, "⚠ "+msg).FontSize(px(t, 12)).TextColor(t.Warning).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+		}
+	})
+	if msg, warn := a.readiness(st); msg != "" {
+		color := t.TextMuted
+		if warn {
+			color = t.Warning
+		}
+		ui.Row(c.Key("readiness")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, msg).FontSize(px(t, 12)).TextColor(color).Grow(1).MinWidth(0)
+			e := a.preset()
+			if m := a.model(e); e.ID != "custom" && m.known && m.local.State != hub.Downloaded && !m.downloading && a.needDownload == nil {
+				if ui.Button(c.Key("ready-download"), i18n.T("Download")).Tooltip(e.Repo).Clicked() {
+					a.download(e)
+				}
+			}
+		})
+		return
+	}
+	if rtf := typicalRTF(a.preset().Family); seconds/rtf > 90 {
+		ui.Text(c.Key("slow"), i18n.T("A long render: about %s of audio may take %s or more. It plays from the first chunk while the rest renders.",
+			formatDuration(seconds), formatDuration(seconds/rtf))).FontSize(px(t, 12)).TextColor(t.Warning)
+	}
+}
+
+// readiness says what keeps Generate from working, or "" when nothing
+// does; warn is true for a problem (not just the engine starting).
+func (a *app) readiness(st scriptStats) (msg string, warn bool) {
+	p := a.preset()
+	switch {
+	case a.engState == engineStarting:
+		return i18n.T("The engine is starting…"), false
+	case a.engState == engineFailed:
+		return i18n.T("The engine is not running. Restart it on the Engine page."), true
+	case p.Repo == "":
+		return i18n.T("Type the Hugging Face repo of the model to use."), true
+	case st.chars == 0:
+		return i18n.T("Type, paste or import a script."), false
+	case st.chunks == 0:
+		return i18n.T("The script has nothing to say: only markup."), true
+	}
+	if m := a.model(p); p.ID != "custom" && m.known && m.local.State != hub.Downloaded && a.needDownload == nil {
+		return i18n.T("%s is not downloaded yet.", p.Label), true
+	}
+	if p.Has(catalog.CapClone) && len(p.Voices) == 0 && !p.Has(catalog.CapVoiceStyle) && a.refAudio == "" && a.voice == "" {
+		return i18n.T("No reference clip: the model speaks in its default voice."), false
+	}
+	return "", false
+}
+
 func (a *app) generateBar(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		n := utf8.RuneCountInString(strings.TrimSpace(a.text))
-		ui.Text(c, i18n.T("%d characters", n)).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
+		a.voicePopover(c)
+		a.qualityPopover(c)
+		if s := a.voiceControlsSummary(); s != "" {
+			ui.Text(c, s).FontSize(px(t, 12)).TextColor(t.TextMuted).SingleLine().Ellipsis("…").MinWidth(0)
+		}
+		ui.Spacer(c)
 		if a.job != nil {
 			if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
 				a.cancel()
@@ -101,13 +229,34 @@ func (a *app) jobStatus(c *ui.Context) {
 	j := a.job
 	ui.Column(c).Gap(px(t, 6)).Children(func() {
 		ui.Progress(c, j.fraction).Label(j.status)
-		ui.Row(c).Gap(px(t, 8)).Children(func() {
-			ui.Text(c, j.status).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			status := j.status
+			if j.kind == "synthesize" && a.renderTake == j.takeID && a.renderChunks > 1 && a.renderChunk > 0 && !j.cancelling {
+				status += " · " + i18n.T("chunk %d of %d", a.renderChunk, a.renderChunks)
+				if a.renderCached > 0 {
+					status += " · " + i18n.N(a.renderCached, "%d from the cache", "%d from the cache", a.renderCached)
+				}
+			}
+			ui.Text(c, status).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			info := i18n.T("%.0f s", time.Since(j.started).Seconds())
 			if j.audioSeconds > 0 {
 				info = i18n.T("%.1f s of audio · ", j.audioSeconds) + info
 			}
 			ui.Text(c, info).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			if a.previewAvailable() {
+				label := i18n.T("Play preview")
+				if a.pl.Playing(a.previewID) {
+					label = i18n.T("Pause preview")
+				}
+				if ui.Button(c.Key("preview"), label).Tooltip(i18n.T("Listen to what is rendered so far")).Clicked() {
+					switch {
+					case a.pl.Playing(a.previewID):
+						a.pl.Stop()
+					default:
+						a.playPreview()
+					}
+				}
+			}
 		})
 	})
 }
@@ -157,77 +306,17 @@ func (a *app) inspector(c *ui.Context) {
 	})
 
 	ui.Divider(c)
-
-	voiceLabel := i18n.T("Voice")
-	if p.Has(catalog.CapVoiceStyle) {
-		voiceLabel = i18n.T("Voice / style")
-	}
-	if voices := p.VoiceIDs(); len(voices) > 0 || custom || p.Has(catalog.CapVoiceStyle) {
-		ui.Field(c, voiceLabel, func() {
-			ui.Autocomplete(c.Key("voice"), &a.voice, voices).Placeholder(i18n.T("Model default")).Label(voiceLabel)
-		})
-	}
-	if languages := p.LanguageOptions(); len(languages) > 0 || custom || p.Has(catalog.CapLanguage) {
-		ui.Field(c, i18n.T("Language"), func() {
-			ui.Autocomplete(c.Key("language"), &a.language, languages).Placeholder(i18n.T("Auto")).Label(i18n.T("Language"))
-		})
-	}
-	if p.Has(catalog.CapSpeed) {
-		ui.Field(c, i18n.T("Speed  %.2f×", a.speed), func() {
-			snapped(ui.Slider(c.Key("speed"), &a.speed, 0.5, 2).Label(i18n.T("Speed")), &a.speed, 0.05)
-		})
-	}
-	if p.Has(catalog.CapDuration) {
-		ui.Field(c, i18n.T("Duration (seconds, 0 = natural)"), func() {
-			ui.NumberInput(c.Key("duration"), &a.duration, 0, 600, 0.5).Label(i18n.T("Duration"))
-		})
-	}
-	if p.Has(catalog.CapSampling) {
-		ui.Checkbox(c.Key("defaults"), &a.modelDefaults, i18n.T("Use the model's sampling defaults"))
-		if !a.modelDefaults {
-			ui.Field(c, i18n.T("Temperature  %.2f", a.temperature), func() {
-				snapped(ui.Slider(c.Key("temperature"), &a.temperature, 0, 1.5).Label(i18n.T("Temperature")), &a.temperature, 0.05)
-			})
-			ui.Field(c, i18n.T("Top P  %.2f", a.topP), func() {
-				snapped(ui.Slider(c.Key("topp"), &a.topP, 0.05, 1).Label(i18n.T("Top P")), &a.topP, 0.05)
-			})
-			ui.Field(c, i18n.T("Max tokens"), func() {
-				ui.NumberInput(c.Key("maxtokens"), &a.maxTokens, 50, 8000, 50).Label(i18n.T("Max tokens"))
-			})
-		}
-	}
-	if p.Has(catalog.CapClone) {
-		ui.Divider(c)
-		ui.Text(c, i18n.T("Voice cloning")).Bold()
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			name := i18n.T("No reference clip")
-			if a.refAudio != "" {
-				name = filepath.Base(a.refAudio)
-			}
-			ui.Text(c, name).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-			if ui.Button(c.Key("choose-ref"), i18n.T("Choose…")).Clicked() {
-				a.chooseRefAudio()
-			}
-			if a.refAudio != "" && ui.Button(c.Key("clear-ref"), i18n.T("Clear")).Clicked() {
-				a.refAudio, a.refText = "", ""
-			}
-		})
-		ui.Field(c, i18n.T("Reference transcript"), func() {
-			ui.TextArea(c.Key("ref-text"), &a.refText).Lines(2, 5).Placeholder(i18n.T("What the reference clip says")).Label(i18n.T("Reference transcript"))
-		})
+	a.voicePicker(c, p) // the voice library's picker (voices.go)
+	if !a.studioUsesSavedVoice(p) {
+		a.studioVoiceSection(c, p)
 	}
 	ui.Divider(c)
 	if ui.Checkbox(c.Key("autoplay"), &a.autoplay, i18n.T("Play each take when it is ready")).Changed() {
 		on := a.autoplay
 		a.updateSettings(func(s *settings.Settings) { s.Studio.Autoplay = on })
 	}
-}
-
-// snapped rounds a slider's value to a step, so labels and requests show
-// 1.05 rather than 1.0473; the slider moves smoothly in between.
-func snapped(e ui.Element, v *float64, step float64) ui.Element {
-	if e.Changed() {
-		*v = math.Round(*v/step) * step
+	if !a.autoplay {
+		return
 	}
-	return e
+	ui.Text(c, i18n.T("Long scripts play from the first chunk while the rest renders.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
 }

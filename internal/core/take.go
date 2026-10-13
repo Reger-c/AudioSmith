@@ -26,9 +26,13 @@ type Take struct {
 	MaxTokens   int     `json:"maxTokens,omitempty"`
 	RefAudio    string  `json:"refAudio,omitempty"` // reference clip for cloning (absolute path)
 	RefText     string  `json:"refText,omitempty"`
-	Seed        int64   `json:"seed,omitempty"` // M1: the seed used, so the take can be reproduced
+	Seed        int64   `json:"seed,omitempty"`     // M1: the seed used, so the take can be reproduced
 	Duration    float64 `json:"duration,omitempty"` // target length in seconds (OmniVoice); 0 = natural
 	Steps       int     `json:"steps,omitempty"`    // diffusion steps (OmniVoice); 0 = the model's
+	// M1 engine parameters (protocol 2, M1); zero = the model's default.
+	Guidance     float64 `json:"guidance,omitempty"`     // classifier-free guidance scale
+	Exaggeration float64 `json:"exaggeration,omitempty"` // emotion intensity (Chatterbox)
+	VoicePrompt  string  `json:"voicePrompt,omitempty"`  // tts.encodeVoice file of the clone reference (absolute path)
 
 	// Relations (M1+). Empty for MVP takes.
 	VoiceID   string `json:"voiceId,omitempty"`   // Voice profile it was spoken with
@@ -38,10 +42,57 @@ type Take struct {
 	// Library state (M1+).
 	Starred bool `json:"starred,omitempty"`
 
+	// Render is how the script became audio (M1 render pipeline): output
+	// options, chunks and findings. nil for takes made by one engine call
+	// (MVP, M0).
+	Render *TakeRender `json:"render,omitempty"`
+
 	// The result.
 	SampleRate   int     `json:"sampleRate"`
 	AudioSeconds float64 `json:"audioSeconds"`
 	GenSeconds   float64 `json:"genSeconds"`
+}
+
+// TakeRender is a take's render: the output options of its recipe (which
+// Reuse restores) and what the render found.
+type TakeRender struct {
+	// Recipe.
+	Bits        int    `json:"bits,omitempty"`        // 16 (0 = 16), 24 or 32 (float)
+	Master      string `json:"master,omitempty"`      // mastering preset ("broadcast" = Even out volume); "" = none
+	NoNormalize bool   `json:"noNormalize,omitempty"` // numbers, dates… left as written
+	SeedPinned  bool   `json:"seedPinned,omitempty"`  // Seed was chosen by the user
+
+	// Result.
+	Channels int          `json:"channels,omitempty"`
+	Bytes    int64        `json:"bytes,omitempty"` // size of the audio file
+	Chunks   []TakeChunk  `json:"chunks,omitempty"`
+	Warnings []TakeNotice `json:"warnings,omitempty"` // markup lowered, chunks that may have dropped words…
+	// Issues are the findings of Check audio (dsp/qc); QCDone says the
+	// check ran (no issues then means none were found).
+	Issues []TakeNotice `json:"issues,omitempty"`
+	QCDone bool         `json:"qcDone,omitempty"`
+}
+
+// TakeChunk is one engine call of a render.
+type TakeChunk struct {
+	Text       string  `json:"text"`             // as the engine got it (lowered, normalised)
+	Start      float64 `json:"start"`            // seconds into the take
+	End        float64 `json:"end"`              //
+	Seed       int64   `json:"seed,omitempty"`   // the seed the engine used
+	Cached     bool    `json:"cached,omitempty"` // reused from the chunk cache
+	GenSeconds float64 `json:"genSeconds,omitempty"`
+}
+
+// TakeNotice is a finding about a take, by code (translated by the UI)
+// with its parameters and, where it has one, its place in the audio.
+type TakeNotice struct {
+	Code     string            `json:"code"`
+	Severity string            `json:"severity,omitempty"` // "info", "warning", "error"
+	Chunk    int               `json:"chunk,omitempty"`    // 1-based; 0 = none
+	Start    float64           `json:"start,omitempty"`    // seconds
+	End      float64           `json:"end,omitempty"`
+	Value    float64           `json:"value,omitempty"`
+	Params   map[string]string `json:"params,omitempty"`
 }
 
 // RTF is how many seconds of audio one second of generation made.

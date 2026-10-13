@@ -15,6 +15,8 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
@@ -46,12 +48,36 @@ type Config struct {
 	// Logf reports failures of background work (saving a generated take, a
 	// draft); nil means log.Printf.
 	Logf func(format string, args ...any)
+
+	// Synth returns the executor of one tts.synthesize call (the engine's,
+	// engine.Executor), asked each time a render starts, so the engine
+	// may be connected after the services. nil, or a nil executor, fails
+	// renders with engine_unavailable (retryable).
+	Synth func() jobs.Executor
+	// ModelPath returns the local snapshot directory of a model, or an
+	// error wrapping core.ErrNotDownloaded (as engine.ExecutorOptions).
+	// Renders fill it into every engine call; nil leaves it out.
+	ModelPath func(ctx context.Context, model string) (string, error)
+	// Models describes a model (from the catalogue); nil uses defaults.
+	Models func(repo string) ModelInfo
+	// CacheDir holds the render's chunk cache, temporary files and
+	// previews; "" means AudioSmith in the system's temporary directory.
+	CacheDir string
+	// KeepTakes caps the history (settings.Studio.KeepTakes): beyond it
+	// the oldest takes neither starred nor in a project are deleted. nil or
+	// 0 keeps every take.
+	KeepTakes func() int
 }
 
 // Services is the set of services over one store, as core.Services for
 // the UI and the Local API.
 type Services struct {
 	core.Services
+	// Pronunciation is the pronunciation dictionary.
+	Pronunciation *Pronunciation
+	// Render is the take service's render pipeline and history tools
+	// beyond core.TakeService (previews, Check audio, pruning).
+	Render *Takes
 	takes  *Takes
 	drafts *Drafts
 }
@@ -70,10 +96,16 @@ func New(cfg Config) *Services {
 	if cfg.DraftDelay <= 0 {
 		cfg.DraftDelay = 750 * time.Millisecond
 	}
-	s := &Services{
-		takes:  newTakes(cfg),
-		drafts: newDrafts(cfg),
+	if cfg.CacheDir == "" {
+		cfg.CacheDir = filepath.Join(os.TempDir(), "AudioSmith")
 	}
+	pron := newPronunciation(cfg.Store.Documents(), cfg.Bus)
+	s := &Services{
+		Pronunciation: pron,
+		takes:         newTakes(cfg, pron),
+		drafts:        newDrafts(cfg),
+	}
+	s.Render = s.takes
 	s.Services = core.Services{
 		Bus:      cfg.Bus,
 		Takes:    s.takes,

@@ -53,6 +53,9 @@ type Appearance struct {
 type Studio struct {
 	Model    string `json:"model"`    // catalog.Entry.ID last used ("" = the first)
 	Autoplay bool   `json:"autoplay"` // play each take when it is ready
+	// KeepTakes caps the history: beyond it the oldest takes that are not
+	// starred (nor part of a project) are deleted. 0 = keep every take.
+	KeepTakes int `json:"keepTakes,omitempty"`
 }
 
 // Models: where and how models download.
