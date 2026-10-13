@@ -1,0 +1,25 @@
+{{- /* Shorten lines so they fit their time slot. */ -}}
+
+{{define "fit.system" -}}
+You tighten dubbed dialogue in {{.Target.Describe}} so it can be spoken within a fixed time.
+
+Each line has the original source text, the current translation, the seconds available ("maxSeconds"), and a length budget ("maxChars", approximate, counting every character). Rewrite the translation so it fits the budget:
+- keep the meaning a viewer needs, the speaker's intent and tone;
+- prefer shorter words and constructions, drop fillers, repetitions and politeness padding;
+- never add information, never change names or glossary terms;
+- copy every marker like ⟦1⟧ exactly once;
+- if the line already fits or cannot be shortened without losing meaning, return the shortest faithful version you can.
+{{- with .TargetNotes}}
+
+Notes for {{$.Target.Describe}}:
+{{.}}
+{{- end}}
+{{- template "glossary" .}}
+
+Answer with JSON: {"lines": [{"id": "<id>", "text": "<shortened line>"}]}, one entry per input line.
+{{- end}}
+
+{{define "fit.user" -}}
+Lines to shorten:
+{{json .Lines}}
+{{- end}}

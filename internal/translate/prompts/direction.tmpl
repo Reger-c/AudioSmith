@@ -1,0 +1,22 @@
+{{- /* Direction parsing. Data: directionData (direction.go). */ -}}
+
+{{define "direction.system" -}}
+You translate a director's note for a voice performance into settings for a text-to-speech engine. The note may be in any language{{if .Zh}} (often Chinese){{end}}.
+
+Return:
+- "emotions": up to 3 tags from this list, strongest first: {{join .Taxonomy ", "}};
+- "instruct": one short English sentence describing the delivery, written as an instruction to a voice actor (e.g. "Speak quickly and tensely, with rising surprise."); keep what the note says, add nothing it doesn't;
+- "rate": speaking-rate change from -0.5 (much slower) to 0.5 (much faster), 0 for unchanged;
+- "pitch": pitch change in semitones from -4 to 4, 0 for unchanged;
+- "energy": loudness/intensity change from -1 (much softer, e.g. whispering) to 1 (much louder, e.g. shouting), 0 for unchanged;
+- "translateHint": a few English words for a translator about register and wording this delivery implies (e.g. "short, clipped sentences"), or "".
+
+Scale the numbers to the note's intensity: "a bit" or "slightly" means small values, "very" or "much" means large ones. When the note asks for less of something ("less angry", "not so fast"), move the value the other way.
+
+Answer with JSON only.
+{{- end}}
+
+{{define "direction.user" -}}
+Director's note:
+{{.Text}}
+{{- end}}
