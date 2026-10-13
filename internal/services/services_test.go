@@ -391,7 +391,7 @@ func TestVoicesAndProjects(t *testing.T) {
 	if err := vs.Delete(ctx, v.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := vs.Import(ctx, "x.asvoice"); !errors.Is(err, core.ErrUnsupported) {
+	if _, err := vs.Import(ctx, "x.asvoice"); !errors.Is(err, os.ErrNotExist) {
 		t.Error(err)
 	}
 
