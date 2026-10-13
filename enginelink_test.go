@@ -261,3 +261,77 @@ func TestStudioOverTheSupervisor(t *testing.T) {
 		t.Error("engine log lines missing from the logs")
 	}
 }
+
+// TestQueueAndCancelByID is the M0 acceptance of the queue, over the real
+// scheduler (SQLite) and supervisor with a scripted engine: three takes
+// queue on the gpu lane behind each other; the one waiting in the middle
+// and the running one are cancelled by id; the last one still runs and
+// becomes a take. The status bar lists them while they wait.
+func TestQueueAndCancelByID(t *testing.T) {
+	lib := openTestLibrary(t)
+	useLocalModels(t, lib)
+	bin, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &engineHost{bin: bin, logDir: t.TempDir()}
+	a := newApp(h, lib)
+	events := make(chan func(), 4096)
+	a.enginePost = func(fn func()) { events <- fn }
+	a.postQueue = a.enginePost
+	h.sup = engine.NewSupervisor(engine.Config{Bin: bin, Bus: a.bus, LogDir: h.logDir, Env: enginetest.Env(""), Logf: t.Logf})
+	a.connectEngine(h)
+	defer h.Stop()
+	pump := func(what string, done func() bool) {
+		t.Helper()
+		deadline := time.After(10 * time.Second)
+		for !done() {
+			select {
+			case fn := <-events:
+				fn()
+			case <-deadline:
+				t.Fatalf("timed out waiting for %s", what)
+			}
+		}
+	}
+	a.startEngine()
+	pump("ready", func() bool { return a.engState == engineReady })
+
+	ctx := context.Background()
+	var ids []string
+	for _, text := range []string{"slow one", "slow two", "three"} {
+		id, err := lib.svc.Takes.Generate(ctx, core.TakeRequest{Recipe: core.Take{Text: text, Model: kokoro}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	state := func(id string) jobs.State {
+		j, _ := lib.sched.Get(ctx, id)
+		return j.State
+	}
+	pump("first running, others queued", func() bool {
+		return state(ids[0]) == jobs.StateRunning && state(ids[1]) == jobs.StateQueued && state(ids[2]) == jobs.StateQueued &&
+			len(a.activeJobs()) == 3
+	})
+	if err := lib.sched.Cancel(ctx, ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := lib.sched.Cancel(ctx, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	pump("the third done", func() bool { return state(ids[2]) == jobs.StateSucceeded && len(a.takes) == 1 })
+	for i, want := range []jobs.State{jobs.StateCancelled, jobs.StateCancelled, jobs.StateSucceeded} {
+		j, _ := lib.sched.Get(ctx, ids[i])
+		if j.State != want {
+			t.Errorf("job %d: %s, want %s", i, j.State, want)
+		}
+		if i == 1 && !j.Started.IsZero() {
+			t.Error("the cancelled waiting job ran")
+		}
+	}
+	if a.takes[0].Text != "three" || a.takes[0].JobID != ids[2] {
+		t.Errorf("take %+v", a.takes[0])
+	}
+	pump("queue empty", func() bool { return len(a.activeJobs()) == 0 })
+}
