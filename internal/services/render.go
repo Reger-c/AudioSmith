@@ -214,11 +214,48 @@ func (r *renderer) Run(ctx context.Context, job jobs.Job, report func(jobs.Progr
 		modelPath = dir
 	}
 	info := r.model(t.Model)
+	var seed *int64
+	if opts.SeedPinned && t.Seed != 0 {
+		seed = &t.Seed
+	}
+	// A chunk the engine finds too long (input_too_long: its own limit is
+	// lower than the catalogue says) plans the take again with smaller
+	// chunks; the chunks already made come from the cache.
+	for attempt := 0; ; attempt++ {
+		res, err := r.renderOnce(ctx, job, &p, opts, info, modelPath, &seed, started, report, chunkOut)
+		var je *jobs.Error
+		if attempt < 2 && errors.As(err, &je) && je.Code == proto.CodeInputTooLong {
+			var d struct{ Limit, Actual, Chars float64 }
+			json.Unmarshal(je.Data, &d)
+			// The failed chunk's length, scaled to the engine's limit.
+			f := 0.6
+			if d.Limit > 0 && d.Actual > d.Limit {
+				f = d.Limit / d.Actual * 0.9
+			}
+			chars := d.Chars
+			if chars <= 0 {
+				chars = float64(info.MaxChars)
+			}
+			ratio := float64(info.MaxCharsCJK) / float64(max(info.MaxChars, 1))
+			info.MaxChars = max(min(int(chars*f), info.MaxChars-1), 20)
+			info.MaxCharsCJK = max(int(float64(info.MaxChars)*ratio), 8)
+			r.logf("render %s: the engine wants shorter chunks (%s); planning again at %d characters", job.ID, je.Message, info.MaxChars)
+			continue
+		}
+		return res, err
+	}
+}
+
+// renderOnce plans the take with info's chunk limits and renders it.
+func (r *renderer) renderOnce(ctx context.Context, job jobs.Job, pp *RenderParams, opts core.TakeRender, info ModelInfo,
+	modelPath string, seedp **int64, started time.Time, report func(jobs.Progress), chunkOut func(json.RawMessage)) (json.RawMessage, error) {
+	p := *pp
+	t := p.Take
 
 	// The plan.
 	dict := r.dictionary(ctx, p.Lang)
 	pl := plan.Build(t.Text, plan.Options{
-		Lang: p.Lang, NonVerbal: info.NonVerbal, Speed: info.Speed,
+		Lang: p.Lang, NonVerbal: info.NonVerbal, NonVerbalTags: info.NonVerbalTags, Speed: info.Speed,
 		MaxChars: info.MaxChars, MaxCharsCJK: info.MaxCharsCJK,
 		NoNormalize: opts.NoNormalize, Lexicon: dict,
 	})
@@ -233,15 +270,12 @@ func (r *renderer) Run(ctx context.Context, job jobs.Job, report func(jobs.Progr
 	}
 
 	// One seed for every chunk, so the take can be made again.
-	var seed *int64
-	switch {
-	case opts.SeedPinned && t.Seed != 0:
-		seed = &t.Seed
-	case len(pl.Speech()) > 1:
+	if *seedp == nil && len(pl.Speech()) > 1 {
 		n, _ := rand.Int(rand.Reader, big.NewInt(math.MaxInt32))
 		s := n.Int64() + 1
-		seed = &s
+		*seedp = &s
 	}
+	seed := *seedp
 
 	chunks, err := r.chunks(&p, &pl, info, modelPath, seed)
 	if err != nil {
@@ -402,6 +436,13 @@ func (r *renderer) chunks(p *RenderParams, pl *plan.Plan, info ModelInfo, modelP
 		sp := proto.SynthesizeParams{
 			Model: t.Model, ModelPath: modelPath, Text: seg.Text, Voice: t.Voice, Language: t.Language,
 			MaxTokens: t.MaxTokens, RefAudio: t.RefAudio, RefText: t.RefText, Steps: t.Steps, Seed: seed,
+			VoicePrompt: t.VoicePrompt,
+		}
+		if t.Guidance != 0 {
+			sp.Guidance = &t.Guidance
+		}
+		if t.Exaggeration != 0 {
+			sp.Exaggeration = &t.Exaggeration
 		}
 		speed := t.Speed
 		if seg.Speed != 1 && seg.Speed > 0 {
@@ -434,6 +475,7 @@ func (r *renderer) chunks(p *RenderParams, pl *plan.Plan, info ModelInfo, modelP
 			"speed": f(sp.Speed), "temperature": f(sp.Temperature), "topP": f(sp.TopP),
 			"maxTokens": strconv.Itoa(t.MaxTokens), "steps": strconv.Itoa(t.Steps), "duration": f(sp.Duration),
 			"ref": ref, "refText": t.RefText, "bits": "32",
+			"guidance": f(sp.Guidance), "exaggeration": f(sp.Exaggeration), "voicePrompt": t.VoicePrompt,
 		}
 		if seed != nil && !info.Deterministic {
 			keyParams["seed"] = strconv.FormatInt(*seed, 10)
@@ -532,7 +574,11 @@ func (st *renderState) synthesize(ctx context.Context, i, n int, c renderChunk) 
 		}
 		var je *jobs.Error
 		if errors.As(err, &je) {
-			data, _ := json.Marshal(map[string]int{"chunk": i, "chunks": n})
+			// The engine's data, plus which chunk and how long it is.
+			fields := map[string]any{}
+			json.Unmarshal(je.Data, &fields)
+			fields["chunk"], fields["chunks"], fields["chars"] = i, n, c.chars
+			data, _ := json.Marshal(fields)
 			msg := je.Message
 			if n > 1 {
 				msg = fmt.Sprintf("Chunk %d of %d: %s", i, n, je.Message)

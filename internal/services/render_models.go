@@ -1,6 +1,9 @@
 package services
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // Traits are what the render pipeline needs to know about a model beyond
 // its catalogue capabilities: how much text one engine call takes, and
@@ -29,6 +32,27 @@ type Traits struct {
 	// MaxCharsCJK for scripts mostly in Han, kana or Hangul.
 	MaxChars    int `json:"maxChars"`
 	MaxCharsCJK int `json:"maxCharsCJK"`
+	// NonVerbalTags are the tags the model renders ("laughter"…, without
+	// brackets); nil with NonVerbal = every tag markup knows.
+	NonVerbalTags []string `json:"nonVerbalTags,omitempty"`
+}
+
+// WithCatalog applies what the catalogue knows of the model (v3): its
+// chunk limit (catalog.TextLength units: CJK characters count three) and
+// the non-verbal tags it renders. Data the catalogue lacks keeps the
+// family's defaults.
+func (t Traits) WithCatalog(maxChars int, nonVerbal []string) Traits {
+	if maxChars > 0 {
+		t.MaxChars, t.MaxCharsCJK = maxChars, max(maxChars/3, 1)
+	}
+	if len(nonVerbal) > 0 {
+		t.NonVerbal = true
+		t.NonVerbalTags = nil
+		for _, tag := range nonVerbal {
+			t.NonVerbalTags = append(t.NonVerbalTags, strings.Trim(strings.ToLower(tag), "[] "))
+		}
+	}
+	return t
 }
 
 // Step counts of the performance tiers, for models with Steps.
@@ -41,10 +65,12 @@ const (
 // TraitsFor returns the traits of a model of family with capabilities caps.
 func TraitsFor(family string, caps []string) Traits {
 	t := Traits{
-		Family:   family,
-		Speed:    slices.Contains(caps, "speed"),
-		Duration: slices.Contains(caps, "duration"),
-		MaxChars: 400, MaxCharsCJK: 200,
+		Family:    family,
+		Speed:     slices.Contains(caps, "speed"),
+		Duration:  slices.Contains(caps, "duration"),
+		Steps:     slices.Contains(caps, "steps"),
+		NonVerbal: slices.Contains(caps, "nonVerbal"),
+		MaxChars:  400, MaxCharsCJK: 200,
 	}
 	switch family {
 	case "kokoro", "kitten":
@@ -55,6 +81,7 @@ func TraitsFor(family string, caps []string) Traits {
 	case "qwen3_tts", "qwen3":
 		t.MaxChars, t.MaxCharsCJK = 500, 250
 	case "omnivoice":
+		// Until the catalogue lists OmniVoice's tags (CapNonVerbal).
 		t.NonVerbal, t.Steps = true, true
 		t.MaxChars, t.MaxCharsCJK = 600, 250
 	case "marvis", "soprano":

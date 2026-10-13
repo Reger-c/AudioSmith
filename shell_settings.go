@@ -54,6 +54,7 @@ func settingsSections() []settingsSection {
 		{"models", i18n.T("Models and downloads"), "Models and downloads"},
 		{"studio", i18n.T("Studio"), "Studio"},
 		{"engine", i18n.T("Engine"), "Engine"},
+		{"pronunciation", i18n.T("Pronunciation"), "Pronunciation"}, // M1-G: pronunciation_settings.go
 	}
 }
 
@@ -294,6 +295,10 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 						r.Title(i18n.T("Engine"))
 						a.lastSettings = "engine"
 						a.engineSettings(c)
+					case r.Match("/pronunciation"): // M1-G: pronunciation_settings.go
+						r.Title(i18n.T("Pronunciation"))
+						a.lastSettings = "pronunciation"
+						a.pronunciationSettings(c)
 					default:
 						ui.Text(c, i18n.T("There is no page at %s.", a.router.Path())).TextColor(t.TextMuted)
 					}
@@ -502,6 +507,7 @@ func (a *app) studioSettings(c *ui.Context) {
 			a.updateSettings(func(s *settings.Settings) { s.Studio.Autoplay = on })
 		}
 	})
+	a.historySettings(c) // M1-G: history cap (takes_view.go)
 }
 
 // chooseCacheDir asks for the model folder; the dialog blocks, so it runs

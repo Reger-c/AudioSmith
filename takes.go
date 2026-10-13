@@ -165,7 +165,7 @@ func modelInfo(repo string) services.ModelInfo {
 	for i, c := range e.Capabilities {
 		caps[i] = string(c)
 	}
-	info := services.ModelInfo{Traits: services.TraitsFor(e.Family, caps), Revision: e.Revision,
+	info := services.ModelInfo{Traits: services.TraitsFor(e.Family, caps).WithCatalog(e.MaxChars, e.NonVerbal), Revision: e.Revision,
 		Languages: map[string]string{}, VoiceLanguages: map[string]string{}}
 	for _, l := range e.Languages {
 		if l.Value != "" {
@@ -284,6 +284,9 @@ type takesState struct {
 	lastClipID   string // the Studio's "Latest take"
 	awaitTake    string // id of the take the Studio's job makes; "" when none
 	historyList  ui.ListState
+	checkOpen    map[string]bool // takes whose Check audio findings show
+	checking     map[string]bool // takes being checked
+	history      historyView
 }
 
 // openTakes connects the take pages to the library: it subscribes to take
@@ -302,6 +305,7 @@ func (a *app) openTakes(lib *library) {
 	a.takeStore = lib.store.Takes()
 	a.peaks = map[string][]float32{}
 	a.peaksPending = map[string]bool{}
+	a.checkOpen, a.checking = map[string]bool{}, map[string]bool{}
 	lib.bus.Subscribe(func(ev core.Event) {
 		// On the publisher's goroutine: hand the event to the main thread.
 		switch ev := ev.(type) {
@@ -313,6 +317,7 @@ func (a *app) openTakes(lib *library) {
 			a.post(func() { a.takeDeleted(ev.ID) })
 		}
 	}, "take.")
+	a.followRenders()
 	a.loadTakes()
 	a.restoreStudioDraft()
 }
@@ -414,7 +419,12 @@ func (a *app) takeCreated(t core.Take) {
 	}
 	a.awaitTake = ""
 	a.lastClipID = t.ID
-	if a.autoplay {
+	a.renderTake, a.renderChunk, a.renderChunks = "", 0, 0
+	if a.preview != nil && a.previewID == t.ID {
+		a.preview.Finish()
+	}
+	// A preview already playing goes on; the file plays next time.
+	if a.autoplay && !a.previewStarted() {
 		if err := a.pl.Toggle(t.ID, a.takeStore.AudioPath(t)); err != nil {
 			a.toast(i18n.T("Could not play: %v", err))
 		}

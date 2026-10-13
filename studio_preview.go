@@ -57,7 +57,20 @@ func (a *app) followRenders() {
 		})
 	})
 	core.On(a.lib.bus, func(u jobs.Updated) {
-		if u.Chunk == nil || u.Job.Kind != services.KindRender {
+		if u.Job.Kind != services.KindRender {
+			return
+		}
+		if strings.HasPrefix(u.Job.Owner, "preview:") && u.Chunk == nil && (u.Job.State.Terminal() || u.Job.State == jobs.StateInterrupted) {
+			// A pronunciation test (Settings → Pronunciation).
+			j := u.Job
+			why := ""
+			if j.State == jobs.StateFailed || j.State == jobs.StateInterrupted {
+				why = jobErrorText(j.Err)
+			}
+			a.post(func() { a.previewDone(j.ID, j.State == jobs.StateSucceeded, why) })
+			return
+		}
+		if u.Chunk == nil {
 			return
 		}
 		id, ok := strings.CutPrefix(u.Job.Owner, takeOwner)
@@ -102,7 +115,6 @@ func (a *app) playPreview() {
 	if a.preview == nil {
 		return
 	}
-	a.preview.SetPosition(0)
 	a.pl.PlayStream(a.previewID, a.preview)
 }
 

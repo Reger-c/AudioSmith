@@ -35,6 +35,7 @@ type fakeSynth struct {
 	ids     []string
 	started chan string
 	rate    int
+	limit   int // texts longer fail with input_too_long
 }
 
 func (f *fakeSynth) Run(ctx context.Context, job jobs.Job, report func(jobs.Progress), _ func(json.RawMessage)) (json.RawMessage, error) {
@@ -55,6 +56,10 @@ func (f *fakeSynth) Run(ctx context.Context, job jobs.Job, report func(jobs.Prog
 	}
 	report(jobs.Progress{Stage: "loading", Fraction: -1})
 	report(jobs.Progress{Stage: "generating", Fraction: 0.5, AudioSeconds: 0.2})
+	if f.limit > 0 && len([]rune(p.Text)) > f.limit {
+		data, _ := json.Marshal(map[string]any{"limit": f.limit, "actual": len([]rune(p.Text)), "unit": "chars"})
+		return nil, &jobs.Error{Code: proto.CodeInputTooLong, Message: "text too long", Data: data}
+	}
 	switch {
 	case strings.Contains(p.Text, "block"):
 		<-ctx.Done()
@@ -509,5 +514,21 @@ func TestPrunePreviewCheckAndExport(t *testing.T) {
 	}
 	if _, f, err := wav.ReadFile(dst); err != nil || f.Encoding != wav.Float32 {
 		t.Errorf("export %+v %v", f, err)
+	}
+}
+
+// The engine's own limit is lower than the catalogue's: the take is
+// planned again with shorter chunks.
+func TestRenderReplansWhenTheEngineWantsShorterChunks(t *testing.T) {
+	e := newRenderEnv(t, func(string) ModelInfo { i := kokoroInfo(""); i.MaxChars = 200; return i })
+	e.synth.limit = 40
+	j, tk := e.generate(t, core.Take{Text: longScript, Model: "m/kokoro", Voice: "af_heart"})
+	if j.State != jobs.StateSucceeded {
+		t.Fatalf("job %s %+v", j.State, j.Err)
+	}
+	for _, c := range tk.Render.Chunks {
+		if n := len([]rune(c.Text)); n > 40 {
+			t.Errorf("chunk of %d", n)
+		}
 	}
 }

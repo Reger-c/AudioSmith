@@ -83,6 +83,12 @@ func (s *scriptEditor) set(t string) {
 	s.synced, s.version = t, s.st.Buffer.Version()
 }
 
+// scriptFocused reports whether the script editor has the keyboard focus
+// (window shortcuts that are typed characters, as "?", leave it the key).
+func (a *app) scriptFocused() bool {
+	return a.script.st != nil && a.script.st.Focused() && a.currentPage() == "studio"
+}
+
 // syncScript reconciles a.text and the buffer: text set elsewhere (tests,
 // Reuse, the palette) goes into the buffer; edits in the editor come out.
 func (a *app) syncScript() {

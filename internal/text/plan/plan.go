@@ -26,6 +26,7 @@
 package plan
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -52,8 +53,10 @@ type Options struct {
 	// (BCP-47); "" guesses from the text.
 	Lang string
 	// NonVerbal: the engine renders non-verbal tags and bracketed
-	// phonemes itself (OmniVoice).
-	NonVerbal bool
+	// phonemes itself (OmniVoice). NonVerbalTags, when set, lists the
+	// tags it renders (lower-case, without brackets); others are removed.
+	NonVerbal     bool
+	NonVerbalTags []string
 	// Speed: the engine takes a speed factor, so [slow]/[fast] work.
 	Speed bool
 	// Voices: [voice:NAME] is allowed (Stories). In the Studio it is not.
@@ -231,7 +234,7 @@ func Build(src string, o Options) Plan {
 			// nothing matches inside it.
 			add(t.Span.Of(src), t.Span)
 		case markup.NonVerbal:
-			if o.NonVerbal {
+			if o.NonVerbal && (o.NonVerbalTags == nil || slices.Contains(o.NonVerbalTags, t.Name)) {
 				add(" ["+t.Name+"] ", t.Span)
 			} else {
 				warn(CodeNonVerbalRemoved, t.Span, "tag", "["+t.Name+"]")

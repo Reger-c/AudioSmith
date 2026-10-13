@@ -116,9 +116,15 @@ func TestCannotGenerateWithoutEngineOrText(t *testing.T) {
 func TestModelSwitchShowsItsControls(t *testing.T) {
 	a, eng, tt := newTestApp(t)
 	tt.Frame()
-	if !tt.HasText("Speed  1.00×") {
-		t.Errorf("Kokoro shows no speed: %q", tt.Texts())
+	tt.Click("Voice controls")
+	tt.Frame()
+	if !tt.HasText("Speed  1.00×") || !tt.HasText("Pin the seed") || tt.HasText("Use the model's sampling defaults") {
+		t.Errorf("Kokoro's voice controls: %q", tt.Texts())
 	}
+	if tt.HasText("Auto-detect ▾") {
+		t.Error("Kokoro's language follows the voice: no picker")
+	}
+	tt.Key(0, ui.KeyEscape)
 
 	a.modelLabel = "Qwen3-TTS 0.6B Base (voice clone)"
 	a.modelChanged()
@@ -126,8 +132,13 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	if a.voice != "" || a.language != "Chinese" {
 		t.Errorf("voice %q language %q after switching", a.voice, a.language)
 	}
-	if tt.HasText("Speed  1.00×") || !tt.HasText("Voice cloning") || !tt.HasText("Use the model's sampling defaults") {
+	if !tt.HasText("Voice cloning") || !tt.HasText("🇨🇳 Chinese ▾") {
 		t.Errorf("controls for Qwen Base: %q", tt.Texts())
+	}
+	tt.Click("Voice controls")
+	tt.Frame()
+	if tt.HasText("Speed  1.00×") || !tt.HasText("Use the model's sampling defaults") {
+		t.Errorf("voice controls for Qwen Base: %q", tt.Texts())
 	}
 
 	// Sampling settings go out only when the defaults are off.
@@ -135,6 +146,7 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	a.temperature = 0.5
 	a.refAudio, a.refText = "/tmp/ref.wav", "Reference words"
 	tt.Frame()
+	tt.Key(0, ui.KeyEscape)
 	tt.Click("Generate")
 	req := renderOf(t, eng.last(t)).Take
 	if req.Temperature != 0.5 || req.MaxTokens != 1200 || req.Speed != 0 ||
@@ -212,9 +224,13 @@ func TestGenerateAsksForTheLicence(t *testing.T) {
 	a.voice = "female, young adult, british accent"
 	a.duration = 3
 	tt.Frame()
-	if !tt.HasText("Duration (seconds, 0 = natural)") || !tt.HasText("CC BY-NC 4.0 · non-commercial use only") {
+	tt.Click("Voice controls")
+	tt.Frame()
+	if !tt.HasText("Duration (seconds, 0 = natural)") || !tt.HasText("CC BY-NC 4.0 · non-commercial use only") ||
+		!tt.HasText("A duration overrides the speed.") {
 		t.Errorf("OmniVoice controls: %q", tt.Texts())
 	}
+	tt.Key(0, ui.KeyEscape)
 	tt.Click("Generate")
 	tt.Frame()
 	if !a.licenceOpen || a.job != nil || len(eng.sent) != 0 {
