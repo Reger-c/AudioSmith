@@ -3,6 +3,7 @@
   "identifier": "dev.hehehai.audiosmith",
   "version": "0.1.0",
   "out": "build",
+  "urlSchemes": ["audiosmith"],
   "macos": {
     "minimumSystemVersion": "14.0",
     "infoPlist": {

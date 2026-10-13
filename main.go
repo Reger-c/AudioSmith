@@ -30,6 +30,7 @@ func main() {
 	takes := openTakeStore(dataDir)            // takes.go
 	eng := newEngineProcess(resources, logDir) // enginelink.go
 	a := newApp(eng, takes)                    // app.go
+	a.connectShell(logDir)                     // shell.go
 	a.connectEngine(eng)                       // enginelink.go
 
 	mygo.App.WhenReady(func() {

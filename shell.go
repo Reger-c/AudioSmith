@@ -1,45 +1,228 @@
 package main
 
-// The window shell: the window itself, the sidebar and page switching,
-// page headers. Thread C replaces the page switch with ui.Router, adds the
-// status bar, command palette, settings and ⌘E here and in new shell_*.go
-// files.
+// The window shell: the window, the sidebar and the router of pages, the
+// status bar and the overlays every page shares (command palette, the
+// shortcut sheet, the engine quick switch, notifications, the licence
+// dialog), and the theme. Its parts live in shell_*.go:
+//
+//	shell_commands.go  command registry, ⌘K palette, ? sheet, native menu, deep links
+//	shell_status.go    status bar, notification centre, ⌘E quick switch
+//	shell_logs.go      logs page and panel
+//	shell_settings.go  settings service wiring, settings pages, language, theme
+//	shell_models.go    Models page, downloads, licence gate and dialog
 
 import (
-	"fmt"
+	"context"
+	"io"
+	"log"
+	"os"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/licence"
+	"github.com/hehehai/AudioSmith/internal/logs"
+	"github.com/hehehai/AudioSmith/internal/notify"
+	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 const (
-	titleBarHeight = 52
-	sidebarWidth   = 200
-	inspectorWidth = 300
+	titleBarHeight  = 52
+	sidebarWidth    = 200
+	inspectorWidth  = 300
+	statusBarHeight = 26
 )
 
-// shellState is the shell's view state.
+// baseFontSize is the platform's text size at 100 %: px scales sizes
+// designed for it with the UI scale (settings.Appearance.Scale).
+var baseFontSize = ui.LightTheme().FontSize
+
+// px scales a size in DIPs designed at 100 % to the theme in use:
+// ui.Text(c, s).FontSize(px(t, 12)).
+func px(t *ui.Theme, n float32) float32 { return n * t.FontSize / baseFontSize }
+
+// shellState is the shell's view state and the services it owns.
 type shellState struct {
-	page string // sidebar selection: "studio", "history" or "engine"
+	router *ui.Router
+	// nav is the sidebar's choice; navShown the router path it was last
+	// synced from (see syncNav).
+	nav, navShown string
+	lastSettings  string // settings section shown last
+
+	bus      *core.Bus
+	settings settings.Service
+	prefs    settings.Settings // the settings, as this thread last saw them
+	notes    *notify.Center
+	notices  []core.Notification // newest first
+	logs     *logs.Ring
+	licences *licence.Gate
+	accepted []core.LicenceAcceptance
+
+	version string // the app's, for the status bar; "" in tests
+
+	paletteOpen  bool
+	paletteQuery string
+	paletteSel   int
+	sheetOpen    bool
+	switchOpen   bool
+	noticesOpen  bool
+	logsPanel    bool
+	logsSource   string
+	logsQuery    string
+	logsHeight   float32
+	logsDirty    atomic.Bool // a redraw for new lines is on its way
+
+	modelsState
+	settingsForm
+	licenceDialog
+	menuLocale string // locale the native menu was built in
+	hasMenu    bool   // the app runs (not a test): it has a menu bar to build
 }
 
 func newShellState() shellState {
-	return shellState{page: "studio"}
+	return shellState{
+		router:       ui.NewRouter("/studio"),
+		lastSettings: "general",
+		logsHeight:   220,
+		prefs:        settings.Defaults(),
+	}
 }
 
-// showPage goes to a page by name ("studio", "history", "engine"). Other
-// areas navigate only through it (and read currentPage), so the shell can
-// move to ui.Router paths without touching them.
-func (a *app) showPage(name string) { a.page = name }
+// openShell wires the shell to the library's bus and store: settings and
+// licence acceptances persist in its database (documents "settings:app"
+// and the licences table), notifications and logs stay in memory until
+// main's wiring (connectShell) adds the log files.
+func (a *app) openShell(lib *library) {
+	a.bus = lib.bus
+	a.router.Transition = ui.TransitionFade
+	st, err := settings.Open(context.Background(), lib.store.Documents(), func(ev settings.Changed) { a.bus.Publish(ev) })
+	if err != nil {
+		log.Printf("settings: %v", err)
+	}
+	a.settings = st
+	a.prefs = st.Get()
+	a.notes = notify.New(a.bus)
+	a.logs = logs.New(logs.Options{Bus: a.bus})
+	a.licences = licence.New(lib.store.Licences(), nil, a.bus)
+	a.models = map[string]*modelState{}
+	a.loadSettingsForm()
 
-// currentPage is the name of the page shown.
-func (a *app) currentPage() string { return a.page }
+	core.On(a.bus, func(ev core.NotificationPosted) {
+		a.post(func() { a.noticePosted(ev.Notification) })
+	})
+	core.On(a.bus, func(ev settings.Changed) {
+		a.post(func() { a.settingsChanged(ev.Old, ev.New) })
+	})
+	core.On(a.bus, func(core.LicenceChanged) { a.loadAcceptances() })
+	core.On(a.bus, func(core.LogAppended) {
+		// Many lines may come at once: one redraw for all of them.
+		if a.logsDirty.CompareAndSwap(false, true) {
+			a.post(func() { a.logsDirty.Store(false) })
+		}
+	})
+	a.applyLocale()
+	a.loadAcceptances()
+}
+
+// connectShell adds what only the real app has: log files in logDir (the
+// Go log package writes there too), the app's version, the system
+// language and deep links. main calls it before App.Run.
+func (a *app) connectShell(logDir string) {
+	if logDir != "" {
+		a.logs.Close()
+		a.logs = logs.New(logs.Options{Dir: logDir, Bus: a.bus})
+		log.SetOutput(io.MultiWriter(os.Stderr, a.logs.Writer("app")))
+	}
+	mygo.App.OnOpenURL(func(u string) { a.post(func() { a.openURL(u) }) })
+}
+
+// closeShell stops downloads and flushes the logs; it runs on quit.
+func (a *app) closeShell() {
+	for _, m := range a.models {
+		if m.cancel != nil {
+			m.cancel()
+		}
+	}
+	a.logs.Close()
+}
+
+// pages are the sidebar's pages, in the order ⌘1… choose them.
+var pages = []struct {
+	path, title string // title: English, translated where shown
+	icon        *ui.SVG
+}{
+	{"/studio", "Studio", studioIcon},
+	{"/history", "History", historyIcon},
+	{"/models", "Models", modelsIcon},
+	{"/engine", "Engine", engineIcon},
+	{"/logs", "Logs", logsIcon},
+}
+
+// pageTitle translates a page's title (literal calls, for the key scan).
+func pageTitle(path string) string {
+	switch path {
+	case "/studio":
+		return i18n.T("Studio")
+	case "/history":
+		return i18n.T("History")
+	case "/models":
+		return i18n.T("Models")
+	case "/engine":
+		return i18n.T("Engine")
+	case "/logs":
+		return i18n.T("Logs")
+	case "/settings":
+		return i18n.T("Settings")
+	}
+	return path
+}
+
+// navigate goes to a router path ("/models", "/settings/general"); it
+// does nothing when that page shows already. "/settings" opens the
+// section shown last.
+func (a *app) navigate(path string) {
+	if path == "/settings" || path == "/settings/" {
+		path = "/settings/" + a.lastSettings
+	}
+	if rest, ok := strings.CutPrefix(path, "/settings/"); ok && rest != "" {
+		a.lastSettings, _, _ = strings.Cut(rest, "/")
+	}
+	if path == a.router.Path() {
+		return
+	}
+	a.router.Push(path)
+	if path == "/models" {
+		a.refreshModels()
+	}
+}
+
+// showPage goes to a page by name ("studio", "history", "engine",
+// "models", "logs", "settings"). Other areas navigate only through it
+// (and read currentPage).
+func (a *app) showPage(name string) { a.navigate("/" + name) }
+
+// currentPage is the name of the page shown: the first part of its path.
+func (a *app) currentPage() string { return section(a.router.Path())[1:] }
+
+// section is the first part of a path: "/settings/models" → "/settings".
+func section(path string) string {
+	if i := strings.IndexByte(path[1:], '/'); i >= 0 {
+		return path[:i+1]
+	}
+	return path
+}
 
 // openWindow opens the main window; it runs in App.WhenReady.
 func (a *app) openWindow() {
+	a.version = mygo.App.Version()
+	a.systemLocale = mygo.App.Locale()
+	a.hasMenu = true
+	a.applyLocale() // the system's language, unless the settings name one
+	a.buildMenu()
 	a.win = mygo.NewWindow(mygo.WindowOptions{
 		Title:          "AudioSmith",
 		Width:          1100,
@@ -51,6 +234,7 @@ func (a *app) openWindow() {
 		TitleBarHeight: titleBarHeight,
 		Content:        ui.View(a.view),
 	})
+	a.refreshModels()
 }
 
 func icon(shapes string) *ui.SVG {
@@ -58,21 +242,29 @@ func icon(shapes string) *ui.SVG {
 }
 
 var (
-	studioIcon  = icon(`<path d="M2 8h1.5M5 5v6M8 3v10M11 5.5v5M14 8h-1"/>`)
-	historyIcon = icon(`<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>`)
-	engineIcon  = icon(`<rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/>`)
+	studioIcon   = icon(`<path d="M2 8h1.5M5 5v6M8 3v10M11 5.5v5M14 8h-1"/>`)
+	historyIcon  = icon(`<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>`)
+	engineIcon   = icon(`<rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/>`)
+	modelsIcon   = icon(`<path d="M8 1.8 13.5 5v6L8 14.2 2.5 11V5z"/><path d="M2.5 5 8 8.2 13.5 5M8 8.2v6"/>`)
+	logsIcon     = icon(`<rect x="2.5" y="2" width="11" height="12" rx="1.5"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/>`)
+	settingsIcon = icon(`<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>`)
+	bellIcon     = icon(`<path d="M4 11V7a4 4 0 0 1 8 0v4l1 1.5H3z"/><path d="M6.5 14a1.5 1.5 0 0 0 3 0"/>`)
+	searchIcon   = icon(`<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/>`)
 )
 
 func (a *app) view(c *ui.Context) {
+	a.applyTheme(c)
 	t := c.Theme()
+	if a.win == nil || a.prefs.Appearance.ReduceMotion {
+		// Tests and snapshots show every change at once, as does the
+		// user's Reduce motion.
+		c.DisableAnimations()
+	}
 	for _, m := range a.toasts {
 		c.Toast(m)
 	}
 	a.toasts = nil
-
-	if c.Shortcut(ui.Cmd, ui.KeyEnter) {
-		a.generate()
-	}
+	a.shortcuts(c)
 	if a.engineSummary().Busy {
 		// Keep the elapsed time current.
 		c.After(500 * time.Millisecond)
@@ -81,66 +273,114 @@ func (a *app) view(c *ui.Context) {
 		// Notice the end of playback, so Pause turns back into Play.
 		c.After(200 * time.Millisecond)
 	}
+	a.syncNav()
 
-	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(sidebarWidth).Shrink(0).Background(t.Surface).Children(func() {
-			a.sidebar(c)
+	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
+		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+			ui.Column(c).Width(px(t, sidebarWidth)).Shrink(0).Background(t.Surface).Children(func() {
+				a.sidebar(c)
+			})
+			ui.Box(c).Width(1).Background(t.Border)
+			ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
+				a.pages(c)
+				if a.logsPanel && section(a.router.Path()) != "/logs" {
+					ui.Divider(c)
+					ui.Column(c.Key("logs-panel")).Height(px(t, a.logsHeight)).Shrink(0).Children(func() {
+						a.logsView(c, true)
+					})
+				}
+			})
 		})
-		ui.Box(c).Width(1).Background(t.Border)
-		ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
-			switch a.page {
-			case "history":
-				a.historyPage(c)
-			case "engine":
-				a.enginePage(c)
-			default:
-				a.studioPage(c)
-			}
-		})
+		ui.Divider(c)
+		a.statusBar(c)
+	})
+	a.palette(c)
+	a.shortcutSheet(c)
+	a.licenceModal(c)
+	a.modelsAlerts(c)
+}
+
+// pages builds the page the router shows.
+func (a *app) pages(c *ui.Context) {
+	a.router.View(c, func(r *ui.Route) {
+		switch {
+		case r.Match("/studio"):
+			r.Title(i18n.T("Studio"))
+			a.studioPage(c)
+		case r.Match("/history"):
+			r.Title(i18n.T("History"))
+			a.historyPage(c)
+		case r.Match("/models"):
+			r.Title(i18n.T("Models"))
+			a.modelsPage(c)
+		case r.Match("/engine"):
+			r.Title(i18n.T("Engine"))
+			a.enginePage(c)
+		case r.Match("/logs"):
+			r.Title(i18n.T("Logs"))
+			a.logsPage(c)
+		case r.Match("/settings/{section...}"):
+			r.Title(i18n.T("Settings"))
+			a.settingsPage(c, r)
+		default:
+			r.Title(i18n.T("Not found"))
+			a.notFoundPage(c, r.Path())
+		}
+	}).Grow(1).MinHeight(0)
+}
+
+func (a *app) notFoundPage(c *ui.Context, path string) {
+	t := c.Theme()
+	header(c, i18n.T("Not found"), nil)
+	ui.Column(c).Grow(1).Center().Gap(px(t, 8)).Children(func() {
+		ui.Text(c, i18n.T("There is no page at %s.", path)).TextColor(t.TextMuted)
+		if ui.Button(c.Key("go-studio"), i18n.T("Go to the Studio")).Clicked() {
+			a.navigate("/studio")
+		}
 	})
 }
 
-func (a *app) sidebar(c *ui.Context) {
-	t := c.Theme()
-	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
-	ui.Sidebar(c, &a.page, func() {
-		ui.SidebarSection(c, "AudioSmith", nil, func() {
-			ui.SidebarItem(c, "studio", studioIcon, i18n.T("Studio"))
-			ui.SidebarItem(c, "history", historyIcon, i18n.T("History")).Children(func() {
-				if n := len(a.takes); n > 0 {
-					ui.Badge(c, fmt.Sprint(n))
-				}
-			})
-			ui.SidebarItem(c, "engine", engineIcon, i18n.T("Engine"))
-		})
-	}).Grow(1).Background(ui.Transparent).Label(i18n.T("Sections"))
+// syncNav makes the sidebar follow the router (Back, deep links, ⌘1…),
+// but not undo a choice in the sidebar the router has not seen yet.
+func (a *app) syncNav() {
+	if p := section(a.router.Path()); p != a.navShown {
+		a.nav, a.navShown = p, p
+	}
+}
 
-	// The engine's status, at the bottom.
-	ui.Column(c).Padding(12, 14).Gap(4).Children(func() {
-		eng := a.engineSummary()
-		color, label := t.Warning, i18n.T("Engine starting…")
-		switch eng.State {
-		case engineReady:
-			color, label = t.Success, i18n.T("Engine ready")
-		case engineFailed:
-			color, label = t.Danger, i18n.T("Engine stopped")
-		}
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Size(8, 8).Radius(4).Background(color)
-			ui.Text(c, label).FontSize(12)
+func (a *app) sidebar(c *ui.Context) {
+	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
+	ui.Sidebar(c, &a.nav, func() {
+		ui.SidebarSection(c, "AudioSmith", nil, func() {
+			for _, p := range pages {
+				item := ui.SidebarItem(c, p.path, p.icon, pageTitle(p.path))
+				switch p.path {
+				case "/history":
+					item.Children(func() {
+						if n := len(a.takes); n > 0 {
+							ui.Badge(c, itoa(n))
+						}
+					})
+				case "/models":
+					if n := a.downloadsRunning(); n > 0 {
+						item.Children(func() { ui.Badge(c, itoa(n)) })
+					}
+				}
+			}
 		})
-		model := i18n.T("No model loaded")
-		if len(eng.Loaded) > 0 {
-			model = catalog.Builtin().DisplayName(eng.Loaded[0])
-		}
-		ui.Text(c, model).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+		ui.SidebarSection(c, i18n.T("App"), nil, func() {
+			ui.SidebarItem(c, "/settings", settingsIcon, i18n.T("Settings"))
+		})
+	}).Grow(1).Background(ui.Transparent).Label(i18n.T("Sections")).OnChange(func() {
+		a.navigate(a.nav)
 	})
 }
 
 // header is a page's title bar, which drags the window.
 func header(c *ui.Context, title string, trailing func()) {
+	t := c.Theme()
 	ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, 16, 0, 20).Gap(8).DragWindow().Children(func() {
-		ui.Text(c, title).FontSize(15).Bold().SingleLine().Grow(1)
+		ui.Text(c, title).FontSize(px(t, 15)).Bold().SingleLine().Grow(1)
 		if trailing != nil {
 			trailing()
 		}

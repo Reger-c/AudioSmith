@@ -65,6 +65,10 @@ type Catalog struct {
 }
 
 // Entry is one downloadable model.
+//
+// Revision is empty ("main") for the MVP presets while the v1 engine
+// downloads by repo id and reads refs/main; once the supervisor loads
+// snapshots by path (proto.LoadParams.Path), entries pin commits.
 type Entry struct {
 	ID       string `json:"id"`                 // stable slug, used in settings and the DB: "kokoro-82m-bf16"
 	Label    string `json:"label"`              // shown in pickers (not translated: product names)
@@ -87,7 +91,25 @@ type Entry struct {
 	MinMemoryGB  float64 `json:"minMemoryGB,omitempty"`
 	Quantization string  `json:"quantization,omitempty"` // "bf16", "8bit", "4bit"…
 
+	// Aux are other repos the model loads at run time (Kokoro's G2P
+	// models): downloaded with it, before it, and needed for it to count
+	// as downloaded. Their sizes are in Size.
+	Aux []Aux `json:"aux,omitempty"`
+
+	// Hidden entries are listed on the Models page (download, licence)
+	// but not offered by pickers (ForTask, Labels) until the app can run
+	// them: OmniVoice waits for the licence gate in the generate path.
+	Hidden bool `json:"hidden,omitempty"`
+
 	Licence Licence `json:"licence"`
+}
+
+// Aux is an auxiliary repo of an entry.
+type Aux struct {
+	Repo     string `json:"repo"`
+	Revision string `json:"revision,omitempty"`
+	Files    []File `json:"files,omitempty"`
+	Licence  string `json:"licence,omitempty"` // SPDX-like, for the credits
 }
 
 // Language is one language a model speaks or understands.
@@ -189,6 +211,11 @@ func (c *Catalog) Validate() error {
 		if e.Label == CustomLabel {
 			return fmt.Errorf("%s: label %q is reserved", e.ID, CustomLabel)
 		}
+		for _, a := range e.Aux {
+			if a.Repo == "" || a.Repo == e.Repo {
+				return fmt.Errorf("%s: bad aux repo %q", e.ID, a.Repo)
+			}
+		}
 	}
 	return nil
 }
@@ -217,11 +244,12 @@ func (c *Catalog) find(match func(*Entry) bool) (Entry, bool) {
 	return Entry{}, false
 }
 
-// ForTask returns the entries that do task, in catalogue order.
+// ForTask returns the entries that do task, in catalogue order, without
+// hidden ones.
 func (c *Catalog) ForTask(task Task) []Entry {
 	var out []Entry
 	for _, e := range c.Entries {
-		if slices.Contains(e.Tasks, task) {
+		if !e.Hidden && slices.Contains(e.Tasks, task) {
 			out = append(out, e)
 		}
 	}

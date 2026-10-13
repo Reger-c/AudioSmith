@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "entries": [
     {
       "id": "kokoro-82m-bf16",
@@ -48,10 +48,14 @@
       ],
       "capabilities": ["speed"],
       "sampleRate": 24000,
-      "size": 390000000,
+      "size": 481172807,
       "minMemoryGB": 2,
       "quantization": "bf16",
-      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/hexgrad/Kokoro-82M", "commercial": true, "verified": true}
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/hexgrad/Kokoro-82M", "commercial": true, "verified": true},
+      "aux": [
+        {"repo": "beshkenadze/kitten-tts-g2p", "licence": "mit"},
+        {"repo": "beshkenadze/g2p-multilingual-byT5-tiny-mlx", "licence": "mit"}
+      ]
     },
     {
       "id": "qwen3-tts-0.6b-customvoice-8bit",
@@ -83,7 +87,7 @@
       ],
       "capabilities": ["sampling", "voiceStyle", "language"],
       "sampleRate": 24000,
-      "size": 2000000000,
+      "size": 1973575388,
       "minMemoryGB": 4,
       "quantization": "8bit",
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice", "commercial": true, "verified": true}
@@ -109,7 +113,7 @@
       ],
       "capabilities": ["sampling", "clone", "language"],
       "sampleRate": 24000,
-      "size": 2000000000,
+      "size": 1991299138,
       "minMemoryGB": 4,
       "quantization": "8bit",
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base", "commercial": true, "verified": true}
@@ -130,10 +134,10 @@
       ],
       "capabilities": ["sampling", "clone"],
       "sampleRate": 24000,
-      "size": 670000000,
+      "size": 672148432,
       "minMemoryGB": 2,
       "quantization": "8bit",
-      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Marvis-AI/marvis-tts-250m-v0.2", "commercial": true, "verified": false}
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Marvis-AI/marvis-tts-250m-v0.2", "commercial": true, "verified": true}
     },
     {
       "id": "soprano-80m-bf16",
@@ -146,10 +150,25 @@
         {"code": "en"}
       ],
       "capabilities": ["sampling"],
-      "size": 220000000,
+      "size": 220645307,
       "minMemoryGB": 1,
       "quantization": "bf16",
-      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/ekwek/Soprano-80M", "commercial": true, "verified": false}
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/ekwek/Soprano-80M", "commercial": true, "verified": true}
+    },
+    {
+      "id": "omnivoice-bf16",
+      "label": "OmniVoice",
+      "family": "omnivoice",
+      "repo": "mlx-community/OmniVoice-bf16",
+      "tasks": ["tts"],
+      "about": "646 languages. Designs a voice from a description (\"female, young adult, british accent\") or clones a reference clip; can hit an exact duration. Non-commercial licence.",
+      "capabilities": ["clone", "design", "voiceStyle", "language", "duration"],
+      "sampleRate": 24000,
+      "size": 1639492513,
+      "minMemoryGB": 8,
+      "quantization": "bf16",
+      "hidden": true,
+      "licence": {"id": "cc-by-nc-4.0", "name": "CC BY-NC 4.0", "url": "https://huggingface.co/k2-fsa/OmniVoice", "commercial": false, "requiresAcceptance": true, "verified": true}
     }
   ]
 }

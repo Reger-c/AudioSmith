@@ -33,11 +33,11 @@ func TestChinese(t *testing.T) {
 		t.Error(got)
 	}
 	// Missing translations fall back to English.
-	if got := T("No takes yet"); got != "No takes yet" {
+	if got := T("A message nobody translated"); got != "A message nobody translated" {
 		t.Error(got)
 	}
-	if got := N(1, "%d take", "%d takes", 1); got != "1 takes" {
-		t.Error("zh-Hans has no singular, so it uses (the translation of) other:", got)
+	if got := N(1, "%d take", "%d takes", 1); got != "1 条录音" {
+		t.Error("zh-Hans has no singular, so it uses the translation of other:", got)
 	}
 }
 
@@ -58,5 +58,11 @@ func TestCatalogsParse(t *testing.T) {
 		if got := SetLocale(tag); got != tag {
 			t.Errorf("SetLocale(%s) = %s", tag, got)
 		}
+	}
+}
+
+func TestNames(t *testing.T) {
+	if Name("en") != "English" || Name("zh-Hans") != "简体中文" || Name("xx") != "xx" {
+		t.Error(Name("en"), Name("zh-Hans"))
 	}
 }

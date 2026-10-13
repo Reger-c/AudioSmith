@@ -10,6 +10,20 @@
 //	<cache>/models--<owner>--<name>/snapshots/<revision>/<path> → ../../blobs/…
 //	<cache>/models--<owner>--<name>/refs/main  (the revision "main" points at)
 //
+// Client (client.go) implements Downloader over the HF HTTP API:
+//   - Plan asks /api/models/<repo>/revision/<rev>?blobs=true for the commit
+//     and its files, racing the endpoints (huggingface.co, hf-mirror.com)
+//     and reusing the winner for a day; gated repos go to the official
+//     endpoint only, and only it ever sees the token (token.go: $HF_TOKEN,
+//     the Keychain, huggingface-cli's file). It refuses when the disk
+//     would keep less than ReserveBytes free.
+//   - Download fetches files Parallel at a time, big ones in ChunkSize
+//     ranges, into blobs/<name>.incomplete (+ .parts recording finished
+//     ranges), resuming what is there (also huggingface_hub's sequential
+//     partials), retrying dropped connections from where they stopped;
+//     checks sha256 (LFS) or the git blob id (others); links the snapshot
+//     beside its place and renames it in; writes refs/<branch> last.
+//
 // Imports: catalog (events satisfy core.Event structurally). Downloads run
 // as jobs.LaneNet jobs of kind "model.download"; the Downloader does the
 // work for their executor.
@@ -17,6 +31,7 @@ package hub
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,14 +96,30 @@ type Options struct {
 	CacheDir string
 	// Endpoints are raced on the first request; the fastest healthy one
 	// wins ("https://huggingface.co", "https://hf-mirror.com"). Empty =
-	// $HF_ENDPOINT, else huggingface.co.
+	// $HF_ENDPOINT, else DefaultEndpoints.
 	Endpoints []string
+	// Official is the endpoint trusted with the token: gated repos
+	// download only from it, and mirrors never see the token. "" =
+	// $HF_ENDPOINT, else "https://huggingface.co".
+	Official string
 	// Token returns the HF token (from the Keychain; $HF_TOKEN in dev) for
-	// gated repos; nil or "" = anonymous.
+	// gated repos; nil or "" = anonymous. See Token.
 	Token func() string
 	// Parallel is the number of files (and ranges of big files) fetched at
 	// once. 0 = 4.
 	Parallel int
+	// ChunkSize is the size of the ranges big files are fetched in, in
+	// parallel; files under two chunks download whole. 0 = 16 MiB.
+	ChunkSize int64
+	// ReserveBytes is the free space a download must leave on the cache
+	// volume. 0 = 2 GB; negative = no check.
+	ReserveBytes int64
+	// Proxy is "" (automatic: environment, then the macOS system proxy),
+	// "direct", or a proxy URL; see proxy.go.
+	Proxy string
+	// HTTPClient makes the requests; nil = a client with timeouts and
+	// Proxy.
+	HTTPClient *http.Client
 }
 
 // Downloader manages model files. Goroutine-safe; methods may block on I/O.
@@ -105,8 +136,9 @@ type Downloader interface {
 	// half there. progress is called often; ctx cancels (partial files
 	// stay for resuming).
 	Download(ctx context.Context, e catalog.Entry, progress func(Progress)) error
-	// Verify re-hashes the files and returns the bad or missing ones; a
-	// later Download repairs them.
+	// Verify re-hashes the files and returns the bad or missing ones,
+	// removing bad blobs so that a later Download repairs them. It needs
+	// the HF API when e lists no files with hashes.
 	Verify(ctx context.Context, e catalog.Entry) ([]string, error)
 	// Delete removes the entry's snapshot and the blobs no other snapshot uses.
 	Delete(ctx context.Context, e catalog.Entry) error
@@ -114,8 +146,11 @@ type Downloader interface {
 
 // Plan is what a download will do.
 type Plan struct {
-	Revision  string // resolved commit
-	Files     []catalog.File
-	Bytes     int64 // still to download
-	FreeBytes int64 // on the cache volume
+	Revision   string // resolved commit
+	Files      []catalog.File
+	TotalBytes int64 // every file
+	Bytes      int64 // still to download
+	FreeBytes  int64 // on the cache volume; -1 when unknown
+	Endpoint   string
+	Gated      bool
 }
