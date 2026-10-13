@@ -1,0 +1,90 @@
+{{- /*
+Per-language notes, looked up as "notes:<variant>" then "notes:<code>"
+(variant = Lang.Variant(): zh-Hans, zh-Hant, pt-BR, es-MX, en-GB…).
+Only languages with conventions worth stating have notes.
+*/ -}}
+
+{{define "notes:zh-Hans" -}}
+- Write Simplified Chinese characters as used in Mainland China.
+- Use full-width Chinese punctuation (，。！？：；“”……——) and no spaces between Chinese characters.
+- Prefer spoken Mandarin over literary phrasing; avoid translationese such as stacked "的" or "被" passives.
+- Leave a Latin-script name or term as is when that is how Chinese speakers say it (e.g. iPhone, Wi-Fi).
+{{- end}}
+
+{{define "notes:zh-Hant" -}}
+- Write Traditional Chinese characters{{if eq .Region "HK"}} with Hong Kong vocabulary and usage{{else}} with Taiwan vocabulary and usage (e.g. 影片, 軟體, 資訊){{end}}.
+- Use full-width punctuation (，。！？：；「」……——) and no spaces between Chinese characters.
+- Prefer natural spoken phrasing over literary phrasing.
+{{- end}}
+
+{{define "notes:ja" -}}
+- Use natural spoken Japanese with 、 and 。; no spaces between words.
+- Keep each character's politeness level (です/ます vs. plain form) consistent with the scene and the speaker relationships shown in the context.
+- Use katakana for foreign names; drop pronouns where Japanese would.
+{{- end}}
+
+{{define "notes:ko" -}}
+- Use natural spoken Korean with standard spacing.
+- Keep speech levels (해요체 / 합니다체 / 반말) consistent with the speaker relationships shown in the context.
+{{- end}}
+
+{{define "notes:es" -}}
+- Use neutral international Spanish unless a region is given; use ¿…? and ¡…!.
+{{- end}}
+
+{{define "notes:es-ES" -}}
+- Use Castilian Spanish as spoken in Spain, including "vosotros" for plural "you" and Spain-specific vocabulary (ordenador, móvil, coche).
+- Use ¿…? and ¡…!.
+{{- end}}
+
+{{define "notes:es-MX" -}}
+- Use Mexican Spanish: "ustedes" for plural "you", Mexican vocabulary (computadora, celular, carro) and natural Mexican colloquialisms where the register allows.
+- Use ¿…? and ¡…!.
+{{- end}}
+
+{{define "notes:es-419" -}}
+- Use neutral Latin American Spanish: "ustedes" for plural "you", vocabulary understood across Latin America (computadora, celular), no strongly local slang.
+- Use ¿…? and ¡…!.
+{{- end}}
+
+{{define "notes:pt-BR" -}}
+- Use Brazilian Portuguese: "você" as the usual "you", Brazilian vocabulary and spelling (ônibus, celular, tela) and natural spoken constructions.
+{{- end}}
+
+{{define "notes:pt-PT" -}}
+- Use European Portuguese: "tu"/"você" as used in Portugal, Portuguese vocabulary and spelling (autocarro, telemóvel, ecrã) and the infinitive construction (estou a fazer).
+{{- end}}
+
+{{define "notes:pt" -}}
+- Use Brazilian Portuguese unless the style notes say otherwise.
+{{- end}}
+
+{{define "notes:en-GB" -}}
+- Use British English spelling and vocabulary (colour, flat, lorry, mobile).
+{{- end}}
+
+{{define "notes:en-US" -}}
+- Use American English spelling and vocabulary (color, apartment, truck, cell phone).
+{{- end}}
+
+{{define "notes:fr" -}}
+- Use standard French with the usual spaces before ; : ! ? and « ».
+- Choose "tu" or "vous" from the speaker relationships and keep it consistent.
+{{- end}}
+
+{{define "notes:fr-CA" -}}
+- Use Canadian (Québec) French vocabulary and usage, without forcing strong joual unless the style notes ask for it.
+- Choose "tu" or "vous" from the speaker relationships and keep it consistent.
+{{- end}}
+
+{{define "notes:de" -}}
+- Choose "du" or "Sie" from the speaker relationships and keep it consistent; use „…“ quotation marks.
+{{- end}}
+
+{{define "notes:ar" -}}
+- Use Modern Standard Arabic suitable for dubbing unless the style notes ask for a dialect; use Arabic punctuation (، ؟).
+{{- end}}
+
+{{define "notes:ru" -}}
+- Choose "ты" or "вы" from the speaker relationships and keep it consistent; use «…» quotation marks.
+{{- end}}
