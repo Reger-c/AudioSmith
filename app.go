@@ -35,6 +35,7 @@ func newApp(eng engine.Backend, takes *library) *app {
 	}
 	a.engineLink.eng = eng
 	a.openTakes(takes)
+	a.openShell(takes)
 	return a
 }
 
@@ -47,6 +48,16 @@ func (a *app) post(fn func()) {
 	a.win.Update(fn)
 }
 
+// async runs fn on a goroutine; in tests (no window) at once, so that
+// views see its results without waiting.
+func (a *app) async(fn func()) {
+	if a.win == nil {
+		fn()
+		return
+	}
+	go fn()
+}
+
 // toast shows msg (already translated) as a toast.
 func (a *app) toast(msg string) {
 	a.toasts = append(a.toasts, msg)
@@ -56,4 +67,5 @@ func (a *app) toast(msg string) {
 func (a *app) quit() {
 	a.pl.Stop()
 	a.eng.Stop()
+	a.closeShell()
 }
