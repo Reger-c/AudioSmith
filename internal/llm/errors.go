@@ -16,26 +16,26 @@ import (
 // Error codes. The UI maps them to messages; Params carry the details
 // named in each comment.
 const (
-	CodeNoKey         = "llm.no_key"          // provider: no API key stored
-	CodeAuth          = "llm.auth"            // provider, status: key rejected (401/403)
-	CodeRateLimited   = "llm.rate_limited"    // provider, retry_after (seconds, may be empty)
-	CodeServer        = "llm.server"          // provider, status: 5xx
-	CodeOverloaded    = "llm.overloaded"      // provider: 529 / "overloaded"
-	CodeBadRequest    = "llm.bad_request"     // provider, status, detail
-	CodeModelNotFound = "llm.model_not_found" // provider, model
-	CodeContextLength = "llm.context_length"  // provider, model: prompt too long
-	CodeFiltered      = "llm.content_filter"  // provider: refused by a safety filter
-	CodeTimeout       = "llm.timeout"         // provider, seconds
-	CodeCancelled     = "llm.cancelled"       //
-	CodeNetwork       = "llm.network"         // provider, detail (connection refused: is Ollama running?)
-	CodeBadResponse   = "llm.bad_response"    // provider, detail: unparseable body / stream
-	CodeEmpty         = "llm.empty"           // provider: no text
-	CodeInvalidJSON   = "llm.invalid_json"    // detail: no JSON value in the reply after repairs
-	CodeSchema        = "llm.schema"          // path, detail: JSON does not match the schema after repairs
-	CodeNoRoute       = "llm.no_route"        // skill: no provider configured
+	CodeNoKey         = "llm.no_key"           // provider: no API key stored
+	CodeAuth          = "llm.auth"             // provider, status: key rejected (401/403)
+	CodeRateLimited   = "llm.rate_limited"     // provider, retry_after (seconds, may be empty)
+	CodeServer        = "llm.server"           // provider, status: 5xx
+	CodeOverloaded    = "llm.overloaded"       // provider: 529 / "overloaded"
+	CodeBadRequest    = "llm.bad_request"      // provider, status, detail
+	CodeModelNotFound = "llm.model_not_found"  // provider, model
+	CodeContextLength = "llm.context_length"   // provider, model: prompt too long
+	CodeFiltered      = "llm.content_filter"   // provider: refused by a safety filter
+	CodeTimeout       = "llm.timeout"          // provider, seconds
+	CodeCancelled     = "llm.cancelled"        //
+	CodeNetwork       = "llm.network"          // provider, detail (connection refused: is Ollama running?)
+	CodeBadResponse   = "llm.bad_response"     // provider, detail: unparseable body / stream
+	CodeEmpty         = "llm.empty"            // provider: no text
+	CodeInvalidJSON   = "llm.invalid_json"     // detail: no JSON value in the reply after repairs
+	CodeSchema        = "llm.schema"           // path, detail: JSON does not match the schema after repairs
+	CodeNoRoute       = "llm.no_route"         // skill: no provider configured
 	CodeUnknown       = "llm.unknown_provider" // provider
-	CodeUnsupported   = "llm.unsupported"     // provider, feature
-	CodeConfig        = "llm.config"          // provider, field: bad preset / settings
+	CodeUnsupported   = "llm.unsupported"      // provider, feature
+	CodeConfig        = "llm.config"           // provider, field: bad preset / settings
 )
 
 // Error is every error this package returns.

@@ -34,7 +34,7 @@ const (
 // Preset is a provider's fixed facts. Presets are data (presets.json).
 type Preset struct {
 	ID           string            `json:"id"`
-	Name         string            `json:"name"` // brand name, not translated
+	Name         string            `json:"name"`      // brand name, not translated
 	Transport    string            `json:"transport"` // "openai" | "anthropic"
 	BaseURL      string            `json:"baseURL"`   // "" for custom: the user supplies it
 	Auth         string            `json:"auth"`
@@ -49,7 +49,7 @@ type Preset struct {
 	// MaxTokensField is the request field for Request.MaxTokens
 	// (OpenAI: "max_completion_tokens"); default "max_tokens".
 	MaxTokensField string `json:"maxTokensField,omitempty"`
-	Docs         string            `json:"docs,omitempty"`
+	Docs           string `json:"docs,omitempty"`
 }
 
 // SecretName is the Secrets name of the preset's API key.

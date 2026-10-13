@@ -242,7 +242,9 @@ func (r *Router) Routes(s Skill) []Route {
 }
 
 // Available reports whether s has at least one usable route.
-func (r *Router) Available(s Skill) bool { return r != nil && r.Registry != nil && len(r.Routes(s)) > 0 }
+func (r *Router) Available(s Skill) bool {
+	return r != nil && r.Registry != nil && len(r.Routes(s)) > 0
+}
 
 func (r *Router) client(b Backend) *Client {
 	return &Client{Backend: b, Timeout: r.Timeout, Retry: r.Retry, Meter: r.Meter, Sleep: r.Sleep}

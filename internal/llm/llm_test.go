@@ -586,7 +586,9 @@ type scripted struct {
 	calls []Request
 }
 
-func (s *scripted) Info() BackendInfo { return BackendInfo{ID: s.id, Local: s.local, Transport: "test"} }
+func (s *scripted) Info() BackendInfo {
+	return BackendInfo{ID: s.id, Local: s.local, Transport: "test"}
+}
 func (s *scripted) Chat(ctx context.Context, req Request) (Response, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -740,12 +742,12 @@ func TestThinkingStripped(t *testing.T) {
 
 func TestExtractJSONAndSchema(t *testing.T) {
 	cases := map[string]string{
-		`{"a":1}`:                           `{"a":1}`,
-		"```json\n[1,2]\n```":               `[1,2]`,
-		`Here: {"a":"}"} trailing`:          `{"a":"}"}`,
+		`{"a":1}`:                          `{"a":1}`,
+		"```json\n[1,2]\n```":              `[1,2]`,
+		`Here: {"a":"}"} trailing`:         `{"a":"}"}`,
 		"<think>{x}</think>\n{\"b\":true}": `{"b":true}`,
-		`text [not json] {"ok":1}`:          `{"ok":1}`,
-		"nothing":                           ``,
+		`text [not json] {"ok":1}`:         `{"ok":1}`,
+		"nothing":                          ``,
 	}
 	for in, want := range cases {
 		if got := string(ExtractJSON(in)); got != want {
