@@ -1,4 +1,4 @@
-module github.com/hehehai/audiosmith
+module github.com/hehehai/AudioSmith
 
 go 1.27.1
 

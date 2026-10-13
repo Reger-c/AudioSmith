@@ -110,3 +110,7 @@ MyGo is pinned in `go.mod`; `go tool mygo` runs the CLI at that version.
 - STT round trip (MLXAudioSTT) to check pronunciation
 - Model manager: downloaded models, sizes, delete
 - Signing, notarization and auto-updates (`macos.signingIdentity`, `updates` in `mygo.json`)
+
+## License
+
+[Apache-2.0](LICENSE)
