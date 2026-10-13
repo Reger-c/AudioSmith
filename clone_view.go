@@ -362,7 +362,7 @@ func (a *app) cloneSaveForm(c *ui.Context) {
 func (a *app) portraitPicker(c *ui.Context, key, name string, bmp *ui.Bitmap, use func(path string), remove func()) {
 	t := c.Theme()
 	ui.Column(c.Key(key)).Gap(px(t, 4)).AlignItems(ui.Center).Children(func() {
-		b := ui.ButtonBase(c.Key(key+"-pick")).Radius(px(t, 32)).Label(i18n.T("Choose a portrait")).
+		b := ui.ButtonBase(c.Key(key + "-pick")).Radius(px(t, 32)).Label(i18n.T("Choose a portrait")).
 			Tooltip(i18n.T("Click or drop an image: PNG, JPG or WebP up to 5 MB"))
 		if files := b.DroppedFiles(); files != nil {
 			use(files[0])

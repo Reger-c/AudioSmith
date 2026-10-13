@@ -761,6 +761,16 @@ func TestStudioSeam(t *testing.T) {
 		t.Errorf("clone on OmniVoice %+v", tk)
 	}
 
+	// A cached prompt is offered for models that reuse one.
+	pr := filepath.Join(t.TempDir(), "p.bin")
+	os.WriteFile(pr, []byte("prompt"), 0o644)
+	cc, _ := a.lib.svc.Voices.SaveFiles(context.Background(), *a.findVoice(c.ID), core.VoiceFiles{Prompt: pr, PromptModel: qwenBase})
+	withPrompt := base
+	withPrompt.Capabilities = append(withPrompt.Capabilities, catalog.CapVoicePrompt)
+	if got := a.studioVoicePrompt(withPrompt); got != a.voicePath(&cc, cc.Prompts[qwenBase]) || got == "" || a.studioVoicePrompt(base) != "" {
+		t.Errorf("voice prompt %q", got)
+	}
+
 	// The picker lists only the voices the model can use.
 	a.studioVoice = ""
 	labels, _ := a.studioVoiceOptions(kok)

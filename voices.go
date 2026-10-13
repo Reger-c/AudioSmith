@@ -744,6 +744,23 @@ func (a *app) fillVoice(t *core.Take, v *core.Voice, e catalog.Entry) {
 	}
 }
 
+// studioVoicePrompt is the cached voice prompt (tts.encodeVoice) of the
+// Studio's voice for model e, an absolute path, or "". The engine prefers
+// it to the reference, which applyStudioVoice still sets as the fallback.
+//
+// Thread G sends it as SynthesizeParams.VoicePrompt once core.Take
+// carries one: t.VoicePrompt = a.studioVoicePrompt(p)
+func (a *app) studioVoicePrompt(e catalog.Entry) string {
+	v := a.findVoice(a.studioVoice)
+	if v == nil || !e.Has(catalog.CapVoicePrompt) || v.Prompts[e.Repo] == "" {
+		return ""
+	}
+	if ok, _ := voiceUsable(v, e); !ok || (v.Locked && v.Sample != "") || v.Kind != core.VoiceCloned {
+		return "" // the prompt is of the reference, not of a locked take or a design
+	}
+	return a.voicePath(v, v.Prompts[e.Repo])
+}
+
 // styleFor is a clone's style hint as model e takes it: tag engines get
 // it reduced to their vocabulary, free-form ones as written, others none.
 func styleFor(e catalog.Entry, style string) string {
@@ -800,4 +817,6 @@ func (a *app) useVoiceInStudio(v *core.Voice) {
 func (a *app) referencesDir() string { return filepath.Join(a.lib.store.Dir(), "references") }
 
 // voiceCacheDir is the cache of rendered gallery previews.
-func (a *app) voiceCacheDir() string { return filepath.Join(filepath.Dir(a.lib.peaks.Dir), "voice-previews") }
+func (a *app) voiceCacheDir() string {
+	return filepath.Join(filepath.Dir(a.lib.peaks.Dir), "voice-previews")
+}

@@ -161,7 +161,7 @@ func (a *app) designDetails(c *ui.Context) {
 					labels, ids = append(labels, op.Label.In(loc)), append(ids, op.ID)
 				}
 				cur := labels[max(slices.Index(ids, d.attrs.Value(cat)), 0)]
-				ui.Row(c.Key("cat-"+string(cat))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+				ui.Row(c.Key("cat-" + string(cat))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, info.Label.In(loc)).FontSize(px(t, 12)).Width(px(t, 110)).Shrink(0)
 					if ui.Select(c.Key("pick-"+string(cat)), &cur, labels).Label(info.Label.In(loc)).Grow(1).Changed() {
 						if i := slices.Index(labels, cur); i >= 0 {
@@ -209,7 +209,7 @@ func (a *app) designSavedVoices(c *ui.Context) {
 	ui.Collapsible(c.Key("design-saved"), i18n.N(len(designed), "%d saved design", "%d saved designs", len(designed)), &d.savedOpen, func() {
 		ui.Column(c).Gap(px(t, 4)).Children(func() {
 			for _, v := range designed {
-				ui.Row(c.Key("saved-"+v.ID)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+				ui.Row(c.Key("saved-" + v.ID)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 					ui.Avatar(c, v.Name, a.portrait(v))
 					ui.Text(c, v.Name).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 					label := i18n.T("Preview")

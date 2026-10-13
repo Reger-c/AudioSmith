@@ -184,7 +184,7 @@ func (a *app) voiceEditor(c *ui.Context) {
 	if e.consent.phase != "" {
 		c.After(100 * time.Millisecond)
 	}
-	ui.Column(c.Key("editor-"+v.ID)).Padding(px(t, 16)).Gap(px(t, 14)).Children(func() {
+	ui.Column(c.Key("editor-" + v.ID)).Padding(px(t, 16)).Gap(px(t, 14)).Children(func() {
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, i18n.T("Edit voice profile")).Bold().Grow(1)
 			if ui.Button(c.Key("editor-close"), i18n.T("Close")).Clicked() {
@@ -524,6 +524,8 @@ func (a *app) editorAlerts(c *ui.Context, v *core.Voice) {
 	}
 	if ui.AlertDialog(c, &e.revokeOpen, i18n.T("Revoke the verification?"), i18n.T("The consent recording is deleted. You can record it again at any time."),
 		i18n.T("Cancel"), i18n.T("Revoke verification")) == 1 {
-		a.voiceAction(func(ctx context.Context, svc core.VoiceService) (core.Voice, error) { return svc.RevokeConsent(ctx, id) }, i18n.T("Verification revoked"))
+		a.voiceAction(func(ctx context.Context, svc core.VoiceService) (core.Voice, error) {
+			return svc.RevokeConsent(ctx, id)
+		}, i18n.T("Verification revoked"))
 	}
 }

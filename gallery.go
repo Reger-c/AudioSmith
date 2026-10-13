@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/gallery"
@@ -20,7 +21,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
 	"github.com/hehehai/AudioSmith/internal/services"
-	"github.com/egoist/mygo/ui"
 )
 
 // galleryPageSize is how many voices a page adds.
