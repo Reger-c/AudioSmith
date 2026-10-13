@@ -12,8 +12,9 @@ import (
 // audio plays without being read into memory. Loading opens the file and
 // reads its header only. Use it from the UI thread (not goroutine-safe).
 type Player struct {
-	id string
-	p  *myaudio.Player
+	id     string
+	p      *myaudio.Player
+	stream *Stream // the audio of a take still rendering (PlayStream); nil for files
 }
 
 func (pl *Player) load(id, path string) error {
@@ -32,8 +33,13 @@ func (pl *Player) load(id, path string) error {
 	return nil
 }
 
-// Toggle plays id's audio at path, loading it first, or pauses it while it plays.
+// Toggle plays id's audio at path, loading it first, or pauses it while it
+// plays. A preview stream of id (PlayStream) that is paused or ended gives
+// way to the file, which can seek.
 func (pl *Player) Toggle(id, path string) error {
+	if pl.id == id && pl.stream != nil && pl.p != nil && !pl.p.Playing() && pl.stream.Done() {
+		pl.Stop()
+	}
 	if pl.id != id || pl.p == nil {
 		if err := pl.load(id, path); err != nil {
 			return err
@@ -47,12 +53,28 @@ func (pl *Player) Toggle(id, path string) error {
 	return nil
 }
 
+// PlayStream plays s, audio that grows while it plays, as id's: the
+// preview of a take still rendering. Stop (or another Toggle or
+// PlayStream) closes it.
+func (pl *Player) PlayStream(id string, s *Stream) {
+	pl.Stop()
+	pl.id, pl.stream = id, s
+	pl.p = myaudio.NewPlayer(s)
+	pl.p.Play()
+}
+
+// Streaming reports whether id's audio is a preview stream.
+func (pl *Player) Streaming(id string) bool { return pl.p != nil && pl.id == id && pl.stream != nil }
+
 // Stop stops, closes the stream (and its file) and forgets the audio.
 func (pl *Player) Stop() {
+	if pl.stream != nil {
+		pl.stream.Close() // wakes the player's decoder if it waits for audio
+	}
 	if pl.p != nil {
 		pl.p.Close()
 	}
-	pl.p = nil
+	pl.p, pl.stream = nil, nil
 	pl.id = ""
 }
 
@@ -73,10 +95,13 @@ func (pl *Player) Progress(id string) float32 {
 		return 0
 	}
 	d := pl.p.Duration()
+	if pl.stream != nil {
+		d = time.Duration(pl.stream.Seconds() * float64(time.Second))
+	}
 	if d <= 0 {
 		return 0
 	}
-	return float32(pl.p.Position()) / float32(d)
+	return min(float32(pl.p.Position())/float32(d), 1)
 }
 
 // Seek moves id to fraction (0–1) of its length, if it is loaded.
@@ -84,5 +109,9 @@ func (pl *Player) Seek(id string, fraction float32) {
 	if pl.p == nil || pl.id != id {
 		return
 	}
-	pl.p.Seek(time.Duration(float64(pl.p.Duration()) * float64(fraction)))
+	d := pl.p.Duration()
+	if pl.stream != nil {
+		d = time.Duration(pl.stream.Seconds() * float64(time.Second))
+	}
+	pl.p.Seek(time.Duration(float64(d) * float64(fraction)))
 }
