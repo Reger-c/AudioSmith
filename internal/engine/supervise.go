@@ -46,7 +46,11 @@ func NewSupervisor(cfg Config) Supervisor {
 		cfg.Logf = log.Printf
 	}
 	s := &supervisor{cfg: cfg, workers: map[proto.Role]*worker{}}
-	for _, r := range cfg.Roles {
+	for _, r := range slices.Concat(cfg.Roles, cfg.OnDemand) {
+		if _, dup := s.workers[r]; dup {
+			continue
+		}
+		s.roles = append(s.roles, r)
 		s.workers[r] = &worker{role: r, status: WorkerStatus{Role: r, State: WorkerStopped, Since: time.Now()}}
 	}
 	return s
@@ -54,6 +58,7 @@ func NewSupervisor(cfg Config) Supervisor {
 
 type supervisor struct {
 	cfg     Config
+	roles   []proto.Role // Roles, then OnDemand
 	ctrlID  atomic.Int64
 	mu      sync.Mutex // guards the workers' fields
 	workers map[proto.Role]*worker
@@ -147,8 +152,8 @@ func (s *supervisor) statusLocked(w *worker) WorkerStatus {
 func (s *supervisor) Status() []WorkerStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]WorkerStatus, 0, len(s.cfg.Roles))
-	for _, r := range s.cfg.Roles {
+	out := make([]WorkerStatus, 0, len(s.roles))
+	for _, r := range s.roles {
 		out = append(out, s.statusLocked(s.workers[r]))
 	}
 	return out
@@ -657,6 +662,14 @@ func (s *supervisor) ready(ctx context.Context, role proto.Role) (*proc, error) 
 			s.mu.Unlock()
 			return nil, fmt.Errorf("no %s engine is configured: %w", role, core.ErrEngine)
 		}
+		if w.status.State == WorkerStopped && w.proc == nil && w.timer == nil && !s.stopped && slices.Contains(s.cfg.OnDemand, role) {
+			// First call to an on-demand worker: start it and wait.
+			w.status.State, w.status.Since = WorkerStarting, time.Now()
+			w.ready = make(chan struct{})
+			s.mu.Unlock()
+			s.spawn(w, false)
+			continue
+		}
 		st, p, ready := w.status, w.proc, w.ready
 		s.mu.Unlock()
 		switch st.State {
@@ -886,7 +899,7 @@ func (s *supervisor) Stop() {
 	s.stopped = true
 	var procs []*proc
 	var sts []WorkerStatus
-	for _, r := range s.cfg.Roles {
+	for _, r := range s.roles {
 		w := s.workers[r]
 		if w.timer != nil {
 			w.timer.Stop()

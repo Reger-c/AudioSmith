@@ -144,8 +144,8 @@ func (g gate) Check(_ context.Context, model string) error {
 	}
 	return nil
 }
-func (gate) Accept(context.Context, core.LicenceAcceptance) error  { return nil }
-func (gate) Revoke(context.Context, string, string) error          { return nil }
+func (gate) Accept(context.Context, core.LicenceAcceptance) error   { return nil }
+func (gate) Revoke(context.Context, string, string) error           { return nil }
 func (gate) List(context.Context) ([]core.LicenceAcceptance, error) { return nil, nil }
 
 // Jobs load models by the path of their local snapshot, and refuse models

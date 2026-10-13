@@ -20,9 +20,9 @@ const (
 // ExecutorOptions configure the engine executors.
 type ExecutorOptions struct {
 	// ModelPath returns the local snapshot directory of a model (repo id),
-	// or an error wrapping core.ErrNotDownloaded. When set, every
-	// models.load and tts.synthesize job gets the path filled in
-	// (proto.LoadParams.Path, proto.SynthesizeParams.ModelPath) as it
+	// or an error wrapping core.ErrNotDownloaded. When set, every job with
+	// a model gets the path filled in (proto.LoadParams.Path, the others'
+	// modelPath) as it
 	// starts, so engines running offline load what the app downloaded. A
 	// model that is not on disk fails the job with model_not_downloaded
 	// without asking the engine. nil leaves params as submitted.
@@ -34,17 +34,27 @@ type ExecutorOptions struct {
 	Licences core.LicenceService
 }
 
-// RegisterExecutors registers the engine-backed job kinds of M0 on sched:
-// "models.load" and "tts.synthesize", run on the gpu worker. A job's
-// Params are the method's params (proto.LoadParams, proto.SynthesizeParams)
-// and its Result the method's result.
+// ExecutorKinds are the job kinds RegisterExecutors registers: every job
+// method of the protocol except capture.start, which is interactive and
+// runs outside the queue (StartCapture). Submit them on the lane of their
+// role: jobs.Lane(proto.RoleOf(kind)).
+var ExecutorKinds = []string{
+	proto.MethodModelsLoad, proto.MethodTTSSynthesize, proto.MethodTTSEncodeVoice,
+	proto.MethodSTTTranscribe, proto.MethodSTTAlign, proto.MethodVADDetect, proto.MethodEnhanceRun,
+	proto.MethodMediaDecode,
+}
+
+// RegisterExecutors registers the engine-backed job kinds (ExecutorKinds)
+// on sched, each run on the worker of its role (proto.RoleOf). A job's
+// Params are the method's params (proto.LoadParams, proto.SynthesizeParams,
+// proto.TranscribeParams…) and its Result the method's result.
 func RegisterExecutors(sched jobs.Scheduler, sup Supervisor, opts ...ExecutorOptions) {
 	var o ExecutorOptions
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	for _, m := range []string{proto.MethodModelsLoad, proto.MethodTTSSynthesize} {
-		sched.Register(m, executor(sup, proto.RoleGPU, m, o))
+	for _, m := range ExecutorKinds {
+		sched.Register(m, executor(sup, proto.RoleOf(m), m, o))
 	}
 }
 

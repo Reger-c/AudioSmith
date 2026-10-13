@@ -65,13 +65,17 @@ func (StatusChanged) Topic() string { return "engine.status" }
 
 // Config configures a Supervisor.
 type Config struct {
-	Bin        string       // audiosmith-engine executable (Find)
-	Roles      []proto.Role // roles to run; M0 runs only proto.RoleGPU
-	AppVersion string       // sent in engine.hello
-	CacheDir   string       // HF hub cache (hub.CacheDir), sent in engine.hello
-	Offline    bool         // engines never download; the Go hub does (M0 goal)
-	LogDir     string       // stderr of role r goes to LogDir/engine-<r>.log (rotated)
-	Bus        *core.Bus    // StatusChanged (and log lines when Log is nil)
+	Bin   string       // audiosmith-engine executable (Find)
+	Roles []proto.Role // roles Start runs; default gpu
+	// OnDemand roles start with the first Call to them (and after Restart),
+	// not with Start: the listen and media workers, which most sessions
+	// never need. Status lists them (stopped until then).
+	OnDemand   []proto.Role
+	AppVersion string    // sent in engine.hello
+	CacheDir   string    // HF hub cache (hub.CacheDir), sent in engine.hello
+	Offline    bool      // engines never download; the Go hub does (M0 goal)
+	LogDir     string    // stderr of role r goes to LogDir/engine-<r>.log (rotated)
+	Bus        *core.Bus // StatusChanged (and log lines when Log is nil)
 	// Log receives the engines' log notifications and stderr lines, with
 	// Source "engine:<role>" (the app's logs.Ring.Append). nil publishes
 	// them on Bus as core.LogAppended.
