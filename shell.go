@@ -163,6 +163,10 @@ var pages = []struct {
 	{"/models", "Models", modelsIcon},
 	{"/engine", "Engine", engineIcon},
 	{"/logs", "Logs", logsIcon},
+	// Voice pages (voices.go, thread V).
+	{"/voices", "Voices", voicesIcon},
+	{"/design", "Design", designIcon},
+	{"/gallery", "Gallery", galleryIcon},
 }
 
 // pageTitle translates a page's title (literal calls, for the key scan).
@@ -180,6 +184,9 @@ func pageTitle(path string) string {
 		return i18n.T("Logs")
 	case "/settings":
 		return i18n.T("Settings")
+	}
+	if t, ok := voicePageTitle(path); ok { // voices.go (thread V)
+		return t
 	}
 	return path
 }
@@ -322,6 +329,7 @@ func (a *app) pages(c *ui.Context) {
 		case r.Match("/logs"):
 			r.Title(i18n.T("Logs"))
 			a.logsPage(c)
+		case a.voicesRoute(c, r): // /voices, /voices/new, /design, /gallery (voices.go, thread V)
 		case r.Match("/settings/{section...}"):
 			r.Title(i18n.T("Settings"))
 			a.settingsPage(c, r)

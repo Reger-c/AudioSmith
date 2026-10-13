@@ -121,6 +121,7 @@ type Store struct {
 	projects  *projectRepo
 	licences  *licenceRepo
 	documents *documentRepo
+	favorites *favoriteRepo
 	jobs      *jobRepo
 }
 
@@ -177,6 +178,7 @@ func Open(ctx context.Context, dir string) (*Store, error) {
 	s.projects = &projectRepo{db: db}
 	s.licences = &licenceRepo{db: db}
 	s.documents = &documentRepo{db: db}
+	s.favorites = &favoriteRepo{db: db}
 	s.jobs = &jobRepo{db: db}
 	return s, nil
 }
@@ -243,6 +245,7 @@ func (s *Store) Voices() store.Voices       { return s.voices }
 func (s *Store) Projects() store.Projects   { return s.projects }
 func (s *Store) Licences() store.Licences   { return s.licences }
 func (s *Store) Documents() store.Documents { return s.documents }
+func (s *Store) Favorites() store.Favorites { return s.favorites }
 func (s *Store) Jobs() jobs.Store           { return s.jobs }
 
 // Close closes the database; operations in flight are cancelled.

@@ -15,26 +15,89 @@ const (
 )
 
 // Voice is a saved voice profile (M1): what to pass to a model to get the
-// same voice again. Blobs (reference audio, cached prompt, portrait) are
-// files in the store's voice directory, referenced by name.
+// same voice again. Blobs (reference audio, rendered sample, consent
+// recording, cached prompts, portrait) are files in the store's voice
+// directory, VoiceDir/<id>/, referenced by name.
 type Voice struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Kind      VoiceKind `json:"kind"`
-	Model     string    `json:"model"`              // repo the voice is for; "" = any that supports Kind
-	Speaker   string    `json:"speaker,omitempty"`  // builtin speaker id or style prompt
-	RefAudio  string    `json:"refAudio,omitempty"` // file name in the voice directory
-	RefText   string    `json:"refText,omitempty"`
-	Design    string    `json:"design,omitempty"` // free-text description (designed voices)
-	Language  string    `json:"language,omitempty"`
-	Seed      int64     `json:"seed,omitempty"`
-	Locked    bool      `json:"locked,omitempty"`   // identity locked to LockTake + Seed
-	LockTake  string    `json:"lockTake,omitempty"` // take id the lock reproduces
-	Consent   bool      `json:"consent,omitempty"`  // verified consent recording on file
-	Portrait  string    `json:"portrait,omitempty"` // file name, 256×256 PNG
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Kind       VoiceKind `json:"kind"`
+	Model      string    `json:"model"`              // repo the voice is for; "" = any that supports Kind
+	Speaker    string    `json:"speaker,omitempty"`  // builtin speaker id
+	RefAudio   string    `json:"refAudio,omitempty"` // clone reference: file name in the voice directory
+	RefText    string    `json:"refText,omitempty"`  // what the reference says ("" = let the engine listen)
+	RefSeconds float64   `json:"refSeconds,omitempty"`
+	// Style is a delivery hint ("whisper", "calm and slow") sent as the
+	// instruction of engines that take one; tag engines get it reduced to
+	// their vocabulary.
+	Style string `json:"style,omitempty"`
+	// Design is the description as written (designed voices) and
+	// DesignAttrs the effective attributes (voicedesign.Attributes JSON):
+	// with Seed they are the voice's voicedesign.Recipe.
+	Design      string          `json:"design,omitempty"`
+	DesignAttrs json.RawMessage `json:"designAttrs,omitempty"`
+	Language    string          `json:"language,omitempty"`
+	Seed        int64           `json:"seed,omitempty"`
+	Locked      bool            `json:"locked,omitempty"`   // identity locked to LockTake + Seed
+	LockTake    string          `json:"lockTake,omitempty"` // take id the lock reproduces
+	Consent     VoiceConsent    `json:"consent,omitzero"`
+	Portrait    string          `json:"portrait,omitempty"` // file name, 256×256 PNG
+	// Sample is a rendered sample of the voice (file name): a designed
+	// voice's identity render, or the locked take's audio; SampleText is
+	// what it says. A locked voice is re-rendered by cloning its sample.
+	Sample     string `json:"sample,omitempty"`
+	SampleText string `json:"sampleText,omitempty"`
+	// Prompts are cached voice prompts by model repo (tts.encodeVoice):
+	// file names in the voice directory.
+	Prompts map[string]string `json:"prompts,omitempty"`
+	// CreatedWith is the repo of the model that made the voice (a design
+	// render, the lock take), for licence notes on export.
+	CreatedWith string `json:"createdWith,omitempty"`
+	// Origin says where the voice came from: "gallery:<archetype id>",
+	// "asvoice:<persona id>", "ovsvoice:<id>"; "" = made here.
+	Origin    string    `json:"origin,omitempty"`
 	Tags      []string  `json:"tags,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// Verified reports whether the profile has a consent recording made here.
+func (v Voice) Verified() bool { return v.Consent.State == ConsentVerified }
+
+// ConsentState is how far a voice's ownership is attested.
+type ConsentState string
+
+const (
+	ConsentNone ConsentState = ""
+	// ConsentVerified: the user recorded the consent statement here.
+	ConsentVerified ConsentState = "verified"
+	// ConsentIncluded: an imported voice file carried a consent record; it
+	// is the exporter's claim until the user records one here.
+	ConsentIncluded ConsentState = "included-unverified"
+)
+
+// VoiceConsent is a voice's ownership attestation: the statement read,
+// its recording (a file name in the voice directory) and when.
+type VoiceConsent struct {
+	State     ConsentState `json:"state,omitempty"`
+	Recording string       `json:"recording,omitempty"`
+	Statement string       `json:"statement,omitempty"`
+	Locale    string       `json:"locale,omitempty"` // language the statement was read in
+	At        time.Time    `json:"at,omitzero"`
+}
+
+// UnmarshalJSON also reads M0's "consent": true|false.
+func (c *VoiceConsent) UnmarshalJSON(b []byte) error {
+	switch string(b) {
+	case "true":
+		*c = VoiceConsent{State: ConsentVerified}
+		return nil
+	case "false", "null":
+		*c = VoiceConsent{}
+		return nil
+	}
+	type plain VoiceConsent
+	return json.Unmarshal(b, (*plain)(c))
 }
 
 // ProjectKind is the workspace a project opens in.
