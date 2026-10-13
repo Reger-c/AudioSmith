@@ -82,16 +82,13 @@ func jsonEqual(a, b []byte) bool {
 	return reflect.DeepEqual(x, y)
 }
 
-var knownCodes = []string{
-	CodeBadRequest, CodeMethodNotFound, CodeNotInitialized, CodeProtocolMismatch, CodeUnsupported,
-	CodeModelNotDownloaded, CodeModelLoadFailed, CodeLicenceRequired, CodeOOM, CodeBusy, CodeCancelled, CodeInternal,
-}
+var knownCodes = Codes
 
 // TestFixtures decodes every golden transcript with the Go types and
 // checks the protocol's sequencing rules on it (docs/protocol-v2.md §4).
 func TestFixtures(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join(fixturesDir, "*.jsonl"))
-	if err != nil || len(paths) < 7 {
+	if err != nil || len(paths) < 12 {
 		t.Fatalf("fixtures: %v %v", paths, err)
 	}
 	for _, path := range paths {
@@ -144,6 +141,11 @@ func TestFixtures(t *testing.T) {
 							t.Fatalf("%s: chunk %+v (want seq %d)", where, v, nextSeq[job])
 						}
 						nextSeq[job]++
+					case *LevelParams:
+						job = v.Job
+						if pending[job] != MethodCaptureStart || v.RMS < -120 || v.Peak < v.RMS || v.Peak > 0 {
+							t.Fatalf("%s: level %+v of %s", where, v, pending[job])
+						}
 					}
 					// (log lines may name any job, running or not)
 					if job != "" {
@@ -253,9 +255,45 @@ func TestErrors(t *testing.T) {
 		t.Error("Retryable")
 	}
 	// Every job method has params and result types.
-	for _, m := range []string{MethodModelsLoad, MethodTTSSynthesize} {
+	for _, m := range JobMethods {
 		if !IsJob(m) || ParamsFor(m) == nil || ResultFor(m) == nil {
 			t.Errorf("%s", m)
+		}
+	}
+	for _, m := range []string{MethodMediaProbe, MethodCaptureDevices, MethodCaptureStop, MethodStats} {
+		if IsJob(m) || ParamsFor(m) == nil || ResultFor(m) == nil {
+			t.Errorf("control %s", m)
+		}
+	}
+	for _, m := range Reserved {
+		if ParamsFor(m) != nil || IsJob(m) {
+			t.Errorf("reserved %s is implemented", m)
+		}
+	}
+	if RoleOf(MethodMediaDecode) != RoleMedia || RoleOf(MethodCaptureStart) != RoleListen || RoleOf(MethodSTTTranscribe) != RoleGPU {
+		t.Error("RoleOf")
+	}
+}
+
+// TestFixturesCoverMethods: every method has a fixture showing it.
+func TestFixturesCoverMethods(t *testing.T) {
+	paths, _ := filepath.Glob(filepath.Join(fixturesDir, "*.jsonl"))
+	seen := map[string]bool{}
+	for _, path := range paths {
+		if filepath.Base(path) == "legacy_v1.jsonl" {
+			continue
+		}
+		for _, l := range readFixture(t, path) {
+			var m Message
+			json.Unmarshal(l.Msg, &m)
+			seen[m.Method] = true
+		}
+	}
+	all := append(slices.Clone(JobMethods), MethodHello, MethodStats, MethodFlush, MethodShutdown, MethodModelsUnload, MethodModelsLoaded,
+		MethodJobCancel, MethodJobProgress, MethodTTSChunk, MethodLog, MethodMediaProbe, MethodCaptureDevices, MethodCaptureStop, MethodCaptureLevel)
+	for _, m := range all {
+		if !seen[m] {
+			t.Errorf("no fixture shows %s", m)
 		}
 	}
 }

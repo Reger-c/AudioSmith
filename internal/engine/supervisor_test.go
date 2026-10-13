@@ -158,7 +158,7 @@ func TestSupervisorHandshakeAndJobs(t *testing.T) {
 	if !errors.Is(err, &proto.Error{Code: proto.CodeModelLoadFailed}) {
 		t.Errorf("load broken: %v", err)
 	}
-	_, err = s.Call(context.Background(), proto.RoleGPU, "", "stt.transcribe", nil, nil)
+	_, err = s.Call(context.Background(), proto.RoleGPU, "", "diarize.run", nil, nil)
 	if !errors.Is(err, &proto.Error{Code: proto.CodeMethodNotFound}) {
 		t.Errorf("unknown method: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestSupervisorHandshakeAndJobs(t *testing.T) {
 }
 
 func TestSupervisorReplaysFixtures(t *testing.T) {
-	for _, name := range []string{"tts_stream", "tts_clone", "models", "cancel"} {
+	for _, name := range []string{"tts_stream", "tts_clone", "models", "cancel", "stt", "analysis", "voice"} {
 		t.Run(name, func(t *testing.T) {
 			path, _ := filepath.Abs(filepath.Join("..", "..", "engine", "Fixtures", name+".jsonl"))
 			s, w := newTestSup(t, "replay="+path, func(c *Config) { c.StatsEvery = -1 })

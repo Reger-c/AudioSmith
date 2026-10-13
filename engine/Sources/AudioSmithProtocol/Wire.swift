@@ -30,14 +30,41 @@ public enum Method {
     public static let modelsLoaded = "models.loaded"
     public static let ttsSynthesize = "tts.synthesize"
     public static let jobCancel = "job.cancel"
+    // M1 (docs/protocol-v2.md §5.2); the role serving each is in role(of:).
+    public static let ttsEncodeVoice = "tts.encodeVoice"
+    public static let sttTranscribe = "stt.transcribe"
+    public static let sttAlign = "stt.align"
+    public static let vadDetect = "vad.detect"
+    public static let enhanceRun = "enhance.run"
+    public static let mediaProbe = "media.probe"
+    public static let mediaDecode = "media.decode"
+    public static let captureDevices = "capture.devices"
+    public static let captureStart = "capture.start"
+    public static let captureStop = "capture.stop"
     // Notifications, engine → app.
     public static let jobProgress = "job.progress"
     public static let ttsChunk = "tts.chunk"
     public static let log = "log"
+    public static let captureLevel = "capture.level"
 
     /// Long-running, cancellable requests that count against concurrency.
     public static func isJob(_ method: String) -> Bool {
-        method == modelsLoad || method == ttsSynthesize
+        switch method {
+        case modelsLoad, ttsSynthesize, ttsEncodeVoice, sttTranscribe, sttAlign, vadDetect, enhanceRun,
+             mediaDecode, captureStart:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// The role whose worker serves method (engine.*, job.cancel: every role).
+    public static func role(of method: String) -> Role {
+        switch method {
+        case mediaProbe, mediaDecode: return .media
+        case captureDevices, captureStart, captureStop: return .listen
+        default: return .gpu
+        }
     }
 }
 
@@ -54,10 +81,17 @@ public enum Code {
     public static let busy = "busy"
     public static let cancelled = "cancelled"
     public static let `internal` = "internal"
+    // M1.
+    public static let inputTooLong = "input_too_long"
+    public static let fileNotFound = "file_not_found"
+    public static let unsupportedMedia = "unsupported_media"
+    public static let permissionDenied = "permission_denied"
+    public static let deviceUnavailable = "device_unavailable"
 
     public static let all: Set<String> = [
         badRequest, methodNotFound, notInitialized, protocolMismatch, unsupported, modelNotDownloaded,
         modelLoadFailed, licenceRequired, oom, busy, cancelled, `internal`,
+        inputTooLong, fileNotFound, unsupportedMedia, permissionDenied, deviceUnavailable,
     ]
 }
 
@@ -365,6 +399,10 @@ public struct SynthesizeParams: Codable, Sendable {
     public var duration: Double?
     public var refAudio: String?
     public var refText: String?
+    /// A file tts.encodeVoice wrote; wins over refAudio, which is the fallback.
+    public var voicePrompt: String?
+    public var guidance: Double?
+    public var exaggeration: Double?
     public var output: Output
     public var stream: Bool?
 
@@ -471,6 +509,17 @@ public func paramsType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.jobProgress: ProgressParams.self
     case Method.ttsChunk: ChunkParams.self
     case Method.log: LogParams.self
+    case Method.ttsEncodeVoice: EncodeVoiceParams.self
+    case Method.sttTranscribe: TranscribeParams.self
+    case Method.sttAlign: AlignParams.self
+    case Method.vadDetect: VADParams.self
+    case Method.enhanceRun: EnhanceParams.self
+    case Method.mediaProbe: ProbeParams.self
+    case Method.mediaDecode: DecodeParams.self
+    case Method.captureDevices: Empty.self
+    case Method.captureStart: CaptureParams.self
+    case Method.captureStop: CaptureStopParams.self
+    case Method.captureLevel: LevelParams.self
     default: nil
     }
 }
@@ -486,6 +535,16 @@ public func resultType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.modelsLoaded: LoadedResult.self
     case Method.ttsSynthesize: SynthesizeResult.self
     case Method.jobCancel: CancelResult.self
+    case Method.ttsEncodeVoice: EncodeVoiceResult.self
+    case Method.sttTranscribe: TranscribeResult.self
+    case Method.sttAlign: AlignResult.self
+    case Method.vadDetect: VADResult.self
+    case Method.enhanceRun: EnhanceResult.self
+    case Method.mediaProbe: ProbeResult.self
+    case Method.mediaDecode: DecodeResult.self
+    case Method.captureDevices: DevicesResult.self
+    case Method.captureStart: CaptureResult.self
+    case Method.captureStop: CaptureStopResult.self
     default: nil
     }
 }

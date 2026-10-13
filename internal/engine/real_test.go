@@ -60,7 +60,7 @@ func TestRealEngineConformance(t *testing.T) {
 		params any
 		code   string
 	}{
-		"unknown":   {"stt.transcribe", map[string]string{"audio": "/tmp/a.wav"}, proto.CodeMethodNotFound},
+		"unknown":   {"diarize.run", map[string]string{"audio": "/tmp/a.wav"}, proto.CodeMethodNotFound},
 		"no model":  {proto.MethodTTSSynthesize, proto.SynthesizeParams{Text: "Hi", Output: proto.Output{Path: dir + "/x.wav"}}, proto.CodeBadRequest},
 		"relative":  {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Hi", Output: proto.Output{Path: "x.wav"}}, proto.CodeBadRequest},
 		"clone":     {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Hi", RefAudio: "/tmp/ref.wav", Output: proto.Output{Path: dir + "/c.wav"}}, proto.CodeUnsupported},

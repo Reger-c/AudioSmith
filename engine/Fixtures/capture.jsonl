@@ -1,0 +1,29 @@
+{"to":"engine","msg":{"id":"c1","method":"engine.hello","params":{"protocol":2,"app":"0.3.0","role":"listen","offline":true}}}
+{"to":"app","msg":{"id":"c1","result":{"protocol":2,"version":"0.3.0","role":"listen","pid":4244,"concurrency":1,"methods":["engine.hello","engine.stats","engine.flush","engine.shutdown","job.cancel","capture.devices","capture.start","capture.stop"],"families":[],"device":{"name":"Apple M2 Pro","memory":34359738368,"os":"macOS 15.1"}}}}
+{"to":"engine","msg":{"id":"c2","method":"capture.devices"}}
+{"to":"app","msg":{"id":"c2","result":{"devices":[{"id":"BuiltInMicrophoneDevice","name":"MacBook Pro Microphone","channels":1,"sampleRate":48000,"default":true,"transport":"builtin"},{"id":"AppleUSBAudioEngine:Focusrite:Scarlett 2i2 USB:1234:1","name":"Scarlett 2i2 USB","channels":2,"sampleRate":48000,"transport":"usb"}]}}}
+{"to":"engine","msg":{"id":"01JB0C1000000000000000000A","method":"capture.start","params":{"device":"AppleUSBAudioEngine:Focusrite:Scarlett 2i2 USB:1234:1","inputChannels":[2],"channels":1,"sampleRate":48000,"output":{"path":"/Users/me/Library/Application Support/AudioSmith/recordings/01JB0C1.wav","bits":24},"maxSeconds":120}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JB0C1000000000000000000A","stage":"recording"}}}
+{"to":"app","msg":{"method":"capture.level","params":{"job":"01JB0C1000000000000000000A","seconds":0.05,"rms":-52.3,"peak":-40.1}}}
+{"to":"app","msg":{"method":"capture.level","params":{"job":"01JB0C1000000000000000000A","seconds":0.1,"rms":-21.7,"peak":-6.2}}}
+{"to":"app","msg":{"method":"capture.level","params":{"job":"01JB0C1000000000000000000A","seconds":0.15,"rms":-18.4,"peak":-0.0001,"clipped":true}}}
+{"to":"engine","msg":{"id":"c3","method":"capture.stop","params":{"job":"01JB0C1000000000000000000A"}}}
+{"to":"app","msg":{"id":"01JB0C1000000000000000000A","result":{"output":"/Users/me/Library/Application Support/AudioSmith/recordings/01JB0C1.wav","sampleRate":48000,"channels":1,"frames":9600,"audioSeconds":0.2,"device":"AppleUSBAudioEngine:Focusrite:Scarlett 2i2 USB:1234:1","peak":-0.0001,"clipped":3,"reason":"stopped"}}}
+{"to":"app","msg":{"id":"c3","result":{"stopped":true}}}
+{"to":"engine","msg":{"id":"c4","method":"capture.stop","params":{"job":"01JB0C1000000000000000000A"}}}
+{"to":"app","msg":{"id":"c4","result":{"stopped":false}}}
+{"to":"engine","msg":{"id":"01JB0C2000000000000000000A","method":"capture.start","params":{"device":"AppleUSBAudioEngine:Unplugged:1","output":{"path":"/Users/me/Library/Application Support/AudioSmith/recordings/01JB0C2.wav"}}}}
+{"to":"app","msg":{"id":"01JB0C2000000000000000000A","error":{"code":"device_unavailable","message":"No audio input AppleUSBAudioEngine:Unplugged:1","data":{"device":"AppleUSBAudioEngine:Unplugged:1"}}}}
+{"to":"engine","msg":{"id":"01JB0C3000000000000000000A","method":"capture.start","params":{"output":{"path":"/Users/me/Library/Application Support/AudioSmith/recordings/01JB0C3.wav"}}}}
+{"to":"app","msg":{"id":"01JB0C3000000000000000000A","error":{"code":"permission_denied","message":"Microphone access is denied for AudioSmith","data":{"permission":"microphone"}}}}
+{"to":"engine","msg":{"id":"01JB0C4000000000000000000A","method":"capture.start","params":{"device":"BuiltInMicrophoneDevice","output":{"path":"/Users/me/Library/Application Support/AudioSmith/recordings/01JB0C4.wav"}}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JB0C4000000000000000000A","stage":"recording"}}}
+{"to":"app","msg":{"method":"capture.level","params":{"job":"01JB0C4000000000000000000A","seconds":0.05,"rms":-60,"peak":-48.5}}}
+{"to":"engine","msg":{"id":"c5","method":"job.cancel","params":{"job":"01JB0C4000000000000000000A"}}}
+{"to":"app","msg":{"id":"c5","result":{"cancelled":true}}}
+{"to":"app","msg":{"id":"01JB0C4000000000000000000A","error":{"code":"cancelled","message":"Cancelled"}}}
+{"to":"engine","msg":{"id":"01JB0C5000000000000000000A","method":"capture.start","params":{"output":{"path":"/Users/me/Library/Application Support/AudioSmith/recordings/01JB0C5.wav"},"maxSeconds":0.1}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JB0C5000000000000000000A","stage":"recording"}}}
+{"to":"app","msg":{"method":"capture.level","params":{"job":"01JB0C5000000000000000000A","seconds":0.05,"rms":-120,"peak":-120}}}
+{"to":"app","msg":{"method":"capture.level","params":{"job":"01JB0C5000000000000000000A","seconds":0.1,"rms":-35.5,"peak":-20}}}
+{"to":"app","msg":{"id":"01JB0C5000000000000000000A","result":{"output":"/Users/me/Library/Application Support/AudioSmith/recordings/01JB0C5.wav","sampleRate":48000,"channels":1,"frames":4800,"audioSeconds":0.1,"device":"BuiltInMicrophoneDevice","peak":-20,"reason":"maxSeconds"}}}

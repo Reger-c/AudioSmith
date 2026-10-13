@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "entries": [
     {
       "id": "kokoro-82m-bf16",
@@ -48,6 +48,7 @@
         {"id": "hf_alpha", "language": "hi", "gender": "female"}
       ],
       "capabilities": ["speed"],
+      "maxChars": 300,
       "sampleRate": 24000,
       "size": 481172807,
       "minMemoryGB": 2,
@@ -168,12 +169,132 @@
       "revision": "8fb0b754cad788aaefec690cd55c207e8a628f85",
       "tasks": ["tts"],
       "about": "646 languages. Designs a voice from a description (\"female, young adult, british accent\") or clones a reference clip; can hit an exact duration. Non-commercial licence.",
-      "capabilities": ["clone", "design", "voiceStyle", "language", "duration", "speed"],
+      "capabilities": ["clone", "design", "voiceStyle", "language", "duration", "speed", "steps"],
       "sampleRate": 24000,
       "size": 1639492513,
       "minMemoryGB": 8,
       "quantization": "bf16",
       "licence": {"id": "cc-by-nc-4.0", "name": "CC BY-NC 4.0", "url": "https://huggingface.co/k2-fsa/OmniVoice", "commercial": false, "requiresAcceptance": true, "verified": true}
+    },
+    {
+      "id": "qwen3-tts-1.7b-voicedesign-4bit",
+      "label": "Qwen3-TTS 1.7B VoiceDesign",
+      "family": "qwen3_tts",
+      "repo": "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-4bit",
+      "revision": "5c390979e4b93af5f2932f90742ca99c7dd04687",
+      "tasks": ["tts"],
+      "about": "Designs a voice from a free-form description in English or Chinese (\"a warm, middle-aged female narrator\"). 10 languages.",
+      "languages": [
+        {"code": "zh", "value": "Chinese"},
+        {"code": "en", "value": "English"},
+        {"code": "ja", "value": "Japanese"},
+        {"code": "ko", "value": "Korean"},
+        {"code": "de", "value": "German"},
+        {"code": "fr", "value": "French"},
+        {"code": "es", "value": "Spanish"},
+        {"code": "it", "value": "Italian"},
+        {"code": "pt", "value": "Portuguese"},
+        {"code": "ru", "value": "Russian"}
+      ],
+      "capabilities": ["sampling", "design", "voiceStyle", "language"],
+      "sampleRate": 24000,
+      "size": 2312058795,
+      "minMemoryGB": 6,
+      "quantization": "4bit",
+      "hidden": true,
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign", "commercial": true, "verified": true}
+    },
+    {
+      "id": "whisper-large-v3-turbo-4bit",
+      "label": "Whisper large-v3 turbo",
+      "family": "whisper",
+      "repo": "mlx-community/whisper-large-v3-turbo-4bit",
+      "revision": "0f058d38170d183f9fdee07908f5b515d91793a8",
+      "tasks": ["stt"],
+      "about": "Transcribes 99 languages and detects which one is spoken; can translate speech into English.",
+      "capabilities": ["language", "translate"],
+      "sampleRate": 16000,
+      "size": 468666034,
+      "minMemoryGB": 2,
+      "quantization": "4bit",
+      "hidden": true,
+      "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/openai/whisper-large-v3-turbo", "commercial": true, "verified": true},
+      "aux": [
+        {"repo": "openai/whisper-large-v3", "revision": "06f233fe06e710322aca913c1bc4249a0d71fce1", "licence": "apache-2.0", "files": [
+          {"path": "added_tokens.json", "size": 34648},
+          {"path": "merges.txt", "size": 493869},
+          {"path": "normalizer.json", "size": 52666},
+          {"path": "preprocessor_config.json", "size": 340},
+          {"path": "special_tokens_map.json", "size": 2072},
+          {"path": "tokenizer.json", "size": 2480617},
+          {"path": "tokenizer_config.json", "size": 282843},
+          {"path": "vocab.json", "size": 1036558}
+        ]}
+      ]
+    },
+    {
+      "id": "qwen3-asr-0.6b-4bit",
+      "label": "Qwen3-ASR 0.6B",
+      "family": "qwen3_asr",
+      "repo": "mlx-community/Qwen3-ASR-0.6B-4bit",
+      "revision": "313d850181767edf09f00a9c289becca70e58cd0",
+      "tasks": ["stt"],
+      "about": "Accurate transcription of Chinese (with dialects), English and about 30 other languages.",
+      "capabilities": ["language"],
+      "sampleRate": 16000,
+      "size": 712781279,
+      "minMemoryGB": 2,
+      "quantization": "4bit",
+      "hidden": true,
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B", "commercial": true, "verified": true}
+    },
+    {
+      "id": "qwen3-forcedaligner-0.6b-4bit",
+      "label": "Qwen3 ForcedAligner 0.6B",
+      "family": "qwen3_forced_aligner",
+      "repo": "mlx-community/Qwen3-ForcedAligner-0.6B-4bit",
+      "revision": "2f652af86ae0c73fe189b9429225c908ce4bf020",
+      "tasks": ["align"],
+      "about": "Times every word of a known transcript against its audio, for subtitles and editing.",
+      "capabilities": ["language", "wordTimes"],
+      "sampleRate": 16000,
+      "size": 975857419,
+      "minMemoryGB": 2,
+      "quantization": "4bit",
+      "hidden": true,
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B", "commercial": true, "verified": true}
+    },
+    {
+      "id": "silero-vad",
+      "label": "Silero VAD",
+      "family": "silero_vad",
+      "repo": "mlx-community/silero-vad",
+      "revision": "7bc17f22d3c0451bd3a6cd71e759b009271ff49a",
+      "tasks": ["vad"],
+      "about": "Finds where people speak in a recording. Tiny and fast.",
+      "sampleRate": 16000,
+      "size": 2182124,
+      "minMemoryGB": 1,
+      "hidden": true,
+      "licence": {"id": "mit", "name": "MIT", "url": "https://github.com/snakers4/silero-vad", "commercial": true, "verified": true}
+    },
+    {
+      "id": "deepfilternet-v3",
+      "label": "DeepFilterNet 3",
+      "family": "deepfilternet",
+      "repo": "mlx-community/DeepFilterNet-mlx",
+      "revision": "220d5dfb7266352272d74c2a7d2025c59e07b391",
+      "tasks": ["enhance"],
+      "about": "Removes background noise from speech, e.g. to clean a reference recording.",
+      "sampleRate": 48000,
+      "size": 8683568,
+      "files": [
+        {"path": "v3/config.json", "size": 859},
+        {"path": "v3/model.safetensors", "size": 8682709}
+      ],
+      "minMemoryGB": 1,
+      "hidden": true,
+      "licence": {"id": "mit", "name": "MIT / Apache 2.0", "url": "https://github.com/Rikorose/DeepFilterNet", "commercial": true, "verified": true}
     }
   ]
 }

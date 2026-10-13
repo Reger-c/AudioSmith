@@ -35,15 +35,47 @@ const (
 	MethodLog         = "log"
 )
 
+// Methods added in M1 (docs/protocol-v2.md §5.2). Role: see RoleOf.
+const (
+	MethodTTSEncodeVoice = "tts.encodeVoice" // request, job (gpu): reference → cached voice prompt file
+
+	MethodSTTTranscribe = "stt.transcribe" // request, job (gpu)
+	MethodSTTAlign      = "stt.align"      // request, job (gpu): forced alignment
+	MethodVADDetect     = "vad.detect"     // request, job (gpu)
+	MethodEnhanceRun    = "enhance.run"    // request, job (gpu): denoise
+
+	MethodMediaProbe  = "media.probe"  // request (media)
+	MethodMediaDecode = "media.decode" // request, job (media): any audio/video → WAV
+
+	MethodCaptureDevices = "capture.devices" // request (listen)
+	MethodCaptureStart   = "capture.start"   // request, job (listen): records until capture.stop
+	MethodCaptureStop    = "capture.stop"    // request (listen)
+	MethodCaptureLevel   = "capture.level"   // notification, engine → app: input meter, ~20 Hz
+)
+
 // Reserved method names for later milestones (see docs/protocol-v2.md §8).
 // Listed so names are not reused for something else; not implemented.
 var Reserved = []string{
-	"tts.encodeVoice", "tts.batch",
-	"stt.transcribe", "stt.align", "stt.stream.open", "stt.stream.push", "stt.stream.close", "stt.partial", "stt.final",
-	"vad.detect", "diarize.run", "lid.detect", "enhance.run", "separate.run",
+	"tts.batch",
+	"stt.stream.open", "stt.stream.push", "stt.stream.close", "stt.partial", "stt.final",
+	"diarize.run", "lid.detect", "separate.run",
 	"llm.generate", "translate.run",
-	"media.probe", "media.decode", "media.encode", "media.mux", "media.timePitch", "media.thumbnail", "media.ocr", "doc.extractText",
-	"capture.devices", "capture.start", "capture.stop", "capture.level", "capture.pcm",
+	"media.encode", "media.mux", "media.timePitch", "media.thumbnail", "media.ocr", "doc.extractText",
+	"capture.pcm",
+}
+
+// RoleOf is the role whose worker serves method: the app sends it there,
+// and the engine answers method_not_found to it in any other role.
+// Methods every role answers (engine.*, job.cancel) are RoleGPU here;
+// models.* go to whichever worker holds the model (gpu in M1).
+func RoleOf(method string) Role {
+	switch method {
+	case MethodMediaProbe, MethodMediaDecode:
+		return RoleMedia
+	case MethodCaptureDevices, MethodCaptureStart, MethodCaptureStop:
+		return RoleListen
+	}
+	return RoleGPU
 }
 
 // HelloParams opens a session. The app sends it first, right after
@@ -148,11 +180,18 @@ type SynthesizeParams struct {
 	// ModelPath is the model's local snapshot directory (hub.Local.Snapshot),
 	// as in LoadParams.Path; "" resolves Model in the cache. The app fills
 	// it when the job runs, so engines started offline never download.
-	ModelPath   string   `json:"modelPath,omitempty"`
-	Text        string   `json:"text"`
-	Voice       string   `json:"voice,omitempty"`    // speaker id or style prompt
-	Language    string   `json:"language,omitempty"` // value the model takes ("en", "Chinese"…)
-	Instruct    string   `json:"instruct,omitempty"` // style/emotion instruction (M1)
+	ModelPath string `json:"modelPath,omitempty"`
+	Text      string `json:"text"`
+	// Voice is a built-in speaker id; for design models (catalogue
+	// "design"/"voiceStyle": Qwen3-TTS VoiceDesign, OmniVoice) the voice
+	// description, as voicedesign.Lowered.Voice makes it; for Qwen3-TTS
+	// CustomVoice "Speaker" or "Speaker, instruction".
+	Voice    string `json:"voice,omitempty"`
+	Language string `json:"language,omitempty"` // value the model takes ("en", "Chinese"…)
+	// Instruct is a style/emotion instruction (catalogue "instruct"):
+	// CustomVoice appends it to the speaker ("Vivian, 非常开心"); design
+	// models take it as the description when Voice is empty.
+	Instruct    string   `json:"instruct,omitempty"`
 	Speed       *float64 `json:"speed,omitempty"`
 	Temperature *float64 `json:"temperature,omitempty"`
 	TopP        *float64 `json:"topP,omitempty"`
@@ -162,7 +201,19 @@ type SynthesizeParams struct {
 	Duration    *float64 `json:"duration,omitempty"` // target seconds (OmniVoice, M1)
 	RefAudio    string   `json:"refAudio,omitempty"` // absolute path of a reference clip (cloning)
 	RefText     string   `json:"refText,omitempty"`
-	Output      Output   `json:"output"`
+	// VoicePrompt is a file tts.encodeVoice wrote for this model: the
+	// clone reference, already encoded. It wins over RefAudio/RefText;
+	// when it cannot be used (another model, an older format) the engine
+	// falls back to RefAudio and logs a warning, or fails with
+	// bad_request when there is none.
+	VoicePrompt string `json:"voicePrompt,omitempty"`
+	// Guidance is the classifier-free guidance scale (OmniVoice
+	// guidance_scale, Chatterbox cfg_weight); Exaggeration is
+	// Chatterbox's emotion exaggeration. Both M1, catalogue capabilities
+	// "guidance" and "exaggeration".
+	Guidance     *float64 `json:"guidance,omitempty"`
+	Exaggeration *float64 `json:"exaggeration,omitempty"`
+	Output       Output   `json:"output"`
 	// Stream asks for tts.chunk notifications as audio is generated, in
 	// addition to the file.
 	Stream bool `json:"stream,omitempty"`
@@ -238,6 +289,28 @@ type LogParams struct {
 // and the fixture tests use them.
 func ParamsFor(method string) any {
 	switch method {
+	case MethodTTSEncodeVoice:
+		return new(EncodeVoiceParams)
+	case MethodSTTTranscribe:
+		return new(TranscribeParams)
+	case MethodSTTAlign:
+		return new(AlignParams)
+	case MethodVADDetect:
+		return new(VADParams)
+	case MethodEnhanceRun:
+		return new(EnhanceParams)
+	case MethodMediaProbe:
+		return new(ProbeParams)
+	case MethodMediaDecode:
+		return new(DecodeParams)
+	case MethodCaptureDevices:
+		return new(Empty)
+	case MethodCaptureStart:
+		return new(CaptureParams)
+	case MethodCaptureStop:
+		return new(CaptureStopParams)
+	case MethodCaptureLevel:
+		return new(LevelParams)
 	case MethodHello:
 		return new(HelloParams)
 	case MethodStats, MethodFlush, MethodShutdown, MethodModelsLoaded:
@@ -263,6 +336,26 @@ func ParamsFor(method string) any {
 // ResultFor: see ParamsFor.
 func ResultFor(method string) any {
 	switch method {
+	case MethodTTSEncodeVoice:
+		return new(EncodeVoiceResult)
+	case MethodSTTTranscribe:
+		return new(TranscribeResult)
+	case MethodSTTAlign:
+		return new(AlignResult)
+	case MethodVADDetect:
+		return new(VADResult)
+	case MethodEnhanceRun:
+		return new(EnhanceResult)
+	case MethodMediaProbe:
+		return new(ProbeResult)
+	case MethodMediaDecode:
+		return new(DecodeResult)
+	case MethodCaptureDevices:
+		return new(DevicesResult)
+	case MethodCaptureStart:
+		return new(CaptureResult)
+	case MethodCaptureStop:
+		return new(CaptureStopResult)
 	case MethodHello:
 		return new(HelloResult)
 	case MethodStats:
@@ -285,5 +378,18 @@ func ResultFor(method string) any {
 
 // IsJob reports whether method is a long-running, cancellable job.
 func IsJob(method string) bool {
-	return method == MethodModelsLoad || method == MethodTTSSynthesize
+	switch method {
+	case MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
+		MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
+		MethodMediaDecode, MethodCaptureStart:
+		return true
+	}
+	return false
+}
+
+// JobMethods lists the job methods, in protocol order.
+var JobMethods = []string{
+	MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
+	MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
+	MethodMediaDecode, MethodCaptureStart,
 }
