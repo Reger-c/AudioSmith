@@ -827,3 +827,21 @@ func TestSystemProxy(t *testing.T) {
 		t.Error(DescribeProxy(""))
 	}
 }
+
+func TestCleanEngineCopies(t *testing.T) {
+	dir := t.TempDir()
+	if got, err := CleanEngineCopies(dir); err != nil || got != nil {
+		t.Fatalf("no dir: %v %v", got, err)
+	}
+	copies := EngineCopiesDir(dir)
+	os.MkdirAll(filepath.Join(copies, "mlx-community_Empty"), 0o755)
+	os.MkdirAll(filepath.Join(copies, "mlx-community_Full"), 0o755)
+	os.WriteFile(filepath.Join(copies, "mlx-community_Full", "config.json"), []byte("{}"), 0o644)
+	got, err := CleanEngineCopies(dir)
+	if err != nil || !slices.Equal(got, []string{"mlx-community_Empty"}) {
+		t.Fatalf("removed %v %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(copies, "mlx-community_Full", "config.json")); err != nil {
+		t.Error("removed a full copy")
+	}
+}

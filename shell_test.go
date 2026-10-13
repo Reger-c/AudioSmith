@@ -229,11 +229,12 @@ func TestShortcutSheet(t *testing.T) {
 	tt.Frame()
 	// Typing "?" in the script is text, not the sheet.
 	tt.Click("Script")
-	if tt.Focused("Script") {
-		tt.Type("?")
-		if a.sheetOpen {
-			t.Error("? in the script opened the sheet")
-		}
+	if !tt.Focused("Script") {
+		t.Fatal("script not focused")
+	}
+	tt.TypeKey(ui.Shift, ui.KeySlash, "?")
+	if a.sheetOpen || !strings.HasSuffix(a.text, "?") {
+		t.Errorf("? in the script: sheet %v text %q", a.sheetOpen, a.text)
 	}
 	a.navigate("/history")
 	tt.Frame()

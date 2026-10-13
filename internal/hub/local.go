@@ -268,3 +268,34 @@ func Delete(cacheDir string, e catalog.Entry) error {
 	}
 	return nil
 }
+
+// EngineCopiesDir is where mlx-audio-swift keeps its own copies of the
+// snapshots it loads: <cache>/mlx-audio/<owner>_<name>/.
+func EngineCopiesDir(cacheDir string) string { return filepath.Join(cacheDir, "mlx-audio") }
+
+// CleanEngineCopies removes the empty directories mlx-audio-swift leaves
+// in EngineCopiesDir after a failed load. Left there, the next load of
+// that repo finds an "incomplete" model and deletes the repo's snapshot
+// from the hub cache as well (research/m0-spikes.md §2). The supervisor
+// calls it before starting an engine. It returns what it removed.
+func CleanEngineCopies(cacheDir string) ([]string, error) {
+	dir := EngineCopiesDir(cacheDir)
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var removed []string
+	for _, de := range entries {
+		p := filepath.Join(dir, de.Name())
+		if !de.IsDir() || nonEmpty(p) {
+			continue
+		}
+		if err := os.Remove(p); err == nil {
+			removed = append(removed, de.Name())
+		}
+	}
+	return removed, nil
+}
