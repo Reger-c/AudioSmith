@@ -14,7 +14,9 @@ import (
 func (a *app) studioPage(c *ui.Context) {
 	t := c.Theme()
 	header(c, i18n.T("Studio"), nil)
-	c.OnShortcut(ui.Alt, ui.KeySlash, func() { a.composer.insertOpen = !a.composer.insertOpen })
+	if c.Shortcut(ui.Alt, ui.KeySlash) { // wherever the focus is, the script editor's too
+		a.composer.insertOpen = !a.composer.insertOpen
+	}
 	if msg := a.composer.undoToast; msg != "" {
 		a.composer.undoToast = ""
 		c.ToastAction(msg, i18n.T("Undo"), a.undoScript)

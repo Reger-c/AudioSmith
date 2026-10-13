@@ -68,7 +68,7 @@ type studioState struct {
 	script      scriptEditor
 	composer    composerState
 	pron        pronState // Settings → Pronunciation
-	renderState // the render the Studio follows: chunk progress, preview
+	renderState           // the render the Studio follows: chunk progress, preview
 
 	// savedDraft is the form as last handed to the draft service (or restored).
 	savedDraft studioDraft

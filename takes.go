@@ -126,13 +126,17 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 		CacheDir:  cacheDir,
 		KeepTakes: func() int { return l.settings.Get().Studio.KeepTakes },
 	})
+	async := o.Async
+	if async == nil {
+		async = func(fn func()) { go fn() }
+	}
 	core.On(bus, func(ev settings.Changed) {
 		if n := ev.New.Studio.KeepTakes; n > 0 && (ev.Old.Studio.KeepTakes == 0 || n < ev.Old.Studio.KeepTakes) {
-			go func() {
+			async(func() {
 				if _, err := l.svc.Render.Prune(context.Background()); err != nil {
 					log.Printf("history: %v", err)
 				}
-			}()
+			})
 		}
 	})
 	return l, nil

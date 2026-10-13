@@ -32,9 +32,9 @@ type composerState struct {
 
 // insertItem is an entry of the insert menu.
 type insertItem struct {
-	key, label string
+	key, label  string
 	open, close string // text before and after the selection
-	nonVerbal       bool
+	nonVerbal   bool
 }
 
 func pauseItems() []insertItem {

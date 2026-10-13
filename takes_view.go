@@ -140,7 +140,7 @@ func (a *app) historyPage(c *ui.Context) {
 		}
 	})
 	if len(takes) == 0 {
-		ui.Column(c).Absolute().Left(0).Top(titleBarHeight+px(t, 50)).Right(0).Bottom(0).Center().Gap(px(t, 6)).PassThrough().Children(func() {
+		ui.Column(c).Absolute().Left(0).Top(titleBarHeight + px(t, 50)).Right(0).Bottom(0).Center().Gap(px(t, 6)).PassThrough().Children(func() {
 			if len(a.takes) == 0 {
 				ui.Text(c, i18n.T("No takes yet")).FontSize(px(t, 15)).Bold()
 				ui.Text(c, i18n.T("What you generate in the studio shows up here.")).TextColor(t.TextMuted)
@@ -257,7 +257,7 @@ func recipeRows(t *core.Take) [][2]string {
 // takeDetails is the History's details pane.
 func (a *app) takeDetails(c *ui.Context, tk *core.Take) {
 	t := c.Theme()
-	ui.Column(c.Key("details-"+tk.ID)).Padding(px(t, 16)).Gap(px(t, 12)).Children(func() {
+	ui.Column(c.Key("details-" + tk.ID)).Padding(px(t, 16)).Gap(px(t, 12)).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, i18n.T("Take details")).FontSize(px(t, 14)).Bold().Grow(1)
 			if ui.Button(c.Key("close-details"), "✕").Label(i18n.T("Close")).Clicked() {
@@ -275,7 +275,7 @@ func (a *app) takeDetails(c *ui.Context, tk *core.Take) {
 		ui.Text(c, i18n.T("Recipe")).Bold()
 		ui.Column(c).Gap(px(t, 4)).Children(func() {
 			for _, row := range recipeRows(tk) {
-				ui.Row(c.Key("recipe-"+row[0])).Gap(px(t, 8)).Children(func() {
+				ui.Row(c.Key("recipe-" + row[0])).Gap(px(t, 8)).Children(func() {
 					ui.Text(c, row[0]).FontSize(px(t, 12)).TextColor(t.TextMuted).Width(px(t, 120)).Shrink(0)
 					ui.Text(c, row[1]).FontSize(px(t, 12)).Selectable().Grow(1).MinWidth(0)
 				})
