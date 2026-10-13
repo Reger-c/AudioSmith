@@ -2,18 +2,22 @@ package main
 
 // The link between the UI and the engines: the protocol-2 supervisor (one
 // audiosmith-engine process per role; M0 runs the gpu one) and the job
-// scheduler that runs engine work as jobs. The Studio's takes and preloads
-// are jobs owned by "studio:…"; the UI follows them through jobs.Updated
-// and the workers through engine.StatusChanged, both on the library's bus.
+// scheduler of the library, which runs engine work as jobs. The UI
+// follows its jobs through jobs.Updated and the workers through
+// engine.StatusChanged, both on the library's bus.
 //
-// Integration step I1 moves the Studio's Generate to TakeService.Generate
-// (jobs owned by "take:…"); until then startSynthesis submits the job
-// itself and takeFinished saves the take.
+// The Studio's takes are made by TakeService.Generate: their jobs are
+// owned by "take:<id>", and the take arrives with TakeCreated once the
+// service saved it. Preloads are the Studio's own models.load jobs, owned
+// by "studio:load:…". Engines run offline: the engine executors fill in
+// the local snapshot of the model (downloaded by the hub, Models page).
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +30,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/licence"
 )
 
 type engineState int
@@ -36,8 +41,12 @@ const (
 	engineFailed
 )
 
-// studioOwner prefixes the owners of the jobs the Studio submits itself.
-const studioOwner = "studio:"
+// studioOwner prefixes the owners of the jobs the Studio submits itself
+// (preloads); takeOwner those of the jobs TakeService submits.
+const (
+	studioOwner = "studio:"
+	takeOwner   = "take:"
+)
 
 // job is the UI's view of the Studio's job: one at a time.
 type job struct {
@@ -49,12 +58,13 @@ type job struct {
 	status       string
 	fraction     float64 // 0–1, or -1 when unknown
 	audioSeconds float64
-	take         *core.Take // what the result becomes, for "synthesize"
+	takeID       string // the take a "synthesize" job makes
 	cancelling   bool
 }
 
-// engineHost is the engine side of the app: the supervisor and the job
-// scheduler. connectEngine makes them, unless a test set fakes.
+// engineHost is the engine side of the app: the supervisor, and the job
+// scheduler (the library's) it runs jobs for. connectEngine makes the
+// supervisor, unless a test set a fake.
 type engineHost struct {
 	bin    string // audiosmith-engine; "" when not found
 	logDir string
@@ -99,6 +109,9 @@ type engineLink struct {
 
 	job      *job
 	jobError string
+	// needDownload is the model the last Generate or preload found missing:
+	// the Studio offers to download it next to the error.
+	needDownload *catalog.Entry
 
 	// enginePost brings engine events to the main thread: a.post, or a
 	// queue in tests that drive real engines.
@@ -132,9 +145,9 @@ func newEngineProcess(resources, logDir string) *engineHost {
 	return &engineHost{bin: engine.Find(resources), logDir: logDir}
 }
 
-// connectEngine makes the supervisor and the scheduler (over the
-// library's jobs table and bus) unless they are set, and routes their
-// events to the main thread. The engine starts with restartEngine.
+// connectEngine makes the supervisor (unless a test set one), registers
+// the engine's job executors on the library's scheduler and routes engine
+// and job events to the main thread. startEngine starts both.
 func (a *app) connectEngine(h *engineHost) {
 	a.eng = h
 	if a.enginePost == nil {
@@ -143,17 +156,20 @@ func (a *app) connectEngine(h *engineHost) {
 	if h.logDir != "" {
 		a.logPath = filepath.Join(h.logDir, "engine-gpu.log")
 	}
+	h.sched = a.lib.sched
 	if h.sup == nil {
-		cacheDir := hub.CacheDir()
+		lib := a.lib
 		ring := a.logs
 		h.sup = engine.NewSupervisor(engine.Config{
 			Bin: h.bin, Roles: []proto.Role{proto.RoleGPU}, AppVersion: mygo.App.Version(),
-			CacheDir: cacheDir, LogDir: h.logDir, Bus: a.bus,
+			CacheDir: modelCache(a.prefs), Offline: true, LogDir: h.logDir, Bus: a.bus,
 			Log:          func(e core.LogEntry) { ring.Append(e) },
-			MemoryBudget: int64(a.prefs.Engine.MemoryBudgetGB * (1 << 30)),
+			MemoryBudget: gb(a.prefs.Engine.MemoryBudgetGB),
+			IdleUnload:   time.Duration(a.prefs.Models.AutoUnload) * time.Minute,
 			// A failed load leaves an empty mlx-audio/<repo> dir behind,
 			// and the next load would then wipe the repo's cache.
 			Prepare: func(proto.Role) {
+				cacheDir := modelCache(lib.settings.Get())
 				removed, err := hub.CleanEngineCopies(cacheDir)
 				if err != nil {
 					ring.Append(core.LogEntry{Level: core.SeverityWarning, Source: "engine:gpu", Message: "cleaning the engine's model copies: " + err.Error()})
@@ -166,60 +182,140 @@ func (a *app) connectEngine(h *engineHost) {
 		// scheduler records the interrupted jobs in.
 		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { h.Stop() })
 	}
-	if h.sched == nil {
-		s := jobs.New(jobs.Options{
-			Store:   a.lib.store.Jobs(),
-			Publish: func(u jobs.Updated) { a.bus.Publish(u) },
-			NewID:   func() string { return core.NewID(time.Now()) },
-		})
-		engine.RegisterExecutors(s, h.sup)
-		h.sched = s
-	}
+	engine.RegisterExecutors(h.sched, h.sup, engine.ExecutorOptions{
+		ModelPath: a.lib.modelSnapshot,
+		Licences:  a.lib.licences,
+	})
 	post := a.enginePost
 	core.On(a.bus, func(ev engine.StatusChanged) { post(func() { a.workerChanged(ev.Status) }) })
 	core.On(a.bus, func(u jobs.Updated) {
-		if strings.HasPrefix(u.Job.Owner, studioOwner) && u.Chunk == nil {
-			post(func() { a.jobUpdated(u.Job) })
+		if u.Chunk != nil {
+			return
 		}
+		post(func() {
+			a.jobsChanged(u.Job) // shell_status.go: every job, for the status bar
+			if u.Job.Kind == hub.KindDownload {
+				a.downloadUpdated(u.Job) // shell_models.go
+			}
+			if strings.HasPrefix(u.Job.Owner, studioOwner) || strings.HasPrefix(u.Job.Owner, takeOwner) {
+				a.jobUpdated(u.Job)
+			}
+		})
 	})
-	if err := h.sched.Start(context.Background()); err != nil {
-		a.engState, a.engError = engineFailed, err.Error()
-	}
 }
 
-// startSynthesis submits a tts.synthesize job whose result becomes take t.
-func (a *app) startSynthesis(t *core.Take, req proto.SynthesizeParams) {
-	params, err := json.Marshal(req)
-	if err != nil {
-		a.jobError = err.Error()
-		return
-	}
+// gb converts the settings' gigabytes to bytes.
+func gb(n float64) int64 { return int64(n * (1 << 30)) }
+
+// startEngine starts the gpu worker, then the scheduler: jobs left from
+// the last run (downloads, takes) continue once the engine is up. It runs
+// once, when the window opens.
+func (a *app) startEngine() {
+	a.engState, a.engError, a.engTail = engineStarting, "", ""
+	sup, sched, post := a.eng.sup, a.eng.sched, a.enginePost
+	a.async(func() {
+		ctx := context.Background()
+		err := sup.Start(ctx)
+		if err == nil {
+			err = sched.Start(ctx)
+		}
+		active, _ := sched.List(ctx, jobs.Filter{})
+		workers := sup.Status()
+		post(func() {
+			// Workers whose events have not arrived yet (events that did
+			// are newer than this snapshot may be).
+			for _, st := range workers {
+				known := slices.ContainsFunc(a.workers, func(w engine.WorkerStatus) bool { return w.Role == st.Role })
+				if !known && st.State != engine.WorkerStopped {
+					a.workerChanged(st)
+				}
+			}
+			if err != nil {
+				a.engState, a.engError = engineFailed, err.Error()
+			}
+			for _, j := range active {
+				a.jobsChanged(j)
+				if j.Kind == hub.KindDownload {
+					a.downloadUpdated(j)
+				}
+			}
+		})
+	})
+}
+
+// startTake asks TakeService for the take whose recipe is t (its id
+// chosen) and follows its job, owned by "take:<id>". The take arrives with
+// TakeCreated (takeCreated), after the service saved it.
+func (a *app) startTake(t core.Take) {
 	status := i18n.T("Starting…")
 	if a.loadedModel != t.Model {
 		status = i18n.T("Loading model…")
 	}
-	a.jobError = ""
-	a.job = &job{owner: studioOwner + t.ID, kind: "synthesize", model: t.Model, started: t.CreatedAt, status: status, fraction: -1, take: t}
-	a.submit(jobs.Spec{Kind: proto.MethodTTSSynthesize, Lane: jobs.LaneGPU, Priority: jobs.PriorityInteractive,
-		Params: params, Title: i18n.T("Generate take"), Owner: a.job.owner})
+	owner := takeOwner + t.ID
+	a.jobError, a.needDownload = "", nil
+	a.awaitTake = t.ID
+	a.job = &job{owner: owner, kind: "synthesize", model: t.Model, started: time.Now(), status: status, fraction: -1, takeID: t.ID}
+	takes, post := a.lib.svc.Takes, a.enginePost
+	a.async(func() {
+		id, err := takes.Generate(context.Background(), core.TakeRequest{Recipe: t})
+		post(func() {
+			j := a.job
+			if j == nil || j.owner != owner {
+				return
+			}
+			if err != nil {
+				a.job = nil
+				if a.awaitTake == t.ID {
+					a.awaitTake = ""
+				}
+				a.generateRefused(t, err)
+				return
+			}
+			j.id = id
+			if j.cancelling {
+				a.cancelJob(id)
+			}
+		})
+	})
+}
+
+// generateRefused explains why Generate did not queue the take, and
+// offers the fix: the licence dialog, or a download.
+func (a *app) generateRefused(t core.Take, err error) {
+	e := entryFor(t.Model)
+	var lic *core.LicenceRequiredError
+	switch {
+	case errors.As(err, &lic):
+		a.askLicence(e, func() { a.generate() })
+	case errors.Is(err, core.ErrNotDownloaded):
+		a.jobError = i18n.T("%s is not downloaded yet.", e.Label)
+		a.needDownload = &e
+	default:
+		a.jobError = err.Error()
+	}
 }
 
 // preload loads the chosen model without generating, so the first take is quick.
 func (a *app) preload() {
-	repo := a.preset().Repo
+	e := a.preset()
+	repo := e.Repo
 	if a.engState != engineReady || a.job != nil || repo == "" || repo == a.loadedModel {
 		return
 	}
+	if licence.Required(e) != nil && !licence.Covers(a.accepted, e) {
+		a.askLicence(e, a.preload)
+		return
+	}
 	params, _ := json.Marshal(proto.LoadParams{Model: repo})
-	a.jobError = ""
+	a.jobError, a.needDownload = "", nil
 	a.job = &job{owner: studioOwner + "load:" + core.NewID(time.Now()), kind: "load", model: repo, started: time.Now(),
 		status: i18n.T("Loading model…"), fraction: -1}
 	a.submit(jobs.Spec{Kind: proto.MethodModelsLoad, Lane: jobs.LaneGPU, Priority: jobs.PriorityInteractive,
 		Params: params, Title: i18n.T("Load model"), Owner: a.job.owner})
 }
 
-// submit queues the Studio's job in the background; its id arrives with
-// the result or with its first update, whichever is first.
+// submit queues the Studio's own job (a preload) in the background; its
+// id arrives with the result or with its first update, whichever is first.
 func (a *app) submit(spec jobs.Spec) {
 	sched, owner, post := a.eng.sched, spec.Owner, a.enginePost
 	a.async(func() {
@@ -274,6 +370,23 @@ func (a *app) unload() {
 			}
 			a.loaded, a.loadedModel = nil, ""
 			a.toast(i18n.T("Model unloaded"))
+		})
+	})
+}
+
+// flushEngine drops MLX's buffer cache in the gpu worker (⌘E).
+func (a *app) flushEngine() {
+	sup, post := a.eng.sup, a.enginePost
+	a.async(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, err := sup.Call(ctx, proto.RoleGPU, "", proto.MethodFlush, proto.Empty{}, nil)
+		post(func() {
+			if err != nil {
+				a.toast(i18n.T("Engine: %s", err.Error()))
+				return
+			}
+			a.toast(i18n.T("Cache cleared"))
 		})
 	})
 }
@@ -384,6 +497,8 @@ func jobErrorText(e *jobs.Error) string {
 		return i18n.T("The engine is not running. Restart it on the Engine page.")
 	case proto.CodeModelNotDownloaded:
 		return i18n.T("The model is not downloaded. Download it on the Models page.")
+	case proto.CodeLicenceRequired:
+		return i18n.T("The model's licence has not been accepted. Review it on the Models page.")
 	case proto.CodeOOM:
 		return i18n.T("Out of memory. Unload other models, or choose a smaller one.")
 	}
@@ -420,28 +535,26 @@ func (a *app) jobUpdated(u jobs.Job) {
 			var res proto.LoadResult
 			json.Unmarshal(u.Result, &res)
 			a.toast(i18n.T("Loaded %s in %.1f s", catalog.ShortRepo(j.model), res.Seconds))
-			return
 		}
-		var res proto.SynthesizeResult
-		if err := json.Unmarshal(u.Result, &res); err != nil {
-			a.jobError = err.Error()
-			return
-		}
-		t := j.take
-		t.JobID = u.ID
-		t.SampleRate, t.AudioSeconds, t.GenSeconds = res.SampleRate, res.AudioSeconds, res.Seconds
-		if res.Seed != nil {
-			t.Seed = *res.Seed
-		}
-		if res.Output != "" {
-			t.File = filepath.Base(res.Output)
-		}
-		a.takeFinished(t)
+		// A take arrives with TakeCreated, once the service saved it.
 	case jobs.StateCancelled:
 		a.job = nil
+		a.dropAwait(j)
 		a.toast(i18n.T("Cancelled"))
 	case jobs.StateFailed, jobs.StateInterrupted:
 		a.job = nil
+		a.dropAwait(j)
 		a.jobError = jobErrorText(u.Err)
+		if u.Err != nil && u.Err.Code == proto.CodeModelNotDownloaded {
+			e := entryFor(j.model)
+			a.needDownload = &e
+		}
+	}
+}
+
+// dropAwait stops waiting for the take of a job that will not make it.
+func (a *app) dropAwait(j *job) {
+	if j.takeID != "" && a.awaitTake == j.takeID {
+		a.awaitTake = ""
 	}
 }

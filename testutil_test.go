@@ -14,18 +14,29 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/hub"
+	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
-// openTestLibrary opens a library in a temporary directory, closed when
-// the test ends. dir may be "" for a new one.
+// inline runs background work at once, as the app does in tests.
+func inline(fn func()) { fn() }
+
+// openTestLibrary opens a library with the real job scheduler in a
+// temporary directory (dir, when given), closed when the test ends.
 func openTestLibrary(t *testing.T, dir ...string) *library {
 	t.Helper()
 	d := t.TempDir()
 	if len(dir) > 0 {
 		d = dir[0]
 	}
-	lib, err := openLibrary(d, filepath.Join(d, "cache"))
+	return openTestLibraryWith(t, d, libraryOptions{Async: inline})
+}
+
+func openTestLibraryWith(t *testing.T, dir string, o libraryOptions) *library {
+	t.Helper()
+	lib, err := openLibrary(dir, filepath.Join(dir, "cache"), o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,21 +44,59 @@ func openTestLibrary(t *testing.T, dir ...string) *library {
 	return lib
 }
 
+// newTestApp is the app over a new library with fake engines: a
+// scheduler that records submissions and a supervisor that records calls
+// (enginefake_test.go); the test plays the engine.
 func newTestApp(t *testing.T) (*app, *fakeEngine, *ui.Tester) {
 	t.Helper()
-	return newTestAppWith(t, openTestLibrary(t))
+	return newTestAppIn(t, t.TempDir())
 }
 
-func newTestAppWith(t *testing.T, lib *library) (*app, *fakeEngine, *ui.Tester) {
+// newTestAppIn is newTestApp over the library in dir, which may hold one
+// from an earlier "run".
+func newTestAppIn(t *testing.T, dir string) (*app, *fakeEngine, *ui.Tester) {
 	t.Helper()
-	eng := newFakeEngine() // enginefake_test.go (thread B)
+	eng := newFakeEngine()
+	lib := openTestLibraryWith(t, dir, libraryOptions{Sched: eng.host.sched, Async: inline})
+	useLocalModels(t, lib)
 	a := newApp(eng.host, lib)
 	eng.a = a
 	a.connectEngine(eng.host)
 	a.autoplay = false
+	a.startEngine()
 	eng.ready()
 	t.Cleanup(a.pl.Stop)
 	return a, eng, ui.NewTester(a.view, 1100, 720)
+}
+
+// useLocalModels points the library's model folder at a temporary one in
+// which every catalogue entry (and its auxiliary repos) is "downloaded":
+// a snapshot at its pinned commit with a config and a weights file.
+func useLocalModels(t *testing.T, lib *library) string {
+	t.Helper()
+	dir := t.TempDir()
+	put := func(repo, rev string) {
+		snap := filepath.Join(hub.RepoDir(dir, repo), "snapshots", rev)
+		for name, data := range map[string]string{"config.json": "{}", "model.safetensors": "weights"} {
+			if err := os.MkdirAll(snap, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(snap, name), []byte(data), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, e := range catalog.Builtin().Entries {
+		put(e.Repo, e.Revision)
+		for _, x := range e.Aux {
+			put(x.Repo, x.Revision)
+		}
+	}
+	if err := lib.settings.Update(context.Background(), func(s *settings.Settings) { s.Models.CacheDir = dir }); err != nil {
+		t.Fatal(err)
+	}
+	lib.resetHub()
+	return dir
 }
 
 // addTake stores a take with a test WAV, as a finished generation would;

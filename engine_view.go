@@ -10,7 +10,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
-	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 )
 
@@ -22,8 +21,8 @@ func (a *app) enginePage(c *ui.Context) {
 		}
 	})
 	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Padding(20).Gap(16).MaxWidth(720).Children(func() {
-			ui.Text(c, i18n.T("AudioSmith runs speech models in audiosmith-engine, a helper built on mlx-audio-swift that runs on the Mac's GPU with MLX. Models download from Hugging Face on first use, into the same cache as the Python tools.")).
+		ui.Column(c).Padding(px(t, 20)).Gap(px(t, 16)).MaxWidth(px(t, 720)).Children(func() {
+			ui.Text(c, i18n.T("AudioSmith runs speech models in audiosmith-engine, a helper built on mlx-audio-swift that runs on the Mac's GPU with MLX. It loads them, without the network, from the model folder the Models page downloads into (the Hugging Face cache the Python tools share).")).
 				TextColor(t.TextMuted)
 
 			workers := a.workers
@@ -37,17 +36,18 @@ func (a *app) enginePage(c *ui.Context) {
 			rows := [][2]string{
 				{i18n.T("Engine"), orDash(a.eng.Path())},
 				{i18n.T("Takes"), a.takeStore.AudioDir()},
-				{i18n.T("Model cache"), hub.CacheDir()},
+				{i18n.T("Model cache"), modelCache(a.prefs)},
 				{i18n.T("Log"), orDash(a.logPath)},
 			}
 			infoGrid(c, rows)
-			ui.Row(c).Gap(8).Children(func() {
+			ui.Row(c).Gap(px(t, 8)).Children(func() {
 				if ui.Button(c.Key("open-log"), i18n.T("Open log")).Disabled(a.logPath == "").Clicked() {
 					mygo.Shell.OpenPath(a.logPath)
 				}
 				if ui.Button(c.Key("open-models"), i18n.T("Open model cache")).Clicked() {
-					os.MkdirAll(hub.CacheDir(), 0o755)
-					mygo.Shell.OpenPath(hub.CacheDir())
+					dir := modelCache(a.prefs)
+					os.MkdirAll(dir, 0o755)
+					mygo.Shell.OpenPath(dir)
 				}
 			})
 		})
@@ -58,7 +58,7 @@ func (a *app) enginePage(c *ui.Context) {
 // and why it stopped.
 func (a *app) workerCard(c *ui.Context, w engine.WorkerStatus) {
 	t := c.Theme()
-	ui.Column(c.Key("worker-"+string(w.Role))).Gap(10).Padding(14).Radius(10).Border(1, t.Border).Background(t.Surface).Children(func() {
+	ui.Column(c.Key("worker-"+string(w.Role))).Gap(px(t, 10)).Padding(px(t, 14)).Radius(10).Border(1, t.Border).Background(t.Surface).Children(func() {
 		color, state := t.Warning, i18n.T("Starting")
 		switch w.State {
 		case engine.WorkerReady:
@@ -66,8 +66,8 @@ func (a *app) workerCard(c *ui.Context, w engine.WorkerStatus) {
 		case engine.WorkerFailed, engine.WorkerStopped:
 			color, state = t.Danger, i18n.T("Stopped")
 		}
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Size(8, 8).Radius(4).Background(color)
+		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			ui.Box(c).Size(px(t, 8), px(t, 8)).Radius(px(t, 4)).Background(color)
 			ui.Text(c, roleTitle(w.Role)).Bold()
 			ui.Text(c, state).TextColor(t.TextMuted)
 		})
@@ -118,14 +118,14 @@ func (a *app) workerCard(c *ui.Context, w engine.WorkerStatus) {
 			ui.Text(c, msg).TextColor(t.Danger).Selectable()
 		}
 		if w.StderrTail != "" && w.State == engine.WorkerFailed {
-			ui.Text(c, w.StderrTail).Font("monospace").FontSize(11).Padding(10).Radius(8).Background(t.Background).Selectable()
+			ui.Text(c, w.StderrTail).Font("monospace").FontSize(px(t, 11)).Padding(px(t, 10)).Radius(8).Background(t.Background).Selectable()
 		}
 	})
 }
 
 func infoGrid(c *ui.Context, rows [][2]string) {
 	t := c.Theme()
-	ui.Grid(c).ColumnTracks(ui.Fixed(120), ui.Fr(1)).GapX(12).GapY(8).Children(func() {
+	ui.Grid(c).ColumnTracks(ui.Fixed(px(t, 120)), ui.Fr(1)).GapX(px(t, 12)).GapY(px(t, 8)).Children(func() {
 		for _, r := range rows {
 			ui.Text(c, r[0]).TextColor(t.TextMuted)
 			ui.Text(c, r[1]).Selectable()

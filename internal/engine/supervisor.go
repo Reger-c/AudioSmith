@@ -136,6 +136,9 @@ type Supervisor interface {
 	SetMemoryBudget(bytes int64)
 	// SetIdleUnload changes Config.IdleUnload at run time.
 	SetIdleUnload(d time.Duration)
+	// SetCacheDir changes Config.CacheDir; it applies to the workers
+	// started (or restarted) after the call.
+	SetCacheDir(dir string)
 	// Stop asks every worker to shut down (engine.shutdown), then kills
 	// what is left after a grace period. Calls in flight fail with core.ErrEngine.
 	Stop()

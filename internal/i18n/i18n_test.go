@@ -1,6 +1,9 @@
 package i18n
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestEnglishIsIdentity(t *testing.T) {
 	SetLocale("en")
@@ -36,7 +39,7 @@ func TestChinese(t *testing.T) {
 	if got := T("A message nobody translated"); got != "A message nobody translated" {
 		t.Error(got)
 	}
-	if got := N(1, "%d take", "%d takes", 1); got != "1 条录音" {
+	if got := N(1, "%d take", "%d takes", 1); got != "1 条生成结果" {
 		t.Error("zh-Hans has no singular, so it uses the translation of other:", got)
 	}
 }
@@ -64,5 +67,29 @@ func TestCatalogsParse(t *testing.T) {
 func TestNames(t *testing.T) {
 	if Name("en") != "English" || Name("zh-Hans") != "简体中文" || Name("xx") != "xx" {
 		t.Error(Name("en"), Name("zh-Hans"))
+	}
+}
+
+func TestDates(t *testing.T) {
+	defer SetLocale("en")
+	now := time.Now()
+	this := time.Date(now.Year(), 3, 4, 15, 6, 0, 0, time.Local)
+	old := time.Date(2024, 11, 22, 9, 5, 0, 0, time.Local)
+	SetLocale("en")
+	if got := DateTime(this); got != "Mar 4 15:06" {
+		t.Errorf("en this year: %q", got)
+	}
+	if got := DateTime(old); got != "Nov 22, 2024 09:05" {
+		t.Errorf("en: %q", got)
+	}
+	SetLocale("zh-Hans")
+	if got := DateTime(this); got != "3月4日 15:06" {
+		t.Errorf("zh this year: %q", got)
+	}
+	if got, want := DateTime(old), "2024年11月22日 09:05"; got != want {
+		t.Errorf("zh: %q", got)
+	}
+	if got := Date(old); got != "2024年11月22日" {
+		t.Errorf("zh date: %q", got)
 	}
 }

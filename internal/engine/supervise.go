@@ -295,9 +295,12 @@ func openLog(path string) *os.File {
 func (s *supervisor) handshake(w *worker, p *proc) {
 	ctx, cancel := context.WithTimeout(context.Background(), s.cfg.HelloTimeout)
 	defer cancel()
+	s.mu.Lock()
+	cacheDir := s.cfg.CacheDir
+	s.mu.Unlock()
 	raw, err := p.call(ctx, "", proto.MethodHello, proto.HelloParams{
 		Protocol: proto.Version, App: s.cfg.AppVersion, Role: w.role,
-		CacheDir: s.cfg.CacheDir, Offline: s.cfg.Offline, LogLevel: "info",
+		CacheDir: cacheDir, Offline: s.cfg.Offline, LogLevel: "info",
 	}, nil, false)
 	var hello proto.HelloResult
 	if err == nil {
@@ -753,6 +756,13 @@ func (s *supervisor) SetMemoryBudget(bytes int64) {
 	s.cfg.MemoryBudget = max(bytes, 0)
 	s.mu.Unlock()
 	go s.evict()
+}
+
+// SetCacheDir changes Config.CacheDir for the workers started next.
+func (s *supervisor) SetCacheDir(dir string) {
+	s.mu.Lock()
+	s.cfg.CacheDir = dir
+	s.mu.Unlock()
 }
 
 // SetIdleUnload changes Config.IdleUnload; it applies at the next poll.

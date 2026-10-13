@@ -8,18 +8,25 @@ package main
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"log"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/audio"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/licence"
 	"github.com/hehehai/AudioSmith/internal/services"
+	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/store"
 	"github.com/hehehai/AudioSmith/internal/store/sqlitestore"
 )
@@ -27,22 +34,45 @@ import (
 // peakCount is how many peaks a waveform draws.
 const peakCount = 160
 
-// library is the domain behind the take pages: the SQLite store, the bus
-// and the services over them. main opens it once (openTakeStore); other
-// areas reach the store's documents and licences, and the bus, through it.
+// library is the app's domain, opened once by main (openTakeStore): the
+// SQLite store and the bus, the settings and the licence gate kept in it,
+// the job scheduler over its jobs table, the model downloader the
+// settings configure, and the services over all of them. The UI areas
+// reach the domain through it; everything in it is goroutine-safe.
 type library struct {
-	store *sqlitestore.Store
-	bus   *core.Bus
-	svc   *services.Services
-	peaks audio.PeakCache
+	store    *sqlitestore.Store
+	bus      *core.Bus
+	settings *settings.Store
+	licences *licence.Gate
+	sched    jobs.Scheduler
+	svc      *services.Services
+	peaks    audio.PeakCache
 	// peakSlots bounds how many waveforms decode at once.
 	peakSlots chan struct{}
+
+	hubMu  sync.Mutex
+	hubCli *hub.Client // for the current settings; nil until needed
+}
+
+// libraryOptions adjust openLibrary for tests.
+type libraryOptions struct {
+	// Sched replaces the job scheduler (tests drive a fake); nil makes the
+	// real one over the store's jobs table.
+	Sched jobs.Scheduler
+	// Async runs the services' background work; nil = goroutines.
+	Async func(func())
 }
 
 // openLibrary opens the store in dataDir (migrating it, and importing the
-// MVP's history.json the first time) and the services over it. Peaks are
-// cached in cacheDir/peaks.
-func openLibrary(dataDir, cacheDir string) (*library, error) {
+// MVP's history.json the first time), then the domain over it (see
+// library). Peaks are cached in cacheDir/peaks. Executors that need the
+// engine are registered later (connectEngine), and the scheduler starts
+// when the engine does (startEngine).
+func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, error) {
+	var o libraryOptions
+	if len(opts) > 0 {
+		o = opts[0]
+	}
 	ctx := context.Background()
 	st, err := sqlitestore.Open(ctx, dataDir)
 	if err != nil {
@@ -54,13 +84,102 @@ func openLibrary(dataDir, cacheDir string) (*library, error) {
 		log.Printf("history.json: imported %d takes", n)
 	}
 	bus := core.NewBus()
-	return &library{
+	l := &library{
 		store:     st,
 		bus:       bus,
-		svc:       services.New(services.Config{Store: st, Bus: bus}),
 		peaks:     audio.PeakCache{Dir: filepath.Join(cacheDir, "peaks"), N: peakCount},
 		peakSlots: make(chan struct{}, 2),
-	}, nil
+	}
+	l.settings, err = settings.Open(ctx, st.Documents(), func(ev settings.Changed) { bus.Publish(ev) })
+	if err != nil {
+		log.Printf("settings: %v", err) // the defaults, until the next change saves them
+	}
+	core.On(bus, func(ev settings.Changed) {
+		m, n := ev.Old.Models, ev.New.Models
+		if !slices.Equal(m.Endpoints, n.Endpoints) || m.CacheDir != n.CacheDir || m.Proxy != n.Proxy {
+			l.resetHub()
+		}
+	})
+	l.licences = licence.New(st.Licences(), nil, bus)
+	l.sched = o.Sched
+	if l.sched == nil {
+		l.sched = jobs.New(jobs.Options{
+			Store:   st.Jobs(),
+			Publish: func(u jobs.Updated) { bus.Publish(u) },
+			NewID:   func() string { return core.NewID(time.Now()) },
+		})
+	}
+	l.sched.Register(hub.KindDownload, hub.DownloadExecutor(
+		func() hub.Downloader { return l.hub() },
+		func(p hub.Progress) { bus.Publish(hub.DownloadProgress{Progress: p}) }))
+	l.svc = services.New(services.Config{
+		Store: st, Bus: bus, Scheduler: l.sched, Licences: l.licences,
+		Ready: l.modelReady, Async: o.Async,
+	})
+	return l, nil
+}
+
+// hubToken finds the HF token for downloads (tests replace it).
+var hubToken = func() string {
+	t, _ := hub.Token(hub.DefaultKeychain)
+	return t
+}
+
+// modelCache is the model folder of the settings.
+func modelCache(s settings.Settings) string {
+	if s.Models.CacheDir != "" {
+		return s.Models.CacheDir
+	}
+	return hub.CacheDir()
+}
+
+// hub is the downloader for the current settings (folder, endpoints, proxy).
+func (l *library) hub() *hub.Client {
+	l.hubMu.Lock()
+	defer l.hubMu.Unlock()
+	if l.hubCli == nil {
+		s := l.settings.Get()
+		m := s.Models
+		l.hubCli = hub.New(hub.Options{CacheDir: modelCache(s), Endpoints: m.Endpoints, Proxy: m.Proxy, Token: hubToken})
+	}
+	return l.hubCli
+}
+
+// resetHub makes the next download use the settings as they are now;
+// downloads running keep their client.
+func (l *library) resetHub() {
+	l.hubMu.Lock()
+	l.hubCli = nil
+	l.hubMu.Unlock()
+}
+
+// entryFor is the catalogue entry of a repo, or a custom entry for it.
+func entryFor(repo string) catalog.Entry {
+	if e, ok := catalog.Builtin().ByRepo(repo); ok {
+		return e
+	}
+	return catalog.Custom(repo)
+}
+
+// modelSnapshot is the local snapshot directory of a model, or an error
+// wrapping core.ErrNotDownloaded. Generate checks it before queueing, and
+// the engine executors fill it into the job as it starts (engines run
+// offline: they load only what the hub downloaded).
+func (l *library) modelSnapshot(ctx context.Context, repo string) (string, error) {
+	loc, err := hub.Status(modelCache(l.settings.Get()), entryFor(repo))
+	if err != nil {
+		return "", err
+	}
+	if loc.State != hub.Downloaded {
+		return "", fmt.Errorf("%s: %w", catalog.Builtin().DisplayName(repo), core.ErrNotDownloaded)
+	}
+	return loc.Snapshot, nil
+}
+
+// modelReady is services.Config.Ready.
+func (l *library) modelReady(ctx context.Context, repo string) error {
+	_, err := l.modelSnapshot(ctx, repo)
+	return err
 }
 
 // close writes pending drafts, waits for takes being saved and closes the store.
@@ -75,21 +194,20 @@ func (l *library) close() {
 	}
 }
 
-// openTakeStore opens the library in the app's data directory and closes
-// it when the app quits. Without its database the app cannot keep takes,
-// so failing to open it (a database from a newer AudioSmith, a missing
-// SQLite library) ends the app with the reason.
-func openTakeStore(dataDir string) *library {
+// openTakeStore opens the library in the app's data directory; main
+// closes it when the app quits. Without its database the app cannot keep
+// takes: when it cannot be opened (a database from a newer AudioSmith, a
+// missing SQLite library) main shows why and quits (showFatal).
+func openTakeStore(dataDir string) (*library, error) {
 	cacheDir, err := mygo.App.Path(mygo.PathCache)
 	if err != nil {
 		cacheDir = filepath.Join(dataDir, "cache")
 	}
 	lib, err := openLibrary(dataDir, cacheDir)
 	if err != nil {
-		log.Fatalf("opening the library in %s: %v", dataDir, err)
+		return nil, fmt.Errorf("opening the library in %s: %w", dataDir, err)
 	}
-	mygo.App.OnQuit(lib.close)
-	return lib
+	return lib, nil
 }
 
 // takesState is the take library's view state.
@@ -103,6 +221,7 @@ type takesState struct {
 	peaksPending map[string]bool      // waveforms being computed
 	pl           audio.Player
 	lastClipID   string // the Studio's "Latest take"
+	awaitTake    string // id of the take the Studio's job makes; "" when none
 	historyList  ui.ListState
 }
 
@@ -117,7 +236,7 @@ func (a *app) openTakes(lib *library) {
 		// On the publisher's goroutine: hand the event to the main thread.
 		switch ev := ev.(type) {
 		case core.TakeCreated:
-			a.post(func() { a.putTake(ev.Take) })
+			a.post(func() { a.takeCreated(ev.Take) })
 		case core.TakeUpdated:
 			a.post(func() { a.putTake(ev.Take) })
 		case core.TakeDeleted:
@@ -215,24 +334,21 @@ func (a *app) lastClip() *core.Take {
 	return a.findTake(a.lastClipID)
 }
 
-// takeFinished is called when the engine has written a take: it shows it
-// as the latest at once, plays it when autoplay is on, and saves it in
-// the background (TakeCreated then confirms it).
-func (a *app) takeFinished(t *core.Take) {
-	take := *t
-	a.putTake(take)
-	a.lastClipID = take.ID
+// takeCreated adds a saved take to the snapshot. The take the Studio
+// waits for (its last Generate) also becomes the latest take, and plays
+// when autoplay is on.
+func (a *app) takeCreated(t core.Take) {
+	a.putTake(t)
+	if t.ID != a.awaitTake {
+		return
+	}
+	a.awaitTake = ""
+	a.lastClipID = t.ID
 	if a.autoplay {
-		if err := a.pl.Toggle(take.ID, a.takeStore.AudioPath(take)); err != nil {
+		if err := a.pl.Toggle(t.ID, a.takeStore.AudioPath(t)); err != nil {
 			a.toast(i18n.T("Could not play: %v", err))
 		}
 	}
-	svc := a.lib.svc.Takes
-	a.background(func() {
-		if _, err := svc.Add(context.Background(), take); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not save the history: %v", err)) })
-		}
-	})
 }
 
 func (a *app) play(t *core.Take) {

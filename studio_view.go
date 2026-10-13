@@ -10,31 +10,32 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 func (a *app) studioPage(c *ui.Context) {
 	t := c.Theme()
 	header(c, i18n.T("Studio"), nil)
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Padding(16, 20).Gap(12).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, 16), px(t, 20)).Gap(px(t, 12)).Children(func() {
 			ui.TextArea(c.Key("script"), &a.text).
 				Placeholder(i18n.T("Type or paste the text to speak…")).
 				Label(i18n.T("Script")).
-				Grow(1).MinHeight(120).
-				FontSize(15)
+				Grow(1).MinHeight(px(t, 120)).
+				FontSize(px(t, 15))
 			a.generateBar(c)
 			if a.job != nil {
 				a.jobStatus(c)
 			} else if a.jobError != "" {
-				ui.Text(c, a.jobError).TextColor(t.Danger).FontSize(12).Selectable()
+				a.jobProblem(c)
 			}
 			if cl := a.lastClip(); cl != nil {
 				a.clipCard(c, cl, true)
 			}
 		})
 		ui.Box(c).Width(1).Background(t.Border)
-		ui.Scroll(c).Width(inspectorWidth).Shrink(0).Background(t.Surface).Children(func() {
-			ui.Column(c).Padding(16).Gap(14).Children(func() {
+		ui.Scroll(c).Width(px(t, inspectorWidth)).Shrink(0).Background(t.Surface).Children(func() {
+			ui.Column(c).Padding(px(t, 16)).Gap(px(t, 14)).Children(func() {
 				a.inspector(c)
 			})
 		})
@@ -45,9 +46,9 @@ func (a *app) studioPage(c *ui.Context) {
 
 func (a *app) generateBar(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 		n := utf8.RuneCountInString(strings.TrimSpace(a.text))
-		ui.Text(c, i18n.T("%d characters", n)).FontSize(12).TextColor(t.TextMuted).Grow(1)
+		ui.Text(c, i18n.T("%d characters", n)).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
 		if a.job != nil {
 			if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
 				a.cancel()
@@ -66,18 +67,47 @@ func (a *app) generateBar(c *ui.Context) {
 	})
 }
 
+// jobProblem shows why the last job failed or did not start, with a
+// Download button when the model is missing.
+func (a *app) jobProblem(c *ui.Context) {
+	t := c.Theme()
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, a.jobError).TextColor(t.Danger).FontSize(px(t, 12)).Selectable().Grow(1).MinWidth(0)
+		e := a.needDownload
+		if e == nil {
+			return
+		}
+		m := a.model(*e)
+		switch {
+		case m.downloading:
+			text := i18n.T("Downloading %s", e.Label)
+			if m.progress.TotalBytes > 0 {
+				text = i18n.T("Downloading %s · %d%%", e.Label, int(100*m.progress.Bytes/m.progress.TotalBytes))
+			}
+			ui.Text(c, text).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			if ui.Button(c.Key("dl-cancel"), i18n.T("Cancel")).Clicked() {
+				a.cancelDownload(*e)
+			}
+		default:
+			if ui.Button(c.Key("dl-model"), i18n.T("Download")).Tooltip(e.Repo).Clicked() {
+				a.download(*e)
+			}
+		}
+	})
+}
+
 func (a *app) jobStatus(c *ui.Context) {
 	t := c.Theme()
 	j := a.job
-	ui.Column(c).Gap(6).Children(func() {
+	ui.Column(c).Gap(px(t, 6)).Children(func() {
 		ui.Progress(c, j.fraction).Label(j.status)
-		ui.Row(c).Gap(8).Children(func() {
-			ui.Text(c, j.status).FontSize(12).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+		ui.Row(c).Gap(px(t, 8)).Children(func() {
+			ui.Text(c, j.status).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			info := i18n.T("%.0f s", time.Since(j.started).Seconds())
 			if j.audioSeconds > 0 {
 				info = i18n.T("%.1f s of audio · ", j.audioSeconds) + info
 			}
-			ui.Text(c, info).FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, info).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		})
 	})
 }
@@ -101,9 +131,12 @@ func (a *app) inspector(c *ui.Context) {
 	if size := catalog.HumanSize(p.Size); size != "" {
 		about += i18n.T(" Download %s.", size)
 	}
-	ui.Text(c, about).FontSize(12).TextColor(t.TextMuted)
+	ui.Text(c, about).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	if !p.Licence.Commercial {
+		ui.Text(c, p.Licence.Name+" · "+i18n.T("non-commercial use only")).FontSize(px(t, 12)).TextColor(t.Warning)
+	}
 
-	ui.Row(c).Gap(8).Children(func() {
+	ui.Row(c).Gap(px(t, 8)).Children(func() {
 		loaded := p.Repo != "" && p.Repo == a.loadedModel
 		label := i18n.T("Preload")
 		if loaded {
@@ -111,7 +144,7 @@ func (a *app) inspector(c *ui.Context) {
 		}
 		if ui.Button(c.Key("preload"), label).
 			Disabled(loaded || a.job != nil || a.engState != engineReady || p.Repo == "").
-			Tooltip(i18n.T("Download and load the model now")).
+			Tooltip(i18n.T("Load the model now, so the first take starts at once")).
 			Clicked() {
 			a.preload()
 		}
@@ -129,7 +162,7 @@ func (a *app) inspector(c *ui.Context) {
 	if p.Has(catalog.CapVoiceStyle) {
 		voiceLabel = i18n.T("Voice / style")
 	}
-	if voices := p.VoiceIDs(); len(voices) > 0 || custom {
+	if voices := p.VoiceIDs(); len(voices) > 0 || custom || p.Has(catalog.CapVoiceStyle) {
 		ui.Field(c, voiceLabel, func() {
 			ui.Autocomplete(c.Key("voice"), &a.voice, voices).Placeholder(i18n.T("Model default")).Label(voiceLabel)
 		})
@@ -142,6 +175,11 @@ func (a *app) inspector(c *ui.Context) {
 	if p.Has(catalog.CapSpeed) {
 		ui.Field(c, i18n.T("Speed  %.2f×", a.speed), func() {
 			snapped(ui.Slider(c.Key("speed"), &a.speed, 0.5, 2).Label(i18n.T("Speed")), &a.speed, 0.05)
+		})
+	}
+	if p.Has(catalog.CapDuration) {
+		ui.Field(c, i18n.T("Duration (seconds, 0 = natural)"), func() {
+			ui.NumberInput(c.Key("duration"), &a.duration, 0, 600, 0.5).Label(i18n.T("Duration"))
 		})
 	}
 	if p.Has(catalog.CapSampling) {
@@ -161,12 +199,12 @@ func (a *app) inspector(c *ui.Context) {
 	if p.Has(catalog.CapClone) {
 		ui.Divider(c)
 		ui.Text(c, i18n.T("Voice cloning")).Bold()
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 			name := i18n.T("No reference clip")
 			if a.refAudio != "" {
 				name = filepath.Base(a.refAudio)
 			}
-			ui.Text(c, name).FontSize(12).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			ui.Text(c, name).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			if ui.Button(c.Key("choose-ref"), i18n.T("Choose…")).Clicked() {
 				a.chooseRefAudio()
 			}
@@ -179,7 +217,10 @@ func (a *app) inspector(c *ui.Context) {
 		})
 	}
 	ui.Divider(c)
-	ui.Checkbox(c.Key("autoplay"), &a.autoplay, i18n.T("Play each take when it is ready"))
+	if ui.Checkbox(c.Key("autoplay"), &a.autoplay, i18n.T("Play each take when it is ready")).Changed() {
+		on := a.autoplay
+		a.updateSettings(func(s *settings.Settings) { s.Studio.Autoplay = on })
+	}
 }
 
 // snapped rounds a slider's value to a step, so labels and requests show

@@ -4,12 +4,14 @@ package main
 // download (resumable, cancellable), verify, delete; the licence dialog
 // that gates models whose licence needs accepting.
 //
-// Downloads run on a goroutine of their own over hub.Client until thread
-// B's scheduler runs them as "model.download" jobs (integration I4); they
-// publish hub.DownloadProgress on the bus either way.
+// Downloads are "model.download" jobs on the net lane (hub.DownloadSpec):
+// the page submits them, follows them through jobs.Updated
+// (downloadUpdated) and cancels them by id. A download the app quit in
+// the middle of continues at the next start, where it stopped.
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,25 +22,27 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
 )
 
 // modelsState is the Models page's view state.
 type modelsState struct {
-	hub       *hub.Client            // built from the settings; nil until needed
-	models    map[string]*modelState // by catalogue id
+	models    map[string]*modelState // by modelKey
 	deleteAsk bool
 	deleting  catalog.Entry
 }
 
 // modelState is what the page knows of one entry.
 type modelState struct {
+	entry       catalog.Entry
 	local       hub.Local
 	known       bool // local was read
-	downloading bool
+	downloading bool // its download job is queued or running
+	jobID       string
 	verifying   bool
 	progress    hub.Progress
-	cancel      context.CancelFunc
+	cancelling  bool
 	err         string
 }
 
@@ -50,30 +54,28 @@ type licenceDialog struct {
 	licenceThen  func()
 }
 
-// hubToken finds the HF token for downloads (tests replace it).
-var hubToken = func() string {
-	t, _ := hub.Token(hub.DefaultKeychain)
-	return t
-}
-
 // hubClient is the downloader for the current settings.
-func (a *app) hubClient() *hub.Client {
-	if a.hub == nil {
-		m := a.prefs.Models
-		a.hub = hub.New(hub.Options{CacheDir: m.CacheDir, Endpoints: m.Endpoints, Proxy: m.Proxy, Token: hubToken})
-	}
-	return a.hub
-}
+func (a *app) hubClient() *hub.Client { return a.lib.hub() }
 
 // resetHub makes the next download use the settings as they are now;
 // downloads running keep their client.
-func (a *app) resetHub() { a.hub = nil }
+func (a *app) resetHub() { a.lib.resetHub() }
 
-func (a *app) model(id string) *modelState {
-	m := a.models[id]
+// modelKey identifies an entry on the page: its catalogue id, or its repo
+// for one outside the catalogue (the Studio's custom repo).
+func modelKey(e catalog.Entry) string {
+	if e.ID == "" || e.ID == "custom" {
+		return "repo:" + e.Repo
+	}
+	return e.ID
+}
+
+func (a *app) model(e catalog.Entry) *modelState {
+	k := modelKey(e)
+	m := a.models[k]
 	if m == nil {
-		m = &modelState{}
-		a.models[id] = m
+		m = &modelState{entry: e}
+		a.models[k] = m
 	}
 	return m
 }
@@ -95,23 +97,32 @@ func (a *app) refreshModels() {
 	a.async(func() {
 		for _, e := range entries {
 			l, err := client.Status(context.Background(), e)
-			a.post(func() {
-				m := a.model(e.ID)
-				if m.downloading {
-					return
-				}
-				m.local, m.known = l, true
-				if err != nil {
-					m.err = err.Error()
-				}
-			})
+			a.post(func() { a.setLocal(e, l, err) })
 		}
 	})
 }
 
-// download fetches e, asking for its licence first when it needs one.
+// refreshModel reads what of e is on disk, in the background.
+func (a *app) refreshModel(e catalog.Entry) {
+	client := a.hubClient()
+	a.async(func() {
+		l, err := client.Status(context.Background(), e)
+		a.post(func() { a.setLocal(e, l, err) })
+	})
+}
+
+func (a *app) setLocal(e catalog.Entry, l hub.Local, err error) {
+	m := a.model(e)
+	m.local, m.known = l, true
+	if err != nil {
+		m.err = err.Error()
+	}
+}
+
+// download queues the download of e, asking for its licence first when it
+// needs one.
 func (a *app) download(e catalog.Entry) {
-	m := a.model(e.ID)
+	m := a.model(e)
 	if m.downloading {
 		return
 	}
@@ -119,42 +130,68 @@ func (a *app) download(e catalog.Entry) {
 		a.askLicence(e, func() { a.download(e) })
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	m.downloading, m.cancel, m.err, m.progress = true, cancel, "", hub.Progress{Repo: e.Repo}
-	client, bus, lg := a.hubClient(), a.bus, a.logs
-	lg.Append(core.LogEntry{Source: "hub", Message: "downloading " + e.Repo})
+	m.downloading, m.cancelling, m.err, m.progress, m.jobID = true, false, "", hub.Progress{Repo: e.Repo}, ""
+	sched := a.lib.sched
+	spec := hub.DownloadSpec(e, i18n.T("Download %s", e.Label))
+	a.logs.Append(core.LogEntry{Source: "hub", Message: "downloading " + e.Repo})
 	a.async(func() {
-		err := client.Download(ctx, e, func(p hub.Progress) {
-			bus.Publish(hub.DownloadProgress{Progress: p})
-			a.post(func() {
-				if m := a.models[e.ID]; m != nil && m.downloading {
-					m.progress = p
-				}
-			})
+		id, err := sched.Submit(context.Background(), spec)
+		a.post(func() {
+			m := a.model(e)
+			if err != nil {
+				m.downloading, m.err = false, err.Error()
+				return
+			}
+			if m.jobID == "" {
+				m.jobID = id
+			}
+			if m.cancelling {
+				a.cancelDownload(e)
+			}
 		})
-		cancel()
-		l, _ := client.Status(context.Background(), e)
-		switch {
-		case err == nil:
-			lg.Append(core.LogEntry{Source: "hub", Level: core.SeveritySuccess, Message: "downloaded " + e.Repo})
-		case errors.Is(err, context.Canceled):
-			lg.Append(core.LogEntry{Source: "hub", Message: "cancelled " + e.Repo})
-		default:
-			lg.Append(core.LogEntry{Source: "hub", Level: core.SeverityError, Message: e.Repo + ": " + err.Error()})
-		}
-		a.post(func() { a.downloadDone(e, l, err) })
 	})
 }
 
-func (a *app) downloadDone(e catalog.Entry, l hub.Local, err error) {
-	m := a.model(e.ID)
-	m.downloading, m.cancel, m.local, m.known = false, nil, l, true
-	switch {
-	case err == nil:
+// downloadUpdated follows a download job; it runs on the main thread.
+func (a *app) downloadUpdated(j jobs.Job) {
+	var p hub.DownloadParams
+	if json.Unmarshal(j.Params, &p) != nil {
+		return
+	}
+	e, err := hub.EntryOf(p)
+	if err != nil {
+		return
+	}
+	m := a.model(e)
+	if m.jobID != "" && m.jobID != j.ID && m.downloading {
+		return // an older job of the same model
+	}
+	m.jobID = j.ID
+	switch j.State {
+	case jobs.StateWaiting, jobs.StateQueued, jobs.StateRunning:
+		m.downloading = true
+		m.progress = hub.Progress{Repo: e.Repo, Bytes: j.Progress.Bytes, TotalBytes: j.Progress.TotalBytes, Mirror: j.Progress.Message}
+		return
+	}
+	if !m.downloading {
+		return // already handled
+	}
+	m.downloading, m.cancelling = false, false
+	a.refreshModel(e)
+	lg := a.logs
+	switch j.State {
+	case jobs.StateSucceeded:
+		lg.Append(core.LogEntry{Source: "hub", Level: core.SeveritySuccess, Message: "downloaded " + e.Repo})
 		a.notify(core.SeveritySuccess, i18n.T("%s is downloaded", e.Label), "", "/models")
-	case errors.Is(err, context.Canceled):
+		if a.needDownload != nil && a.needDownload.Repo == e.Repo {
+			a.needDownload, a.jobError = nil, ""
+		}
+	case jobs.StateCancelled:
+		lg.Append(core.LogEntry{Source: "hub", Message: "cancelled " + e.Repo})
 		a.toast(i18n.T("Download of %s cancelled; it resumes where it stopped.", e.Label))
-	default:
+	default: // failed, interrupted
+		err := hub.ErrorOf(j.Err)
+		lg.Append(core.LogEntry{Source: "hub", Level: core.SeverityError, Message: e.Repo + ": " + err.Error()})
 		msg, link := downloadError(err)
 		m.err = msg
 		a.notify(core.SeverityError, i18n.T("Could not download %s", e.Label), msg, link)
@@ -176,14 +213,23 @@ func downloadError(err error) (msg, link string) {
 	return err.Error(), ""
 }
 
+// cancelDownload cancels the download job of e by its id; the files
+// fetched so far stay for resuming.
 func (a *app) cancelDownload(e catalog.Entry) {
-	if m := a.models[e.ID]; m != nil && m.cancel != nil {
-		m.cancel()
+	m := a.model(e)
+	if !m.downloading {
+		return
 	}
+	m.cancelling = true
+	if m.jobID == "" {
+		return // cancelled when Submit returns the id
+	}
+	sched, id := a.lib.sched, m.jobID
+	a.async(func() { sched.Cancel(context.Background(), id) })
 }
 
 func (a *app) verifyModel(e catalog.Entry) {
-	m := a.model(e.ID)
+	m := a.model(e)
 	if m.verifying || m.downloading {
 		return
 	}
@@ -210,7 +256,7 @@ func (a *app) verifyModel(e catalog.Entry) {
 
 func (a *app) deleteModel(e catalog.Entry) {
 	client := a.hubClient()
-	m := a.model(e.ID)
+	m := a.model(e)
 	a.async(func() {
 		err := client.Delete(context.Background(), e)
 		l, _ := client.Status(context.Background(), e)
@@ -249,7 +295,7 @@ func (a *app) modelsPage(c *ui.Context) {
 
 func (a *app) modelCard(c *ui.Context, e catalog.Entry) {
 	t := c.Theme()
-	m := a.model(e.ID)
+	m := a.model(e)
 	eng := a.engineSummary()
 	loaded := false
 	for _, r := range eng.Loaded {

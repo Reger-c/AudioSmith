@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -35,6 +36,8 @@ type settingsForm struct {
 	cacheDir     string
 	memoryGB     float64
 	autoUnload   float64
+	defaultModel    string // label
+	autoplaySetting bool
 
 	token     string // typed, not yet saved
 	tokenInfo string // where the token in use comes from
@@ -49,6 +52,7 @@ func settingsSections() []settingsSection {
 		{"general", i18n.T("General"), "General"},
 		{"appearance", i18n.T("Appearance"), "Appearance"},
 		{"models", i18n.T("Models and downloads"), "Models and downloads"},
+		{"studio", i18n.T("Studio"), "Studio"},
 		{"engine", i18n.T("Engine"), "Engine"},
 	}
 }
@@ -73,7 +77,7 @@ func (a *app) settingsChanged(old, new settings.Settings) {
 		a.applyLocale()
 	}
 	if !slices.Equal(old.Models.Endpoints, new.Models.Endpoints) || old.Models.CacheDir != new.Models.CacheDir || old.Models.Proxy != new.Models.Proxy {
-		a.resetHub()
+		a.resetHub() // the library resets it too; downloads running keep theirs
 		if old.Models.Proxy != new.Models.Proxy {
 			a.loadProxyInfo()
 		}
@@ -81,7 +85,35 @@ func (a *app) settingsChanged(old, new settings.Settings) {
 			a.refreshModels()
 		}
 	}
+	a.applyEngineSettings(old, new)
+	if old.Studio.Autoplay != new.Studio.Autoplay {
+		a.autoplay = new.Studio.Autoplay
+	}
 	a.loadSettingsForm()
+}
+
+// applyEngineSettings hands changed engine settings to the supervisor:
+// the memory budget and the idle limit apply at once; a new model folder
+// with the next start of the engine, which happens now unless it works.
+func (a *app) applyEngineSettings(old, new settings.Settings) {
+	if a.eng == nil || a.eng.sup == nil {
+		return
+	}
+	sup := a.eng.sup
+	if old.Engine.MemoryBudgetGB != new.Engine.MemoryBudgetGB {
+		sup.SetMemoryBudget(gb(new.Engine.MemoryBudgetGB))
+	}
+	if old.Models.AutoUnload != new.Models.AutoUnload {
+		sup.SetIdleUnload(time.Duration(new.Models.AutoUnload) * time.Minute)
+	}
+	if dir := modelCache(new); dir != modelCache(old) {
+		sup.SetCacheDir(dir)
+		if a.job == nil && len(a.activeJobs()) == 0 && a.engState == engineReady {
+			a.restartEngine()
+		} else {
+			a.toast(i18n.T("The engine uses the new model folder after its next restart."))
+		}
+	}
 }
 
 // applyLocale switches the UI to the settings' language, or the system's,
@@ -178,6 +210,11 @@ func (a *app) loadSettingsForm() {
 		f.proxyMode, f.proxy = px[2], s.Models.Proxy
 	}
 	f.cacheDir = s.Models.CacheDir
+	f.defaultModel = catalog.Builtin().ForTask(catalog.TaskTTS)[0].Label
+	if e, ok := catalog.Builtin().ByID(s.Studio.Model); ok {
+		f.defaultModel = e.Label
+	}
+	f.autoplaySetting = s.Studio.Autoplay
 	f.memoryGB = s.Engine.MemoryBudgetGB
 	f.autoUnload = float64(s.Models.AutoUnload)
 }
@@ -249,6 +286,10 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 						r.Title(i18n.T("Models and downloads"))
 						a.lastSettings = "models"
 						a.modelSettings(c)
+					case r.Match("/studio"):
+						r.Title(i18n.T("Studio"))
+						a.lastSettings = "studio"
+						a.studioSettings(c)
 					case r.Match("/engine"):
 						r.Title(i18n.T("Engine"))
 						a.lastSettings = "engine"
@@ -409,7 +450,7 @@ func (a *app) modelSettings(c *ui.Context) {
 		if acc.Model != "" {
 			who = catalog.Builtin().DisplayName(acc.Model)
 		}
-		settingRow(c, "acc-"+acc.Licence+"-"+acc.Model, licenceName(acc.Licence), i18n.T("Accepted for %s on %s", who, acc.AcceptedAt.Format("2006-01-02")), func() {
+		settingRow(c, "acc-"+acc.Licence+"-"+acc.Model, licenceName(acc.Licence), i18n.T("Accepted for %s on %s", who, i18n.Date(acc.AcceptedAt)), func() {
 			if ui.Button(c.Key("revoke"), i18n.T("Withdraw")).Clicked() {
 				a.revokeLicence(acc)
 			}
@@ -429,7 +470,7 @@ func licenceName(id string) string {
 
 func (a *app) engineSettings(c *ui.Context) {
 	t := c.Theme()
-	settingRow(c, "memory", i18n.T("Memory budget"), i18n.T("How much memory models may take together, in GB; 0 lets AudioSmith decide. Applies with the next engine start."), func() {
+	settingRow(c, "memory", i18n.T("Memory budget"), i18n.T("How much memory models may take together, in GB; 0 lets AudioSmith decide. Models over it leave memory at once."), func() {
 		if ui.NumberInput(c.Key("memory-input"), &a.memoryGB, 0, 512, 1).Width(px(t, 120)).Label(i18n.T("Memory budget")).Changed() {
 			gb := a.memoryGB
 			a.updateSettings(func(s *settings.Settings) { s.Engine.MemoryBudgetGB = gb })
@@ -439,6 +480,26 @@ func (a *app) engineSettings(c *ui.Context) {
 		if ui.NumberInput(c.Key("unload-input"), &a.autoUnload, 0, 240, 5).Width(px(t, 120)).Label(i18n.T("Unload idle models")).Changed() {
 			m := int(a.autoUnload)
 			a.updateSettings(func(s *settings.Settings) { s.Models.AutoUnload = m })
+		}
+	})
+}
+
+func (a *app) studioSettings(c *ui.Context) {
+	t := c.Theme()
+	settingRow(c, "default-model", i18n.T("Default model"), i18n.T("The model the Studio starts with. Choosing another one in the Studio changes it too."), func() {
+		labels := catalog.Builtin().Labels(catalog.TaskTTS)
+		labels = slices.DeleteFunc(slices.Clone(labels), func(l string) bool { return l == catalog.CustomLabel })
+		if ui.Select(c.Key("default-model-select"), &a.defaultModel, labels).Label(i18n.T("Default model")).Width(px(t, 260)).Changed() {
+			if e, ok := catalog.Builtin().ByLabel(a.defaultModel); ok {
+				id := e.ID
+				a.updateSettings(func(s *settings.Settings) { s.Studio.Model = id })
+			}
+		}
+	})
+	settingRow(c, "autoplay", i18n.T("Play each take when it is ready"), "", func() {
+		if ui.Switch(c.Key("autoplay-switch"), &a.autoplaySetting).Label(i18n.T("Play each take when it is ready")).Changed() {
+			on := a.autoplaySetting
+			a.updateSettings(func(s *settings.Settings) { s.Studio.Autoplay = on })
 		}
 	})
 }

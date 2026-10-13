@@ -9,12 +9,12 @@ import (
 // main thread: work on other goroutines reaches it through post.
 //
 // Each area keeps its fields in a struct of its own, embedded here, in the
-// file its owner thread edits (docs/architecture.md §Ownership):
+// file of its area (docs/architecture.md §1):
 //
-//	shellState   shell.go      window chrome, navigation      (thread C)
-//	studioState  studio.go     the TTS form                   (thread A)
-//	takesState   takes.go      take library, player, peaks    (thread A)
-//	engineLink   enginelink.go engine process and current job (thread B)
+//	shellState   shell.go      window chrome, navigation, settings, models, jobs
+//	studioState  studio.go     the TTS form
+//	takesState   takes.go      the library (domain), take snapshot, player, peaks
+//	engineLink   enginelink.go engines and the Studio's current job
 //
 // Add fields to your area's struct, not here.
 type app struct {
@@ -27,14 +27,14 @@ type app struct {
 	engineLink
 }
 
-func newApp(eng *engineHost, takes *library) *app {
+func newApp(eng *engineHost, lib *library) *app {
 	a := &app{
 		shellState:  newShellState(),
-		studioState: newStudioState(),
+		studioState: newStudioState(lib.settings.Get()),
 	}
 	a.engineLink.eng = eng
-	a.openTakes(takes)
-	a.openShell(takes)
+	a.openShell(lib)
+	a.openTakes(lib)
 	return a
 }
 

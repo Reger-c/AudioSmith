@@ -25,19 +25,27 @@ func main() {
 	resources, _ := mygo.App.Path(mygo.PathResources)
 	logDir, _ := mygo.App.Path(mygo.PathLogs)
 
-	// Wiring: one call per area, each defined in the file its owner thread
-	// edits (docs/architecture.md §5).
-	takes := openTakeStore(dataDir)            // takes.go
+	// Wiring: one call per area, each defined in the file of that area.
+	lib, err := openTakeStore(dataDir) // takes.go
+	if err != nil {
+		showFatal(err) // shell.go: explains, then quits
+		return
+	}
 	eng := newEngineProcess(resources, logDir) // enginelink.go
-	a := newApp(eng, takes)                    // app.go
+	a := newApp(eng, lib)                      // app.go
 	a.connectShell(logDir)                     // shell.go
 	a.connectEngine(eng)                       // enginelink.go
 
 	mygo.App.WhenReady(func() {
 		a.openWindow() // shell.go
-		a.restartEngine()
+		a.startEngine()
 	})
-	mygo.App.OnQuit(a.quit)
+	// The engines stop on OnWillQuit (enginelink.go), so the scheduler
+	// records interrupted jobs before the library closes the database.
+	mygo.App.OnQuit(func() {
+		a.quit()
+		lib.close()
+	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}

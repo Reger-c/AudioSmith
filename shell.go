@@ -24,6 +24,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
 	"github.com/hehehai/AudioSmith/internal/logs"
 	"github.com/hehehai/AudioSmith/internal/notify"
@@ -69,6 +70,8 @@ type shellState struct {
 	paletteSel   int
 	sheetOpen    bool
 	switchOpen   bool
+	jobsOpen     bool
+	jobList      map[string]jobs.Job // unfinished jobs of every owner, by id
 	noticesOpen  bool
 	logsPanel    bool
 	logsSource   string
@@ -92,23 +95,25 @@ func newShellState() shellState {
 	}
 }
 
-// openShell wires the shell to the library's bus and store: settings and
-// licence acceptances persist in its database (documents "settings:app"
-// and the licences table), notifications and logs stay in memory until
-// main's wiring (connectShell) adds the log files.
+// openShell wires the shell to the library: its bus, the settings and
+// the licence gate it keeps in the database, and the notification centre,
+// which keeps info and warnings there too (document "notifications").
+// Logs stay in memory until main's wiring (connectShell) adds the files.
 func (a *app) openShell(lib *library) {
 	a.bus = lib.bus
 	a.router.Transition = ui.TransitionFade
-	st, err := settings.Open(context.Background(), lib.store.Documents(), func(ev settings.Changed) { a.bus.Publish(ev) })
+	a.settings = lib.settings
+	a.prefs = lib.settings.Get()
+	notes, err := notify.Open(context.Background(), lib.store.Documents(), a.bus)
 	if err != nil {
-		log.Printf("settings: %v", err)
+		log.Printf("notifications: %v", err)
 	}
-	a.settings = st
-	a.prefs = st.Get()
-	a.notes = notify.New(a.bus)
+	a.notes = notes
+	a.notices, _ = notes.List(context.Background())
 	a.logs = logs.New(logs.Options{Bus: a.bus})
-	a.licences = licence.New(lib.store.Licences(), nil, a.bus)
+	a.licences = lib.licences
 	a.models = map[string]*modelState{}
+	a.jobList = map[string]jobs.Job{}
 	a.loadSettingsForm()
 
 	core.On(a.bus, func(ev core.NotificationPosted) {
@@ -140,13 +145,11 @@ func (a *app) connectShell(logDir string) {
 	mygo.App.OnOpenURL(func(u string) { a.post(func() { a.openURL(u) }) })
 }
 
-// closeShell stops downloads and flushes the logs; it runs on quit.
+// closeShell waits for the notifications to be saved and flushes the
+// logs; it runs on quit. Downloads are jobs: the scheduler stops them,
+// and they resume at the next start.
 func (a *app) closeShell() {
-	for _, m := range a.models {
-		if m.cancel != nil {
-			m.cancel()
-		}
-	}
+	a.notes.Close()
 	a.logs.Close()
 }
 
@@ -379,7 +382,7 @@ func (a *app) sidebar(c *ui.Context) {
 // header is a page's title bar, which drags the window.
 func header(c *ui.Context, title string, trailing func()) {
 	t := c.Theme()
-	ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, 16, 0, 20).Gap(8).DragWindow().Children(func() {
+	ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, px(t, 16), 0, px(t, 20)).Gap(px(t, 8)).DragWindow().Children(func() {
 		ui.Text(c, title).FontSize(px(t, 15)).Bold().SingleLine().Grow(1)
 		if trailing != nil {
 			trailing()
@@ -394,4 +397,31 @@ func orDash(s string) string {
 		return "—"
 	}
 	return s
+}
+
+// showFatal explains, in a dialog, why AudioSmith cannot start (its
+// library did not open), then quits. It runs instead of the app.
+func showFatal(err error) {
+	log.Print(err)
+	mygo.App.WhenReady(func() {
+		i18n.SetLocale(mygo.App.Locale())
+		go func() {
+			dataDir, _ := mygo.App.Path(mygo.PathUserData)
+			res, _ := mygo.Dialog.Message(mygo.MessageOptions{
+				Type:    mygo.MessageError,
+				Title:   "AudioSmith",
+				Message: i18n.T("AudioSmith cannot open its library"),
+				Detail: i18n.T("Your takes and settings are kept in a database in %s. It could not be opened: %v", dataDir, err) +
+					"\n\n" + i18n.T("If a newer AudioSmith created it, use that version. Nothing was changed."),
+				Buttons: []string{i18n.T("Quit"), i18n.T("Show the folder")},
+			})
+			if res.Button == 1 {
+				mygo.Shell.OpenPath(dataDir)
+			}
+			mygo.App.Quit()
+		}()
+	})
+	if err := mygo.App.Run(); err != nil {
+		log.Fatal(err)
+	}
 }

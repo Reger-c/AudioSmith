@@ -12,6 +12,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 // kokoro is the first catalogue entry, which the Studio starts on.
@@ -147,8 +148,8 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 // starts with it and with the takes.
 func TestDraftAndLibrarySurviveRestart(t *testing.T) {
 	dir := t.TempDir()
-	lib := openTestLibrary(t, dir)
-	a, _, tt := newTestAppWith(t, lib)
+	a, _, tt := newTestAppIn(t, dir)
+	lib := a.lib
 	addTake(t, a, core.Take{ID: "T1", CreatedAt: time.Now(), Text: "Kept", Model: kokoro}, 0.2)
 	a.text = "A script in progress"
 	a.modelLabel = "Qwen3-TTS 0.6B Base (voice clone)"
@@ -161,7 +162,7 @@ func TestDraftAndLibrarySurviveRestart(t *testing.T) {
 	}
 	lib.close()
 
-	b, _, tt2 := newTestAppWith(t, openTestLibrary(t, dir))
+	b, _, tt2 := newTestAppIn(t, dir)
 	if b.text != "A script in progress" || b.modelLabel != "Qwen3-TTS 0.6B Base (voice clone)" ||
 		b.refText != "ref words" || b.language != "Chinese" || b.autoplay {
 		t.Errorf("restored form %+v", b.toDraft())
@@ -169,5 +170,85 @@ func TestDraftAndLibrarySurviveRestart(t *testing.T) {
 	tt2.Frame()
 	if len(b.takes) != 1 || b.lastClip() == nil || !tt2.HasText("Latest take") {
 		t.Errorf("takes after restart %v", b.takes)
+	}
+}
+
+// Generate refuses a model that is not downloaded, and offers to download
+// it there; once the download job is done, Generate works.
+func TestGenerateNeedsDownload(t *testing.T) {
+	a, eng, tt := newTestApp(t)
+	f := useFakeHub(t, a) // an empty model folder
+	tt.Frame()
+	if err := tt.Click("Generate"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.job != nil || a.needDownload == nil || !tt.HasText("Kokoro 82M is not downloaded yet.") {
+		t.Fatalf("not refused: job %v, %q", a.job, tt.Texts())
+	}
+	if len(eng.sent) != 0 {
+		t.Fatalf("queued %+v", eng.sent)
+	}
+	if err := tt.Click("Download"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if r := eng.last(t); r.Cmd != "download" || r.Model != kokoro || r.Spec.Owner != "model:"+kokoro {
+		t.Fatalf("download job %+v", r)
+	}
+	if a.needDownload != nil || a.jobError != "" || f.served[kokoro] != 2 {
+		t.Fatalf("after the download: %v %q served %d", a.needDownload, a.jobError, f.served[kokoro])
+	}
+	tt.Click("Generate")
+	if r := eng.last(t); r.Cmd != "synthesize" || !strings.HasPrefix(r.Spec.Owner, "take:") {
+		t.Fatalf("generate after download %+v", r)
+	}
+}
+
+// A model whose licence needs accepting asks first, then generates.
+func TestGenerateAsksForTheLicence(t *testing.T) {
+	a, eng, tt := newTestApp(t)
+	omni := entry(t, "omnivoice-bf16")
+	a.selectModel(omni)
+	a.voice = "female, young adult, british accent"
+	a.duration = 3
+	tt.Frame()
+	if !tt.HasText("Duration (seconds, 0 = natural)") || !tt.HasText("CC BY-NC 4.0 · non-commercial use only") {
+		t.Errorf("OmniVoice controls: %q", tt.Texts())
+	}
+	tt.Click("Generate")
+	tt.Frame()
+	if !a.licenceOpen || a.job != nil || len(eng.sent) != 0 {
+		t.Fatalf("no licence dialog: open %v job %v sent %v", a.licenceOpen, a.job, eng.sent)
+	}
+	tt.Click("I have read the licence and will use this model only as it allows.")
+	tt.Click("Accept")
+	tt.Frame()
+	r := eng.last(t)
+	if r.Cmd != "synthesize" || r.Model != omni.Repo || r.Duration == nil || *r.Duration != 3 || r.Voice != a.voice || a.job == nil {
+		t.Fatalf("after accepting: %+v job %v", r, a.job)
+	}
+	if got := a.settings.Get().Studio.Model; got != omni.ID {
+		t.Errorf("default model %q", got)
+	}
+}
+
+// The Studio's defaults come from the settings.
+func TestStudioDefaultsFromSettings(t *testing.T) {
+	dir := t.TempDir()
+	a, _, _ := newTestAppIn(t, dir)
+	a.updateSettings(func(s *settings.Settings) {
+		s.Studio.Model = "soprano-80m-bf16"
+		s.Studio.Autoplay = false
+	})
+	a.lib.close()
+	b, _, tt := newTestAppIn(t, dir)
+	if b.preset().ID != "soprano-80m-bf16" || b.autoplay {
+		t.Errorf("fresh start: %s autoplay %v", b.preset().ID, b.autoplay)
+	}
+	b.navigate("/settings/studio")
+	tt.Frame()
+	if !tt.HasText("Default model") || !tt.HasText("Soprano 80M") {
+		t.Errorf("studio settings: %q", tt.Texts())
 	}
 }

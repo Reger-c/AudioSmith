@@ -58,7 +58,7 @@ func TestEndToEnd(t *testing.T) {
 		}
 	}
 
-	a.restartEngine()
+	a.startEngine()
 	waitFor("ready", time.Minute, func() bool { return a.engState == engineReady })
 	w := a.workers[0]
 	t.Logf("engine %s pid %d on %s, families %v", a.engVersion, a.engPID, w.Hello.Device.Name, w.Hello.Families)

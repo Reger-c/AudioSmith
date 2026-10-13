@@ -20,6 +20,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
@@ -44,7 +45,12 @@ func newFakeHF(t *testing.T) *fakeHF {
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
 		if rest, ok := strings.CutPrefix(p, "/api/models/"); ok {
-			repo, _, _ := strings.Cut(rest, "/revision/")
+			repo, rev, _ := strings.Cut(rest, "/revision/")
+			rev, _, _ = strings.Cut(rev, "?")
+			sha := strings.Repeat("a", 40)
+			if len(rev) == 40 {
+				sha = rev // a pinned commit
+			}
 			var sibs []map[string]any
 			for name, b := range files(repo) {
 				s := map[string]any{"rfilename": name, "size": len(b)}
@@ -58,7 +64,7 @@ func newFakeHF(t *testing.T) *fakeHF {
 				}
 				sibs = append(sibs, s)
 			}
-			json.NewEncoder(w).Encode(map[string]any{"id": repo, "sha": strings.Repeat("a", 40), "gated": false, "siblings": sibs})
+			json.NewEncoder(w).Encode(map[string]any{"id": repo, "sha": sha, "gated": false, "siblings": sibs})
 			return
 		}
 		// /{owner}/{name}/resolve/{commit}/{file}
@@ -90,6 +96,9 @@ func useFakeHub(t *testing.T, a *app) *fakeHF {
 		s.Models.Endpoints = []string{f.URL}
 	})
 	a.resetHub()
+	if fs, ok := a.eng.sup.(*fakeSup); ok && a.engState == engineStarting {
+		fs.f.ready() // the engine restarted for the new model folder
+	}
 	saved := hubToken
 	hubToken = func() string { return "" }
 	t.Cleanup(func() { hubToken = saved })
@@ -314,8 +323,7 @@ func TestLogs(t *testing.T) {
 
 func TestLanguageSwitch(t *testing.T) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
-	lib := openTestLibrary(t)
-	a, _, tt := newTestAppWith(t, lib)
+	a, _, tt := newTestApp(t)
 	a.navigate("/settings/general")
 	tt.Frame()
 	a.language = "简体中文"
@@ -344,7 +352,7 @@ func TestLanguageSwitch(t *testing.T) {
 
 func TestSettingsPersist(t *testing.T) {
 	dir := t.TempDir()
-	a, _, tt := newTestAppWith(t, openTestLibrary(t, dir))
+	a, _, tt := newTestAppIn(t, dir)
 	a.navigate("/settings/appearance")
 	tt.Frame()
 	if err := tt.Click("Dark"); err != nil {
@@ -368,7 +376,7 @@ func TestSettingsPersist(t *testing.T) {
 	a.updateSettings(func(s *settings.Settings) { s.Engine.MemoryBudgetGB = 12 })
 
 	// Another app over the same database reads them back.
-	b, _, _ := newTestAppWith(t, openTestLibrary(t, dir))
+	b, _, _ := newTestAppIn(t, dir)
 	if s := b.prefs; s.Appearance.Theme != "dark" || s.Appearance.Scale != 1.25 || s.Engine.MemoryBudgetGB != 12 {
 		t.Errorf("reopened %+v", s)
 	}
@@ -535,7 +543,7 @@ func TestStatusBar(t *testing.T) {
 	if !tt.HasText("Engine ready") || !tt.HasText("· No model loaded") {
 		t.Errorf("status: %q", tt.Texts())
 	}
-	m := a.model("soprano-80m-bf16")
+	m := a.model(entry(t, "soprano-80m-bf16"))
 	m.downloading, m.progress = true, hub.Progress{Bytes: 50, TotalBytes: 200}
 	tt.Frame()
 	if !tt.HasText("Downloading Soprano 80M · 25%") {
@@ -549,5 +557,76 @@ func TestStatusBar(t *testing.T) {
 	tt.Click("Show or hide the logs panel (⇧⌘L)")
 	if !a.logsPanel {
 		t.Error("logs toggle")
+	}
+}
+
+// Engine settings reach the supervisor while it runs.
+func TestEngineSettingsApply(t *testing.T) {
+	a, eng, _ := newTestApp(t)
+	a.updateSettings(func(s *settings.Settings) {
+		s.Engine.MemoryBudgetGB = 6
+		s.Models.AutoUnload = 15
+	})
+	if eng.budget != 6<<30 || eng.idle != 15*time.Minute {
+		t.Errorf("budget %d idle %v", eng.budget, eng.idle)
+	}
+	dir := t.TempDir()
+	restarts := eng.restarts
+	a.updateSettings(func(s *settings.Settings) { s.Models.CacheDir = dir })
+	if eng.cacheDir != dir || eng.restarts != restarts+1 {
+		t.Errorf("cache dir %q, restarts %d", eng.cacheDir, eng.restarts-restarts)
+	}
+}
+
+// The status bar lists every unfinished job; each is cancelled by its id.
+func TestJobsInStatusBar(t *testing.T) {
+	a, eng, tt := newTestApp(t)
+	tt.Frame()
+	tt.Click("Generate")
+	take := eng.last(t).ID
+	other, _ := eng.host.sched.Submit(context.Background(), jobs.Spec{Kind: "x.batch", Lane: jobs.LaneCPU, Title: "Batch export", Owner: "project:p1"})
+	eng.progress(take, "generating", 0.5, 1)
+	eng.update(other, func(j *jobs.Job) { j.State = jobs.StateQueued })
+	tt.Frame()
+	if !tt.HasText("2 jobs · 1 waiting") {
+		t.Fatalf("status: %q", tt.Texts())
+	}
+	tt.Click("2 jobs · 1 waiting")
+	tt.Frame()
+	if !a.jobsOpen || !tt.HasText("Batch export") || !tt.HasText(i18n.T("Generate take")) {
+		t.Fatalf("jobs panel: %q", tt.Texts())
+	}
+	// Running first; the Studio's take is cancelled through the Studio.
+	active := a.activeJobs()
+	if active[0].ID != take || active[1].ID != other {
+		t.Fatalf("order %+v", active)
+	}
+	a.cancelJobByID(active[1])
+	if r := eng.last(t); r.Cmd != "cancel" || r.ID != other {
+		t.Errorf("cancelled %+v, want %s", r, other)
+	}
+	a.cancelJobByID(active[0])
+	if r := eng.last(t); r.Cmd != "cancel" || r.ID != take || !a.job.cancelling {
+		t.Errorf("cancelled %+v, want %s", r, take)
+	}
+	eng.cancelled(other)
+	eng.cancelled(take)
+	tt.Frame()
+	if len(a.activeJobs()) != 0 || tt.HasText("2 jobs · 1 waiting") {
+		t.Errorf("after: %+v", a.activeJobs())
+	}
+}
+
+// Notifications other than errors come back after a restart.
+func TestNotificationsPersist(t *testing.T) {
+	dir := t.TempDir()
+	a, _, _ := newTestAppIn(t, dir)
+	a.notify(core.SeverityWarning, "Disk almost full", "", "/settings/models")
+	a.notify(core.SeverityError, "Download failed", "", "")
+	a.notes.Close()
+	a.lib.close()
+	b, _, _ := newTestAppIn(t, dir)
+	if len(b.notices) != 1 || b.notices[0].Title != "Disk almost full" {
+		t.Errorf("after restart %+v", b.notices)
 	}
 }

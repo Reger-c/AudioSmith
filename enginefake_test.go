@@ -8,12 +8,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
@@ -29,13 +31,18 @@ type fakeEngine struct {
 	host     *engineHost
 	a        *app
 	sent     []sentReq
-	jobs     map[string]jobs.Job
-	restarts int
+	jobs      map[string]jobs.Job
+	executors map[string]jobs.Executor
+	restarts  int
+	// What the settings told the supervisor.
+	budget   int64
+	idle     time.Duration
+	cacheDir string
 }
 
 func newFakeEngine() *fakeEngine {
-	f := &fakeEngine{jobs: map[string]jobs.Job{}}
-	f.host = &engineHost{bin: "/fake/audiosmith-engine", sup: fakeSup{f}, sched: fakeSched{f}}
+	f := &fakeEngine{jobs: map[string]jobs.Job{}, executors: map[string]jobs.Executor{}}
+	f.host = &engineHost{bin: "/fake/audiosmith-engine", sup: &fakeSup{f}, sched: fakeSched{f}}
 	return f
 }
 
@@ -93,7 +100,13 @@ func (f *fakeEngine) cancelled(id string) {
 
 type fakeSched struct{ f *fakeEngine }
 
-func (s fakeSched) Register(string, jobs.Executor)      {}
+// Register keeps the executors of Go-side kinds (downloads), which the
+// fake runs at once, inside Submit.
+func (s fakeSched) Register(kind string, ex jobs.Executor) {
+	if kind == hub.KindDownload {
+		s.f.executors[kind] = ex
+	}
+}
 func (s fakeSched) Start(context.Context) error         { return nil }
 func (s fakeSched) Idle() bool                          { return true }
 func (s fakeSched) Close() error                        { return nil }
@@ -106,6 +119,11 @@ func (s fakeSched) Submit(_ context.Context, spec jobs.Spec) (string, error) {
 	case proto.MethodTTSSynthesize:
 		r.Cmd = "synthesize"
 		json.Unmarshal(spec.Params, &r.SynthesizeParams)
+	case hub.KindDownload:
+		r.Cmd = "download"
+		var p hub.DownloadParams
+		json.Unmarshal(spec.Params, &p)
+		r.Model = p.Repo
 	case proto.MethodModelsLoad:
 		r.Cmd = "load"
 		var p proto.LoadParams
@@ -114,7 +132,32 @@ func (s fakeSched) Submit(_ context.Context, spec jobs.Spec) (string, error) {
 	}
 	s.f.sent = append(s.f.sent, r)
 	s.f.jobs[id] = jobs.Job{ID: id, Spec: spec, State: jobs.StateQueued, Created: time.Now()}
+	if ex := s.f.executors[spec.Kind]; ex != nil {
+		s.f.run(id, ex)
+	}
 	return id, nil
+}
+
+// run executes a job at once, publishing its updates as the scheduler would.
+func (f *fakeEngine) run(id string, ex jobs.Executor) {
+	f.update(id, func(j *jobs.Job) { j.State, j.Attempt, j.Started = jobs.StateRunning, 1, time.Now() })
+	res, err := ex.Run(context.Background(), f.jobs[id], func(p jobs.Progress) {
+		f.update(id, func(j *jobs.Job) { j.Progress = p })
+	}, nil)
+	f.update(id, func(j *jobs.Job) {
+		j.Finished = time.Now()
+		var je *jobs.Error
+		switch {
+		case err == nil:
+			j.State, j.Result = jobs.StateSucceeded, res
+		case errors.As(err, &je):
+			j.State, j.Err = jobs.StateFailed, je
+		case errors.Is(err, context.Canceled):
+			j.State, j.Err = jobs.StateCancelled, &jobs.Error{Code: jobs.CodeCancelled}
+		default:
+			j.State, j.Err = jobs.StateFailed, &jobs.Error{Code: "internal", Message: err.Error()}
+		}
+	})
 }
 
 func (s fakeSched) SubmitGraph(ctx context.Context, nodes []jobs.Node) (map[string]string, error) {
@@ -142,9 +185,15 @@ func (s fakeSched) List(context.Context, jobs.Filter) ([]jobs.Job, error) { retu
 
 type fakeSup struct{ f *fakeEngine }
 
+var _ engine.Supervisor = (*fakeSup)(nil)
+
 func (s fakeSup) Start(context.Context) error   { return nil }
 func (s fakeSup) Status() []engine.WorkerStatus { return nil }
 func (s fakeSup) Stop()                         {}
+
+func (s fakeSup) SetMemoryBudget(n int64)       { s.f.budget = n }
+func (s fakeSup) SetIdleUnload(d time.Duration) { s.f.idle = d }
+func (s fakeSup) SetCacheDir(dir string)        { s.f.cacheDir = dir }
 
 func (s fakeSup) Restart(proto.Role) error {
 	s.f.restarts++

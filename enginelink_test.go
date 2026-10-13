@@ -31,7 +31,7 @@ func TestErrorsAndCancel(t *testing.T) {
 	tt.Frame()
 	tt.Click("Generate")
 	req := eng.last(t)
-	if req.Spec.Owner != studioOwner+a.job.take.ID || req.Spec.Lane != jobs.LaneGPU || req.Spec.Priority != jobs.PriorityInteractive {
+	if req.Spec.Owner != takeOwner+a.job.takeID || req.Spec.Lane != jobs.LaneGPU || req.Spec.Priority != jobs.PriorityInteractive {
 		t.Fatalf("job spec %+v", req.Spec)
 	}
 	eng.progress(req.ID, "loading", -1, 0)
@@ -190,6 +190,7 @@ func TestPreloadUnloadAndStats(t *testing.T) {
 // binary as a scripted engine process.
 func TestStudioOverTheSupervisor(t *testing.T) {
 	lib := openTestLibrary(t)
+	useLocalModels(t, lib)
 	bin, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -216,7 +217,7 @@ func TestStudioOverTheSupervisor(t *testing.T) {
 		}
 	}
 
-	a.restartEngine()
+	a.startEngine()
 	waitFor("ready", func() bool { return a.engState == engineReady })
 	if a.engVersion != "fake" {
 		t.Errorf("version %q", a.engVersion)
@@ -235,7 +236,7 @@ func TestStudioOverTheSupervisor(t *testing.T) {
 		t.Errorf("audio: %v", err)
 	}
 	j, err := h.sched.Get(context.Background(), c.JobID)
-	if err != nil || j.State != jobs.StateSucceeded || j.Owner != studioOwner+c.ID {
+	if err != nil || j.State != jobs.StateSucceeded || j.Owner != takeOwner+c.ID {
 		t.Errorf("job %+v %v", j, err)
 	}
 	waitFor("stats", func() bool { return len(a.loaded) == 1 })

@@ -1,19 +1,28 @@
 package main
 
 // The status bar along the bottom of the window: the engine (which opens
-// the ⌘E quick switch), downloads, the notification centre's bell, the
-// logs panel toggle and the version.
+// the ⌘E quick switch), the jobs in the queue (a list where each can be
+// cancelled by id), downloads, the notification centre's bell, the logs
+// panel toggle and the version. The engine part reads the workers'
+// status as the supervisor publishes it; the jobs part the scheduler's
+// jobs (jobs.Updated, and the list at start).
 
 import (
 	"context"
+	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
 func (a *app) statusBar(c *ui.Context) {
@@ -41,22 +50,40 @@ func (a *app) statusBar(c *ui.Context) {
 			a.switchOpen = !a.switchOpen
 		}
 		ui.Popover(c, engBtn, &a.switchOpen, func() { a.quickSwitch(c) })
-		if eng.Busy {
+
+		// The queue.
+		if active := a.activeJobs(); len(active) > 0 {
+			running := 0
+			for _, j := range active {
+				if j.State == jobs.StateRunning {
+					running++
+				}
+			}
+			label := i18n.N(len(active), "%d job", "%d jobs", len(active))
+			if running < len(active) {
+				label += " · " + i18n.N(len(active)-running, "%d waiting", "%d waiting", len(active)-running)
+			}
+			jobsBtn := statusButton(c, "status-jobs", i18n.T("Jobs"), func() {
+				ui.Spinner(c).Size(px(t, 12), px(t, 12))
+				ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			})
+			if jobsBtn.Clicked() {
+				a.jobsOpen = !a.jobsOpen
+			}
+			ui.Popover(c, jobsBtn, &a.jobsOpen, func() { a.jobsPanel(c) })
+		} else if eng.Busy {
 			ui.Spinner(c).Size(px(t, 12), px(t, 12))
 			ui.Text(c, i18n.T("Working…")).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		}
 
 		// Downloads.
-		for _, e := range catalog.Builtin().Entries {
-			m := a.models[e.ID]
-			if m == nil || !m.downloading {
-				continue
-			}
+		for _, m := range a.downloads() {
+			e := m.entry
 			text := i18n.T("Downloading %s", e.Label)
 			if m.progress.TotalBytes > 0 {
 				text = i18n.T("Downloading %s · %d%%", e.Label, int(100*m.progress.Bytes/m.progress.TotalBytes))
 			}
-			if statusButton(c, "status-dl-"+e.ID, i18n.T("Show the models"), func() {
+			if statusButton(c, "status-dl-"+modelKey(e), i18n.T("Show the models"), func() {
 				ui.Text(c, text).FontSize(px(t, 12)).TextColor(t.TextMuted).SingleLine()
 			}).Clicked() {
 				a.navigate("/models")
@@ -95,6 +122,105 @@ func (a *app) statusBar(c *ui.Context) {
 	})
 }
 
+// downloads are the models downloading, catalogue first, in its order.
+func (a *app) downloads() []*modelState {
+	var out []*modelState
+	for _, e := range catalog.Builtin().Entries {
+		if m := a.models[e.ID]; m != nil && m.downloading {
+			out = append(out, m)
+		}
+	}
+	keys := slices.Sorted(maps.Keys(a.models))
+	for _, k := range keys {
+		if m := a.models[k]; strings.HasPrefix(k, "repo:") && m.downloading {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// jobsChanged keeps the snapshot of unfinished jobs (every owner) the
+// status bar lists; it runs on the main thread.
+func (a *app) jobsChanged(j jobs.Job) {
+	if j.State.Terminal() || j.State == jobs.StateInterrupted {
+		delete(a.jobList, j.ID)
+		return
+	}
+	a.jobList[j.ID] = j
+}
+
+// activeJobs are the unfinished jobs: running first, then by age.
+func (a *app) activeJobs() []jobs.Job {
+	list := slices.Collect(maps.Values(a.jobList))
+	slices.SortFunc(list, func(x, y jobs.Job) int {
+		if rx, ry := x.State == jobs.StateRunning, y.State == jobs.StateRunning; rx != ry {
+			if rx {
+				return -1
+			}
+			return 1
+		}
+		if c := x.Created.Compare(y.Created); c != 0 {
+			return c
+		}
+		return strings.Compare(x.ID, y.ID)
+	})
+	return list
+}
+
+// jobsPanel lists the unfinished jobs, each with its progress and Cancel.
+func (a *app) jobsPanel(c *ui.Context) {
+	t := c.Theme()
+	ui.Column(c).Width(px(t, 360)).Gap(px(t, 8)).Padding(px(t, 4)).Children(func() {
+		ui.Text(c, i18n.T("Jobs")).Bold()
+		active := a.activeJobs()
+		if len(active) == 0 {
+			ui.Text(c, i18n.T("Nothing is running.")).TextColor(t.TextMuted)
+			return
+		}
+		for _, j := range active {
+			ui.Row(c.Key("job-"+j.ID)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 4)).Children(func() {
+					title := j.Title
+					if title == "" {
+						title = j.Kind
+					}
+					ui.Text(c, title).FontSize(px(t, 13)).SingleLine().Ellipsis("…")
+					state := i18n.T("Waiting")
+					if j.State == jobs.StateRunning {
+						state = stageText(j.Progress.Stage)
+						if j.Progress.Fraction >= 0 {
+							state += fmt.Sprintf(" · %d%%", int(100*j.Progress.Fraction))
+						}
+					}
+					if j.State == jobs.StateRunning {
+						ui.Progress(c, j.Progress.Fraction).Label(title)
+					}
+					ui.Text(c, state).FontSize(px(t, 11)).TextColor(t.TextMuted)
+				})
+				if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
+					a.cancelJobByID(j)
+				}
+			})
+		}
+	})
+}
+
+// cancelJobByID cancels any job by its id, as the Studio's Cancel does for
+// its own.
+func (a *app) cancelJobByID(j jobs.Job) {
+	if a.job != nil && a.job.id == j.ID {
+		a.cancel()
+		return
+	}
+	for _, m := range a.models {
+		if m.jobID == j.ID && m.downloading {
+			a.cancelDownload(m.entry)
+			return
+		}
+	}
+	a.cancelJob(j.ID)
+}
+
 // statusButton is a flat button of the status bar.
 func statusButton(c *ui.Context, key, label string, content func()) ui.Element {
 	t := c.Theme()
@@ -126,6 +252,9 @@ func (a *app) quickSwitch(c *ui.Context) {
 		if eng.Err != "" {
 			ui.Text(c, eng.Err).FontSize(px(t, 12)).TextColor(t.Danger).MaxLines(3).Ellipsis("…")
 		}
+		if mem := a.gpuMemory(); mem != "" {
+			ui.Text(c, mem).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		}
 		ui.Divider(c)
 		ui.Text(c, i18n.T("In memory")).FontSize(px(t, 12)).Bold().TextColor(t.TextMuted)
 		if len(eng.Loaded) == 0 {
@@ -142,7 +271,7 @@ func (a *app) quickSwitch(c *ui.Context) {
 		ui.Divider(c)
 		ui.Text(c, i18n.T("Speech model")).FontSize(px(t, 12)).Bold().TextColor(t.TextMuted)
 		for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
-			m := a.models[e.ID]
+			m := a.models[modelKey(e)]
 			chosen := a.preset().Repo == e.Repo
 			row := ui.ButtonBase(c.Key("switch-"+e.ID)).Padding(px(t, 5), px(t, 8)).Radius(6).Label(e.Label)
 			if chosen {
@@ -159,12 +288,16 @@ func (a *app) quickSwitch(c *ui.Context) {
 				})
 			})
 			if row.Clicked() {
-				a.chooseModel(e)
+				a.selectModel(e)
 			}
 		}
 		ui.Row(c).Gap(px(t, 8)).Children(func() {
 			if ui.Button(c.Key("switch-preload"), i18n.T("Preload")).Disabled(eng.Busy || eng.State != engineReady).Clicked() {
 				a.preload()
+			}
+			if ui.Button(c.Key("switch-flush"), i18n.T("Clear cache")).Disabled(eng.State != engineReady).
+				Tooltip(i18n.T("Free the memory MLX keeps for reuse")).Clicked() {
+				a.flushEngine()
 			}
 			if ui.Button(c.Key("switch-restart"), i18n.T("Restart engine")).Clicked() {
 				a.restartEngine()
@@ -178,16 +311,14 @@ func (a *app) quickSwitch(c *ui.Context) {
 	})
 }
 
-// chooseModel makes e the Studio's model.
-//
-// It sets the Studio form's model as its Model select does; proposed as a
-// seam of studio.go (thread A) in the handoff.
-func (a *app) chooseModel(e catalog.Entry) {
-	if a.modelLabel == e.Label {
-		return
+// gpuMemory describes the gpu worker's memory, from its last stats.
+func (a *app) gpuMemory() string {
+	for _, w := range a.workers {
+		if w.Role == proto.RoleGPU && w.Stats != nil && w.State == engine.WorkerReady {
+			return i18n.T("Memory: %s in use · %s cached", catalog.HumanSize(w.Stats.Memory.Active), catalog.HumanSize(w.Stats.Memory.Cache))
+		}
 	}
-	a.modelLabel = e.Label
-	a.modelChanged()
+	return ""
 }
 
 // noticePosted adds a notification to the centre's snapshot and shows it
@@ -289,5 +420,5 @@ func timeAgo(t time.Time) string {
 	case d < 24*time.Hour:
 		return i18n.N(int(d.Hours()), "%d hour ago", "%d hours ago", int(d.Hours()))
 	}
-	return strings.TrimSpace(t.Format("Jan 2 15:04"))
+	return i18n.DateTime(t)
 }

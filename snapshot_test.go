@@ -99,7 +99,7 @@ func TestSnapshots(t *testing.T) {
 		useFakeHub(t, a)
 		a.download(entry(t, "kokoro-82m-bf16"))
 		a.navigate("/models")
-		dl := a.model("soprano-80m-bf16")
+		dl := a.model(entry(t, "soprano-80m-bf16"))
 		dl.downloading, dl.progress = true, hub.Progress{Bytes: 88e6, TotalBytes: 220645307, Mirror: "https://hf-mirror.com"}
 		a.notices = nil
 		save("models")
