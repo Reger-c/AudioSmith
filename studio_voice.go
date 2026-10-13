@@ -1,14 +1,10 @@
 package main
 
-// The Studio inspector's voice section: the voice (a built-in speaker or a
-// style prompt) and, for models that clone, the reference clip and its
-// transcript.
-//
-// Seam for the voice library (thread V): studioVoiceSection is the one
-// call the Studio makes for it. V's voice picker and reference flow
-// replace this body (and may move it to a file of theirs); what the form
-// needs back is a.voice, a.refAudio, a.refText (and later a voice
-// profile id and voice prompt in the recipe).
+// The Studio inspector's own voice section: the voice (a built-in speaker
+// or a style prompt) and, for models that clone, a reference clip and its
+// transcript. It shows when no voice from the library is picked (the
+// voice library's picker, voicePicker in voices.go, comes first, and
+// studioUsesSavedVoice hides this section while it supplies the voice).
 
 import (
 	"path/filepath"

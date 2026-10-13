@@ -110,8 +110,14 @@ func (s *Takes) AudioPath(t core.Take) string { return s.store.AudioPath(t) }
 func SynthesizeParams(t core.Take, output string, stream bool) proto.SynthesizeParams {
 	p := proto.SynthesizeParams{
 		Model: t.Model, Text: t.Text, Voice: t.Voice, Language: t.Language,
-		MaxTokens: t.MaxTokens, RefAudio: t.RefAudio, RefText: t.RefText,
+		MaxTokens: t.MaxTokens, RefAudio: t.RefAudio, RefText: t.RefText, VoicePrompt: t.VoicePrompt,
 		Output: proto.Output{Path: output}, Stream: stream,
+	}
+	if t.Guidance != 0 {
+		p.Guidance = &t.Guidance
+	}
+	if t.Exaggeration != 0 {
+		p.Exaggeration = &t.Exaggeration
 	}
 	if t.Speed != 0 {
 		p.Speed = &t.Speed
@@ -183,9 +189,9 @@ func (s *Takes) Generate(ctx context.Context, req core.TakeRequest) (string, err
 	t.JobID, t.Starred = "", false
 	t.SampleRate, t.AudioSeconds, t.GenSeconds = 0, 0, 0
 	t.Render = renderRecipe(t.Render)
-	if !t.Render.SeedPinned {
-		t.Seed = 0
-	}
+	// A seed in the request is the seed to use (pinned): every chunk
+	// gets it, and Reuse brings it back.
+	t.Render.SeedPinned = t.Seed != 0
 	info := s.model(t.Model)
 	params, err := json.Marshal(RenderParams{Take: t, Lang: info.Lang(t.Language, t.Voice),
 		Output: s.store.AudioPath(t), Stream: req.Stream || !req.Background})
@@ -400,6 +406,7 @@ func (s *Takes) Preview(ctx context.Context, recipe core.Take) (jobID, output st
 	t.ID = core.NewID(s.now())
 	t.File = t.ID + ".wav"
 	t.Render = renderRecipe(t.Render)
+	t.Render.SeedPinned = t.Seed != 0
 	info := s.model(t.Model)
 	output = filepath.Join(dir, t.File)
 	params, err := json.Marshal(RenderParams{Take: t, Lang: info.Lang(t.Language, t.Voice), Output: output, Stream: true})

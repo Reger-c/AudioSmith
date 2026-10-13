@@ -63,19 +63,97 @@ type VoiceService interface {
 	List(ctx context.Context, q VoiceQuery) ([]Voice, error)
 	Get(ctx context.Context, id string) (Voice, error)
 	// Save creates (empty ID) or updates a profile and returns it as stored.
+	// Blob fields (RefAudio, Sample, Portrait, Consent.Recording, Prompts)
+	// keep their stored values on update: files change through SaveFiles,
+	// Lock, SetConsent.
 	Save(ctx context.Context, v Voice) (Voice, error)
+	// SaveFiles is Save that first copies files into the voice's directory.
+	// A new reference clears the lock and a verified consent (the new clip
+	// may be another speaker).
+	SaveFiles(ctx context.Context, v Voice, f VoiceFiles) (Voice, error)
 	Delete(ctx context.Context, id string) error
-	// Import reads a .asvoice (or VoiceStudio .ovsvoice) package.
-	Import(ctx context.Context, path string) (Voice, error)
+	// Import reads a .asvoice (or VoiceStudio .ovsvoice) package into a new
+	// profile. Imported consent is ConsentIncluded at most.
+	Import(ctx context.Context, path string) (VoiceImport, error)
 	// Export writes a .asvoice package.
-	Export(ctx context.Context, id, dst string) error
+	Export(ctx context.Context, id, dst string, o VoiceExport) error
+	// Usage says where the voice was used: takes, project segments.
+	Usage(ctx context.Context, id string) (VoiceUsage, error)
+	// Lock ties the voice's identity to one of its takes: its audio becomes
+	// the voice's sample, its seed the voice's seed.
+	Lock(ctx context.Context, id, takeID string) (Voice, error)
+	Unlock(ctx context.Context, id string) (Voice, error)
+	// SetConsent stores a recording of the user reading the consent
+	// statement: the voice becomes Verified. RevokeConsent removes it.
+	SetConsent(ctx context.Context, id string, c ConsentRecording) (Voice, error)
+	RevokeConsent(ctx context.Context, id string) (Voice, error)
+	// FilePath is the absolute path of one of the voice's files ("" for
+	// an empty name). Pure: no I/O.
+	FilePath(v Voice, name string) string
 }
 
 // VoiceQuery selects voices. The zero value is every voice, by name.
 type VoiceQuery struct {
-	Search string
+	Search string // name, style, transcript, description, tags
 	Kind   VoiceKind
 	Model  string
+	Origin string // exact Voice.Origin
+}
+
+// VoiceFiles are files to copy into a voice's directory. Empty fields
+// leave the voice's files as they are.
+type VoiceFiles struct {
+	Reference string // audio file (absolute path): the new clone reference
+	Sample    string // audio file: a rendered sample (designed voices)
+	// Portrait is the new portrait, a PNG (already cropped to 256×256);
+	// RemovePortrait deletes the current one.
+	Portrait       []byte
+	RemovePortrait bool
+	// Prompt is a cached voice prompt for model PromptModel (tts.encodeVoice).
+	Prompt      string
+	PromptModel string
+}
+
+// ConsentRecording is the consent statement as read by the user.
+type ConsentRecording struct {
+	Audio     string // the recording (absolute path), copied into the voice's directory
+	Statement string // the text read
+	Locale    string
+}
+
+// VoiceImport is an imported voice and what the importer could not carry over.
+type VoiceImport struct {
+	Voice    Voice
+	Format   string   // "asvoice" or "ovsvoice"
+	Warnings []string // English, technical
+}
+
+// VoiceExport configures Export.
+type VoiceExport struct {
+	// IncludeReference adds the clone reference; off shares only the preview.
+	IncludeReference bool
+	Licence          string // SPDX id; "" = personal use
+	// Preview is a WAV to ship as the preview; "" picks the voice's sample,
+	// its latest take, or its reference (WAV).
+	Preview    string
+	App        string // creator software, "AudioSmith"
+	AppVersion string
+}
+
+// VoiceUsage is where a voice was used.
+type VoiceUsage struct {
+	Takes      int
+	LatestTake string // id of the newest take
+	Segments   int
+	Projects   []VoiceProjectUsage
+}
+
+// VoiceProjectUsage is one project whose segments use a voice.
+type VoiceProjectUsage struct {
+	ID       string
+	Title    string
+	Kind     ProjectKind
+	Segments int
 }
 
 // ProjectService is the project library (M3+).

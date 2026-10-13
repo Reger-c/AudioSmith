@@ -278,9 +278,13 @@ func (a *app) recipe(now time.Time) core.Take {
 	if p.Has(catalog.CapSampling) && !a.modelDefaults {
 		t.Temperature, t.TopP, t.MaxTokens = a.temperature, a.topP, int(a.maxTokens)
 	}
-	if p.Has(catalog.CapClone) && strings.TrimSpace(a.refAudio) != "" {
+	if p.Has(catalog.CapClone) && strings.TrimSpace(a.refAudio) != "" && !a.studioUsesSavedVoice(p) {
 		t.RefAudio, t.RefText = strings.TrimSpace(a.refAudio), strings.TrimSpace(a.refText)
 	}
+	// A voice from the library (voices.go): its reference, design, seed,
+	// style, and the encoded prompt the engine prefers to the reference.
+	a.applyStudioVoice(&t, p)
+	t.VoicePrompt = a.studioVoicePrompt(p)
 	if p.Has(catalog.CapDuration) && a.duration > 0 {
 		t.Duration = a.duration
 	}
@@ -309,6 +313,12 @@ func (a *app) reuse(t *core.Take) {
 		a.temperature, a.topP, a.maxTokens = t.Temperature, t.TopP, float64(t.MaxTokens)
 	}
 	a.refAudio, a.refText = t.RefAudio, t.RefText
+	// The library voice it was spoken with, if it still exists.
+	a.studioVoice, a.studioClip = "", nil
+	if v := a.findVoice(t.VoiceID); v != nil {
+		a.studioVoice = v.ID
+		a.refAudio, a.refText = "", ""
+	}
 	a.duration, a.steps = t.Duration, float64(t.Steps)
 	a.seedPinned, a.seed = t.Seed != 0, float64(t.Seed)
 	if r := t.Render; r != nil {

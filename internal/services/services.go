@@ -109,7 +109,7 @@ func New(cfg Config) *Services {
 	s.Services = core.Services{
 		Bus:      cfg.Bus,
 		Takes:    s.takes,
-		Voices:   &Voices{store: cfg.Store.Voices(), bus: cfg.Bus, now: cfg.Now},
+		Voices:   newVoices(cfg), // voices.go
 		Projects: &Projects{store: cfg.Store.Projects(), bus: cfg.Bus, now: cfg.Now},
 		Licences: cfg.Licences,
 		Drafts:   s.drafts,

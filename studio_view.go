@@ -306,7 +306,10 @@ func (a *app) inspector(c *ui.Context) {
 	})
 
 	ui.Divider(c)
-	a.studioVoiceSection(c, p)
+	a.voicePicker(c, p) // the voice library's picker (voices.go)
+	if !a.studioUsesSavedVoice(p) {
+		a.studioVoiceSection(c, p)
+	}
 	ui.Divider(c)
 	if ui.Checkbox(c.Key("autoplay"), &a.autoplay, i18n.T("Play each take when it is ready")).Changed() {
 		on := a.autoplay

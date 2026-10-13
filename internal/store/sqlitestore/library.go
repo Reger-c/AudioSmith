@@ -4,110 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/hehehai/AudioSmith/internal/core"
 )
-
-// --- voices -------------------------------------------------------------
-
-// voiceRepo stores voice profiles: core.Voice as JSON plus filter columns.
-type voiceRepo struct {
-	db  *sqlite.DB
-	dir string
-}
-
-func (r *voiceRepo) VoiceDir() string { return r.dir }
-
-func (r *voiceRepo) Put(ctx context.Context, v core.Voice) error {
-	if err := validID(v.ID); err != nil {
-		return err
-	}
-	profile, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	_, err = r.db.Execute(ctx, `INSERT INTO voices (id, name, kind, model, locked, consent, created_at, updated_at, profile)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind, model = excluded.model,
-  locked = excluded.locked, consent = excluded.consent, created_at = excluded.created_at,
-  updated_at = excluded.updated_at, profile = excluded.profile`,
-		v.ID, v.Name, string(v.Kind), v.Model, v.Locked, v.Consent, v.CreatedAt.UnixMilli(), v.UpdatedAt.UnixMilli(), string(profile))
-	return wrap("voice "+v.ID, err)
-}
-
-func scanVoice(row []any) (core.Voice, error) {
-	var v core.Voice
-	err := json.Unmarshal(asBytes(row[0]), &v)
-	return v, err
-}
-
-func (r *voiceRepo) Get(ctx context.Context, id string) (core.Voice, error) {
-	rows, err := r.db.Query(ctx, `SELECT profile FROM voices WHERE id = ?`, id)
-	if err != nil {
-		return core.Voice{}, wrap("voice "+id, err)
-	}
-	if len(rows.Values) == 0 {
-		return core.Voice{}, fmt.Errorf("voice %s: %w", id, core.ErrNotFound)
-	}
-	return scanVoice(rows.Values[0])
-}
-
-// List filters by kind and model (a voice for any model, model ”, matches
-// every model) and searches names; sorted by name.
-func (r *voiceRepo) List(ctx context.Context, q core.VoiceQuery) ([]core.Voice, error) {
-	var where []string
-	var args []any
-	if s := strings.TrimSpace(q.Search); s != "" {
-		if useFTS(s) {
-			where, args = append(where, `seq IN (SELECT rowid FROM voices_fts WHERE voices_fts MATCH ?)`), append(args, ftsPhrase(s))
-		} else {
-			where, args = append(where, `name LIKE ? ESCAPE '\'`), append(args, likePattern(s))
-		}
-	}
-	if q.Kind != "" {
-		where, args = append(where, `kind = ?`), append(args, string(q.Kind))
-	}
-	if q.Model != "" {
-		where, args = append(where, `(model = ? OR model = '')`), append(args, q.Model)
-	}
-	sql := `SELECT profile FROM voices`
-	if len(where) > 0 {
-		sql += ` WHERE ` + strings.Join(where, ` AND `)
-	}
-	rows, err := r.db.Query(ctx, sql+` ORDER BY name COLLATE NOCASE, id`, args...)
-	if err != nil {
-		return nil, wrap("voices", err)
-	}
-	out := make([]core.Voice, 0, len(rows.Values))
-	for _, row := range rows.Values {
-		v, err := scanVoice(row)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
-	return out, nil
-}
-
-// Delete removes the profile and its blob directory.
-func (r *voiceRepo) Delete(ctx context.Context, id string) error {
-	if err := validID(id); err != nil {
-		return err
-	}
-	res, err := r.db.Execute(ctx, `DELETE FROM voices WHERE id = ?`, id)
-	if err != nil {
-		return wrap("voice "+id, err)
-	}
-	if res.Changes == 0 {
-		return fmt.Errorf("voice %s: %w", id, core.ErrNotFound)
-	}
-	return os.RemoveAll(filepath.Join(r.dir, id))
-}
 
 // --- projects -----------------------------------------------------------
 
