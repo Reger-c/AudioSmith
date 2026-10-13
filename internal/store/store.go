@@ -1,9 +1,10 @@
 // Package store is AudioSmith's persistence contract: repositories for
-// each kind of record, behind which the database lives. Thread A
-// implements Store on SQLite (the MyGo plugin github.com/egoist/mygo/plugins/sqlite,
-// schema in schema.sql) in internal/store/sqlitestore, and imports the
-// MVP's history.json on first run (internal/store/historyjson, which today
-// is the only implementation, of Takes alone).
+// each kind of record, behind which the database lives. The app uses
+// internal/store/sqlitestore (SQLite through the MyGo plugin
+// github.com/egoist/mygo/plugins/sqlite; schema in its migrations/*.sql),
+// which imports the MVP's history.json on first run with
+// internal/store/historyjson (an implementation of Takes alone, kept for
+// that import and for tests).
 //
 // Rules:
 //   - Repositories are goroutine-safe and may block on I/O: never call
@@ -67,7 +68,7 @@ type Voices interface {
 }
 
 // Projects stores projects; segments, renders and exports are rows of
-// their own tables keyed by project id (see schema.sql) with repositories
+// their own tables keyed by project id (see sqlitestore/migrations) with repositories
 // added by the milestone that needs them.
 type Projects interface {
 	Put(ctx context.Context, p core.Project) error
