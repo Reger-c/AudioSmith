@@ -170,7 +170,21 @@ const (
 	CodeBusy               = "busy"                 // over the concurrency hello announced: retryable
 	CodeCancelled          = "cancelled"            // the job was cancelled (job.cancel or shutdown)
 	CodeInternal           = "internal"             // anything else; message carries the detail
+
+	// Added in M1 (additive: an older app reads them as internal).
+	CodeInputTooLong      = "input_too_long"     // text over the model's limit for one request: chunk it; data: {"limit":510,"actual":731,"unit":"phonemes"|"chars"|"tokens"}
+	CodeFileNotFound      = "file_not_found"     // an input path does not exist; data: {"path":"…"}
+	CodeUnsupportedMedia  = "unsupported_media"  // an input exists but cannot be decoded; data: {"path":"…"}
+	CodePermissionDenied  = "permission_denied"  // macOS refused a permission; data: {"permission":"microphone"}
+	CodeDeviceUnavailable = "device_unavailable" // the capture device is unknown, gone or busy; data: {"device":"…"}
 )
+
+// Codes lists every error code the engine may send.
+var Codes = []string{
+	CodeBadRequest, CodeMethodNotFound, CodeNotInitialized, CodeProtocolMismatch, CodeUnsupported,
+	CodeModelNotDownloaded, CodeModelLoadFailed, CodeLicenceRequired, CodeOOM, CodeBusy, CodeCancelled, CodeInternal,
+	CodeInputTooLong, CodeFileNotFound, CodeUnsupportedMedia, CodePermissionDenied, CodeDeviceUnavailable,
+}
 
 // Retryable reports whether a job failing with code may be retried automatically.
 func Retryable(code string) bool { return code == CodeOOM || code == CodeBusy }

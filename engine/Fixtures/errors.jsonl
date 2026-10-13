@@ -2,8 +2,8 @@
 {"to":"app","msg":{"id":"c1","error":{"code":"not_initialized","message":"engine.hello must come first"}}}
 {"to":"engine","msg":{"id":"c2","method":"engine.hello","params":{"protocol":3,"app":"9.0.0","role":"gpu"}}}
 {"to":"app","msg":{"id":"c2","error":{"code":"protocol_mismatch","message":"This engine speaks protocol 2","data":{"supported":[2]}}}}
-{"to":"engine","msg":{"id":"c3","method":"stt.transcribe","params":{"audio":"/tmp/a.wav"}}}
-{"to":"app","msg":{"id":"c3","error":{"code":"method_not_found","message":"Unknown method stt.transcribe"}}}
+{"to":"engine","msg":{"id":"c3","method":"diarize.run","params":{"audio":"/tmp/a.wav"}}}
+{"to":"app","msg":{"id":"c3","error":{"code":"method_not_found","message":"Unknown method diarize.run"}}}
 {"to":"engine","msg":{"id":"j1","method":"tts.synthesize","params":{"model":"","text":"Hi","output":{"path":""}}}}
 {"to":"app","msg":{"id":"j1","error":{"code":"bad_request","message":"Missing model"}}}
 {"to":"engine","msg":{"id":"j2","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","text":"Hi","refAudio":"/tmp/ref.wav","output":{"path":"/tmp/j2.wav"}}}}
@@ -18,3 +18,5 @@
 {"to":"app","msg":{"id":"j5","error":{"code":"oom","message":"Out of memory while generating","data":{"active":15800000000}}}}
 {"to":"engine","msg":{"id":"j7","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","text":"Hi","output":{"path":"/nonexistent/dir/j7.wav"}}}}
 {"to":"app","msg":{"id":"j7","error":{"code":"internal","message":"Could not write /nonexistent/dir/j7.wav: No such file or directory"}}}
+{"to":"engine","msg":{"id":"j8","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","text":"A very long paragraph …","voice":"af_heart","output":{"path":"/tmp/j8.wav"}}}}
+{"to":"app","msg":{"id":"j8","error":{"code":"input_too_long","message":"The text is 731 phonemes; Kokoro-82M-bf16 takes at most 510 per request","data":{"limit":510,"actual":731,"unit":"phonemes"}}}}
