@@ -25,16 +25,21 @@ Data:
 ```
 ┌──────────────── AudioSmith.app ────────────────┐
 │ Go + MyGo native UI (Metal)                     │
-│  view.go   studio / history / engine pages      │
-│  app.go    state and actions (main thread)      │
-│  engine.go child process, JSON lines            │──stdin──▶ ┌───────────────────────────┐
-│  clips.go  history, waveform peaks              │◀─stdout── │ audiosmith-engine (Swift) │
-│  player.go playback (mygo/audio)                │           │ mlx-audio-swift + MLX     │
+│  *.go            views and their state (main)   │
+│  internal/core   domain types, services, bus    │
+│  internal/store  takes (history.json → SQLite)  │
+│  internal/engine child process, JSON lines      │──stdin──▶ ┌───────────────────────────┐
+│  internal/jobs   job queue (M0)                 │◀─stdout── │ audiosmith-engine (Swift) │
+│  internal/catalog, hub, settings, i18n, audio   │           │ mlx-audio-swift + MLX     │
 └─────────────────────────────────────────────────┘           │ writes WAV takes          │
                                                               └───────────────────────────┘
 ```
 
-The two halves only share the protocol in [`engine/Sources/AudioSmithEngine/Protocol.swift`](engine/Sources/AudioSmithEngine/Protocol.swift): one JSON object per line (`load`, `synthesize`, `cancel`, `unload` → `ready`, `status`, `loaded`, `progress`, `done`, `cancelled`, `error`). The engine keeps one model loaded, runs one job at a time, and exits when the app closes its stdin. The engine's stdout carries only the protocol: it redirects everything else to stderr, which the app logs.
+[docs/architecture.md](docs/architecture.md) maps the packages, the threading rules and who owns what. The two halves share only the engine protocol:
+- **v1** is in use: [`Protocol.swift`](engine/Sources/AudioSmithEngine/Protocol.swift), one JSON object per line (`load`, `synthesize`, `cancel`, `unload` → `ready`, `status`, `loaded`, `progress`, `done`, `cancelled`, `error`). The engine keeps one model loaded and runs one job at a time.
+- **v2** is specified in [docs/protocol-v2.md](docs/protocol-v2.md): JSON-RPC-shaped, with job ids, a handshake, typed errors and streaming. Golden fixtures are in `engine/Fixtures/`.
+
+The engine exits when the app closes its stdin. Its stdout carries only the protocol: it redirects everything else to stderr, which the app logs.
 
 Why a helper process: MyGo is pure Go without cgo, and MLX is Swift/C++/Metal. A child process keeps the Go build cgo-free, keeps the UI alive when a model crashes or runs out of memory, and gives Unload a way to free the GPU memory.
 
@@ -64,7 +69,7 @@ The UI and its tests are plain Go and run anywhere:
 
 ```sh
 CGO_ENABLED=0 go test ./...     # views run headless in ui.Tester; the engine is faked
-go tool mygo vet .
+go tool mygo vet .              # go vet ./... + MyGo UI-lifetime checks
 ```
 
 `scripts/mac.sh` mirrors the project to a Mac over SSH (`MAC_HOST`, default `mac-air`) and runs a command there:
@@ -93,7 +98,7 @@ MyGo is pinned in `go.mod`; `go tool mygo` runs the CLI at that version.
 
 | Command | Where | What it covers |
 |---|---|---|
-| `CGO_ENABLED=0 go test ./...` | anywhere | Views in `ui.Tester` with a fake engine (generate, cancel, errors, crash + restart, per-model controls, preload/unload, history reuse/delete), the real process client against a stand-in script |
+| `CGO_ENABLED=0 go test ./...` | anywhere | Views in `ui.Tester` with a fake engine (generate, cancel, errors, crash + restart, per-model controls, preload/unload, history reuse/delete), the real process client against a stand-in script, the protocol-v2 fixtures, the catalogue, the bus |
 | `AUDIOSMITH_E2E=1 go test -run TestEndToEnd -v .` | Mac | The app's state driving the real engine: start, preload, English and Chinese takes, unload |
 | `scripts/smoke-engine.sh` | Mac | The engine binary alone: three Kokoro takes |
 | `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .` | anywhere | Renders every page, light and dark, to PNG |

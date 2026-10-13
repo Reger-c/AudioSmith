@@ -39,7 +39,7 @@ func TestEngineCrash(t *testing.T) {
 	tt.Frame()
 	tt.Click("Generate")
 	a.engineExited(os.ErrClosed, "fatal: Failed to load the default metallib")
-	a.page = "engine"
+	a.showPage("engine")
 	tt.Frame()
 	if a.job != nil || a.engState != engineFailed {
 		t.Fatalf("state %v job %v", a.engState, a.job)

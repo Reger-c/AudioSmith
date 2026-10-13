@@ -75,9 +75,9 @@ func TestSnapshots(t *testing.T) {
 		a.refText = "This is what my voice sounds like."
 		save("studio-clone")
 
-		a.page = "history"
+		a.showPage("history")
 		save("history")
-		a.page = "engine"
+		a.showPage("engine")
 		save("engine")
 	}
 	_ = ui.Cmd

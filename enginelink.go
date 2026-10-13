@@ -51,6 +51,27 @@ type engineLink struct {
 	jobError string
 }
 
+// engineSummary is what the shell shows about the engines: the sidebar
+// status today, the status bar and the ⌘E switcher (thread C) next. Thread
+// B keeps it filled from the supervisor; the shell reads nothing else of
+// the engine link.
+type engineSummary struct {
+	State   engineState
+	Version string
+	PID     int
+	Err     string
+	Loaded  []string // repos of resident models, most recent first
+	Busy    bool     // a job runs
+}
+
+func (a *app) engineSummary() engineSummary {
+	s := engineSummary{State: a.engState, Version: a.engVersion, PID: a.engPID, Err: a.engError, Busy: a.job != nil}
+	if a.loadedModel != "" {
+		s.Loaded = []string{a.loadedModel}
+	}
+	return s
+}
+
 // newEngineProcess finds the engine among the app's resources.
 func newEngineProcess(resources, logDir string) *engine.Process {
 	return &engine.Process{

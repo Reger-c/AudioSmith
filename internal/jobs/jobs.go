@@ -39,7 +39,7 @@ const (
 	LaneListen Lane = "listen" // engine --role listen: dictation, capture. 1 slot
 	LaneMedia  Lane = "media"  // engine --role media: decode/encode/mux. 2 slots
 	LaneNet    Lane = "net"    // Go: model downloads, URL import. 3 slots
-	LaneCPU    Lane = "cpu"    // Go: text pipeline, DSP, exports. NumCPU/2 slots
+	LaneCPU    Lane = "cpu"    // Go: text pipeline, DSP, exports. 2 slots
 )
 
 // Priority orders jobs within a lane: higher first.

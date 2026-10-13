@@ -25,6 +25,8 @@ func main() {
 	resources, _ := mygo.App.Path(mygo.PathResources)
 	logDir, _ := mygo.App.Path(mygo.PathLogs)
 
+	// Wiring: one call per area, each defined in the file its owner thread
+	// edits (docs/architecture.md §5).
 	takes := openTakeStore(dataDir)            // takes.go
 	eng := newEngineProcess(resources, logDir) // enginelink.go
 	a := newApp(eng, takes)                    // app.go

@@ -30,6 +30,14 @@ func newShellState() shellState {
 	return shellState{page: "studio"}
 }
 
+// showPage goes to a page by name ("studio", "history", "engine"). Other
+// areas navigate only through it (and read currentPage), so the shell can
+// move to ui.Router paths without touching them.
+func (a *app) showPage(name string) { a.page = name }
+
+// currentPage is the name of the page shown.
+func (a *app) currentPage() string { return a.page }
+
 // openWindow opens the main window; it runs in App.WhenReady.
 func (a *app) openWindow() {
 	a.win = mygo.NewWindow(mygo.WindowOptions{
@@ -65,7 +73,7 @@ func (a *app) view(c *ui.Context) {
 	if c.Shortcut(ui.Cmd, ui.KeyEnter) {
 		a.generate()
 	}
-	if a.job != nil {
+	if a.engineSummary().Busy {
 		// Keep the elapsed time current.
 		c.After(500 * time.Millisecond)
 	}
@@ -109,8 +117,9 @@ func (a *app) sidebar(c *ui.Context) {
 
 	// The engine's status, at the bottom.
 	ui.Column(c).Padding(12, 14).Gap(4).Children(func() {
+		eng := a.engineSummary()
 		color, label := t.Warning, i18n.T("Engine starting…")
-		switch a.engState {
+		switch eng.State {
 		case engineReady:
 			color, label = t.Success, i18n.T("Engine ready")
 		case engineFailed:
@@ -121,8 +130,8 @@ func (a *app) sidebar(c *ui.Context) {
 			ui.Text(c, label).FontSize(12)
 		})
 		model := i18n.T("No model loaded")
-		if a.loadedModel != "" {
-			model = catalog.Builtin().DisplayName(a.loadedModel)
+		if len(eng.Loaded) > 0 {
+			model = catalog.Builtin().DisplayName(eng.Loaded[0])
 		}
 		ui.Text(c, model).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 	})

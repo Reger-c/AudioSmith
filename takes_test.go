@@ -19,7 +19,7 @@ func TestHistoryReuseAndDelete(t *testing.T) {
 			Language: "English", Temperature: 0.4, TopP: 0.8, MaxTokens: 900, AudioSeconds: 1,
 		}, 0.3)
 	}
-	a.page = "history"
+	a.showPage("history")
 	tt.Frame()
 	if !tt.HasText("2 takes") || !tt.HasText("First take") || !tt.HasText("Second take") {
 		t.Fatalf("history: %q", tt.Texts())
@@ -27,12 +27,12 @@ func TestHistoryReuseAndDelete(t *testing.T) {
 
 	second := &a.takes[0]
 	a.reuse(second)
-	if a.page != "studio" || a.text != "Second take" || a.modelLabel != "Qwen3-TTS 0.6B CustomVoice" ||
+	if a.currentPage() != "studio" || a.text != "Second take" || a.modelLabel != "Qwen3-TTS 0.6B CustomVoice" ||
 		a.voice != "Vivian, cheerful" || a.modelDefaults || a.temperature != 0.4 || a.maxTokens != 900 {
 		t.Errorf("reuse: %+v", a)
 	}
 
-	a.page = "history"
+	a.showPage("history")
 	tt.Frame()
 	path := a.takeStore.AudioPath(*second)
 	a.deleteClip(second)
@@ -47,7 +47,7 @@ func TestHistoryReuseAndDelete(t *testing.T) {
 
 func TestEmptyHistory(t *testing.T) {
 	a, _, tt := newTestApp(t)
-	a.page = "history"
+	a.showPage("history")
 	tt.Frame()
 	if !tt.HasText("No takes yet") {
 		t.Errorf("texts %q", tt.Texts())

@@ -129,7 +129,7 @@ func (a *app) reuse(t *core.Take) {
 		a.temperature, a.topP, a.maxTokens = t.Temperature, t.TopP, float64(t.MaxTokens)
 	}
 	a.refAudio, a.refText = t.RefAudio, t.RefText
-	a.page = "studio"
+	a.showPage("studio")
 }
 
 func (a *app) chooseRefAudio() {
