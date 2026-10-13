@@ -14,6 +14,9 @@ final class Writer: @unchecked Sendable {
     init() {
         let fd = dup(STDOUT_FILENO)
         dup2(STDERR_FILENO, STDOUT_FILENO)
+        // Libraries print diagnostics; unbuffered, they reach the log even
+        // when the process is killed.
+        setvbuf(stdout, nil, _IONBF, 0)
         handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
     }
 

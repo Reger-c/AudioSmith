@@ -118,7 +118,7 @@ func TestModelSmoke(t *testing.T) {
 			}
 		}
 	}()
-	ensure := func(e catalog.Entry) string {
+	ensure := func(t *testing.T, e catalog.Entry) string {
 		t.Helper()
 		l, err := client.Status(ctx, e)
 		if err != nil {
@@ -179,7 +179,7 @@ func TestModelSmoke(t *testing.T) {
 
 	// The reference speaker: Kokoro reads smokeRefText.
 	kokoro, _ := cat.ByID("kokoro-82m-bf16")
-	kokoroPath := ensure(kokoro)
+	kokoroPath := ensure(t, kokoro)
 	ref := filepath.Join(outDir, "reference.wav")
 	var refRes proto.SynthesizeResult
 	if err := call(proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro.Repo, ModelPath: kokoroPath, Text: smokeRefText,
@@ -207,7 +207,7 @@ func TestModelSmoke(t *testing.T) {
 	hearing := ids == "all" || strings.Contains(ids, whisper.ID) || os.Getenv("AUDIOSMITH_SMOKE_HEAR") != ""
 	var whisperPath string
 	if hearing {
-		whisperPath = ensure(whisper)
+		whisperPath = ensure(t, whisper)
 	}
 	hear := func(path, lang string) (string, error) {
 		if whisperPath == "" {
@@ -223,7 +223,7 @@ func TestModelSmoke(t *testing.T) {
 
 	for _, e := range entries {
 		t.Run(e.ID, func(t *testing.T) {
-			snap := ensure(e)
+			snap := ensure(t, e)
 			if err := sup.Restart(proto.RoleGPU); err != nil {
 				t.Fatal(err)
 			}
