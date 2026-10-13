@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -240,17 +241,17 @@ func (a *app) inspector(c *ui.Context) {
 	}
 	if p.Speed {
 		ui.Field(c, fmt.Sprintf("Speed  %.2f×", a.speed), func() {
-			ui.StepSlider(c.Key("speed"), &a.speed, 0.5, 2, 0.05).Label("Speed")
+			snapped(ui.Slider(c.Key("speed"), &a.speed, 0.5, 2).Label("Speed"), &a.speed, 0.05)
 		})
 	}
 	if p.Sampling {
 		ui.Checkbox(c.Key("defaults"), &a.modelDefaults, "Use the model's sampling defaults")
 		if !a.modelDefaults {
 			ui.Field(c, fmt.Sprintf("Temperature  %.2f", a.temperature), func() {
-				ui.StepSlider(c.Key("temperature"), &a.temperature, 0, 1.5, 0.05).Label("Temperature")
+				snapped(ui.Slider(c.Key("temperature"), &a.temperature, 0, 1.5).Label("Temperature"), &a.temperature, 0.05)
 			})
 			ui.Field(c, fmt.Sprintf("Top P  %.2f", a.topP), func() {
-				ui.StepSlider(c.Key("topp"), &a.topP, 0.05, 1, 0.05).Label("Top P")
+				snapped(ui.Slider(c.Key("topp"), &a.topP, 0.05, 1).Label("Top P"), &a.topP, 0.05)
 			})
 			ui.Field(c, "Max tokens", func() {
 				ui.NumberInput(c.Key("maxtokens"), &a.maxTokens, 50, 8000, 50).Label("Max tokens")
@@ -303,7 +304,11 @@ func (a *app) clipCard(c *ui.Context, cl *clip, latest bool) {
 				title = "Latest take"
 			}
 			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-				ui.Text(c, title).FontSize(13).SingleLine().Ellipsis("…")
+				if latest {
+					ui.Text(c, title).FontSize(13).SingleLine().Ellipsis("…")
+				} else {
+					ui.Text(c, title).FontSize(13).MaxLines(3).Ellipsis("…")
+				}
 				ui.Text(c, clipMeta(cl)).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 			})
 			if !latest && ui.Button(c.Key("reuse"), "Reuse").Tooltip("Load this take's text and settings into the studio").Clicked() {
@@ -396,7 +401,6 @@ func (a *app) historyPage(c *ui.Context) {
 	ui.List(c, &a.historyList, len(clips)).Grow(1).Padding(10, 0).ItemKey(func(i int) any { return clips[i].ID }).Rows(func(r ui.ListRow) {
 		cl := clips[r.Index]
 		ui.Column(c).Padding(6, 20).Children(func() {
-			ui.Text(c, cl.Text).FontSize(13).MaxLines(3).Ellipsis("…").Padding(0, 0, 6, 0)
 			a.clipCard(c, cl, false)
 		})
 	})
@@ -472,6 +476,15 @@ func hfCacheDir() string {
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".cache", "huggingface", "hub")
+}
+
+// snapped rounds a slider's value to a step, so labels and requests show
+// 1.05 rather than 1.0473; the slider moves smoothly in between.
+func snapped(e ui.Element, v *float64, step float64) ui.Element {
+	if e.Changed() {
+		*v = math.Round(*v/step) * step
+	}
+	return e
 }
 
 func orDash(s string) string {

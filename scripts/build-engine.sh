@@ -32,6 +32,7 @@ xcodebuild build \
   -derivedDataPath "$DERIVED" \
   -skipPackagePluginValidation \
   -skipMacroValidation \
+  -onlyUsePackageVersionsFromResolvedFile \
   CODE_SIGNING_ALLOWED=NO \
   > "$LOG" 2>&1 || true
 grep -E "error:|\*\* BUILD" "$LOG" | sort -u | head -40 || true

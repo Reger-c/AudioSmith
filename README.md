@@ -3,7 +3,7 @@
 A TTS workbench for macOS on Apple silicon. Write a script, pick a model and a voice, generate takes locally on the GPU, then listen to them, compare them and export them.
 
 - **UI**: [MyGo](https://mygo.egoist.dev/) native UI, written in Go (`*.go`).
-- **Speech**: `audiosmith-engine`, a Swift helper on [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) (`engine/`), which runs the models with MLX.
+- **Speech**: `audiosmith-engine`, a Swift helper on [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) (the [hehehai fork](https://github.com/hehehai/mlx-audio-swift) Voxt uses) in `engine/`, which runs the models with MLX.
 
 ## MVP features
 
@@ -76,8 +76,31 @@ scripts/mac.sh go tool mygo build
 
 ## Versions
 
-- mlx-audio-swift is pinned to a revision in `engine/Package.swift` (it moves fast and has no stable tags), with mlx-swift 0.32.x and mlx-swift-lm 3.32.x as it resolves them. Update them together.
-- MyGo is pinned in `go.mod`; `go tool mygo` runs the CLI at that version.
+The engine uses the dependency set Voxt validated, locked in `engine/Package.resolved` (builds use it strictly):
+
+| Dependency | Pin |
+|---|---|
+| [hehehai/mlx-audio-swift](https://github.com/hehehai/mlx-audio-swift) | `2a6e75d` (upstream + Voxt fixes) |
+| mlx-swift | `0.31.6` |
+| mlx-swift-lm | `c6446cf` |
+| swift-transformers / swift-huggingface | `1.3.4` / `0.10.2` |
+
+Keep them together. **Don't move to upstream mlx-audio-swift HEAD / mlx-swift 0.32.x yet**: MLX 0.32 makes Metal command encoders thread-local, while mlx-audio-swift builds graphs in Swift `Task`s that hop threads. Every generation then crashes with `There is no Stream(gpu, N) in current thread`. This was reproduced with Kokoro on macOS 26.
+
+MyGo is pinned in `go.mod`; `go tool mygo` runs the CLI at that version.
+
+## Tests
+
+| Command | Where | What it covers |
+|---|---|---|
+| `CGO_ENABLED=0 go test ./...` | anywhere | Views in `ui.Tester` with a fake engine (generate, cancel, errors, crash + restart, per-model controls, preload/unload, history reuse/delete), the real process client against a stand-in script |
+| `AUDIOSMITH_E2E=1 go test -run TestEndToEnd -v .` | Mac | The app's state driving the real engine: start, preload, English and Chinese takes, unload |
+| `scripts/smoke-engine.sh` | Mac | The engine binary alone: three Kokoro takes |
+| `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .` | anywhere | Renders every page, light and dark, to PNG |
+
+![Studio](docs/screenshots/studio-light.png)
+![History](docs/screenshots/history-light.png)
+![Voice cloning, dark](docs/screenshots/studio-clone-dark.png)
 
 ## Next steps
 

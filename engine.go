@@ -207,6 +207,9 @@ func (e *engineProcess) Stop() {
 // resources (packaged, mygo dev, or go run from the project).
 func findEngine(resources string) string {
 	if p := os.Getenv("AUDIOSMITH_ENGINE"); p != "" {
+		if abs, err := filepath.Abs(p); err == nil {
+			return abs
+		}
 		return p
 	}
 	candidates := []string{
@@ -215,6 +218,10 @@ func findEngine(resources string) string {
 	}
 	for _, p := range candidates {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			// Absolute: the engine runs in its own directory.
+			if abs, err := filepath.Abs(p); err == nil {
+				return abs
+			}
 			return p
 		}
 	}

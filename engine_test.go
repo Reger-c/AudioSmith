@@ -109,3 +109,19 @@ func TestEngineMissing(t *testing.T) {
 		t.Errorf("found %q in an empty directory", got)
 	}
 }
+
+func TestFindEngineIsAbsolute(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "res", "engine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "res", "engine", "audiosmith-engine"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	t.Setenv("AUDIOSMITH_ENGINE", "")
+	got := findEngine("res")
+	if !filepath.IsAbs(got) || filepath.Base(got) != "audiosmith-engine" {
+		t.Fatalf("findEngine = %q", got)
+	}
+}
