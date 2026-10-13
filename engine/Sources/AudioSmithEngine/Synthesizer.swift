@@ -198,38 +198,63 @@ final class Synthesizer: @unchecked Sendable {
         let progress = JobProgress(out: out, job: job)
         progress.send("generating", force: true)
         let started = Date()
-        let stream = model.generateStream(
-            text: text, voice: nonEmpty(p.voice), refAudio: refAudio, refText: nonEmpty(p.refText),
-            language: nonEmpty(p.language), generationParameters: params, streamingInterval: 1.0)
-
         var samples: [Float] = []
         var seq = 0
-        for try await event in stream {
+        func audio(_ chunk: MLXArray) throws {
+            let mono = try monoSamples(chunk)
+            if p.stream == true {
+                // Up to one second per tts.chunk.
+                var i = 0
+                while i < mono.count {
+                    let end = min(i + sampleRate, mono.count)
+                    out.notify(Method.ttsChunk, ChunkParams(job: job, seq: seq, sampleRate: sampleRate, channels: 1,
+                                                            encoding: "pcm16le", data: pcm16(mono[i ..< end]), final: nil))
+                    seq += 1
+                    i = end
+                }
+            }
+            samples.append(contentsOf: mono)
+            progress.audioSeconds = Double(samples.count) / Double(sampleRate)
+            progress.send("generating")
+        }
+
+        if model is KokoroModel || model is KittenTTSModel {
+            // These make the whole take in one call; their generateStream
+            // only runs it in a Task of its own, which a cancelled job
+            // would leave computing on the GPU while the next job starts.
+            // Run here instead, so the job ends when the computation does.
+            let chunk = try await model.generate(
+                text: text, voice: nonEmpty(p.voice), refAudio: refAudio, refText: nonEmpty(p.refText),
+                language: nonEmpty(p.language), generationParameters: params)
             try Task.checkCancellation()
-            switch event {
-            case .audio(let chunk):
-                let mono = try monoSamples(chunk)
-                if p.stream == true {
-                    // Up to one second per tts.chunk.
-                    var i = 0
-                    while i < mono.count {
-                        let end = min(i + sampleRate, mono.count)
-                        out.notify(Method.ttsChunk, ChunkParams(job: job, seq: seq, sampleRate: sampleRate, channels: 1,
-                                                                encoding: "pcm16le", data: pcm16(mono[i ..< end]), final: nil))
-                        seq += 1
-                        i = end
+            try audio(chunk)
+        } else {
+            let stream = model.generateStream(
+                text: text, voice: nonEmpty(p.voice), refAudio: refAudio, refText: nonEmpty(p.refText),
+                language: nonEmpty(p.language), generationParameters: params, streamingInterval: 1.0)
+            do {
+                for try await event in stream {
+                    try Task.checkCancellation()
+                    switch event {
+                    case .audio(let chunk):
+                        try audio(chunk)
+                    case .progress(let fraction):
+                        progress.fraction = min(max(fraction, 0), 1)
+                        progress.send("generating")
+                    case .token:
+                        progress.send("generating")
+                    case .info(let info):
+                        log(info.summary)
                     }
                 }
-                samples.append(contentsOf: mono)
-                progress.audioSeconds = Double(samples.count) / Double(sampleRate)
-                progress.send("generating")
-            case .progress(let fraction):
-                progress.fraction = min(max(fraction, 0), 1)
-                progress.send("generating")
-            case .token:
-                progress.send("generating")
-            case .info(let info):
-                log(info.summary)
+            } catch {
+                if Task.isCancelled {
+                    // Ending the stream cancels the model's own Task, which
+                    // stops at its next step: give it that step before the
+                    // engine takes another job.
+                    await settle()
+                }
+                throw error
             }
         }
         try Task.checkCancellation()
@@ -253,6 +278,11 @@ final class Synthesizer: @unchecked Sendable {
                                 frames: Int64(samples.count), audioSeconds: audioSeconds, seconds: seconds,
                                 rtf: seconds > 0 ? audioSeconds / seconds : 0, seed: seed)
     }
+}
+
+/// Waits ~200 ms even in a cancelled task.
+func settle() async {
+    await Task.detached { try? await Task.sleep(nanoseconds: 200_000_000) }.value
 }
 
 /// Sends a job's job.progress, at most 10 per second unless forced.

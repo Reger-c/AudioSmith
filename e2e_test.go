@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,15 +102,14 @@ func TestEndToEnd(t *testing.T) {
 	waitFor("stats", 30*time.Second, func() bool { return len(a.loaded) > 0 })
 
 	// Cancel a long take by id: the job ends cancelled, the engine stays up.
-	long := ""
-	for range 40 {
-		long += "This sentence makes the take long enough to cancel it while it is generating. "
-	}
+	// Kokoro takes at most ~510 phonemes at once.
+	long := strings.Repeat("This sentence makes the take long enough to cancel it. ", 7)
 	a.text, a.voice = long, "af_heart"
 	a.generate()
 	waitFor("generating", time.Minute, func() bool {
 		return a.job != nil && a.job.id != "" && a.job.status == i18n.T("Generating…")
 	})
+	time.Sleep(1500 * time.Millisecond) // into the computation
 	started := time.Now()
 	a.cancel()
 	waitFor("cancelled", 30*time.Second, func() bool { return a.job == nil })
