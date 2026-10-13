@@ -3,11 +3,30 @@
   "identifier": "dev.hehehai.audiosmith",
   "version": "0.1.0",
   "out": "build",
-  "urlSchemes": ["audiosmith"],
+  "urlSchemes": [
+    "audiosmith"
+  ],
   "macos": {
-    "minimumSystemVersion": "14.0",
+    "minimumSystemVersion": "15.0",
     "infoPlist": {
       "LSApplicationCategoryType": "public.app-category.music"
     }
-  }
+  },
+  "fileAssociations": [
+    {
+      "ext": [
+        "asvoice"
+      ],
+      "name": "AudioSmith Voice",
+      "mimeType": "application/vnd.audiosmith.voice+zip",
+      "role": "Editor"
+    },
+    {
+      "ext": [
+        "ovsvoice"
+      ],
+      "name": "VoiceStudio Voice",
+      "role": "Viewer"
+    }
+  ]
 }

@@ -159,14 +159,14 @@ var pages = []struct {
 	icon        *ui.SVG
 }{
 	{"/studio", "Studio", studioIcon},
-	{"/history", "History", historyIcon},
-	{"/models", "Models", modelsIcon},
-	{"/engine", "Engine", engineIcon},
-	{"/logs", "Logs", logsIcon},
 	// Voice pages (voices.go, thread V).
 	{"/voices", "Voices", voicesIcon},
 	{"/design", "Design", designIcon},
 	{"/gallery", "Gallery", galleryIcon},
+	{"/history", "History", historyIcon},
+	{"/models", "Models", modelsIcon},
+	{"/engine", "Engine", engineIcon},
+	{"/logs", "Logs", logsIcon},
 }
 
 // pageTitle translates a page's title (literal calls, for the key scan).

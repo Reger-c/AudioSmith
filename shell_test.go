@@ -117,7 +117,7 @@ func entry(t *testing.T, id string) catalog.Entry {
 func TestNavigation(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	tt.Frame()
-	for i, want := range []string{"studio", "history", "models", "engine", "logs"} {
+	for i, want := range []string{"studio", "voices", "design", "gallery", "history", "models", "engine", "logs"} {
 		tt.Key(ui.Cmd, ui.Key1+ui.Key(i))
 		if a.currentPage() != want {
 			t.Errorf("⌘%d: %s", i+1, a.currentPage())
