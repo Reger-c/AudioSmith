@@ -63,8 +63,12 @@ func (a *app) workerCard(c *ui.Context, w engine.WorkerStatus) {
 		switch w.State {
 		case engine.WorkerReady:
 			color, state = t.Success, i18n.T("Ready")
-		case engine.WorkerFailed, engine.WorkerStopped:
+		case engine.WorkerFailed:
 			color, state = t.Danger, i18n.T("Stopped")
+		case engine.WorkerStopped:
+			// Not started yet (the listen and media workers start when
+			// first needed), or stopped while quitting.
+			color, state = t.TextMuted, i18n.T("Not running: starts when needed")
 		}
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 			ui.Box(c).Size(px(t, 8), px(t, 8)).Radius(px(t, 4)).Background(color)
@@ -137,7 +141,7 @@ func infoGrid(c *ui.Context, rows [][2]string) {
 func roleTitle(r proto.Role) string {
 	switch r {
 	case proto.RoleListen:
-		return i18n.T("Dictation engine")
+		return i18n.T("Microphone engine")
 	case proto.RoleMedia:
 		return i18n.T("Media engine")
 	}

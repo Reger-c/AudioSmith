@@ -162,13 +162,20 @@ func (a *app) connectEngine(h *engineHost) {
 		ring := a.logs
 		h.sup = engine.NewSupervisor(engine.Config{
 			Bin: h.bin, Roles: []proto.Role{proto.RoleGPU}, AppVersion: mygo.App.Version(),
+			// The microphone and media workers start when first used.
+			OnDemand: []proto.Role{proto.RoleListen, proto.RoleMedia},
 			CacheDir: modelCache(a.prefs), Offline: true, LogDir: h.logDir, Bus: a.bus,
 			Log:          func(e core.LogEntry) { ring.Append(e) },
 			MemoryBudget: gb(a.prefs.Engine.MemoryBudgetGB),
 			IdleUnload:   time.Duration(a.prefs.Models.AutoUnload) * time.Minute,
 			// A failed load leaves an empty mlx-audio/<repo> dir behind,
 			// and the next load would then wipe the repo's cache.
-			Prepare: func(proto.Role) {
+			// Only the gpu worker loads models: cleaning while another
+			// worker starts could remove a copy the gpu worker is writing.
+			Prepare: func(role proto.Role) {
+				if role != proto.RoleGPU {
+					return
+				}
 				cacheDir := modelCache(lib.settings.Get())
 				removed, err := hub.CleanEngineCopies(cacheDir)
 				if err != nil {
@@ -481,6 +488,20 @@ func stageText(stage string) string {
 		return i18n.T("Generating…")
 	case "writing":
 		return i18n.T("Saving…")
+	case "transcribing":
+		return i18n.T("Transcribing…")
+	case "aligning":
+		return i18n.T("Aligning words…")
+	case "detecting":
+		return i18n.T("Finding speech…")
+	case "enhancing":
+		return i18n.T("Removing noise…")
+	case "decoding":
+		return i18n.T("Reading audio…")
+	case "encoding":
+		return i18n.T("Preparing the voice…")
+	case "recording":
+		return i18n.T("Recording…")
 	}
 	return i18n.T("Working…")
 }
@@ -501,8 +522,92 @@ func jobErrorText(e *jobs.Error) string {
 		return i18n.T("The model's licence has not been accepted. Review it on the Models page.")
 	case proto.CodeOOM:
 		return i18n.T("Out of memory. Unload other models, or choose a smaller one.")
+	case proto.CodeInputTooLong:
+		return i18n.T("The text is too long for this model in one piece. Split it into shorter parts.")
+	case proto.CodeFileNotFound:
+		var d struct{ Path string }
+		if json.Unmarshal(e.Data, &d) == nil && d.Path != "" {
+			return i18n.T("File not found: %s", d.Path)
+		}
+		return i18n.T("A file the job needs was not found.")
+	case proto.CodeUnsupportedMedia:
+		return i18n.T("This file's format cannot be read. Convert it to WAV, M4A or MP3 and try again.")
+	case proto.CodePermissionDenied:
+		return i18n.T("AudioSmith may not use the microphone. Allow it in System Settings → Privacy & Security → Microphone.")
+	case proto.CodeDeviceUnavailable:
+		return i18n.T("The microphone is not available. Check that it is connected, or choose another input.")
 	}
 	return e.Message
+}
+
+// engineErrorText explains an error of an engine call or job (a
+// *jobs.Error from the executors and engine.Probe/Devices/StartCapture),
+// translated where the code is known.
+func engineErrorText(err error) string {
+	var je *jobs.Error
+	if errors.As(err, &je) {
+		return jobErrorText(je)
+	}
+	if errors.Is(err, context.Canceled) {
+		return i18n.T("Cancelled")
+	}
+	return err.Error()
+}
+
+// Engine calls outside the job queue, for the areas (thread V's reference
+// recorder, imports). Each runs on a goroutine and calls then on the main
+// thread; errors explain themselves with engineErrorText.
+
+// probeMedia describes a media file (media.probe on the media worker).
+func (a *app) probeMedia(path string, then func(proto.ProbeResult, error)) {
+	sup, post := a.eng.sup, a.enginePost
+	a.async(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		info, err := engine.Probe(ctx, sup, path)
+		post(func() { then(info, err) })
+	})
+}
+
+// captureDevices lists the audio inputs, the system default first.
+func (a *app) captureDevices(then func([]proto.CaptureDevice, error)) {
+	sup, post := a.eng.sup, a.enginePost
+	a.async(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		devs, err := engine.Devices(ctx, sup)
+		post(func() { then(devs, err) })
+	})
+}
+
+// startRecording records p from the microphone. level gets the meter
+// (about 20 Hz) and then the started recording (or why it could not
+// start), both on the main thread; stopRecording or Recording.Cancel end
+// it. The recording also ends by itself (p.MaxSeconds, the device going
+// away): watch Recording.Done, or call stopRecording, which is safe then.
+func (a *app) startRecording(p proto.CaptureParams, level func(proto.LevelParams), then func(*engine.Recording, error)) {
+	sup, post := a.eng.sup, a.enginePost
+	a.async(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute) // the permission prompt waits for the user
+		defer cancel()
+		rec, err := engine.StartCapture(ctx, sup, "", p, func(l proto.LevelParams) {
+			if level != nil {
+				post(func() { level(l) })
+			}
+		})
+		post(func() { then(rec, err) })
+	})
+}
+
+// stopRecording ends rec and calls then with the file.
+func (a *app) stopRecording(rec *engine.Recording, then func(proto.CaptureResult, error)) {
+	post := a.enginePost
+	a.async(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		res, err := rec.Stop(ctx)
+		post(func() { then(res, err) })
+	})
 }
 
 // jobUpdated applies an update of the Studio's job; it runs on the main thread.

@@ -1,0 +1,16 @@
+{"to":"engine","msg":{"id":"c1","method":"engine.hello","params":{"protocol":2,"app":"0.3.0","role":"media","offline":true}}}
+{"to":"app","msg":{"id":"c1","result":{"protocol":2,"version":"0.3.0","role":"media","pid":4243,"concurrency":2,"methods":["engine.hello","engine.stats","engine.flush","engine.shutdown","job.cancel","media.probe","media.decode"],"families":[],"device":{"name":"Apple M2 Pro","memory":34359738368,"os":"macOS 15.1"}}}}
+{"to":"engine","msg":{"id":"c2","method":"media.probe","params":{"input":"/Users/me/Movies/interview.mov"}}}
+{"to":"app","msg":{"id":"c2","result":{"format":"mov","duration":754.32,"hasAudio":true,"hasVideo":true,"audioTracks":1,"codec":"aac","sampleRate":48000,"channels":2,"bitRate":256000,"video":{"codec":"hevc","width":3840,"height":2160,"fps":29.97}}}}
+{"to":"engine","msg":{"id":"c3","method":"media.probe","params":{"input":"/Users/me/Library/Application Support/AudioSmith/voices/01JB0V0000000000000000000/reference.wav"}}}
+{"to":"app","msg":{"id":"c3","result":{"format":"wav","duration":12.5,"hasAudio":true,"hasVideo":false,"audioTracks":1,"codec":"lpcm","sampleRate":44100,"channels":1,"bits":24,"bitRate":1058400}}}
+{"to":"engine","msg":{"id":"01JB0M1000000000000000000A","method":"media.decode","params":{"input":"/Users/me/Movies/interview.mov","output":{"path":"/Users/me/Library/Caches/AudioSmith/work/interview-ref.wav","format":"wav","bits":16},"sampleRate":24000,"channels":1,"start":62.5,"duration":12}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JB0M1000000000000000000A","stage":"decoding","fraction":0.5}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JB0M1000000000000000000A","stage":"decoding","fraction":1}}}
+{"to":"app","msg":{"id":"01JB0M1000000000000000000A","result":{"output":"/Users/me/Library/Caches/AudioSmith/work/interview-ref.wav","sampleRate":24000,"channels":1,"frames":288000,"audioSeconds":12,"source":{"format":"mov","duration":754.32,"hasAudio":true,"hasVideo":true,"audioTracks":1,"codec":"aac","sampleRate":48000,"channels":2,"bitRate":256000,"video":{"codec":"hevc","width":3840,"height":2160,"fps":29.97}},"seconds":0.4}}}
+{"to":"engine","msg":{"id":"c4","method":"media.probe","params":{"input":"/Users/me/Downloads/talk.mkv"}}}
+{"to":"app","msg":{"id":"c4","error":{"code":"unsupported_media","message":"AVFoundation cannot open /Users/me/Downloads/talk.mkv","data":{"path":"/Users/me/Downloads/talk.mkv"}}}}
+{"to":"engine","msg":{"id":"01JB0M2000000000000000000A","method":"media.decode","params":{"input":"/Users/me/Desktop/gone.m4a","output":{"path":"/Users/me/Library/Caches/AudioSmith/work/gone.wav"}}}}
+{"to":"app","msg":{"id":"01JB0M2000000000000000000A","error":{"code":"file_not_found","message":"No such file: /Users/me/Desktop/gone.m4a","data":{"path":"/Users/me/Desktop/gone.m4a"}}}}
+{"to":"engine","msg":{"id":"c5","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","text":"Hi","output":{"path":"/tmp/x.wav"}}}}
+{"to":"app","msg":{"id":"c5","error":{"code":"method_not_found","message":"tts.synthesize is not served by the media role"}}}
