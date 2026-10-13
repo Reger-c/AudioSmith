@@ -277,7 +277,7 @@ func (r *renderer) renderOnce(ctx context.Context, job jobs.Job, pp *RenderParam
 	}
 	seed := *seedp
 
-	chunks, err := r.chunks(&p, &pl, info, modelPath, seed)
+	chunks, err := r.chunks(&p, &pl, info, modelPath, seed, r.chunkDir(), nil)
 	if err != nil {
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
@@ -407,8 +407,10 @@ func (r *renderer) publish(ev RenderProgress) {
 	}
 }
 
-// chunks makes the engine calls of the plan's speech, with their cache keys.
-func (r *renderer) chunks(p *RenderParams, pl *plan.Plan, info ModelInfo, modelPath string, seed *int64) ([]renderChunk, error) {
+// chunks makes the engine calls of the plan's speech, with their cache
+// keys and their files in dir (the chunk cache); extra adds to every key
+// (longform's "vary repeated lines").
+func (r *renderer) chunks(p *RenderParams, pl *plan.Plan, info ModelInfo, modelPath string, seed *int64, dir string, extra map[string]string) ([]renderChunk, error) {
 	t := p.Take
 	speech := pl.Speech()
 	totalChars := 0
@@ -480,8 +482,11 @@ func (r *renderer) chunks(p *RenderParams, pl *plan.Plan, info ModelInfo, modelP
 		if seed != nil && !info.Deterministic {
 			keyParams["seed"] = strconv.FormatInt(*seed, 10)
 		}
+		for k, v := range extra {
+			keyParams[k] = v
+		}
 		key := text.Key(seg.Text, keyParams)
-		path := filepath.Join(r.chunkDir(), key+".wav")
+		path := filepath.Join(dir, key+".wav")
 		sp.Output = proto.Output{Path: path, Format: "wav", Bits: 32}
 		out = append(out, renderChunk{seg: seg, params: sp, key: key, path: path, chars: chars})
 	}
@@ -509,6 +514,12 @@ type renderState struct {
 	seq            int
 	files          []string
 	leading        float64 // seconds of [pause] before the first speech
+
+	// Longform renders (longform_render.go): the gaps between sentences,
+	// lines and paragraphs (nil: edit.DefaultGaps), and whether the
+	// engine's edge silence is kept.
+	gaps     *edit.GapPolicy
+	keepEdge bool
 }
 
 func (st *renderState) seconds() float64 {
@@ -592,9 +603,11 @@ func (st *renderState) synthesize(ctx context.Context, i, n int, c renderChunk) 
 	return res, false, nil
 }
 
-// joinFor is the join before a segment.
-func joinFor(b plan.Break) edit.Join {
-	g := edit.DefaultGaps
+// joinFor is the join before a segment, with the default gaps.
+func joinFor(b plan.Break) edit.Join { return joinWith(edit.DefaultGaps, b) }
+
+// joinWith is the join before a segment with gaps g.
+func joinWith(g edit.GapPolicy, b plan.Break) edit.Join {
 	switch b {
 	case plan.BreakChunk:
 		return g.Join(edit.Chunk)
@@ -699,7 +712,13 @@ func (st *renderState) appendChunk(path string, b plan.Break) (start, end, voice
 	}
 	trimmed := edit.Trim(buf, edit.TrimOptions{})
 	voiced = trimmed.Seconds()
+	if st.keepEdge {
+		trimmed = buf
+	}
 	join := joinFor(b)
+	if st.gaps != nil {
+		join = joinWith(*st.gaps, b)
+	}
 	if st.joiner.Frames() == 0 {
 		join = edit.Join{}
 	}
