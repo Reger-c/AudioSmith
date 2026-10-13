@@ -15,13 +15,13 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/engine/enginetest"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 )
 
 func TestMain(m *testing.M) {
-	if _, ok := os.LookupEnv(fakeEnv); ok {
-		runFakeEngine()
-		return
+	if enginetest.Enabled() {
+		enginetest.Main()
 	}
 	os.Exit(m.Run())
 }
@@ -80,7 +80,7 @@ func newTestSup(t *testing.T, opts string, mod ...func(*Config)) (Supervisor, *w
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{Bin: bin, AppVersion: "test", Bus: bus, LogDir: t.TempDir(), Env: []string{fakeEnv + "=" + opts},
+	cfg := Config{Bin: bin, AppVersion: "test", Bus: bus, LogDir: t.TempDir(), Env: enginetest.Env(opts),
 		StatsEvery: 20 * time.Millisecond, Logf: t.Logf}
 	for _, m := range mod {
 		m(&cfg)
@@ -107,7 +107,12 @@ func TestSupervisorHandshakeAndJobs(t *testing.T) {
 	w.mu.Lock()
 	logs := slices.Clone(w.logs)
 	w.mu.Unlock()
-	if len(logs) == 0 || logs[0].Message != "fake engine ready" || logs[0].Source != "engine:gpu" {
+	var sawLog, sawStderr bool
+	for _, l := range logs {
+		sawLog = sawLog || (l.Message == "fake engine ready" && l.Source == "engine:gpu")
+		sawStderr = sawStderr || strings.HasPrefix(l.Message, "fake engine starting")
+	}
+	if !sawLog || !sawStderr {
 		t.Errorf("logs %+v", logs)
 	}
 

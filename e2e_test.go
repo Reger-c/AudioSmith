@@ -2,19 +2,22 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/audio"
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/i18n"
 )
 
-// TestEndToEnd drives the real audiosmith-engine through the app's state:
-// start, preload, generate twice (English, Chinese), cancel nothing, quit.
-// It needs macOS on Apple silicon, a built engine and the network on first
-// run (the model downloads), so it runs only with AUDIOSMITH_E2E=1:
+// TestEndToEnd drives the real audiosmith-engine through the app's state,
+// the supervisor and the job scheduler: start, preload, generate twice
+// (English, Chinese), cancel a long take, unload, quit. It needs macOS on
+// Apple silicon, a built engine and the network on first run (the model
+// downloads), so it runs only with AUDIOSMITH_E2E=1:
 //
 //	AUDIOSMITH_E2E=1 go test -run TestEndToEnd -v .
 func TestEndToEnd(t *testing.T) {
@@ -26,15 +29,17 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatal("no engine: run scripts/build-engine.sh")
 	}
 	lib := openTestLibrary(t)
-	events := make(chan func(), 64)
-	eng := &engine.Process{Bin: enginePath, LogPath: filepath.Join(t.TempDir(), "engine.log")}
-	a := newApp(eng, lib)
+	h := &engineHost{bin: enginePath, logDir: t.TempDir()}
+	a := newApp(h, lib)
 	a.autoplay = false
-	// Events arrive on the engine's goroutine; apply them here, in order,
+	// Engine events arrive on other goroutines; apply them here, in order,
 	// as the window's main thread would.
-	eng.OnEvent = func(ev engine.Event) { events <- func() { a.handleEvent(ev) } }
-	eng.OnExit = func(err error, tail string) { events <- func() { a.engineExited(err, tail) } }
-	defer eng.Stop()
+	events := make(chan func(), 256)
+	a.enginePost = func(fn func()) { events <- fn }
+	h.sup = engine.NewSupervisor(engine.Config{Bin: enginePath, Bus: a.bus, LogDir: h.logDir,
+		Log: func(e core.LogEntry) { t.Logf("%s %s: %s", e.Level, e.Source, e.Message) }, Logf: t.Logf})
+	a.connectEngine(h)
+	defer h.Stop()
 
 	waitFor := func(what string, timeout time.Duration, done func() bool) {
 		t.Helper()
@@ -53,12 +58,17 @@ func TestEndToEnd(t *testing.T) {
 	}
 
 	a.restartEngine()
-	waitFor("ready", 30*time.Second, func() bool { return a.engState == engineReady })
-	t.Logf("engine %s pid %d", a.engVersion, a.engPID)
+	waitFor("ready", time.Minute, func() bool { return a.engState == engineReady })
+	w := a.workers[0]
+	t.Logf("engine %s pid %d on %s, families %v", a.engVersion, a.engPID, w.Hello.Device.Name, w.Hello.Families)
+	if w.Hello.Protocol != proto.Version || w.Hello.Concurrency != 1 {
+		t.Fatalf("hello %+v", w.Hello)
+	}
 
+	kokoro := catalog.Builtin().Entries[0].Repo
 	a.preload()
 	waitFor("load", 10*time.Minute, func() bool { return a.job == nil })
-	if a.loadedModel != catalog.Builtin().Entries[0].Repo || a.jobError != "" {
+	if a.loadedModel != kokoro || a.jobError != "" {
 		t.Fatalf("loaded %q, error %q", a.loadedModel, a.jobError)
 	}
 
@@ -76,17 +86,36 @@ func TestEndToEnd(t *testing.T) {
 			t.Fatalf("take %d: %s", i, a.jobError)
 		}
 		c := a.lastClip()
-		if c == nil || c.Voice != tc.voice || c.AudioSeconds < 0.5 || c.SampleRate != 24000 {
+		if c == nil || c.Voice != tc.voice || c.AudioSeconds < 0.5 || c.SampleRate != 24000 || c.Seed == 0 {
 			t.Fatalf("take %d: %+v", i, c)
 		}
 		peaks, err := audio.Peaks(a.takeStore.AudioPath(*c), 50)
 		if err != nil || len(peaks) != 50 {
 			t.Fatalf("take %d audio unreadable: %v", i, err)
 		}
-		t.Logf("take %d: %.2f s of audio in %.2f s (%.1f× realtime)", i, c.AudioSeconds, c.GenSeconds, c.RTF())
+		t.Logf("take %d: %.2f s of audio in %.2f s (%.1f× realtime), seed %d", i, c.AudioSeconds, c.GenSeconds, c.RTF(), c.Seed)
 	}
 	if len(a.takes) != 2 {
 		t.Fatalf("history has %d takes", len(a.takes))
+	}
+	waitFor("stats", 30*time.Second, func() bool { return len(a.loaded) > 0 })
+
+	// Cancel a long take by id: the job ends cancelled, the engine stays up.
+	long := ""
+	for range 40 {
+		long += "This sentence makes the take long enough to cancel it while it is generating. "
+	}
+	a.text, a.voice = long, "af_heart"
+	a.generate()
+	waitFor("generating", time.Minute, func() bool {
+		return a.job != nil && a.job.id != "" && a.job.status == i18n.T("Generating…")
+	})
+	started := time.Now()
+	a.cancel()
+	waitFor("cancelled", 30*time.Second, func() bool { return a.job == nil })
+	t.Logf("cancelled in %.2f s", time.Since(started).Seconds())
+	if a.jobError != "" || len(a.takes) != 2 || a.engState != engineReady || a.workers[0].Restarts != 0 {
+		t.Fatalf("after cancel: error %q, %d takes, engine %v, %+v", a.jobError, len(a.takes), a.engState, a.workers[0])
 	}
 
 	a.unload()

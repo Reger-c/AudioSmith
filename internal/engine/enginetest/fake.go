@@ -1,9 +1,18 @@
-package engine
+// Package enginetest is a scripted protocol-2 audiosmith-engine for tests:
+// a test binary runs it instead of its tests when AUDIOSMITH_FAKE_ENGINE is
+// set, so the supervisor spawns a real process and talks to it over real
+// pipes, without MLX. In the test package:
+//
+//	func TestMain(m *testing.M) {
+//		if enginetest.Enabled() {
+//			enginetest.Main()
+//		}
+//		os.Exit(m.Run())
+//	}
+//
+// and point engine.Config at os.Executable() with Env: enginetest.Env(opts).
+package enginetest
 
-// A scripted protocol-2 engine for the supervisor tests: the test binary
-// runs it instead of the tests when AUDIOSMITH_FAKE_ENGINE is set (see
-// TestMain), so the supervisor spawns a real process and talks to it over
-// real pipes, without MLX.
 //
 // AUDIOSMITH_FAKE_ENGINE is a comma-separated list of options:
 //
@@ -36,6 +45,22 @@ import (
 )
 
 const fakeEnv = "AUDIOSMITH_FAKE_ENGINE"
+
+// Enabled reports whether this process should be the fake engine.
+func Enabled() bool {
+	_, ok := os.LookupEnv(fakeEnv)
+	return ok
+}
+
+// Env returns the environment that makes a re-executed test binary the
+// fake engine with opts (see the package comment of the file).
+func Env(opts string) []string { return []string{fakeEnv + "=" + opts} }
+
+// Main runs the fake engine and exits.
+func Main() {
+	runFakeEngine()
+	os.Exit(0)
+}
 
 type fakeEngine struct {
 	opts map[string]string

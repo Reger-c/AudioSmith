@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
-	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
 )
 
 // kokoro is the first catalogue entry, which the Studio starts on.
@@ -35,8 +35,8 @@ func TestGenerateTake(t *testing.T) {
 	if req.Temperature != nil || req.TopP != nil {
 		t.Errorf("Kokoro takes no sampling settings, got %+v", req)
 	}
-	if !strings.HasSuffix(req.Output, ".wav") || !strings.HasPrefix(req.Output, a.takeStore.AudioDir()) {
-		t.Errorf("output %q", req.Output)
+	if !strings.HasSuffix(req.Output.Path, ".wav") || !strings.HasPrefix(req.Output.Path, a.takeStore.AudioDir()) {
+		t.Errorf("output %q", req.Output.Path)
 	}
 	if a.job == nil {
 		t.Fatal("no job after Generate")
@@ -49,17 +49,15 @@ func TestGenerateTake(t *testing.T) {
 		t.Errorf("sent %d requests while busy", len(eng.sent))
 	}
 
-	a.handleEvent(engine.Event{ID: req.ID, Event: "loaded", Model: req.Model, SampleRate: 24000})
-	a.handleEvent(engine.Event{ID: req.ID, Event: "status", Message: "Generating…"})
-	half := 0.5
-	a.handleEvent(engine.Event{ID: req.ID, Event: "progress", Fraction: &half, AudioSeconds: 0.4})
+	eng.progress(req.ID, "loading", -1, 0)
+	eng.progress(req.ID, "generating", 0.5, 0.4)
 	tt.Frame()
 	if !tt.HasText("Generating…") {
 		t.Errorf("status not shown: %q", tt.Texts())
 	}
 
-	writeTestWAV(t, req.Output, 24000, 0.8)
-	a.handleEvent(engine.Event{ID: req.ID, Event: "done", Output: req.Output, SampleRate: 24000, AudioSeconds: 0.8, Seconds: 0.2})
+	writeTestWAV(t, req.Output.Path, 24000, 0.8)
+	eng.succeed(req.ID, proto.SynthesizeResult{Output: req.Output.Path, SampleRate: 24000, AudioSeconds: 0.8, Seconds: 0.2})
 	tt.Frame()
 	if a.job != nil {
 		t.Fatal("job still running after done")

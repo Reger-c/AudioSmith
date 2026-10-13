@@ -9,7 +9,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
-	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/settings"
@@ -36,13 +35,13 @@ func TestSnapshots(t *testing.T) {
 	}{{"en", false}, {"en", true}, {"zh-Hans", false}, {"zh-Hans", true}} {
 		dark := run.dark
 		i18n.SetLocale("en")
-		a, _, tt := newTestApp(t)
+		a, eng, tt := newTestApp(t)
 		if run.lang != "en" {
 			a.updateSettings(func(s *settings.Settings) { s.General.Language = run.lang })
 		}
 		tt.SetDark(dark)
 		tt.SetScale(2)
-		a.handleEvent(engine.Event{Event: "loaded", Model: kokoro})
+		a.loadedModel = kokoro
 		texts := []string{
 			"Hello from AudioSmith. This voice was generated on your Mac with MLX.",
 			"你好，这是在 Mac 上用 MLX 生成的语音。",
@@ -80,8 +79,7 @@ func TestSnapshots(t *testing.T) {
 		// Generating, half way.
 		a.generate()
 		half := 0.5
-		a.handleEvent(engine.Event{ID: a.job.id, Event: "status", Message: "Generating…"})
-		a.handleEvent(engine.Event{ID: a.job.id, Event: "progress", Fraction: &half, AudioSeconds: 2.4})
+		eng.progress(a.job.id, "generating", half, 2.4)
 		save("generating")
 		a.job = nil
 

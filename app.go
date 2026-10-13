@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/egoist/mygo"
-	"github.com/hehehai/AudioSmith/internal/engine"
 )
 
 // app is AudioSmith's UI state: the view state of every page, and handles
@@ -28,7 +27,7 @@ type app struct {
 	engineLink
 }
 
-func newApp(eng engine.Backend, takes *library) *app {
+func newApp(eng *engineHost, takes *library) *app {
 	a := &app{
 		shellState:  newShellState(),
 		studioState: newStudioState(),

@@ -3,7 +3,7 @@ package main
 // The Studio's form and its actions. The form autosaves as a draft
 // (core.DraftService, key "studio") and comes back at the next start.
 // Until generation runs on jobs (integration step I1: TakeService.Generate)
-// generate builds the take's recipe and the protocol-1 request and hands
+// generate builds the take's recipe and the engine request and hands
 // both to the engine link (enginelink.go).
 
 import (
@@ -15,7 +15,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
-	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 )
 
@@ -169,13 +169,12 @@ func (a *app) generate() {
 		Language:  strings.TrimSpace(a.language),
 	}
 	t.File = t.ID + ".wav"
-	req := engine.Request{
-		Cmd:      "synthesize",
+	req := proto.SynthesizeParams{
 		Model:    t.Model,
 		Text:     t.Text,
 		Voice:    t.Voice,
 		Language: t.Language,
-		Output:   a.takeStore.AudioPath(*t),
+		Output:   proto.Output{Path: a.takeStore.AudioPath(*t)},
 	}
 	if p.Has(catalog.CapSpeed) {
 		t.Speed = a.speed

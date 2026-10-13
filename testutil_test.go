@@ -1,8 +1,8 @@
 package main
 
-// Test helpers shared by the view tests: a fake protocol-1 engine, a test
-// app over a temporary library (SQLite store + services), and a WAV
-// writer. Thread A owns this file; B and C add their fakes in files of
+// Test helpers shared by the view tests: a test app over a temporary
+// library (SQLite store + services) and fake engines (enginefake_test.go),
+// and a WAV writer. Thread A owns this file; B and C add their fakes in files of
 // their own.
 
 import (
@@ -15,33 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
-	"github.com/hehehai/AudioSmith/internal/engine"
 )
-
-// fakeEngine records requests instead of running audiosmith-engine.
-type fakeEngine struct {
-	sent     []engine.Request
-	restarts int
-}
-
-func (f *fakeEngine) Send(req engine.Request) (string, error) {
-	if req.ID == "" {
-		req.ID = string(rune('a' + len(f.sent)))
-	}
-	f.sent = append(f.sent, req)
-	return req.ID, nil
-}
-func (f *fakeEngine) Restart() error { f.restarts++; return nil }
-func (f *fakeEngine) Stop()          {}
-func (f *fakeEngine) Path() string   { return "/fake/audiosmith-engine" }
-
-func (f *fakeEngine) last(t *testing.T) engine.Request {
-	t.Helper()
-	if len(f.sent) == 0 {
-		t.Fatal("nothing was sent to the engine")
-	}
-	return f.sent[len(f.sent)-1]
-}
 
 // openTestLibrary opens a library in a temporary directory, closed when
 // the test ends. dir may be "" for a new one.
@@ -66,10 +40,12 @@ func newTestApp(t *testing.T) (*app, *fakeEngine, *ui.Tester) {
 
 func newTestAppWith(t *testing.T, lib *library) (*app, *fakeEngine, *ui.Tester) {
 	t.Helper()
-	eng := &fakeEngine{}
-	a := newApp(eng, lib)
+	eng := newFakeEngine() // enginefake_test.go (thread B)
+	a := newApp(eng.host, lib)
+	eng.a = a
+	a.connectEngine(eng.host)
 	a.autoplay = false
-	a.handleEvent(engine.Event{Event: "ready", Version: "test", PID: 42})
+	eng.ready()
 	t.Cleanup(a.pl.Stop)
 	return a, eng, ui.NewTester(a.view, 1100, 720)
 }

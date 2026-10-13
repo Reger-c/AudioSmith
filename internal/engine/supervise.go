@@ -179,6 +179,9 @@ func (s *supervisor) spawn(w *worker, auto bool) {
 	}
 	s.mu.Unlock()
 
+	if s.cfg.Prepare != nil {
+		s.cfg.Prepare(w.role)
+	}
 	p, err := s.startProcess(w, bin)
 	s.mu.Lock()
 	if err != nil {
@@ -257,6 +260,9 @@ func (s *supervisor) startProcess(w *worker, bin string) (*proc, error) {
 			p.tail.add(line)
 			if logFile != nil {
 				fmt.Fprintln(logFile, line)
+			}
+			if strings.TrimSpace(line) != "" {
+				s.emit(core.LogEntry{Time: time.Now(), Level: stderrLevel(line), Source: "engine:" + string(w.role), Message: line})
 			}
 		}
 	}()
@@ -394,8 +400,8 @@ func (p *proc) handleLine(line []byte) {
 		if c != nil {
 			c.resp = m
 			close(c.done)
-			if c.job {
-				p.poll()
+			if c.job || c.method == proto.MethodModelsUnload {
+				p.poll() // the resident models may have changed
 			}
 		}
 	case proto.KindNotification:
@@ -429,8 +435,28 @@ func (p *proc) log(m proto.Message) {
 	default:
 		level = core.SeverityInfo
 	}
-	p.s.cfg.Bus.Publish(core.LogAppended{Entry: core.LogEntry{
-		Time: time.Now(), Level: level, Source: "engine:" + string(p.w.role), Message: lp.Message, JobID: lp.Job}})
+	p.s.emit(core.LogEntry{Time: time.Now(), Level: level, Source: "engine:" + string(p.w.role), Message: lp.Message, JobID: lp.Job})
+}
+
+// emit hands a log line to Config.Log, or the bus.
+func (s *supervisor) emit(e core.LogEntry) {
+	if s.cfg.Log != nil {
+		s.cfg.Log(e)
+		return
+	}
+	s.cfg.Bus.Publish(core.LogAppended{Entry: e})
+}
+
+// stderrLevel guesses the level of a free-form stderr line.
+func stderrLevel(line string) core.Severity {
+	l := strings.ToLower(line)
+	switch {
+	case strings.Contains(l, "fatal") || strings.Contains(l, "error"):
+		return core.SeverityError
+	case strings.Contains(l, "warning"):
+		return core.SeverityWarning
+	}
+	return core.SeverityInfo
 }
 
 func (p *proc) isClosed() bool {

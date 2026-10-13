@@ -71,7 +71,14 @@ type Config struct {
 	CacheDir   string       // HF hub cache (hub.CacheDir), sent in engine.hello
 	Offline    bool         // engines never download; the Go hub does (M0 goal)
 	LogDir     string       // stderr of role r goes to LogDir/engine-<r>.log (rotated)
-	Bus        *core.Bus    // StatusChanged, and log lines as core.LogAppended
+	Bus        *core.Bus    // StatusChanged (and log lines when Log is nil)
+	// Log receives the engines' log notifications and stderr lines, with
+	// Source "engine:<role>" (the app's logs.Ring.Append). nil publishes
+	// them on Bus as core.LogAppended.
+	Log func(core.LogEntry)
+	// Prepare runs before every start of a worker, e.g. to remove what a
+	// failed model load left in the HF cache (hub.CleanEngineCopies).
+	Prepare func(proto.Role)
 	// MemoryBudget is the bytes resident models of all workers may take
 	// together; above it the supervisor unloads the least recently used
 	// idle models (models.unload). 0 means 60% of physical memory.
