@@ -352,15 +352,22 @@ func (m *Meter) Stats() Stats {
 }
 
 // Measure returns the Stats of a whole buffer (true peak included).
-func Measure(b dsp.Buffer) Stats {
-	m := NewMeter(b.Rate, b.Channels, Options{})
+func Measure(b dsp.Buffer) Stats { return MeasureWith(b, Options{}) }
+
+// MeasureWith is Measure with meter options.
+func MeasureWith(b dsp.Buffer, o Options) Stats {
+	m := NewMeter(b.Rate, b.Channels, o)
 	m.Write(b.Samples)
 	return m.Stats()
 }
 
 // Integrated returns the integrated loudness of a buffer (no true peak work).
-func Integrated(b dsp.Buffer) float64 {
-	m := NewMeter(b.Rate, b.Channels, Options{SkipTruePeak: true})
+func Integrated(b dsp.Buffer) float64 { return IntegratedWith(b, Options{}) }
+
+// IntegratedWith is Integrated with meter options (SkipTruePeak is implied).
+func IntegratedWith(b dsp.Buffer, o Options) float64 {
+	o.SkipTruePeak = true
+	m := NewMeter(b.Rate, b.Channels, o)
 	m.Write(b.Samples)
 	return m.Integrated()
 }

@@ -296,7 +296,9 @@ func Decode(r io.Reader) (dsp.Buffer, Format, error) {
 	}
 	f := d.Format()
 	b := dsp.Buffer{Rate: f.Rate, Channels: f.Channels}
-	if n := d.Frames(); n >= 0 && n < 1<<31 {
+	// Trust the header's size only so far: a hostile one could ask for
+	// gigabytes up front.
+	if n := d.Frames(); n >= 0 && n*int64(f.Channels) <= 1<<24 {
 		b.Samples = make([]float32, 0, int(n)*f.Channels)
 	}
 	buf := make([]float32, 16384*f.Channels)

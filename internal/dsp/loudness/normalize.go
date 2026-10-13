@@ -65,6 +65,9 @@ type NormalizeOptions struct {
 	// NoLimiter lowers the gain to respect the ceiling instead of limiting
 	// peaks: the target loudness may then be missed.
 	NoLimiter bool
+	// DualMono measures mono as if on two channels (+3.01 LU), as some
+	// podcast tools do; the result is then 3 dB quieter than by BS.1770.
+	DualMono bool
 }
 
 // limiter settings used to hold the ceiling: a 0.1 dB margin under it
@@ -144,7 +147,8 @@ func apply(b dsp.Buffer, gainDB, ceil float64, limit bool) (dsp.Buffer, float64)
 // result is within 0.1 LU of the target. b is not modified. Silent input is
 // returned unchanged (a "silent" check fails).
 func Normalize(b dsp.Buffer, t Target, opt NormalizeOptions) (dsp.Buffer, Report) {
-	before := Measure(b)
+	mo := Options{DualMono: opt.DualMono}
+	before := MeasureWith(b, mo)
 	r := Report{Target: t.ID, Before: before}
 	gain, limit := Plan(before, t)
 	out := b
@@ -160,14 +164,14 @@ func Normalize(b dsp.Buffer, t Target, opt NormalizeOptions) (dsp.Buffer, Report
 			if !limit {
 				break
 			}
-			got := Integrated(out)
+			got := IntegratedWith(out, mo)
 			if math.Abs(got-t.Integrated) <= 0.1 {
 				break
 			}
 			gain += t.Integrated - got
 		}
 	}
-	r.After = Measure(out)
+	r.After = MeasureWith(out, mo)
 	finish(&r, out, t)
 	return out, r
 }

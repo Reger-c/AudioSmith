@@ -335,3 +335,22 @@ func BenchmarkReadPCM16(b *testing.B) {
 		Decode(bytes.NewReader(buf.Bytes()))
 	}
 }
+
+func FuzzDecode(f *testing.F) {
+	var buf bytes.Buffer
+	Encode(&buf, dsptest.Sine(8000, 2, 440, -6, 0.01, 0), PCM24)
+	f.Add(buf.Bytes())
+	buf.Reset()
+	Encode(&buf, dsptest.Sine(8000, 1, 440, -6, 0.01, 0), Float32)
+	f.Add(buf.Bytes())
+	f.Add([]byte("RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00\x80\x3e\x00\x00\x02\x00\x10\x00data\xff\xff\xff\x7f"))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		b, fm, err := Decode(bytes.NewReader(data))
+		if err != nil {
+			return
+		}
+		if fm.Channels <= 0 || len(b.Samples)%fm.Channels != 0 {
+			t.Fatalf("bad decode %+v %d", fm, len(b.Samples))
+		}
+	})
+}

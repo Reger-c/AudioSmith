@@ -258,6 +258,13 @@ func TestNormalizeNoLimiterAndChecks(t *testing.T) {
 	if _, err := json.Marshal(r); err != nil {
 		t.Error(err)
 	}
+	// Dual mono: the same mono file normalised 3 dB quieter.
+	mono := speechLike(24000, 1, -20)
+	_, a := Normalize(mono, Podcast, NormalizeOptions{})
+	_, d := Normalize(mono, Podcast, NormalizeOptions{DualMono: true})
+	if math.Abs(a.GainDB-d.GainDB-3.01) > 0.05 || math.Abs(d.After.Integrated-Podcast.Integrated) > 0.15 {
+		t.Errorf("dual mono gain %.2f vs %.2f", d.GainDB, a.GainDB)
+	}
 	// Verify does not change anything.
 	v := Verify(speechLike(24000, 2, -20), Broadcast)
 	if v.Before != v.After || v.GainDB != 0 {
