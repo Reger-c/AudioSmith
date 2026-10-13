@@ -62,6 +62,9 @@ type studioState struct {
 	// Voice controls: a pinned seed makes takes repeatable.
 	seedPinned bool
 	seed       float64
+	// Model-specific controls (catalogue capabilities); 0 = the model's.
+	guidance     float64
+	exaggeration float64
 	// recentLangs are the languages chosen last, newest first (codes).
 	recentLangs [4]string
 
@@ -122,13 +125,15 @@ type studioDraft struct {
 	RefText       string  `json:"refText,omitempty"`
 	Duration      float64 `json:"duration,omitempty"`
 
-	Steps       float64   `json:"steps,omitempty"`
-	Bits        int       `json:"bits,omitempty"`
-	RawVolume   bool      `json:"rawVolume,omitempty"`   // Even out volume off
-	NoNormalize bool      `json:"noNormalize,omitempty"` // normalisation off
-	SeedPinned  bool      `json:"seedPinned,omitempty"`
-	Seed        float64   `json:"seed,omitempty"`
-	Recent      [4]string `json:"recentLanguages"`
+	Steps        float64   `json:"steps,omitempty"`
+	Bits         int       `json:"bits,omitempty"`
+	RawVolume    bool      `json:"rawVolume,omitempty"`   // Even out volume off
+	NoNormalize  bool      `json:"noNormalize,omitempty"` // normalisation off
+	SeedPinned   bool      `json:"seedPinned,omitempty"`
+	Seed         float64   `json:"seed,omitempty"`
+	Recent       [4]string `json:"recentLanguages"`
+	Guidance     float64   `json:"guidance,omitempty"`
+	Exaggeration float64   `json:"exaggeration,omitempty"`
 }
 
 const studioDraftKey = "studio"
@@ -139,7 +144,8 @@ func (s *studioState) toDraft() studioDraft {
 		Temperature: s.temperature, TopP: s.topP, MaxTokens: s.maxTokens,
 		RefAudio: s.refAudio, RefText: s.refText, Duration: s.duration,
 		Steps: s.steps, Bits: bitDepths[min(max(s.bitsIndex, 0), len(bitDepths)-1)], RawVolume: !s.evenOut,
-		NoNormalize: !s.normalize, SeedPinned: s.seedPinned, Seed: s.seed, Recent: s.recentLangs}
+		NoNormalize: !s.normalize, SeedPinned: s.seedPinned, Seed: s.seed, Recent: s.recentLangs,
+		Guidance: s.guidance, Exaggeration: s.exaggeration}
 }
 
 // applyDraft restores a draft, ignoring a model the catalogue no longer has.
@@ -160,6 +166,7 @@ func (s *studioState) applyDraft(d studioDraft) {
 	s.steps, s.evenOut, s.normalize = d.Steps, !d.RawVolume, !d.NoNormalize
 	s.bitsIndex = max(slices.Index(bitDepths, d.Bits), 0)
 	s.seedPinned, s.seed, s.recentLangs = d.SeedPinned, d.Seed, d.Recent
+	s.guidance, s.exaggeration = d.Guidance, d.Exaggeration
 	s.script.reset(s.text)
 	s.savedDraft = s.toDraft()
 }
@@ -291,6 +298,12 @@ func (a *app) recipe(now time.Time) core.Take {
 	if tr.Steps && a.steps > 0 {
 		t.Steps = int(a.steps)
 	}
+	if p.Has(catalog.CapGuidance) && a.guidance > 0 {
+		t.Guidance = a.guidance
+	}
+	if p.Has(catalog.CapExaggeration) && a.exaggeration > 0 {
+		t.Exaggeration = a.exaggeration
+	}
 	return t
 }
 
@@ -320,6 +333,7 @@ func (a *app) reuse(t *core.Take) {
 		a.refAudio, a.refText = "", ""
 	}
 	a.duration, a.steps = t.Duration, float64(t.Steps)
+	a.guidance, a.exaggeration = t.Guidance, t.Exaggeration
 	a.seedPinned, a.seed = t.Seed != 0, float64(t.Seed)
 	if r := t.Render; r != nil {
 		a.bitsIndex = max(slices.Index(bitDepths, r.Bits), 0)

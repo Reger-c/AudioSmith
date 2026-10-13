@@ -404,6 +404,28 @@ func (a *app) voicePopover(c *ui.Context) {
 					}
 				})
 			}
+			if p.Has(catalog.CapGuidance) {
+				g := a.guidance
+				if g == 0 {
+					g = 2
+				}
+				ui.Field(c, i18n.T("Prompt guidance  %.1f", g), func() {
+					if snapped(ui.Slider(c.Key("guidance"), &g, 1, 4).Label(i18n.T("Prompt guidance")), &g, 0.1).Changed() {
+						a.guidance = g
+					}
+				})
+			}
+			if p.Has(catalog.CapExaggeration) {
+				x := a.exaggeration
+				if x == 0 {
+					x = 0.5
+				}
+				ui.Field(c, i18n.T("Expressiveness  %.2f", x), func() {
+					if snapped(ui.Slider(c.Key("exaggeration"), &x, 0.25, 2).Label(i18n.T("Expressiveness")), &x, 0.05).Changed() {
+						a.exaggeration = x
+					}
+				})
+			}
 			if p.Has(catalog.CapSampling) {
 				ui.Divider(c)
 				ui.Checkbox(c.Key("defaults"), &a.modelDefaults, i18n.T("Use the model's sampling defaults"))
@@ -421,6 +443,7 @@ func (a *app) voicePopover(c *ui.Context) {
 			}
 			if ui.Button(c.Key("voice-reset"), i18n.T("Reset")).Clicked() {
 				a.speed, a.duration, a.seedPinned, a.modelDefaults = 1, 0, false, true
+				a.guidance, a.exaggeration = 0, 0
 				a.temperature, a.topP, a.maxTokens = 0.7, 0.9, 1200
 			}
 		})
