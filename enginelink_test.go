@@ -335,3 +335,92 @@ func TestQueueAndCancelByID(t *testing.T) {
 	}
 	pump("queue empty", func() bool { return len(a.activeJobs()) == 0 })
 }
+
+// The seams other areas use for engine calls outside the queue: probe,
+// devices, a recording with its meter, and translated errors.
+func TestEngineCallSeams(t *testing.T) {
+	a, eng, _ := newTestApp(t)
+	// The recording's meter arrives from the engine's reader goroutine:
+	// queue what the seams post, and run it here.
+	events := make(chan func(), 64)
+	a.enginePost = func(fn func()) { events <- fn }
+	pump := func(what string, done func() bool) {
+		t.Helper()
+		deadline := time.After(5 * time.Second)
+		for !done() {
+			select {
+			case fn := <-events:
+				fn()
+			case <-deadline:
+				t.Fatalf("waiting for %s", what)
+			}
+		}
+	}
+
+	var devs []proto.CaptureDevice
+	a.captureDevices(func(d []proto.CaptureDevice, err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		devs = d
+	})
+	pump("devices", func() bool { return devs != nil })
+	if len(devs) != 3 || devs[0].ID != enginetest.FakeBuiltInMic {
+		t.Fatalf("devices: %+v", devs)
+	}
+
+	eng.probes["/in/clip.mov"] = proto.ProbeResult{Format: "mov", Duration: 9, HasAudio: true, HasVideo: true}
+	var info *proto.ProbeResult
+	a.probeMedia("/in/clip.mov", func(p proto.ProbeResult, err error) { info = &p })
+	pump("probe", func() bool { return info != nil })
+	if !info.HasVideo || info.Duration != 9 || eng.lastOf(t, proto.MethodMediaProbe).Params == nil {
+		t.Fatalf("probe: %+v", info)
+	}
+
+	var levels []proto.LevelParams
+	var rec *engine.Recording
+	a.startRecording(proto.CaptureParams{Output: proto.Output{Path: "/rec/a.wav"}},
+		func(l proto.LevelParams) { levels = append(levels, l) },
+		func(r *engine.Recording, err error) {
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec = r
+		})
+	pump("levels", func() bool { return rec != nil && len(levels) == 2 })
+	if levels[1].Peak != -12 || levels[0].Job != rec.ID {
+		t.Fatalf("levels %+v", levels)
+	}
+	var res *proto.CaptureResult
+	a.stopRecording(rec, func(r proto.CaptureResult, err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		res = &r
+	})
+	pump("stop", func() bool { return res != nil })
+	if res.Output != "/rec/a.wav" || res.Reason != proto.CaptureStopped {
+		t.Fatalf("stopped: %+v", res)
+	}
+
+	// Refusals explain themselves, in the user's language.
+	eng.mu.Lock()
+	eng.callErr[proto.MethodCaptureStart] = &proto.Error{Code: proto.CodePermissionDenied, Message: "denied"}
+	eng.mu.Unlock()
+	var msg string
+	a.startRecording(proto.CaptureParams{Output: proto.Output{Path: "/rec/b.wav"}}, nil, func(r *engine.Recording, err error) {
+		msg = engineErrorText(err)
+	})
+	pump("refusal", func() bool { return msg != "" })
+	if !strings.Contains(msg, "System Settings") {
+		t.Errorf("permission: %q", msg)
+	}
+	i18n.SetLocale("zh-Hans")
+	defer i18n.SetLocale("en")
+	if got := jobErrorText(&jobs.Error{Code: proto.CodeFileNotFound, Data: []byte(`{"path":"/x.wav"}`)}); got != "找不到文件：/x.wav" {
+		t.Errorf("zh file not found: %q", got)
+	}
+	if got := stageText("transcribing"); got != "正在转写…" {
+		t.Errorf("zh stage: %q", got)
+	}
+}

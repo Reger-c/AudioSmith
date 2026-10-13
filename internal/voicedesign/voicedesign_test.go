@@ -297,6 +297,7 @@ func TestEngineFor(t *testing.T) {
 	want := map[string]Target{
 		"omnivoice-bf16":                  TargetOmniVoice,
 		"qwen3-tts-0.6b-customvoice-8bit": TargetQwen3CustomVoice,
+		"qwen3-tts-1.7b-voicedesign-4bit": TargetQwen3Design, // catalogue entry added by the M1 engine thread
 	}
 	for _, e := range cat.Entries {
 		got, ok := EngineFor(e.Family, e.Repo)

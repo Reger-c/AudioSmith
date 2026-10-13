@@ -177,3 +177,22 @@ func TestUnknownLanguageCode(t *testing.T) {
 		t.Errorf("validate: %v", err)
 	}
 }
+
+func TestM1Entries(t *testing.T) {
+	c := Builtin()
+	for id, task := range map[string]Task{DefaultSTT: TaskSTT, DefaultAlign: TaskAlign, DefaultVAD: TaskVAD, DefaultEnhance: TaskEnhance} {
+		e, ok := c.ByID(id)
+		if !ok || !slices.Contains(e.Tasks, task) || e.SampleRate == 0 {
+			t.Errorf("default %s: %+v", id, e)
+		}
+	}
+	if e, _ := c.ByID(DefaultAlign); !e.Has(CapWordTimes) {
+		t.Error("the aligner times words")
+	}
+	if e, _ := c.ByID("kokoro-82m-bf16"); e.MaxChars == 0 {
+		t.Error("kokoro has a per-request limit")
+	}
+	if n := TextLength("Hi 你好"); n != 9 {
+		t.Errorf("TextLength = %d", n)
+	}
+}

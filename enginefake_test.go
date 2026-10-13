@@ -10,27 +10,37 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/engine/enginetest"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
-// sentReq is what the Studio asked of the engine side.
+// sentReq is what the app asked of the engine side.
 type sentReq struct {
 	ID  string
-	Cmd string // "synthesize", "load", "cancel", "unload", or another method
+	Cmd string // "synthesize", "load", "download", "cancel", "unload", or the method / job kind
 	proto.SynthesizeParams
-	Spec jobs.Spec
+	Params json.RawMessage // the job's or call's params, whatever the kind
+	Spec   jobs.Spec
 }
 
+// fakeEngine plays the engine side for view tests. Jobs (any kind) are
+// recorded and finished by the test (succeed, fail, progress…). Direct
+// calls (fakeSup.Call) answer at once: media.probe with probes[path] (or
+// a 3 s mono WAV), capture.devices with enginetest.FakeDevices, and any
+// method in callErr with that error. capture.start reports "recording",
+// sends levels, then waits for capture.stop or cancellation and answers
+// with a CaptureResult whose file the test may need to create.
 type fakeEngine struct {
-	host     *engineHost
-	a        *app
-	sent     []sentReq
+	host      *engineHost
+	a         *app
+	sent      []sentReq
 	jobs      map[string]jobs.Job
 	executors map[string]jobs.Executor
 	restarts  int
@@ -38,12 +48,32 @@ type fakeEngine struct {
 	budget   int64
 	idle     time.Duration
 	cacheDir string
+
+	mu       sync.Mutex
+	probes   map[string]proto.ProbeResult
+	callErr  map[string]*proto.Error // method → error to answer with
+	levels   []proto.LevelParams     // sent by capture.start (job id filled in)
+	captures map[string]chan struct{}
 }
 
 func newFakeEngine() *fakeEngine {
-	f := &fakeEngine{jobs: map[string]jobs.Job{}, executors: map[string]jobs.Executor{}}
+	f := &fakeEngine{jobs: map[string]jobs.Job{}, executors: map[string]jobs.Executor{},
+		probes: map[string]proto.ProbeResult{}, callErr: map[string]*proto.Error{}, captures: map[string]chan struct{}{},
+		levels: []proto.LevelParams{{Seconds: 0.05, RMS: -30, Peak: -18}, {Seconds: 0.1, RMS: -24, Peak: -12}}}
 	f.host = &engineHost{bin: "/fake/audiosmith-engine", sup: &fakeSup{f}, sched: fakeSched{f}}
 	return f
+}
+
+// lastOf returns the last request of kind cmd.
+func (f *fakeEngine) lastOf(t *testing.T, cmd string) sentReq {
+	t.Helper()
+	for i := len(f.sent) - 1; i >= 0; i-- {
+		if f.sent[i].Cmd == cmd {
+			return f.sent[i]
+		}
+	}
+	t.Fatalf("no %s was sent to the engine (sent %v)", cmd, f.sent)
+	return sentReq{}
 }
 
 func (f *fakeEngine) last(t *testing.T) sentReq {
@@ -114,7 +144,7 @@ func (s fakeSched) Retry(context.Context, string) error { return nil }
 
 func (s fakeSched) Submit(_ context.Context, spec jobs.Spec) (string, error) {
 	id := fmt.Sprintf("job%d", len(s.f.jobs)+1)
-	r := sentReq{ID: id, Spec: spec}
+	r := sentReq{ID: id, Spec: spec, Cmd: spec.Kind, Params: spec.Params}
 	switch spec.Kind {
 	case proto.MethodTTSSynthesize:
 		r.Cmd = "synthesize"
@@ -200,15 +230,84 @@ func (s fakeSup) Restart(proto.Role) error {
 	return nil
 }
 
-func (s fakeSup) Call(_ context.Context, _ proto.Role, id, method string, params any, _ func(proto.Message)) (json.RawMessage, error) {
+func (s fakeSup) Call(ctx context.Context, _ proto.Role, id, method string, params any, notify func(proto.Message)) (json.RawMessage, error) {
+	f := s.f
 	cmd := method
 	switch method {
 	case proto.MethodModelsUnload:
 		cmd = "unload"
 	}
-	s.f.sent = append(s.f.sent, sentReq{ID: id, Cmd: cmd})
-	if method == proto.MethodModelsUnload {
+	raw, _ := json.Marshal(params)
+	f.mu.Lock()
+	f.sent = append(f.sent, sentReq{ID: id, Cmd: cmd, Params: raw})
+	perr := f.callErr[method]
+	f.mu.Unlock()
+	if perr != nil {
+		return nil, perr
+	}
+	answer := func(v any) (json.RawMessage, error) {
+		out, err := json.Marshal(v)
+		return out, err
+	}
+	switch method {
+	case proto.MethodModelsUnload:
 		return json.RawMessage(`{"unloaded":[]}`), nil
+	case proto.MethodMediaProbe:
+		var p proto.ProbeParams
+		json.Unmarshal(raw, &p)
+		f.mu.Lock()
+		info, ok := f.probes[p.Input]
+		f.mu.Unlock()
+		if !ok {
+			info = proto.ProbeResult{Format: "wav", Duration: 3, HasAudio: true, AudioTracks: 1, Codec: "lpcm", SampleRate: 48000, Channels: 1, Bits: 16}
+		}
+		return answer(info)
+	case proto.MethodCaptureDevices:
+		return answer(proto.DevicesResult{Devices: enginetest.FakeDevices()})
+	case proto.MethodCaptureStop:
+		var p proto.CaptureStopParams
+		json.Unmarshal(raw, &p)
+		f.mu.Lock()
+		stop, ok := f.captures[p.Job]
+		delete(f.captures, p.Job)
+		f.mu.Unlock()
+		if ok {
+			close(stop)
+		}
+		return answer(proto.CaptureStopResult{Stopped: ok})
+	case proto.MethodCaptureStart:
+		var p proto.CaptureParams
+		json.Unmarshal(raw, &p)
+		stop := make(chan struct{})
+		f.mu.Lock()
+		f.captures[id] = stop
+		levels := f.levels
+		f.mu.Unlock()
+		note := func(method string, v any) {
+			if notify != nil {
+				m, _ := proto.NewNotification(method, v)
+				notify(m)
+			}
+		}
+		note(proto.MethodJobProgress, proto.ProgressParams{Job: id, Stage: "recording"})
+		for _, l := range levels {
+			l.Job = id
+			note(proto.MethodCaptureLevel, l)
+		}
+		select {
+		case <-stop:
+		case <-ctx.Done():
+			f.mu.Lock()
+			delete(f.captures, id)
+			f.mu.Unlock()
+			return nil, &proto.Error{Code: proto.CodeCancelled, Message: "Cancelled"}
+		}
+		dev := p.Device
+		if dev == "" {
+			dev = enginetest.FakeBuiltInMic
+		}
+		return answer(proto.CaptureResult{AudioOut: proto.AudioOut{Output: p.Output.Path, SampleRate: 48000, Channels: 1, Frames: 48000, AudioSeconds: 1},
+			Device: dev, Peak: -12, Reason: proto.CaptureStopped})
 	}
 	return json.RawMessage(`{}`), nil
 }

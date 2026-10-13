@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/hehehai/AudioSmith/internal/lang"
 )
@@ -57,6 +58,14 @@ const (
 	CapDuration   Capability = "duration"   // can target a duration
 	CapStream     Capability = "stream"     // emits audio chunks while generating
 	CapWordTimes  Capability = "wordTimes"  // STT: word-level timestamps
+
+	// M1.
+	CapVoicePrompt  Capability = "voicePrompt"  // tts.encodeVoice: a clone reference can be encoded once and reused
+	CapSteps        Capability = "steps"        // honours steps (diffusion / refinement steps)
+	CapGuidance     Capability = "guidance"     // honours guidance (classifier-free guidance scale)
+	CapExaggeration Capability = "exaggeration" // honours exaggeration (Chatterbox emotion intensity)
+	CapNonVerbal    Capability = "nonVerbal"    // renders inline non-verbal tags (Entry.NonVerbal)
+	CapTranslate    Capability = "translate"    // STT: can translate speech into English (task "translate")
 )
 
 // Catalog is a versioned list of entries.
@@ -84,6 +93,14 @@ type Entry struct {
 	Voices       []VoiceOption `json:"voices,omitempty"` // built-in speakers; the first is the default
 	Capabilities []Capability  `json:"capabilities,omitempty"`
 	SampleRate   int           `json:"sampleRate,omitempty"` // Hz; 0 = learned at load
+
+	// MaxChars is the longest text one tts.synthesize may carry, measured
+	// with TextLength; the app splits longer scripts into chunks. Longer
+	// requests fail with input_too_long. 0 = no known limit.
+	MaxChars int `json:"maxChars,omitempty"`
+	// NonVerbal lists the inline tags the model renders (CapNonVerbal),
+	// as written in the text: "[laughter]", "[sigh]"…
+	NonVerbal []string `json:"nonVerbal,omitempty"`
 
 	// Size is the download size in bytes: the sum of Files when they are
 	// listed, else an estimate until the hub lists the repo.
@@ -228,7 +245,33 @@ func (c *Catalog) Validate() error {
 	return nil
 }
 
-var knownCaps = []Capability{CapSpeed, CapSampling, CapClone, CapVoiceStyle, CapLanguage, CapInstruct, CapDesign, CapSeed, CapDuration, CapStream, CapWordTimes}
+var knownCaps = []Capability{CapSpeed, CapSampling, CapClone, CapVoiceStyle, CapLanguage, CapInstruct, CapDesign, CapSeed, CapDuration, CapStream, CapWordTimes,
+	CapVoicePrompt, CapSteps, CapGuidance, CapExaggeration, CapNonVerbal, CapTranslate}
+
+// Default models of the M1 analysis tasks: what the app runs to clean,
+// cut and transcribe a clone reference. Their entries may be hidden from
+// pickers; find them with ByID.
+const (
+	DefaultSTT     = "whisper-large-v3-turbo-4bit"
+	DefaultAlign   = "qwen3-forcedaligner-0.6b-4bit"
+	DefaultVAD     = "silero-vad"
+	DefaultEnhance = "deepfilternet-v3"
+)
+
+// TextLength measures text against Entry.MaxChars: one per character,
+// three per CJK character (which a model's phonemiser turns into several
+// phonemes).
+func TextLength(text string) int {
+	n := 0
+	for _, r := range text {
+		if unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul) {
+			n += 3
+		} else {
+			n++
+		}
+	}
+	return n
+}
 
 // ByID, ByRepo and ByLabel find an entry.
 func (c *Catalog) ByID(id string) (Entry, bool) {
