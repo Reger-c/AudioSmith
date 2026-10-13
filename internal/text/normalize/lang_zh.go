@@ -138,6 +138,15 @@ func init() {
 	}
 	l.Extra = cjkExtra(l, regexp.MustCompile(`(\d{4})年`), func(y string) string { return zhYearDigits(y) + "年" },
 		func(num, den string) string { return den + "分之" + num }, func(w string) string { return "千分之" + w })
+	// A lone 2 before a measure word or a large unit is read 两: 2个 → 两个,
+	// 2点 → 两点, 2万 → 两万 (but 2月, 2号, 2楼 stay 二).
+	two := regexp.MustCompile(`2(个|位|只|次|天|岁|本|张|件|条|种|名|台|辆|家|口|斤|公斤|千克|公里|小时|分钟|周|倍|点|杯|双|对|份|间|座|首|部|场|遍|片|块|样|句|步|声|眼|下|百|千|万|亿)`)
+	l.Extra = append(l.Extra, Rule{Re: two, Fn: func(s string, m []int) (string, bool) {
+		if gluedBefore(s, m[0]) {
+			return "", false
+		}
+		return "两" + group(s, m, 1), true
+	}})
 	Register(l)
 }
 

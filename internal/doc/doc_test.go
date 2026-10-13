@@ -117,17 +117,21 @@ type zipFile struct{ name, body string }
 
 func makeZip(t *testing.T, files ...zipFile) []byte {
 	t.Helper()
+	return makeZipF(files)
+}
+
+func makeZipF(files []zipFile) []byte {
 	var b bytes.Buffer
 	w := zip.NewWriter(&b)
 	for _, f := range files {
 		fw, err := w.Create(f.name)
 		if err != nil {
-			t.Fatal(err)
+			panic(err)
 		}
 		io.WriteString(fw, f.body)
 	}
 	if err := w.Close(); err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	return b.Bytes()
 }
