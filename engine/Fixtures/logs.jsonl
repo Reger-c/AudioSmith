@@ -1,0 +1,3 @@
+{"to":"app","msg":{"method":"log","params":{"level":"info","message":"Metal device: Apple M2 Pro"}}}
+{"to":"app","msg":{"method":"log","params":{"level":"warning","message":"Voice af_unknown not found, using af_heart","job":"01JA2K7Q8M4X5V6B7C8D9E0F1G"}}}
+{"to":"app","msg":{"method":"log","params":{"level":"debug","message":"Token 128/1200"}}}

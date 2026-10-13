@@ -1,0 +1,8 @@
+{"to":"engine","msg":{"id":"01JA2K7Q8M4X5V6B7C8D9E0F1G","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","text":"Hello from AudioSmith.","voice":"af_heart","speed":1.25,"output":{"path":"/Users/me/Library/Application Support/AudioSmith/clips/01JA2K7Q8M4X5V6B7C8D9E0F1G.wav","format":"wav","bits":16},"stream":true}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JA2K7Q8M4X5V6B7C8D9E0F1G","stage":"loading","message":"Loading Kokoro-82M-bf16"}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JA2K7Q8M4X5V6B7C8D9E0F1G","stage":"generating","fraction":0}}}
+{"to":"app","msg":{"method":"tts.chunk","params":{"job":"01JA2K7Q8M4X5V6B7C8D9E0F1G","seq":0,"sampleRate":24000,"channels":1,"encoding":"pcm16le","data":"AAABAP//AIA="}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JA2K7Q8M4X5V6B7C8D9E0F1G","stage":"generating","fraction":0.5,"audioSeconds":0.4}}}
+{"to":"app","msg":{"method":"tts.chunk","params":{"job":"01JA2K7Q8M4X5V6B7C8D9E0F1G","seq":1,"sampleRate":24000,"channels":1,"encoding":"pcm16le","data":"ABAA8AAA","final":true}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JA2K7Q8M4X5V6B7C8D9E0F1G","stage":"writing","fraction":1,"audioSeconds":0.8}}}
+{"to":"app","msg":{"id":"01JA2K7Q8M4X5V6B7C8D9E0F1G","result":{"output":"/Users/me/Library/Application Support/AudioSmith/clips/01JA2K7Q8M4X5V6B7C8D9E0F1G.wav","model":"mlx-community/Kokoro-82M-bf16","sampleRate":24000,"channels":1,"frames":19200,"audioSeconds":0.8,"seconds":0.2,"rtf":4}}}

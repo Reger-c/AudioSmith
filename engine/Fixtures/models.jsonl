@@ -1,0 +1,15 @@
+{"to":"engine","msg":{"id":"01JA2KC0000000000000000000","method":"models.load","params":{"model":"mlx-community/Kokoro-82M-bf16","path":"/Users/me/.cache/huggingface/hub/models--mlx-community--Kokoro-82M-bf16/snapshots/0123abcd","task":"tts"}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JA2KC0000000000000000000","stage":"loading","message":"Loading Kokoro-82M-bf16"}}}
+{"to":"app","msg":{"id":"01JA2KC0000000000000000000","result":{"model":"mlx-community/Kokoro-82M-bf16","task":"tts","sampleRate":24000,"seconds":1.5,"bytes":390000000,"voices":["af_heart","zf_xiaobei"],"capabilities":["speed","stream"]}}}
+{"to":"engine","msg":{"id":"c2","method":"models.loaded"}}
+{"to":"app","msg":{"id":"c2","result":{"models":[{"model":"mlx-community/Kokoro-82M-bf16","task":"tts","sampleRate":24000,"bytes":390000000,"idleSeconds":2.5}]}}}
+{"to":"engine","msg":{"id":"c3","method":"engine.stats"}}
+{"to":"app","msg":{"id":"c3","result":{"memory":{"active":412000000,"cache":96000000,"peak":655000000},"models":[{"model":"mlx-community/Kokoro-82M-bf16","task":"tts","sampleRate":24000,"bytes":390000000}],"jobs":[]}}}
+{"to":"engine","msg":{"id":"c4","method":"engine.flush"}}
+{"to":"app","msg":{"id":"c4","result":{}}}
+{"to":"engine","msg":{"id":"c5","method":"models.unload","params":{"model":"mlx-community/Kokoro-82M-bf16"}}}
+{"to":"app","msg":{"id":"c5","result":{"unloaded":["mlx-community/Kokoro-82M-bf16"]}}}
+{"to":"engine","msg":{"id":"c6","method":"models.unload","params":{}}}
+{"to":"app","msg":{"id":"c6","result":{"unloaded":[]}}}
+{"to":"engine","msg":{"id":"c9","method":"engine.shutdown"}}
+{"to":"app","msg":{"id":"c9","result":{}}}
