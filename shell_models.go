@@ -255,111 +255,125 @@ func (a *app) modelCard(c *ui.Context, e catalog.Entry) {
 	for _, r := range eng.Loaded {
 		loaded = loaded || r == e.Repo
 	}
-	ui.Column(c.Key("model-"+e.ID)).Gap(px(t, 6)).Padding(px(t, 12)).Radius(10).Border(1, t.Border).Background(t.Surface).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, e.Label).FontSize(px(t, 14)).Bold()
-			if e.Quantization != "" {
-				ui.Badge(c, e.Quantization)
-			}
-			if e.Hidden {
-				ui.Badge(c, i18n.T("Preview"))
-			}
-			if loaded {
-				ui.Badge(c, i18n.T("In memory"))
-			}
-			ui.Spacer(c)
+	ui.Row(c.Key("model-"+e.ID)).Gap(px(t, 16)).Padding(px(t, 12)).Radius(10).Border(1, t.Border).Background(t.Surface).AlignItems(ui.Start).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 5)).Children(func() {
+			a.modelInfo(c, e, m, loaded)
+		})
+		ui.Column(c).Shrink(0).Gap(px(t, 8)).AlignItems(ui.End).Children(func() {
 			ui.Text(c, a.modelStateText(e, m)).FontSize(px(t, 12)).TextColor(t.TextMuted)
-		})
-		ui.Text(c, i18n.T(e.About)).FontSize(px(t, 12)).TextColor(t.TextMuted)
-		var facts []string
-		if s := catalog.HumanSize(e.Size); s != "" {
-			facts = append(facts, s)
-		}
-		if n := len(e.Languages); n > 0 {
-			facts = append(facts, i18n.N(n, "%d language", "%d languages", n))
-		}
-		if n := len(e.Voices); n > 0 {
-			facts = append(facts, i18n.N(n, "%d voice", "%d voices", n))
-		}
-		if e.MinMemoryGB > 0 {
-			facts = append(facts, i18n.T("needs %g GB of memory", e.MinMemoryGB))
-		}
-		facts = append(facts, e.Repo)
-		ui.Text(c, strings.Join(facts, " · ")).FontSize(px(t, 11)).TextColor(t.TextMuted).Selectable()
-
-		// The licence.
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			lic := e.Licence
-			use := i18n.T("commercial use allowed")
-			color := t.Success
-			if !lic.Commercial {
-				use, color = i18n.T("non-commercial use only"), t.Warning
-			}
-			ui.Box(c).Size(px(t, 6), px(t, 6)).Radius(px(t, 3)).Background(color)
-			ui.Text(c, lic.Name+" · "+use).FontSize(px(t, 12))
-			if lic.RequiresAcceptance {
-				if licence.Covers(a.accepted, e) {
-					ui.Text(c, "· "+i18n.T("accepted")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-				} else if ui.Button(c.Key("licence"), i18n.T("Review licence…")).Clicked() {
-					a.askLicence(e, nil)
-				}
-			}
-			if lic.URL != "" {
-				ui.Link(c, i18n.T("Model card"), lic.URL).FontSize(px(t, 12))
-			}
-		})
-
-		if m.downloading {
-			frac := -1.0
-			if m.progress.TotalBytes > 0 {
-				frac = float64(m.progress.Bytes) / float64(m.progress.TotalBytes)
-			}
-			ui.Progress(c, frac).Label(i18n.T("Downloading %s", e.Label))
-			info := i18n.T("%s of %s", mb(m.progress.Bytes), mb(m.progress.TotalBytes))
-			if m.progress.Mirror != "" {
-				info += " · " + strings.TrimPrefix(m.progress.Mirror, "https://")
-			}
-			ui.Text(c, info).FontSize(px(t, 11)).TextColor(t.TextMuted)
-		}
-		if m.err != "" && !m.downloading {
-			ui.Text(c, m.err).FontSize(px(t, 12)).TextColor(t.Danger).Selectable()
-		}
-
-		ui.Row(c).Gap(px(t, 8)).Children(func() {
-			st := m.local.State
-			switch {
-			case m.downloading:
-				if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
-					a.cancelDownload(e)
-				}
-			case st == hub.Partial:
-				if ui.PrimaryButton(c.Key("download"), i18n.T("Resume")).Clicked() {
-					a.download(e)
-				}
-			case st != hub.Downloaded:
-				if ui.PrimaryButton(c.Key("download"), i18n.T("Download")).Disabled(!m.known).Clicked() {
-					a.download(e)
-				}
-			}
-			if st == hub.Downloaded && !m.downloading {
-				if ui.Button(c.Key("verify"), i18n.T("Verify")).Disabled(m.verifying).Tooltip(i18n.T("Check every file against its hash")).Clicked() {
-					a.verifyModel(e)
-				}
-				if ui.Button(c.Key("reveal"), i18n.T("Reveal")).Tooltip(i18n.T("Show in Finder")).Clicked() {
-					mygo.Shell.ShowItemInFolder(m.local.Snapshot)
-				}
-			}
-			if (st == hub.Downloaded || st == hub.Partial) && !m.downloading {
-				del := ui.Button(c.Key("delete"), i18n.T("Delete")).Disabled(loaded)
-				if loaded {
-					del.Tooltip(i18n.T("Unload it first"))
-				}
-				if del.Clicked() {
-					a.deleting, a.deleteAsk = e, true
-				}
-			}
+			ui.Row(c).Gap(px(t, 6)).Children(func() {
+				a.modelActions(c, e, m, loaded)
+			})
 		})
 	})
+}
+
+// modelInfo describes an entry: name, what it does, its size and licence,
+// and the download in progress.
+func (a *app) modelInfo(c *ui.Context, e catalog.Entry, m *modelState, loaded bool) {
+	t := c.Theme()
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, e.Label).FontSize(px(t, 14)).Bold()
+		if e.Quantization != "" {
+			ui.Badge(c, e.Quantization)
+		}
+		if e.Hidden {
+			ui.Badge(c, i18n.T("Preview"))
+		}
+		if loaded {
+			ui.Badge(c, i18n.T("In memory"))
+		}
+	})
+	ui.Text(c, i18n.T(e.About)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	var facts []string
+	if s := catalog.HumanSize(e.Size); s != "" {
+		facts = append(facts, s)
+	}
+	if n := len(e.Languages); n > 0 {
+		facts = append(facts, i18n.N(n, "%d language", "%d languages", n))
+	}
+	if n := len(e.Voices); n > 0 {
+		facts = append(facts, i18n.N(n, "%d voice", "%d voices", n))
+	}
+	if e.MinMemoryGB > 0 {
+		facts = append(facts, i18n.T("needs %g GB of memory", e.MinMemoryGB))
+	}
+	facts = append(facts, e.Repo)
+	ui.Text(c, strings.Join(facts, " · ")).FontSize(px(t, 11)).TextColor(t.TextMuted).Selectable()
+
+	// The licence.
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		lic := e.Licence
+		use := i18n.T("commercial use allowed")
+		color := t.Success
+		if !lic.Commercial {
+			use, color = i18n.T("non-commercial use only"), t.Warning
+		}
+		ui.Box(c).Size(px(t, 6), px(t, 6)).Radius(px(t, 3)).Background(color)
+		ui.Text(c, lic.Name+" · "+use).FontSize(px(t, 12))
+		if lic.RequiresAcceptance {
+			if licence.Covers(a.accepted, e) {
+				ui.Text(c, "· "+i18n.T("accepted")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			} else if ui.Button(c.Key("licence"), i18n.T("Review licence…")).Clicked() {
+				a.askLicence(e, nil)
+			}
+		}
+		if lic.URL != "" {
+			ui.Link(c, i18n.T("Model card"), lic.URL).FontSize(px(t, 12))
+		}
+	})
+
+	if m.downloading {
+		frac := -1.0
+		if m.progress.TotalBytes > 0 {
+			frac = float64(m.progress.Bytes) / float64(m.progress.TotalBytes)
+		}
+		ui.Progress(c, frac).Label(i18n.T("Downloading %s", e.Label))
+		info := i18n.T("%s of %s", mb(m.progress.Bytes), mb(m.progress.TotalBytes))
+		if m.progress.Mirror != "" {
+			info += " · " + strings.TrimPrefix(m.progress.Mirror, "https://")
+		}
+		ui.Text(c, info).FontSize(px(t, 11)).TextColor(t.TextMuted)
+	}
+	if m.err != "" && !m.downloading {
+		ui.Text(c, m.err).FontSize(px(t, 12)).TextColor(t.Danger).Selectable()
+	}
+}
+
+// modelActions are the buttons of an entry for its state.
+func (a *app) modelActions(c *ui.Context, e catalog.Entry, m *modelState, loaded bool) {
+	st := m.local.State
+	switch {
+	case m.downloading:
+		if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
+			a.cancelDownload(e)
+		}
+	case st == hub.Partial:
+		if ui.PrimaryButton(c.Key("download"), i18n.T("Resume")).Clicked() {
+			a.download(e)
+		}
+	case st != hub.Downloaded:
+		if ui.PrimaryButton(c.Key("download"), i18n.T("Download")).Disabled(!m.known).Clicked() {
+			a.download(e)
+		}
+	}
+	if st == hub.Downloaded && !m.downloading {
+		if ui.Button(c.Key("verify"), i18n.T("Verify")).Disabled(m.verifying).Tooltip(i18n.T("Check every file against its hash")).Clicked() {
+			a.verifyModel(e)
+		}
+		if ui.Button(c.Key("reveal"), i18n.T("Reveal")).Tooltip(i18n.T("Show in Finder")).Clicked() {
+			mygo.Shell.ShowItemInFolder(m.local.Snapshot)
+		}
+	}
+	if (st == hub.Downloaded || st == hub.Partial) && !m.downloading {
+		del := ui.Button(c.Key("delete"), i18n.T("Delete")).Disabled(loaded)
+		if loaded {
+			del.Tooltip(i18n.T("Unload it first"))
+		}
+		if del.Clicked() {
+			a.deleting, a.deleteAsk = e, true
+		}
+	}
 }
 
 // modelStateText says what of an entry is on disk.

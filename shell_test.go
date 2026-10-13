@@ -211,11 +211,6 @@ func TestPalette(t *testing.T) {
 	if n := len(a.paletteItems()); a.paletteSel != n-1 {
 		t.Errorf("up wraps: %d of %d", a.paletteSel, n)
 	}
-	// Escape clears the search, then closes.
-	tt.Key(0, ui.KeyEscape)
-	if !a.paletteOpen || a.paletteQuery != "" {
-		t.Errorf("first escape: %v %q", a.paletteOpen, a.paletteQuery)
-	}
 	tt.Key(0, ui.KeyEscape)
 	if a.paletteOpen {
 		t.Error("escape left it open")

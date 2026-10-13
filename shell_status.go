@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 )
 
@@ -131,7 +132,7 @@ func (a *app) quickSwitch(c *ui.Context) {
 			ui.Text(c, i18n.T("No model loaded")).FontSize(px(t, 12))
 		}
 		for _, repo := range eng.Loaded {
-			ui.Row(c.Key("loaded-"+repo)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("loaded-" + repo)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, catalog.Builtin().DisplayName(repo)).Grow(1).SingleLine().Ellipsis("…")
 				if ui.Button(c.Key("unload"), i18n.T("Unload")).Disabled(eng.Busy).Clicked() {
 					a.unload()
@@ -150,9 +151,9 @@ func (a *app) quickSwitch(c *ui.Context) {
 				row.Background(t.SurfaceHover)
 			}
 			row.Children(func() {
-				ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).Grow(1).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, e.Label).Grow(1).SingleLine()
-					if m != nil && m.known && m.local.State == "downloaded" {
+					if m != nil && m.known && m.local.State == hub.Downloaded {
 						ui.Text(c, i18n.T("Downloaded")).FontSize(px(t, 11)).TextColor(t.TextMuted)
 					}
 				})
@@ -259,7 +260,7 @@ func (a *app) noticeRow(c *ui.Context, n core.Notification) {
 	if !n.Read {
 		bg = t.Accent.Alpha(0.08)
 	}
-	ui.Row(c.Key("notice-"+n.ID)).Gap(px(t, 8)).Padding(px(t, 8)).Radius(8).Background(bg).AlignItems(ui.Start).Children(func() {
+	ui.Row(c.Key("notice-" + n.ID)).Gap(px(t, 8)).Padding(px(t, 8)).Radius(8).Background(bg).AlignItems(ui.Start).Children(func() {
 		ui.Box(c).Size(px(t, 8), px(t, 8)).Radius(px(t, 4)).Background(color).Margin(px(t, 5), 0, 0, 0)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 			ui.Text(c, n.Title).FontSize(px(t, 13)).Bold().MaxLines(2).Ellipsis("…")

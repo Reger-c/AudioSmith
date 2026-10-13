@@ -157,7 +157,9 @@ func (a *app) palette(c *ui.Context) {
 		a.paletteSel = max(0, min(a.paletteSel, len(items)-1))
 		ui.Row(c).Padding(px(t, 10), px(t, 12)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, searchIcon).TextColor(t.TextMuted)
-			search := ui.SearchField(c.Key("palette-search"), &a.paletteQuery).AutoFocus().Grow(1).
+			// A text input rather than ui.SearchField, whose placeholder
+			// is not translated; Escape closes the palette.
+			search := ui.TextInput(c.Key("palette-search"), &a.paletteQuery).AutoFocus().Grow(1).
 				Placeholder(i18n.T("Type a command or a page…")).Label(i18n.T("Search commands"))
 			if search.Changed() {
 				a.paletteSel = 0
@@ -184,7 +186,7 @@ func (a *app) palette(c *ui.Context) {
 						row.Background(t.Accent.Alpha(0.15))
 					}
 					row.Children(func() {
-						ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
+						ui.Row(c).Grow(1).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
 							ui.Text(c, cmd.title).Grow(1).SingleLine().Ellipsis("…")
 							ui.Text(c, cmd.group).FontSize(px(t, 11)).TextColor(t.TextMuted)
 							if cmd.keys != "" {

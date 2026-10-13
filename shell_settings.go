@@ -218,7 +218,6 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 	header(c, i18n.T("Settings"), nil)
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Width(px(t, 190)).Shrink(0).Padding(px(t, 10)).Gap(px(t, 2)).Children(func() {
-			cur := strings.TrimPrefix(r.Path(), "/settings/")
 			for _, s := range settingsSections() {
 				b := ui.ButtonBase(c.Key("settings-"+s.id)).Padding(px(t, 6), px(t, 10)).Radius(6).Label(s.title)
 				switch {
@@ -227,12 +226,11 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 				case b.Hovered():
 					b.Background(t.SurfaceHover)
 				}
-				b.Children(func() { ui.Text(c, s.title) })
+				b.Children(func() { ui.Text(c, s.title).Grow(1) })
 				if b.Clicked() {
 					a.navigate("/settings/" + s.id)
 				}
 			}
-			_ = cur
 		})
 		ui.Box(c).Width(1).Background(t.Border)
 		r.View(c, func(r *ui.Route) {

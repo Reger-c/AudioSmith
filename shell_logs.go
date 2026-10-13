@@ -76,7 +76,7 @@ func (a *app) logsView(c *ui.Context, panel bool) {
 				}
 			}
 		}
-		ui.SearchField(c.Key("logs-search"), &a.logsQuery).Placeholder(i18n.T("Filter")).Width(px(t, 200)).Label(i18n.T("Filter the logs"))
+		ui.TextInput(c.Key("logs-search"), &a.logsQuery).Placeholder(i18n.T("Filter")).Width(px(t, 200)).Label(i18n.T("Filter the logs"))
 		ui.Spacer(c)
 		ui.Text(c, i18n.N(len(lines), "%d line", "%d lines", len(lines))).FontSize(px(t, 11)).TextColor(t.TextMuted)
 		if ui.Button(c.Key("logs-copy"), i18n.T("Copy")).Disabled(len(lines) == 0).Tooltip(i18n.T("Copy the lines shown")).Clicked() {
