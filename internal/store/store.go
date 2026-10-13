@@ -38,6 +38,7 @@ type Store interface {
 	// Documents holds small JSON documents by key: "settings:app" (the
 	// settings.Settings document) and "draft:<page>" (core.DraftService).
 	Documents() Documents
+	Favorites() Favorites
 	Jobs() jobs.Store
 	Close() error
 }
@@ -64,7 +65,17 @@ type Voices interface {
 	Get(ctx context.Context, id string) (core.Voice, error)
 	List(ctx context.Context, q core.VoiceQuery) ([]core.Voice, error)
 	Delete(ctx context.Context, id string) error
+	// Usage counts the takes and project segments that use the voice.
+	Usage(ctx context.Context, id string) (core.VoiceUsage, error)
 	VoiceDir() string
+}
+
+// Favorites stores sets of favorite keys by scope ("gallery": archetype
+// ids, later "community:<repo>:<id>").
+type Favorites interface {
+	List(ctx context.Context, scope string) ([]string, error)
+	// Set adds (on) or removes a key; both are idempotent.
+	Set(ctx context.Context, scope, key string, on bool) error
 }
 
 // Projects stores projects; segments, renders and exports are rows of

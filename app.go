@@ -15,6 +15,7 @@ import (
 //	studioState  studio.go     the TTS form
 //	takesState   takes.go      the library (domain), take snapshot, player, peaks
 //	engineLink   enginelink.go engines and the Studio's current job
+//	voicesState  voices.go     voice library, clone flow, design, gallery
 //
 // Add fields to your area's struct, not here.
 type app struct {
@@ -29,6 +30,7 @@ type app struct {
 	studioState
 	takesState
 	engineLink
+	voicesState // voices.go (thread V): voice library, design, gallery
 }
 
 func newApp(eng *engineHost, lib *library) *app {
@@ -39,6 +41,7 @@ func newApp(eng *engineHost, lib *library) *app {
 	a.engineLink.eng = eng
 	a.openShell(lib)
 	a.openTakes(lib)
+	a.openVoices(lib) // voices.go (thread V)
 	return a
 }
 

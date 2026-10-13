@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
-	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -29,15 +29,15 @@ func TestGenerateTake(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := eng.last(t)
-	if req.Cmd != "synthesize" || req.Model != kokoro || req.Voice != "zf_xiaobei" ||
-		req.Text != "Testing one two three." || req.Speed == nil || *req.Speed != 1.25 {
-		t.Fatalf("request %+v", req)
+	p := renderOf(t, req)
+	if p.Take.Model != kokoro || p.Take.Voice != "zf_xiaobei" || p.Take.Text != "Testing one two three." || p.Take.Speed != 1.25 {
+		t.Fatalf("request %+v", p)
 	}
-	if req.Temperature != nil || req.TopP != nil {
-		t.Errorf("Kokoro takes no sampling settings, got %+v", req)
+	if p.Take.Temperature != 0 || p.Take.TopP != 0 {
+		t.Errorf("Kokoro takes no sampling settings, got %+v", p.Take)
 	}
-	if !strings.HasSuffix(req.Output.Path, ".wav") || !strings.HasPrefix(req.Output.Path, a.takeStore.AudioDir()) {
-		t.Errorf("output %q", req.Output.Path)
+	if !strings.HasSuffix(p.Output, ".wav") || !strings.HasPrefix(p.Output, a.takeStore.AudioDir()) {
+		t.Errorf("output %q", p.Output)
 	}
 	if a.job == nil {
 		t.Fatal("no job after Generate")
@@ -57,8 +57,7 @@ func TestGenerateTake(t *testing.T) {
 		t.Errorf("status not shown: %q", tt.Texts())
 	}
 
-	writeTestWAV(t, req.Output.Path, 24000, 0.8)
-	eng.succeed(req.ID, proto.SynthesizeResult{Output: req.Output.Path, SampleRate: 24000, AudioSeconds: 0.8, Seconds: 0.2})
+	finishRender(t, eng, req, 0.8)
 	tt.Frame()
 	if a.job != nil {
 		t.Fatal("job still running after done")
@@ -76,7 +75,7 @@ func TestGenerateTake(t *testing.T) {
 	if len(a.peaks[cl.ID]) != 160 {
 		t.Errorf("waveform has %d peaks", len(a.peaks[cl.ID]))
 	}
-	if a.loadedModel != req.Model {
+	if a.loadedModel != p.Take.Model {
 		t.Errorf("loaded model %q", a.loadedModel)
 	}
 
@@ -94,7 +93,7 @@ func TestShortcutGenerates(t *testing.T) {
 	a, eng, tt := newTestApp(t)
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyEnter)
-	if len(eng.sent) != 1 || eng.sent[0].Cmd != "synthesize" {
+	if len(eng.sent) != 1 || eng.sent[0].Spec.Kind != services.KindRender {
 		t.Fatalf("⌘↩ sent %+v", eng.sent)
 	}
 	_ = a
@@ -117,9 +116,15 @@ func TestCannotGenerateWithoutEngineOrText(t *testing.T) {
 func TestModelSwitchShowsItsControls(t *testing.T) {
 	a, eng, tt := newTestApp(t)
 	tt.Frame()
-	if !tt.HasText("Speed  1.00×") {
-		t.Errorf("Kokoro shows no speed: %q", tt.Texts())
+	tt.Click("Voice controls")
+	tt.Frame()
+	if !tt.HasText("Speed  1.00×") || !tt.HasText("Pin the seed") || tt.HasText("Use the model's sampling defaults") {
+		t.Errorf("Kokoro's voice controls: %q", tt.Texts())
 	}
+	if tt.HasText("Auto-detect ▾") {
+		t.Error("Kokoro's language follows the voice: no picker")
+	}
+	tt.Key(0, ui.KeyEscape)
 
 	a.modelLabel = "Qwen3-TTS 0.6B Base (voice clone)"
 	a.modelChanged()
@@ -127,8 +132,13 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	if a.voice != "" || a.language != "Chinese" {
 		t.Errorf("voice %q language %q after switching", a.voice, a.language)
 	}
-	if tt.HasText("Speed  1.00×") || !tt.HasText("Voice cloning") || !tt.HasText("Use the model's sampling defaults") {
+	if !tt.HasText("Voice cloning") || !tt.HasText("🇨🇳 Chinese ▾") {
 		t.Errorf("controls for Qwen Base: %q", tt.Texts())
+	}
+	tt.Click("Voice controls")
+	tt.Frame()
+	if tt.HasText("Speed  1.00×") || !tt.HasText("Use the model's sampling defaults") {
+		t.Errorf("voice controls for Qwen Base: %q", tt.Texts())
 	}
 
 	// Sampling settings go out only when the defaults are off.
@@ -136,9 +146,10 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	a.temperature = 0.5
 	a.refAudio, a.refText = "/tmp/ref.wav", "Reference words"
 	tt.Frame()
+	tt.Key(0, ui.KeyEscape)
 	tt.Click("Generate")
-	req := eng.last(t)
-	if req.Temperature == nil || *req.Temperature != 0.5 || req.MaxTokens != 1200 || req.Speed != nil ||
+	req := renderOf(t, eng.last(t)).Take
+	if req.Temperature != 0.5 || req.MaxTokens != 1200 || req.Speed != 0 ||
 		req.RefAudio != "/tmp/ref.wav" || req.RefText != "Reference words" || req.Language != "Chinese" {
 		t.Fatalf("request %+v", req)
 	}
@@ -200,7 +211,7 @@ func TestGenerateNeedsDownload(t *testing.T) {
 		t.Fatalf("after the download: %v %q served %d", a.needDownload, a.jobError, f.served[kokoro])
 	}
 	tt.Click("Generate")
-	if r := eng.last(t); r.Cmd != "synthesize" || !strings.HasPrefix(r.Spec.Owner, "take:") {
+	if r := eng.last(t); r.Spec.Kind != services.KindRender || !strings.HasPrefix(r.Spec.Owner, "take:") {
 		t.Fatalf("generate after download %+v", r)
 	}
 }
@@ -213,9 +224,13 @@ func TestGenerateAsksForTheLicence(t *testing.T) {
 	a.voice = "female, young adult, british accent"
 	a.duration = 3
 	tt.Frame()
-	if !tt.HasText("Duration (seconds, 0 = natural)") || !tt.HasText("CC BY-NC 4.0 · non-commercial use only") {
+	tt.Click("Voice controls")
+	tt.Frame()
+	if !tt.HasText("Duration (seconds, 0 = natural)") || !tt.HasText("CC BY-NC 4.0 · non-commercial use only") ||
+		!tt.HasText("A duration overrides the speed.") {
 		t.Errorf("OmniVoice controls: %q", tt.Texts())
 	}
+	tt.Key(0, ui.KeyEscape)
 	tt.Click("Generate")
 	tt.Frame()
 	if !a.licenceOpen || a.job != nil || len(eng.sent) != 0 {
@@ -224,8 +239,8 @@ func TestGenerateAsksForTheLicence(t *testing.T) {
 	tt.Click("I have read the licence and will use this model only as it allows.")
 	tt.Click("Accept")
 	tt.Frame()
-	r := eng.last(t)
-	if r.Cmd != "synthesize" || r.Model != omni.Repo || r.Duration == nil || *r.Duration != 3 || r.Voice != a.voice || a.job == nil {
+	r := renderOf(t, eng.last(t)).Take
+	if r.Model != omni.Repo || r.Duration != 3 || r.Voice != a.voice || a.job == nil {
 		t.Fatalf("after accepting: %+v job %v", r, a.job)
 	}
 	if got := a.settings.Get().Studio.Model; got != omni.ID {

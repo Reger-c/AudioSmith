@@ -141,7 +141,7 @@ func (a *app) shortcuts(c *ui.Context) {
 	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyL) {
 		a.logsPanel = !a.logsPanel
 	}
-	if c.Shortcut(ui.Shift, ui.KeySlash) {
+	if !a.scriptFocused() && c.Shortcut(ui.Shift, ui.KeySlash) { // M1-G: "?" is text in the script editor
 		a.sheetOpen = true
 	}
 }

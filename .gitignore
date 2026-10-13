@@ -10,3 +10,4 @@ mygo_windows_*.syso
 /engine/.swiftpm/xcode/*
 !/engine/.swiftpm/xcode/xcshareddata/
 /resources/darwin-arm64/engine/
+/AudioSmith

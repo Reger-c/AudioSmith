@@ -46,7 +46,8 @@ Arrows point to what a package may import. No cycles. Leaves import nothing inte
 
 ```
 main ──▶ every internal package
-services ──▶ core, store, jobs, engine/proto (the job's params), i18n (job titles)
+services ──▶ core, store, jobs, engine/proto (the job's params), i18n (job titles), voicedesign, gallery/persona (M1 voices), text/plan, text/lexicon, dsp/{edit,loudness,master,qc,resample,wav} (M1 render)
+text/plan ──▶ text, text/markup, text/normalize, text/lexicon
 store ──▶ core, jobs            store/sqlitestore ──▶ core, jobs, store, store/historyjson
 engine ──▶ core, engine/proto, jobs (its executors)        engine/enginetest ──▶ engine/proto
 hub ──▶ catalog, jobs (the download executor)              catalog ──▶ lang
@@ -130,6 +131,9 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | `a.updateSettings(fn)`, `a.prefs` | shell_settings.go | every area that changes a setting |
 | `a.askLicence(entry, then)` | shell_models.go | Models page, Studio (Generate, Preload) |
 | `a.toast(msg)`, `a.notify(…)`, `a.post(fn)`, `a.async(fn)` | app.go, shell_status.go | everyone |
+| Render: one `take.render` job per take on the gpu lane (`services.KindRender`, `RenderParams/Result/Progress`); chunks run sequentially inside it via the engine executor, content-addressed chunk cache `<cache>/chunks/<key>.wav` (LRU 2 GB); `svc.Render.Preview/Check/ExportAs/Prune`, `svc.Pronunciation` (store.Documents key `pronunciation`) | internal/services/render*.go (M1-G) | studio, voices (Try this voice, design preview), later Stories/Audiobook |
+| `a.clipCard` (output panel), `a.scriptFocused()` | studio_output.go, studio*.go (M1-G) | design page, shell (`?` shortcut) |
+| `a.voicePicker(c, p)`, `a.applyStudioVoice(&t, p)`, `a.studioUsesSavedVoice(p)`, `a.studioVoicePrompt(p)`, `a.useVoiceInStudio`, `a.openVoiceEditor`, `a.openDesignFor`, `a.startClone` | voices*.go, clone*.go, design*.go (M1-V) | studio, gallery, palette |
 | `a.probeMedia`, `a.captureDevices`, `a.startRecording(params, onLevel, then)`, `a.stopRecording`, `engineErrorText(err)`, `jobErrorText(*jobs.Error)` | enginelink.go (M1) | voices/clone (reference recorder, imports), studio |
 | Engine jobs: submit `proto` job kinds (`engine.ExecutorKinds`) on `jobs.Lane(proto.RoleOf(kind))`; listen/media workers start on demand (`engine.Config.OnDemand`); default models `catalog.DefaultSTT/DefaultAlign/DefaultVAD/DefaultEnhance` | internal/engine, internal/catalog (M1) | voices, studio, later dictation/dubbing |
 
@@ -140,7 +144,7 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | Domain types (Take, Voice, Project, LicenceAcceptance, Notification, LogEntry), `NewID` (ULID) | `internal/core/{take,domain,ids}.go` | done; Take gained `Duration`, `Steps` (OmniVoice) |
 | Event bus: `Publish/Subscribe`, `core.On[T]`, `core.NewStream` | `internal/core/bus.go` | done |
 | Services, bundled as `core.Services` | `internal/core/services.go`, `internal/services` | done; `TakeRequest.Recipe.ID` may be chosen by the caller |
-| Store: Takes, Voices, Projects, Licences, Documents, `jobs.Store` | `internal/store`, `sqlitestore/migrations/001_init.sql` | done (SQLite) |
+| Store: Takes, Voices (+Usage), Projects, Licences, Documents, Favorites, `jobs.Store` | `internal/store`, `sqlitestore/migrations/001_init.sql`, `002_voices.sql` (M1: voices search/origin, favorites) | done (SQLite) |
 | Jobs: lanes, priorities, states, DAG, retry, interrupted-on-restart | `internal/jobs` | done |
 | Engine supervisor: `Start/Call/Status/Restart/Stop`, `SetMemoryBudget`, `SetIdleUnload`, `SetCacheDir` | `internal/engine/supervisor.go` | done |
 | Engine executors: `RegisterExecutors(sched, sup, ExecutorOptions{ModelPath, Licences})` | `internal/engine/executors.go` | done |
@@ -199,6 +203,9 @@ Rules that stay:
 | Take audio | `~/Library/Application Support/AudioSmith/clips/<take id>.wav` |
 | MVP history | `…/AudioSmith/history.json`, imported once and kept |
 | Waveform cache | `~/Library/Caches/AudioSmith/peaks/<take id>.f32` |
+| Voices | `…/AudioSmith/voices/<voice id>/` (reference, locked.wav, sample, consent, portrait, prompts); unsaved clips in `…/AudioSmith/references/` |
+| Chunk cache | `~/Library/Caches/AudioSmith/chunks/<text.Key>.wav` (float32, pruned to 2 GB LRU) |
+| Gallery previews | `~/Library/Caches/AudioSmith/voice-previews/<key>.wav` (job owner `archetype:<id>`; voice jobs use owner `voicework:`) |
 | Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app, rotated at 5 MB) and `engine-gpu.log` (engine stderr) |
 | Models | the Hugging Face cache, `~/.cache/huggingface/hub` (`HF_HUB_CACHE`/`HF_HOME`, or Settings → Models → Model folder) |
 | Secrets | the login Keychain, service "AudioSmith": account "huggingface-token" (HF token; or `$HF_TOKEN`, or huggingface-cli's token file), later "llm.<provider>", "mt.<service>" |

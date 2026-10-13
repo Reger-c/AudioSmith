@@ -63,7 +63,20 @@ func (f *fakeScheduler) finish(t *testing.T, id string, state jobs.State, res *p
 	f.mu.Lock()
 	j := f.jobs[id]
 	j.State, j.Finished = state, time.Now()
-	if res != nil {
+	if res != nil && j.Kind == KindRender {
+		// A render: its result carries the engine's figures.
+		var p RenderParams
+		json.Unmarshal(j.Params, &p)
+		os.WriteFile(p.Output, []byte("RIFF"), 0o644)
+		rr := RenderResult{Output: p.Output, SampleRate: res.SampleRate, AudioSeconds: res.AudioSeconds, Seconds: res.Seconds}
+		if res.Seed != nil {
+			rr.Seed = *res.Seed
+		}
+		if p.Take.Render != nil {
+			rr.Render = *p.Take.Render
+		}
+		j.Result, _ = json.Marshal(rr)
+	} else if res != nil {
 		var p proto.SynthesizeParams
 		json.Unmarshal(j.Params, &p)
 		os.WriteFile(p.Output.Path, []byte("RIFF"), 0o644)
@@ -151,17 +164,18 @@ func TestGenerate(t *testing.T) {
 		t.Fatal(err)
 	}
 	job, _ := e.sched.Get(ctx, id)
-	if job.Kind != "tts.synthesize" || job.Lane != jobs.LaneGPU || job.Priority != jobs.PriorityInteractive ||
+	if job.Kind != KindRender || job.Lane != jobs.LaneGPU || job.Priority != jobs.PriorityInteractive ||
 		!strings.HasPrefix(job.Owner, "take:") || job.Title == "" || !job.Idempotent {
 		t.Fatalf("spec %+v", job.Spec)
 	}
-	var p proto.SynthesizeParams
+	var p RenderParams
 	if err := json.Unmarshal(job.Params, &p); err != nil {
 		t.Fatal(err)
 	}
 	takeID := strings.TrimPrefix(job.Owner, "take:")
-	if p.Text != "Hello there." || p.Model != "m/kokoro" || p.Voice != "af_heart" || p.Speed == nil || *p.Speed != 1.25 ||
-		p.Temperature != nil || p.TopP != nil || !p.Stream || p.Output.Path != filepath.Join(takes.AudioDir(), takeID+".wav") {
+	if p.Take.Text != "Hello there." || p.Take.Model != "m/kokoro" || p.Take.Voice != "af_heart" || p.Take.Speed != 1.25 ||
+		p.Take.ID != takeID || p.Take.AudioSeconds != 0 || p.Take.Starred || p.Take.Render == nil || p.Take.Render.Master != MasterDefault ||
+		!p.Stream || p.Output != filepath.Join(takes.AudioDir(), takeID+".wav") {
 		t.Fatalf("params %+v", p)
 	}
 	if len(e.events()) != 0 {
@@ -391,7 +405,7 @@ func TestVoicesAndProjects(t *testing.T) {
 	if err := vs.Delete(ctx, v.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := vs.Import(ctx, "x.asvoice"); !errors.Is(err, core.ErrUnsupported) {
+	if _, err := vs.Import(ctx, "x.asvoice"); !errors.Is(err, os.ErrNotExist) {
 		t.Error(err)
 	}
 
@@ -555,9 +569,9 @@ func TestGenerateWithChosenID(t *testing.T) {
 		t.Fatal(err)
 	}
 	j, _ := e.sched.Get(ctx, jobID)
-	var p proto.SynthesizeParams
+	var p RenderParams
 	json.Unmarshal(j.Params, &p)
-	if j.Owner != "take:"+id || p.Duration == nil || *p.Duration != 3.5 || p.Steps != 16 || !strings.Contains(p.Output.Path, id) {
+	if j.Owner != "take:"+id || p.Take.Duration != 3.5 || p.Take.Steps != 16 || !strings.Contains(p.Output, id) {
 		t.Fatalf("job %+v params %+v", j.Spec, p)
 	}
 	e.sched.finish(t, jobID, jobs.StateSucceeded, &proto.SynthesizeResult{SampleRate: 24000, AudioSeconds: 3.5, Seconds: 1})

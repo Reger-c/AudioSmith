@@ -19,6 +19,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/services"
 )
 
 // sentReq is what the app asked of the engine side.
@@ -149,6 +150,11 @@ func (s fakeSched) Submit(_ context.Context, spec jobs.Spec) (string, error) {
 	case proto.MethodTTSSynthesize:
 		r.Cmd = "synthesize"
 		json.Unmarshal(spec.Params, &r.SynthesizeParams)
+	case services.KindRender: // M1-G: a take's render; tests read it as the one synthesize call it would make
+		r.Cmd = "synthesize"
+		var p services.RenderParams
+		json.Unmarshal(spec.Params, &p)
+		r.SynthesizeParams = services.SynthesizeParams(p.Take, p.Output, p.Stream)
 	case hub.KindDownload:
 		r.Cmd = "download"
 		var p hub.DownloadParams
