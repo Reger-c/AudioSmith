@@ -130,6 +130,8 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | `a.updateSettings(fn)`, `a.prefs` | shell_settings.go | every area that changes a setting |
 | `a.askLicence(entry, then)` | shell_models.go | Models page, Studio (Generate, Preload) |
 | `a.toast(msg)`, `a.notify(…)`, `a.post(fn)`, `a.async(fn)` | app.go, shell_status.go | everyone |
+| `a.probeMedia`, `a.captureDevices`, `a.startRecording(params, onLevel, then)`, `a.stopRecording`, `engineErrorText(err)`, `jobErrorText(*jobs.Error)` | enginelink.go (M1) | voices/clone (reference recorder, imports), studio |
+| Engine jobs: submit `proto` job kinds (`engine.ExecutorKinds`) on `jobs.Lane(proto.RoleOf(kind))`; listen/media workers start on demand (`engine.Config.OnDemand`); default models `catalog.DefaultSTT/DefaultAlign/DefaultVAD/DefaultEnhance` | internal/engine, internal/catalog (M1) | voices, studio, later dictation/dubbing |
 
 ## 4. Contracts (summary)
 
