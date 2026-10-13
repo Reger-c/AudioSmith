@@ -1,0 +1,628 @@
+package translate
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"html"
+	"io"
+	"math/rand/v2"
+	"net"
+	"net/http"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/hehehai/AudioSmith/internal/llm"
+)
+
+// Online machine translation. Each service is a third-party network
+// service with its own key (Secrets name "mt.<service>"). Text goes as
+// HTML: [tags] (as ⟦n⟧ markers) and glossary targets are wrapped in
+// <span translate="no" class="notranslate">, which DeepL, Google and
+// Microsoft all leave untranslated, so tags survive and glossary terms
+// come out as the glossary says.
+
+// MTSecretPrefix starts MT key names: "mt.deepl", "mt.google", "mt.google-v3", "mt.microsoft".
+const MTSecretPrefix = "mt."
+
+// MTConfig is what every MT adapter needs.
+type MTConfig struct {
+	Client  *http.Client // the app's proxy-aware client; nil: http.DefaultClient
+	Secrets llm.Secrets  // keys; the app backs it with the Keychain
+	BaseURL string       // overrides the service endpoint (tests, regional endpoints)
+	// MaxAttempts per request, retrying 429/5xx/network errors (0: 3).
+	MaxAttempts int
+	Sleep       func(ctx context.Context, d time.Duration) error // tests
+}
+
+// mtService is one provider's wire format.
+type mtService interface {
+	id() string
+	maxBatch() (texts, chars int)
+	// code maps a language to the service's code; ok false if unsupported.
+	code(l Lang, target bool) (string, bool)
+	// call translates htmls (protected HTML) and returns them in order.
+	call(ctx context.Context, m *mtTranslator, htmls []string, src, tgt string, req Request) ([]string, error)
+}
+
+type mtTranslator struct {
+	cfg MTConfig
+	svc mtService
+}
+
+func (m *mtTranslator) Info() Info {
+	return Info{ID: m.svc.id(), Kind: "mt", Network: true, ThirdParty: true, Qualities: []Quality{Fast}, Glossary: true, Detects: true}
+}
+
+const noTranslateOpen, noTranslateClose = `<span translate="no" class="notranslate">`, `</span>`
+
+var (
+	reNoTranslate = regexp.MustCompile(`(?s)<span[^>]*notranslate[^>]*>(.*?)</span>`)
+	reAnyTag      = regexp.MustCompile(`<[^>]+>`)
+)
+
+// protectHTML escapes masked text, wraps its markers and replaces glossary
+// sources with wrapped targets.
+func protectHTML(text string, g Glossary) string {
+	type span struct {
+		s, e   int
+		target string
+	}
+	var spans []span
+	taken := make([]bool, len(text))
+	for _, t := range g { // Relevant: longest first
+		for _, r := range t.match(text) {
+			if anyUsed(taken, r[0], r[1]) {
+				continue
+			}
+			for k := r[0]; k < r[1]; k++ {
+				taken[k] = true
+			}
+			spans = append(spans, span{r[0], r[1], t.Target})
+		}
+	}
+	// Order by position.
+	for i := 1; i < len(spans); i++ {
+		for j := i; j > 0 && spans[j].s < spans[j-1].s; j-- {
+			spans[j], spans[j-1] = spans[j-1], spans[j]
+		}
+	}
+	var b strings.Builder
+	plain := func(s string) {
+		esc := html.EscapeString(s)
+		b.WriteString(markerRE.ReplaceAllStringFunc(esc, func(x string) string { return noTranslateOpen + x + noTranslateClose }))
+	}
+	last := 0
+	for _, sp := range spans {
+		plain(text[last:sp.s])
+		b.WriteString(noTranslateOpen + html.EscapeString(sp.target) + noTranslateClose)
+		last = sp.e
+	}
+	plain(text[last:])
+	return b.String()
+}
+
+// unprotectHTML undoes protectHTML on a service's output.
+func unprotectHTML(s string) string {
+	s = reNoTranslate.ReplaceAllString(s, "$1")
+	s = strings.ReplaceAll(s, "<br>", "\n")
+	s = reAnyTag.ReplaceAllString(s, "")
+	return strings.TrimSpace(collapseSpaces(html.UnescapeString(s)))
+}
+
+func (m *mtTranslator) Translate(ctx context.Context, req Request) (Result, error) {
+	if err := validate(&req); err != nil {
+		return Result{}, err
+	}
+	if req.Quality != Fast {
+		return Result{}, newErr(CodeUnsupported, "feature", "quality."+string(req.Quality))
+	}
+	tgt, _ := parseLang(req.Target)
+	tcode, ok := m.svc.code(tgt, true)
+	if !ok {
+		return Result{}, newErr(CodeLanguage, "lang", req.Target, "service", m.svc.id())
+	}
+	scode := ""
+	if req.Source != "" {
+		src, _ := parseLang(req.Source)
+		if scode, ok = m.svc.code(src, false); !ok {
+			return Result{}, newErr(CodeLanguage, "lang", req.Source, "service", m.svc.id())
+		}
+	}
+	res := Result{Translator: m.svc.id(), Segments: make([]Translated, len(req.Segments))}
+	masks := make([]masked, len(req.Segments))
+	htmls := make([]string, len(req.Segments))
+	for i, s := range req.Segments {
+		res.Segments[i].ID = s.ID
+		masks[i] = mask(s.Text)
+		htmls[i] = protectHTML(masks[i].Text, req.Glossary.Relevant(s.Text))
+	}
+	maxN, maxC := m.svc.maxBatch()
+	done := 0
+	for start := 0; start < len(htmls); {
+		end, chars := start, 0
+		for end < len(htmls) && end-start < maxN && (end == start || chars+len(htmls[end]) <= maxC) {
+			chars += len(htmls[end])
+			end++
+		}
+		if len(htmls[start]) > maxC {
+			res.Segments[start].Err = lineErr(req.Segments[start].ID, newErr(CodeTooLong, "service", m.svc.id(), "limit", strconv.Itoa(maxC)))
+			start = start + 1
+			continue
+		}
+		// Empty lines skip the service.
+		var idx []int
+		var batch []string
+		for i := start; i < end; i++ {
+			if strings.TrimSpace(htmls[i]) == "" {
+				continue
+			}
+			idx = append(idx, i)
+			batch = append(batch, htmls[i])
+		}
+		if len(batch) > 0 {
+			out, err := m.retry(ctx, func() ([]string, error) { return m.svc.call(ctx, m, batch, scode, tcode, req) })
+			if err != nil {
+				countFailed(&res)
+				return res, err
+			}
+			if len(out) != len(batch) {
+				return res, newErr(CodeBadResponse, "service", m.svc.id(), "detail", "count")
+			}
+			for k, i := range idx {
+				text, ok := masks[i].unmask(unprotectHTML(out[k]))
+				res.Segments[i].Text = text
+				if !ok {
+					res.Segments[i].Warnings = append(res.Segments[i].Warnings, WarnTagsRepaired)
+				}
+			}
+		}
+		done += end - start
+		if req.Progress != nil {
+			req.Progress(Progress{Stage: "translate", Done: done, Total: len(req.Segments)})
+		}
+		start = end
+	}
+	countFailed(&res)
+	return res, nil
+}
+
+func (m *mtTranslator) retry(ctx context.Context, f func() ([]string, error)) ([]string, error) {
+	attempts := m.cfg.MaxAttempts
+	if attempts <= 0 {
+		attempts = 3
+	}
+	for a := 1; ; a++ {
+		out, err := f()
+		if err == nil {
+			return out, nil
+		}
+		var r *retryable
+		if !errors.As(err, &r) || a >= attempts || ctx.Err() != nil {
+			if errors.As(err, &r) {
+				return nil, r.err
+			}
+			return nil, err
+		}
+		d := r.after
+		if d <= 0 {
+			base := 500 * time.Millisecond << (a - 1)
+			d = base/2 + time.Duration(rand.Float64()*float64(base/2))
+		}
+		if d > 30*time.Second {
+			return nil, r.err
+		}
+		sleep := m.cfg.Sleep
+		if sleep == nil {
+			sleep = func(ctx context.Context, d time.Duration) error {
+				t := time.NewTimer(d)
+				defer t.Stop()
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-t.C:
+					return nil
+				}
+			}
+		}
+		if err := sleep(ctx, d); err != nil {
+			return nil, cancelled(err)
+		}
+	}
+}
+
+// retryable marks an error worth retrying.
+type retryable struct {
+	err   *Error
+	after time.Duration
+}
+
+func (r *retryable) Error() string { return r.err.Error() }
+func (r *retryable) Unwrap() error { return r.err }
+
+func (m *mtTranslator) key(ctx context.Context) (string, error) {
+	name := MTSecretPrefix + m.svc.id()
+	if m.cfg.Secrets == nil {
+		return "", newErr(CodeNoKey, "service", m.svc.id())
+	}
+	k, err := m.cfg.Secrets.Secret(ctx, name)
+	if err != nil || strings.TrimSpace(k) == "" {
+		e := newErr(CodeNoKey, "service", m.svc.id())
+		if err != nil && !errors.Is(err, llm.ErrNoSecret) {
+			e.Err = err
+		}
+		return "", e
+	}
+	return strings.TrimSpace(k), nil
+}
+
+// do sends a JSON request and decodes a 2xx JSON response into out.
+func (m *mtTranslator) do(ctx context.Context, method, url string, header http.Header, body, out any) error {
+	var rd io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, rd)
+	if err != nil {
+		e := newErr(CodeConfig, "service", m.svc.id(), "field", "baseURL")
+		e.Err = err
+		return e
+	}
+	for k, v := range header {
+		req.Header[k] = v
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set("User-Agent", llm.UserAgent)
+	c := m.cfg.Client
+	if c == nil {
+		c = http.DefaultClient
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		if ctx.Err() != nil {
+			return cancelled(ctx.Err())
+		}
+		e := newErr(CodeNetwork, "service", m.svc.id(), "detail", err.Error())
+		e.Err = err
+		var ne net.Error
+		if !strings.Contains(err.Error(), "connection refused") || errors.As(err, &ne) && ne.Timeout() {
+			return &retryable{err: e}
+		}
+		return e
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		if ctx.Err() != nil {
+			return cancelled(ctx.Err())
+		}
+		e := newErr(CodeNetwork, "service", m.svc.id(), "detail", err.Error())
+		return &retryable{err: e}
+	}
+	if resp.StatusCode/100 != 2 {
+		return m.httpErr(resp, raw)
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
+		e := newErr(CodeBadResponse, "service", m.svc.id(), "detail", clipRunes(string(raw), 200))
+		e.Err = err
+		return e
+	}
+	return nil
+}
+
+func (m *mtTranslator) httpErr(resp *http.Response, raw []byte) error {
+	id, st := m.svc.id(), resp.StatusCode
+	detail := strings.ToLower(string(raw))
+	status := strconv.Itoa(st)
+	var after time.Duration
+	if v, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil {
+		after = time.Duration(v) * time.Second
+	}
+	switch {
+	case st == 456 || strings.Contains(detail, "quota") || strings.Contains(detail, "limit exceeded") || strings.Contains(detail, "ratelimit"):
+		e := newErr(CodeQuota, "service", id, "status", status)
+		if st == 429 || strings.Contains(detail, "ratelimitexceeded") || strings.Contains(detail, "too many") {
+			return &retryable{err: e, after: after}
+		}
+		return e
+	case st == 429:
+		return &retryable{err: newErr(CodeQuota, "service", id, "status", status), after: after}
+	case st == 401 || st == 403 || strings.Contains(detail, "api key not valid") || strings.Contains(detail, "invalid api key"):
+		return newErr(CodeAuth, "service", id, "status", status)
+	case st == 413 || st == 414:
+		return newErr(CodeTooLong, "service", id, "limit", "")
+	case st >= 500:
+		return &retryable{err: newErr(CodeHTTP, "service", id, "status", status, "detail", clipRunes(string(raw), 200)), after: after}
+	}
+	return newErr(CodeHTTP, "service", id, "status", status, "detail", clipRunes(string(raw), 200))
+}
+
+func (m *mtTranslator) base(def string) string {
+	if m.cfg.BaseURL != "" {
+		return strings.TrimRight(m.cfg.BaseURL, "/")
+	}
+	return def
+}
+
+// ---- DeepL ----
+
+// NewDeepL returns the DeepL adapter (key "mt.deepl"; ":fx" keys use the free API).
+func NewDeepL(cfg MTConfig) Translator { return &mtTranslator{cfg: cfg, svc: deepl{}} }
+
+type deepl struct{}
+
+func (deepl) id() string                   { return "deepl" }
+func (deepl) maxBatch() (texts, chars int) { return 50, 100_000 }
+
+var deeplLangs = map[string]bool{"ar": true, "bg": true, "cs": true, "da": true, "de": true, "el": true, "en": true, "es": true, "et": true, "fi": true, "fr": true, "he": true, "hu": true, "id": true, "it": true, "ja": true, "ko": true, "lt": true, "lv": true, "nb": true, "nl": true, "pl": true, "pt": true, "ro": true, "ru": true, "sk": true, "sl": true, "sv": true, "th": true, "tr": true, "uk": true, "vi": true, "zh": true}
+
+func (deepl) code(l Lang, target bool) (string, bool) {
+	c := l.Code
+	if c == "no" {
+		c = "nb"
+	}
+	if !deeplLangs[c] {
+		return "", false
+	}
+	up := strings.ToUpper(c)
+	if !target {
+		return up, true
+	}
+	switch c {
+	case "en":
+		if l.Region == "GB" || l.Region == "AU" || l.Region == "IE" || l.Region == "NZ" || l.Region == "IN" || l.Region == "ZA" {
+			return "EN-GB", true
+		}
+		return "EN-US", true
+	case "pt":
+		if l.Region == "PT" || l.Region == "AO" || l.Region == "MZ" {
+			return "PT-PT", true
+		}
+		return "PT-BR", true
+	case "zh":
+		if l.Script == "Hant" {
+			return "ZH-HANT", true
+		}
+		return "ZH-HANS", true
+	case "es":
+		if l.Region != "" && l.Region != "ES" {
+			return "ES-419", true
+		}
+	}
+	return up, true
+}
+
+func (d deepl) call(ctx context.Context, m *mtTranslator, htmls []string, src, tgt string, req Request) ([]string, error) {
+	key, err := m.key(ctx)
+	if err != nil {
+		return nil, err
+	}
+	def := "https://api.deepl.com"
+	if strings.HasSuffix(key, ":fx") {
+		def = "https://api-free.deepl.com"
+	}
+	body := map[string]any{"text": htmls, "target_lang": tgt, "tag_handling": "html", "preserve_formatting": true}
+	if src != "" {
+		body["source_lang"] = src
+	}
+	switch req.Formality {
+	case FormalityFormal:
+		body["formality"] = "prefer_more"
+	case FormalityInformal:
+		body["formality"] = "prefer_less"
+	}
+	if c := strings.TrimSpace(req.Context + " " + req.Style); c != "" {
+		body["context"] = c
+	}
+	var out struct {
+		Translations []struct {
+			Text string `json:"text"`
+		} `json:"translations"`
+	}
+	h := http.Header{"Authorization": {"DeepL-Auth-Key " + key}}
+	if err := m.do(ctx, http.MethodPost, m.base(def)+"/v2/translate", h, body, &out); err != nil {
+		return nil, err
+	}
+	res := make([]string, len(out.Translations))
+	for i, t := range out.Translations {
+		res[i] = t.Text
+	}
+	return res, nil
+}
+
+// ---- Google Cloud Translation ----
+
+// NewGoogle returns the Google Cloud Translation v2 (basic) adapter, key "mt.google" (an API key).
+func NewGoogle(cfg MTConfig) Translator { return &mtTranslator{cfg: cfg, svc: googleV2{}} }
+
+// NewGoogleV3 returns the v3 adapter for project (location global); the
+// secret "mt.google-v3" is an OAuth access token (from the user's
+// service account / gcloud), sent as a Bearer token.
+func NewGoogleV3(cfg MTConfig, project string) Translator {
+	return &mtTranslator{cfg: cfg, svc: googleV3{project: project}}
+}
+
+func googleCode(l Lang) string {
+	switch l.Code {
+	case "zh":
+		if l.Script == "Hant" {
+			return "zh-TW"
+		}
+		return "zh-CN"
+	case "pt":
+		if l.Region == "PT" {
+			return "pt-PT"
+		}
+		return "pt"
+	case "fr":
+		if l.Region == "CA" {
+			return "fr-CA"
+		}
+	case "he":
+		return "iw"
+	case "jv":
+		return "jw"
+	}
+	return l.Code
+}
+
+type googleV2 struct{}
+
+func (googleV2) id() string                   { return "google" }
+func (googleV2) maxBatch() (texts, chars int) { return 100, 25_000 }
+func (googleV2) code(l Lang, _ bool) (string, bool) {
+	return googleCode(l), l.Code != ""
+}
+
+func (g googleV2) call(ctx context.Context, m *mtTranslator, htmls []string, src, tgt string, _ Request) ([]string, error) {
+	key, err := m.key(ctx)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{"q": htmls, "target": tgt, "format": "html"}
+	if src != "" {
+		body["source"] = src
+	}
+	var out struct {
+		Data struct {
+			Translations []struct {
+				TranslatedText string `json:"translatedText"`
+			} `json:"translations"`
+		} `json:"data"`
+	}
+	u := m.base("https://translation.googleapis.com") + "/language/translate/v2?key=" + url.QueryEscape(key)
+	if err := m.do(ctx, http.MethodPost, u, nil, body, &out); err != nil {
+		return nil, err
+	}
+	res := make([]string, len(out.Data.Translations))
+	for i, t := range out.Data.Translations {
+		res[i] = t.TranslatedText
+	}
+	return res, nil
+}
+
+type googleV3 struct{ project string }
+
+func (googleV3) id() string                   { return "google-v3" }
+func (googleV3) maxBatch() (texts, chars int) { return 100, 25_000 }
+func (googleV3) code(l Lang, _ bool) (string, bool) {
+	c := googleCode(l)
+	if c == "iw" {
+		c = "he"
+	}
+	return c, l.Code != ""
+}
+
+func (g googleV3) call(ctx context.Context, m *mtTranslator, htmls []string, src, tgt string, _ Request) ([]string, error) {
+	if g.project == "" {
+		return nil, newErr(CodeConfig, "service", g.id(), "field", "project")
+	}
+	token, err := m.key(ctx)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{"contents": htmls, "targetLanguageCode": tgt, "mimeType": "text/html"}
+	if src != "" {
+		body["sourceLanguageCode"] = src
+	}
+	var out struct {
+		Translations []struct {
+			TranslatedText string `json:"translatedText"`
+		} `json:"translations"`
+	}
+	u := fmt.Sprintf("%s/v3/projects/%s/locations/global:translateText", m.base("https://translation.googleapis.com"), url.PathEscape(g.project))
+	h := http.Header{"Authorization": {"Bearer " + token}, "X-Goog-User-Project": {g.project}}
+	if err := m.do(ctx, http.MethodPost, u, h, body, &out); err != nil {
+		return nil, err
+	}
+	res := make([]string, len(out.Translations))
+	for i, t := range out.Translations {
+		res[i] = t.TranslatedText
+	}
+	return res, nil
+}
+
+// ---- Microsoft Translator ----
+
+// NewMicrosoft returns the Microsoft Translator v3 adapter, key
+// "mt.microsoft"; region is the resource's Azure region ("" for global
+// resources).
+func NewMicrosoft(cfg MTConfig, region string) Translator {
+	return &mtTranslator{cfg: cfg, svc: microsoft{region: region}}
+}
+
+type microsoft struct{ region string }
+
+func (microsoft) id() string                   { return "microsoft" }
+func (microsoft) maxBatch() (texts, chars int) { return 100, 40_000 }
+func (microsoft) code(l Lang, _ bool) (string, bool) {
+	switch l.Code {
+	case "zh":
+		if l.Script == "Hant" {
+			return "zh-Hant", true
+		}
+		return "zh-Hans", true
+	case "pt":
+		if l.Region == "PT" {
+			return "pt-pt", true
+		}
+		return "pt", true
+	case "fr":
+		if l.Region == "CA" {
+			return "fr-ca", true
+		}
+	case "sr":
+		if l.Script == "Latn" {
+			return "sr-Latn", true
+		}
+		return "sr-Cyrl", true
+	case "no":
+		return "nb", true
+	}
+	return l.Code, l.Code != ""
+}
+
+func (ms microsoft) call(ctx context.Context, m *mtTranslator, htmls []string, src, tgt string, _ Request) ([]string, error) {
+	key, err := m.key(ctx)
+	if err != nil {
+		return nil, err
+	}
+	body := make([]map[string]string, len(htmls))
+	for i, h := range htmls {
+		body[i] = map[string]string{"Text": h}
+	}
+	u := m.base("https://api.cognitive.microsofttranslator.com") + "/translate?api-version=3.0&textType=html&to=" + url.QueryEscape(tgt)
+	if src != "" {
+		u += "&from=" + url.QueryEscape(src)
+	}
+	h := http.Header{"Ocp-Apim-Subscription-Key": {key}}
+	if ms.region != "" {
+		h.Set("Ocp-Apim-Subscription-Region", ms.region)
+	}
+	var out []struct {
+		Translations []struct {
+			Text string `json:"text"`
+		} `json:"translations"`
+	}
+	if err := m.do(ctx, http.MethodPost, u, h, body, &out); err != nil {
+		return nil, err
+	}
+	res := make([]string, len(out))
+	for i, t := range out {
+		if len(t.Translations) > 0 {
+			res[i] = t.Translations[0].Text
+		}
+	}
+	return res, nil
+}

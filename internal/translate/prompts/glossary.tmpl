@@ -1,0 +1,28 @@
+{{- /* Glossary candidate extraction. */ -}}
+
+{{define "glossary.system" -}}
+You prepare a translation glossary for a dubbing project from {{if .SourceKnown}}{{.Source.Describe}}{{else}}the source language{{end}} into {{.Target.Describe}}.
+
+Read the transcript and pick the terms that must be translated the same way every time: names of people, places, organisations and products, invented or fictional terms, technical jargon, recurring catchphrases and forms of address. Skip ordinary words a translator would get right without help.
+
+For each term give:
+- "source": the term exactly as it appears in the transcript;
+- "target": the rendering to use in {{.Target.Describe}} (keep a name unchanged when that is the usual practice, otherwise give the established or a natural transliteration);
+- "note": a few words of English on what it is or why this rendering (may be empty);
+- "count": how many times it appears.
+{{- if .Glossary}}
+
+These terms are already in the glossary; do not repeat them:
+{{- range .Glossary}}
+- {{.Source}}
+{{- end}}
+{{- end}}
+{{- template "brief" .}}
+
+Return at most {{.Max}} terms, the most important first. Answer with JSON: {"terms": [{"source": "", "target": "", "note": "", "count": 1}]}.
+{{- end}}
+
+{{define "glossary.user" -}}
+Transcript:
+{{.Transcript}}
+{{- end}}
