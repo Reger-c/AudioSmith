@@ -83,6 +83,9 @@ type Config struct {
 	// together; above it the supervisor unloads the least recently used
 	// idle models (models.unload). 0 means 60% of physical memory.
 	MemoryBudget int64
+	// IdleUnload unloads a model nobody used for this long (settings:
+	// "Unload idle models"); 0 keeps models until the budget needs room.
+	IdleUnload time.Duration
 	// HelloTimeout bounds the handshake (default 30 s: first launch
 	// compiles Metal shaders).
 	HelloTimeout time.Duration
@@ -128,6 +131,11 @@ type Supervisor interface {
 	// Restart stops the worker of role (cancelling its calls) and starts a
 	// fresh one; it resets the restart budget.
 	Restart(role proto.Role) error
+	// SetMemoryBudget changes Config.MemoryBudget at run time (settings);
+	// 0 is automatic. Models over the new budget are unloaded at once.
+	SetMemoryBudget(bytes int64)
+	// SetIdleUnload changes Config.IdleUnload at run time.
+	SetIdleUnload(d time.Duration)
 	// Stop asks every worker to shut down (engine.shutdown), then kills
 	// what is left after a grace period. Calls in flight fail with core.ErrEngine.
 	Stop()

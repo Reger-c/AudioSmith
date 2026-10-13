@@ -43,9 +43,12 @@ type TakeService interface {
 
 // TakeRequest asks for a new take.
 type TakeRequest struct {
-	// Recipe holds the text, model, voice and parameters; its ID, File,
+	// Recipe holds the text, model, voice and parameters; its File,
 	// CreatedAt and result fields are ignored and filled in by the service.
-	// Zero parameters are not sent, so the model's defaults apply.
+	// Zero parameters are not sent, so the model's defaults apply. Its ID
+	// may be set (a new ULID, core.NewID) so the caller can follow the job
+	// by its owner, "take:<id>", before Generate returns; "" lets the
+	// service choose one.
 	Recipe Take
 	// Stream asks for audio chunks as they are generated (M1 streaming
 	// preview): the job's events then carry tts.chunk payloads.

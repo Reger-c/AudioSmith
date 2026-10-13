@@ -499,8 +499,19 @@ func TestPinnedRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := RepoDir(c.opts.CacheDir, testRepo)
-	if _, err := os.Stat(filepath.Join(repo, "refs")); err == nil {
-		t.Error("a pinned commit wrote refs")
+	// refs/main points at it, for tools that resolve the repo by id…
+	if ref, err := os.ReadFile(filepath.Join(repo, "refs", "main")); err != nil || string(ref) != testCommit {
+		t.Errorf("refs/main %q %v", ref, err)
+	}
+	// …unless it names another snapshot that is there.
+	other := strings.Repeat("b", 40)
+	os.MkdirAll(filepath.Join(repo, "snapshots", other), 0o755)
+	os.WriteFile(filepath.Join(repo, "refs", "main"), []byte(other), 0o644)
+	if err := c.Download(context.Background(), e, nil); err != nil {
+		t.Fatal(err)
+	}
+	if ref, _ := os.ReadFile(filepath.Join(repo, "refs", "main")); string(ref) != other {
+		t.Errorf("refs/main moved to %q", ref)
 	}
 	if l, _ := c.Status(context.Background(), e); l.State != Downloaded || filepath.Base(l.Snapshot) != testCommit {
 		t.Errorf("status %+v", l)

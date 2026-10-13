@@ -27,6 +27,8 @@ type Take struct {
 	RefAudio    string  `json:"refAudio,omitempty"` // reference clip for cloning (absolute path)
 	RefText     string  `json:"refText,omitempty"`
 	Seed        int64   `json:"seed,omitempty"` // M1: the seed used, so the take can be reproduced
+	Duration    float64 `json:"duration,omitempty"` // target length in seconds (OmniVoice); 0 = natural
+	Steps       int     `json:"steps,omitempty"`    // diffusion steps (OmniVoice); 0 = the model's
 
 	// Relations (M1+). Empty for MVP takes.
 	VoiceID   string `json:"voiceId,omitempty"`   // Voice profile it was spoken with

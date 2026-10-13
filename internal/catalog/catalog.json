@@ -6,6 +6,7 @@
       "label": "Kokoro 82M",
       "family": "kokoro",
       "repo": "mlx-community/Kokoro-82M-bf16",
+      "revision": "a71e4d38b236d968966a2002c4c895dbd12b1c3c",
       "tasks": ["tts"],
       "about": "Fast, light, 54 voices in 9 languages. Language follows the voice prefix (af_ = US English, zf_ = Chinese…).",
       "languages": [
@@ -53,8 +54,8 @@
       "quantization": "bf16",
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/hexgrad/Kokoro-82M", "commercial": true, "verified": true},
       "aux": [
-        {"repo": "beshkenadze/kitten-tts-g2p", "licence": "mit"},
-        {"repo": "beshkenadze/g2p-multilingual-byT5-tiny-mlx", "licence": "mit"}
+        {"repo": "beshkenadze/kitten-tts-g2p", "revision": "9c692b92682d959d9013a9cfe6a49541997add18", "licence": "mit"},
+        {"repo": "beshkenadze/g2p-multilingual-byT5-tiny-mlx", "revision": "1388486ea7ddcd1806f0179bb6ae55119d9d1d45", "licence": "mit"}
       ]
     },
     {
@@ -62,6 +63,7 @@
       "label": "Qwen3-TTS 0.6B CustomVoice",
       "family": "qwen3_tts",
       "repo": "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit",
+      "revision": "049ef77fe8816b536193c0c25f9a214d17921282",
       "tasks": ["tts"],
       "about": "Chinese and English with named speakers. The voice field also takes a style, e.g. \"Vivian, calm and warm\".",
       "languages": [
@@ -97,6 +99,7 @@
       "label": "Qwen3-TTS 0.6B Base (voice clone)",
       "family": "qwen3_tts",
       "repo": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit",
+      "revision": "50f45ef0047cde7e84c2ef04326acb8ada2436a7",
       "tasks": ["tts"],
       "about": "Clones the voice of a reference clip; give its transcript too for best results.",
       "languages": [
@@ -123,6 +126,7 @@
       "label": "Marvis TTS 250M",
       "family": "marvis",
       "repo": "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit",
+      "revision": "f564ede427b7ec816b229b8c1c2f129817dc4a95",
       "tasks": ["tts"],
       "about": "English conversational voices; clones a voice from reference audio.",
       "languages": [
@@ -144,6 +148,7 @@
       "label": "Soprano 80M",
       "family": "soprano",
       "repo": "mlx-community/Soprano-80M-bf16",
+      "revision": "b7da048eff3dfd556409a44b78b9c61a9dd4ccfa",
       "tasks": ["tts"],
       "about": "Tiny English model, very fast.",
       "languages": [
@@ -160,6 +165,7 @@
       "label": "OmniVoice",
       "family": "omnivoice",
       "repo": "mlx-community/OmniVoice-bf16",
+      "revision": "8fb0b754cad788aaefec690cd55c207e8a628f85",
       "tasks": ["tts"],
       "about": "646 languages. Designs a voice from a description (\"female, young adult, british accent\") or clones a reference clip; can hit an exact duration. Non-commercial licence.",
       "capabilities": ["clone", "design", "voiceStyle", "language", "duration"],

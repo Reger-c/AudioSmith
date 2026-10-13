@@ -39,6 +39,10 @@ type Config struct {
 	DraftDelay time.Duration
 	// Now is the clock (tests); nil means time.Now.
 	Now func() time.Time
+	// Async runs the background work bus handlers hand off (saving the take
+	// a job made); nil means a new goroutine. Tests without goroutines
+	// pass a function that runs it at once.
+	Async func(func())
 	// Logf reports failures of background work (saving a generated take, a
 	// draft); nil means log.Printf.
 	Logf func(format string, args ...any)
@@ -59,6 +63,9 @@ func New(cfg Config) *Services {
 	}
 	if cfg.Logf == nil {
 		cfg.Logf = log.Printf
+	}
+	if cfg.Async == nil {
+		cfg.Async = func(fn func()) { go fn() }
 	}
 	if cfg.DraftDelay <= 0 {
 		cfg.DraftDelay = 750 * time.Millisecond

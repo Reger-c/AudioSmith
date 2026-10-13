@@ -483,3 +483,59 @@ func TestSupervisorEvictsOverBudget(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// loadedModels lists the fake engine's resident models.
+func loadedModels(t *testing.T, s Supervisor) []string {
+	t.Helper()
+	raw, err := s.Call(context.Background(), proto.RoleGPU, "", proto.MethodModelsLoaded, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res proto.LoadedResult
+	json.Unmarshal(raw, &res)
+	var ids []string
+	for _, m := range res.Models {
+		ids = append(ids, m.Model)
+	}
+	return ids
+}
+
+func waitLoaded(t *testing.T, s Supervisor, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got := loadedModels(t, s)
+		if len(got) == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("loaded %v, want %d models", got, want)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// The settings change the budget and the idle limit while engines run.
+func TestSupervisorLimitsAtRunTime(t *testing.T) {
+	s, w := newTestSup(t, "")
+	w.until(t, "ready", ready)
+	ctx := context.Background()
+	for _, m := range []string{"a/one", "b/two"} {
+		if _, err := s.Call(ctx, proto.RoleGPU, "L-"+m, proto.MethodModelsLoad, proto.LoadParams{Model: m}, nil); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	waitLoaded(t, s, 2)
+	w.until(t, "stats with both models", func(st WorkerStatus) bool { return st.Stats != nil && len(st.Stats.Models) == 2 })
+
+	s.SetMemoryBudget(150) // one 100-byte model fits
+	waitLoaded(t, s, 1)
+	if got := loadedModels(t, s); got[0] != "b/two" {
+		t.Errorf("kept %v, want the most recent", got)
+	}
+
+	s.SetMemoryBudget(0)
+	s.SetIdleUnload(50 * time.Millisecond)
+	waitLoaded(t, s, 0)
+}

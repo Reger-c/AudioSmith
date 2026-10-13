@@ -17,13 +17,34 @@ const (
 	CodeEngineUnavailable = "engine_unavailable"
 )
 
+// ExecutorOptions configure the engine executors.
+type ExecutorOptions struct {
+	// ModelPath returns the local snapshot directory of a model (repo id),
+	// or an error wrapping core.ErrNotDownloaded. When set, every
+	// models.load and tts.synthesize job gets the path filled in
+	// (proto.LoadParams.Path, proto.SynthesizeParams.ModelPath) as it
+	// starts, so engines running offline load what the app downloaded. A
+	// model that is not on disk fails the job with model_not_downloaded
+	// without asking the engine. nil leaves params as submitted.
+	ModelPath func(ctx context.Context, model string) (string, error)
+	// Licences, when set, is asked again before a job loads or runs a
+	// model (the services ask first; jobs submitted some other way, or
+	// re-run after the acceptance was withdrawn, are caught here): a
+	// refusal fails the job with licence_required.
+	Licences core.LicenceService
+}
+
 // RegisterExecutors registers the engine-backed job kinds of M0 on sched:
 // "models.load" and "tts.synthesize", run on the gpu worker. A job's
 // Params are the method's params (proto.LoadParams, proto.SynthesizeParams)
 // and its Result the method's result.
-func RegisterExecutors(sched jobs.Scheduler, sup Supervisor) {
+func RegisterExecutors(sched jobs.Scheduler, sup Supervisor, opts ...ExecutorOptions) {
+	var o ExecutorOptions
+	if len(opts) > 0 {
+		o = opts[0]
+	}
 	for _, m := range []string{proto.MethodModelsLoad, proto.MethodTTSSynthesize} {
-		sched.Register(m, Executor(sup, proto.RoleGPU, m))
+		sched.Register(m, executor(sup, proto.RoleGPU, m, o))
 	}
 }
 
@@ -35,10 +56,25 @@ func RegisterExecutors(sched jobs.Scheduler, sup Supervisor) {
 // (jobs.CodeInterrupted) or not being ready (CodeEngineUnavailable) — the
 // job's MaxAttempts decides whether it runs again.
 func Executor(sup Supervisor, role proto.Role, method string) jobs.Executor {
+	return executor(sup, role, method, ExecutorOptions{})
+}
+
+func executor(sup Supervisor, role proto.Role, method string, o ExecutorOptions) jobs.Executor {
 	return jobs.ExecutorFunc(func(ctx context.Context, job jobs.Job, report func(jobs.Progress), chunk func(json.RawMessage)) (json.RawMessage, error) {
 		params := job.Params
 		if len(params) == 0 {
 			params = json.RawMessage(`{}`)
+		}
+		if o.Licences != nil {
+			if err := checkLicence(ctx, params, o.Licences); err != nil {
+				return nil, err
+			}
+		}
+		if o.ModelPath != nil {
+			var err error
+			if params, err = withModelPath(ctx, method, params, o.ModelPath); err != nil {
+				return nil, err
+			}
 		}
 		notify := func(m proto.Message) {
 			switch m.Method {
@@ -64,6 +100,60 @@ func Executor(sup Supervisor, role proto.Role, method string) jobs.Executor {
 		}
 		return nil, jobError(ctx, err)
 	})
+}
+
+// checkLicence fails a job whose model's licence was not accepted.
+func checkLicence(ctx context.Context, params json.RawMessage, gate core.LicenceService) error {
+	var head struct {
+		Model string `json:"model"`
+	}
+	if json.Unmarshal(params, &head) != nil || head.Model == "" {
+		return nil // the engine answers bad_request
+	}
+	err := gate.Check(ctx, head.Model)
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, core.ErrLicenceRequired) {
+		data, _ := json.Marshal(map[string]string{"model": head.Model})
+		return &jobs.Error{Code: proto.CodeLicenceRequired, Message: err.Error(), Data: data}
+	}
+	return &jobs.Error{Code: proto.CodeInternal, Message: err.Error()}
+}
+
+// withModelPath fills the local snapshot directory of the job's model
+// into its params. A model that is not downloaded fails the job with
+// model_not_downloaded (not retryable: the user has to download it).
+func withModelPath(ctx context.Context, method string, params json.RawMessage, resolve func(context.Context, string) (string, error)) (json.RawMessage, error) {
+	var head struct {
+		Model     string `json:"model"`
+		Path      string `json:"path"`
+		ModelPath string `json:"modelPath"`
+	}
+	if err := json.Unmarshal(params, &head); err != nil {
+		return nil, &jobs.Error{Code: proto.CodeBadRequest, Message: "params: " + err.Error()}
+	}
+	if head.Model == "" || head.Path != "" || head.ModelPath != "" {
+		return params, nil // the engine answers bad_request, or the caller chose a path
+	}
+	dir, err := resolve(ctx, head.Model)
+	if err != nil {
+		if errors.Is(err, core.ErrNotDownloaded) {
+			data, _ := json.Marshal(map[string]string{"model": head.Model})
+			return nil, &jobs.Error{Code: proto.CodeModelNotDownloaded, Message: err.Error(), Data: data}
+		}
+		return nil, &jobs.Error{Code: proto.CodeInternal, Message: err.Error()}
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(params, &fields); err != nil {
+		return nil, &jobs.Error{Code: proto.CodeBadRequest, Message: "params: " + err.Error()}
+	}
+	key := "modelPath"
+	if method == proto.MethodModelsLoad {
+		key = "path"
+	}
+	fields[key], _ = json.Marshal(dir)
+	return json.Marshal(fields)
 }
 
 // jobError maps a Call error to a *jobs.Error (or ctx's error when the

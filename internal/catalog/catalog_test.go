@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -141,5 +142,20 @@ func TestNames(t *testing.T) {
 	}
 	if got := ShortRepo("plain"); got != "plain" {
 		t.Error(got)
+	}
+}
+
+// Every entry and auxiliary repo pins a commit.
+func TestRevisionsArePinned(t *testing.T) {
+	commit := regexp.MustCompile(`^[0-9a-f]{40}$`)
+	for _, e := range Builtin().Entries {
+		if !commit.MatchString(e.Revision) {
+			t.Errorf("%s: revision %q is not a commit", e.ID, e.Revision)
+		}
+		for _, a := range e.Aux {
+			if !commit.MatchString(a.Revision) {
+				t.Errorf("%s: aux %s: revision %q is not a commit", e.ID, a.Repo, a.Revision)
+			}
+		}
 	}
 }

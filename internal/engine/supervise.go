@@ -693,13 +693,18 @@ func (s *supervisor) Call(ctx context.Context, role proto.Role, id, method strin
 func (s *supervisor) pollStats(w *worker, p *proc) {
 	tick := time.NewTicker(s.cfg.StatsEvery)
 	defer tick.Stop()
+	var lastIdlePoll time.Time
 	for {
 		select {
 		case <-p.exited:
 			return
 		case <-tick.C:
 			if p.jobCount() == 0 {
-				continue
+				// Idle: poll now and then only to unload idle models.
+				if !s.idlePollDue(w, lastIdlePoll) {
+					continue
+				}
+				lastIdlePoll = time.Now()
 			}
 		case <-p.pollNow:
 		}
@@ -729,6 +734,35 @@ func (s *supervisor) pollStats(w *worker, p *proc) {
 	}
 }
 
+// idlePollDue reports whether an idle worker's stats should be polled to
+// find models idle for longer than the idle-unload limit.
+func (s *supervisor) idlePollDue(w *worker, last time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idle := s.cfg.IdleUnload
+	if idle <= 0 || w.status.Stats == nil || len(w.status.Stats.Models) == 0 {
+		return false
+	}
+	every := min(max(idle/4, time.Second), 30*time.Second)
+	return time.Since(last) >= every
+}
+
+// SetMemoryBudget changes Config.MemoryBudget and applies it at once.
+func (s *supervisor) SetMemoryBudget(bytes int64) {
+	s.mu.Lock()
+	s.cfg.MemoryBudget = max(bytes, 0)
+	s.mu.Unlock()
+	go s.evict()
+}
+
+// SetIdleUnload changes Config.IdleUnload; it applies at the next poll.
+func (s *supervisor) SetIdleUnload(d time.Duration) {
+	s.mu.Lock()
+	s.cfg.IdleUnload = max(d, 0)
+	s.mu.Unlock()
+	go s.evict()
+}
+
 func sameModels(a, b []proto.LoadedModel) bool {
 	return slices.EqualFunc(a, b, func(x, y proto.LoadedModel) bool { return x.Model == y.Model })
 }
@@ -747,7 +781,8 @@ func (s *supervisor) budgetLocked() int64 {
 }
 
 // evict unloads the least recently used idle models while the resident
-// models of all workers are over the budget.
+// models of all workers are over the budget, and every model idle for
+// longer than IdleUnload.
 func (s *supervisor) evict() {
 	type candidate struct {
 		role proto.Role
@@ -755,6 +790,7 @@ func (s *supervisor) evict() {
 	}
 	s.mu.Lock()
 	budget := s.budgetLocked()
+	idle := s.cfg.IdleUnload.Seconds()
 	var total int64
 	var cands []candidate
 	for _, w := range s.workers {
@@ -769,13 +805,15 @@ func (s *supervisor) evict() {
 		}
 	}
 	s.mu.Unlock()
-	if budget <= 0 || total <= budget {
+	overBudget := budget > 0 && total > budget
+	if !overBudget && idle <= 0 {
 		return
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].m.IdleSeconds > cands[j].m.IdleSeconds })
 	for _, c := range cands {
-		if total <= budget {
-			break
+		tooIdle := idle > 0 && c.m.IdleSeconds >= idle
+		if !tooIdle && (budget <= 0 || total <= budget) {
+			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_, err := s.Call(ctx, c.role, "", proto.MethodModelsUnload, proto.UnloadParams{Model: c.m.Model}, nil)
@@ -784,7 +822,11 @@ func (s *supervisor) evict() {
 			s.cfg.Logf("engine %s: unloading %s: %v", c.role, c.m.Model, err)
 			continue
 		}
-		s.cfg.Logf("engine %s: unloaded %s (idle %.0f s) to stay within the memory budget", c.role, c.m.Model, c.m.IdleSeconds)
+		why := "to stay within the memory budget"
+		if tooIdle {
+			why = "after the idle limit"
+		}
+		s.cfg.Logf("engine %s: unloaded %s (idle %.0f s) %s", c.role, c.m.Model, c.m.IdleSeconds, why)
 		total -= c.m.Bytes
 		s.mu.Lock()
 		if w := s.workers[c.role]; w.status.Stats != nil {

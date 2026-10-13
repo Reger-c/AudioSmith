@@ -543,3 +543,29 @@ func TestConcurrentServices(t *testing.T) {
 		t.Errorf("%d starred", len(s))
 	}
 }
+
+// A caller may choose the take's id, to follow its job by owner before
+// Generate returns; OmniVoice's duration and steps reach the engine. With
+// Async inline the take is saved before finish returns.
+func TestGenerateWithChosenID(t *testing.T) {
+	e := newEnv(t, func(c *Config) { c.Async = func(fn func()) { fn() } })
+	id := core.NewID(time.Now())
+	jobID, err := e.svc.Takes.Generate(ctx, core.TakeRequest{Recipe: core.Take{ID: id, Text: "x", Model: "m", Duration: 3.5, Steps: 16}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, _ := e.sched.Get(ctx, jobID)
+	var p proto.SynthesizeParams
+	json.Unmarshal(j.Params, &p)
+	if j.Owner != "take:"+id || p.Duration == nil || *p.Duration != 3.5 || p.Steps != 16 || !strings.Contains(p.Output.Path, id) {
+		t.Fatalf("job %+v params %+v", j.Spec, p)
+	}
+	e.sched.finish(t, jobID, jobs.StateSucceeded, &proto.SynthesizeResult{SampleRate: 24000, AudioSeconds: 3.5, Seconds: 1})
+	got, err := e.svc.Takes.Get(ctx, id)
+	if err != nil || got.Duration != 3.5 || got.Steps != 16 || got.JobID != jobID {
+		t.Fatalf("take %+v %v", got, err)
+	}
+	if _, err := e.svc.Takes.Generate(ctx, core.TakeRequest{Recipe: core.Take{ID: "../x", Text: "x", Model: "m"}}); !errors.Is(err, core.ErrInvalid) {
+		t.Errorf("bad id: %v", err)
+	}
+}

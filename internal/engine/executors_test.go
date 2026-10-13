@@ -3,10 +3,12 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
@@ -118,4 +120,94 @@ func TestExecutorsOverTheSupervisor(t *testing.T) {
 	}
 	after := submit(proto.MethodTTSSynthesize, synth("after", false), nil)
 	wait(after, jobs.StateSucceeded)
+}
+
+// recordSup answers every call with {} and records its params.
+type recordSup struct {
+	Supervisor
+	mu     sync.Mutex
+	params []json.RawMessage
+}
+
+func (r *recordSup) Call(_ context.Context, _ proto.Role, _, _ string, params any, _ func(proto.Message)) (json.RawMessage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.params = append(r.params, params.(json.RawMessage))
+	return json.RawMessage(`{}`), nil
+}
+
+type gate map[string]bool
+
+func (g gate) Check(_ context.Context, model string) error {
+	if g[model] {
+		return &core.LicenceRequiredError{Model: model, Name: "CC BY-NC 4.0"}
+	}
+	return nil
+}
+func (gate) Accept(context.Context, core.LicenceAcceptance) error  { return nil }
+func (gate) Revoke(context.Context, string, string) error          { return nil }
+func (gate) List(context.Context) ([]core.LicenceAcceptance, error) { return nil, nil }
+
+// Jobs load models by the path of their local snapshot, and refuse models
+// that are missing or whose licence is not accepted.
+func TestExecutorsFillModelPaths(t *testing.T) {
+	sup := &recordSup{}
+	sched := jobs.New(jobs.Options{Store: jobs.NewMemStore(), Logf: t.Logf})
+	defer sched.Close()
+	RegisterExecutors(sched, sup, ExecutorOptions{
+		Licences: gate{"nc/model": true},
+		ModelPath: func(_ context.Context, model string) (string, error) {
+			if model == "missing/model" {
+				return "", fmt.Errorf("%s: %w", model, core.ErrNotDownloaded)
+			}
+			return "/cache/" + model, nil
+		},
+	})
+	ctx := context.Background()
+	sched.Start(ctx)
+	run := func(method string, params any) jobs.Job {
+		t.Helper()
+		raw, _ := json.Marshal(params)
+		id, err := sched.Submit(ctx, jobs.Spec{Kind: method, Lane: jobs.LaneGPU, Params: raw})
+		if err != nil {
+			t.Fatal(err)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			j, _ := sched.Get(ctx, id)
+			if j.State.Terminal() {
+				return j
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("job %+v", j)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	if j := run(proto.MethodTTSSynthesize, synth("hi", false)); j.State != jobs.StateSucceeded {
+		t.Fatalf("synthesize: %+v", j)
+	}
+	if j := run(proto.MethodModelsLoad, proto.LoadParams{Model: "m/one"}); j.State != jobs.StateSucceeded {
+		t.Fatalf("load: %+v", j)
+	}
+	var sp proto.SynthesizeParams
+	var lp proto.LoadParams
+	json.Unmarshal(sup.params[0], &sp)
+	json.Unmarshal(sup.params[1], &lp)
+	if sp.ModelPath != "/cache/mlx-community/Kokoro-82M-bf16" || sp.Text != "hi" || lp.Path != "/cache/m/one" {
+		t.Errorf("params %s %s", sup.params[0], sup.params[1])
+	}
+
+	j := run(proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: "missing/model", Text: "x"})
+	if j.State != jobs.StateFailed || j.Err.Code != proto.CodeModelNotDownloaded {
+		t.Errorf("missing model: %+v %+v", j, j.Err)
+	}
+	j = run(proto.MethodModelsLoad, proto.LoadParams{Model: "nc/model"})
+	if j.State != jobs.StateFailed || j.Err.Code != proto.CodeLicenceRequired {
+		t.Errorf("licence: %+v %+v", j, j.Err)
+	}
+	if len(sup.params) != 2 {
+		t.Errorf("refused jobs reached the engine: %d calls", len(sup.params))
+	}
 }

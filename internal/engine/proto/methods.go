@@ -144,7 +144,11 @@ type LoadedResult struct {
 // unless that parameter is the point of the request (refAudio on a model
 // that cannot clone → unsupported).
 type SynthesizeParams struct {
-	Model       string   `json:"model"`
+	Model string `json:"model"`
+	// ModelPath is the model's local snapshot directory (hub.Local.Snapshot),
+	// as in LoadParams.Path; "" resolves Model in the cache. The app fills
+	// it when the job runs, so engines started offline never download.
+	ModelPath   string   `json:"modelPath,omitempty"`
 	Text        string   `json:"text"`
 	Voice       string   `json:"voice,omitempty"`    // speaker id or style prompt
 	Language    string   `json:"language,omitempty"` // value the model takes ("en", "Chinese"…)

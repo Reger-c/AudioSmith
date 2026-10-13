@@ -77,9 +77,27 @@ final class Synthesizer: @unchecked Sendable {
         let started = Date()
         let before = MLX.Memory.activeMemory
         let loaded: SpeechGenerationModel
+        let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
         do {
-            let source = (path?.isEmpty ?? true) ? model : path!
-            loaded = try await TTS.loadModel(modelRepo: source, hfToken: ProcessInfo.processInfo.environment["HF_TOKEN"])
+            if let path, !path.isEmpty {
+                do {
+                    loaded = try await TTS.loadModel(modelRepo: path, hfToken: token)
+                } catch TTSModelError.unsupportedModelType(let type) where (type ?? "").hasSuffix("from local directory") {
+                    // Families without a directory loader in mlx-audio-swift
+                    // (Marvis, OmniVoice, Spark) resolve the repo id in the
+                    // HF cache instead, where the app downloaded the same
+                    // snapshot (standard layout, found without the network).
+                    if offline, let missing = missingFromCache(model) {
+                        throw EngineError.notDownloaded(model: model, missing: missing)
+                    }
+                    log("\(model): no directory loader for its family, loading it from the cache by id")
+                    loaded = try await TTS.loadModel(modelRepo: model, hfToken: token)
+                }
+            } else {
+                loaded = try await TTS.loadModel(modelRepo: model, hfToken: token)
+            }
+        } catch let error as EngineError {
+            throw error
         } catch {
             if Task.isCancelled { throw CancellationError() }
             throw EngineError.loadFailed(error.localizedDescription)
@@ -154,6 +172,7 @@ final class Synthesizer: @unchecked Sendable {
         defer { release(p.model) }
         var caps = ["stream"]
         if model is KokoroModel { caps.append("speed") }
+        if model is OmniVoiceModel { caps.append(contentsOf: ["speed", "duration", "steps", "clone", "design"]) }
         return LoadResult(model: p.model, task: p.task ?? "tts", sampleRate: model.sampleRate,
                           seconds: Date().timeIntervalSince(started), bytes: r.bytes > 0 ? r.bytes : nil, capabilities: caps)
     }
@@ -167,7 +186,7 @@ final class Synthesizer: @unchecked Sendable {
         let bits = p.output.bits ?? 16
         guard [16, 24, 32].contains(bits) else { throw EngineError.badRequest("Unsupported bits \(bits)") }
 
-        let (model, _) = try await acquire(p.model, path: nil, job: job, offline: offline)
+        let (model, _) = try await acquire(p.model, path: p.modelPath, job: job, offline: offline)
         defer { release(p.model) }
 
         let refPath = nonEmpty(p.refAudio)
@@ -218,7 +237,22 @@ final class Synthesizer: @unchecked Sendable {
             progress.send("generating")
         }
 
-        if model is KokoroModel || model is KittenTTSModel {
+        if let omni = model as? OmniVoiceModel {
+            // OmniVoice takes its own parameters (diffusion steps, a target
+            // duration, speed, seed), which only this entry point accepts.
+            // It runs in the job's task and checks for cancellation at each
+            // diffusion step, so a cancelled job stops within a step.
+            var ov = OmniVoiceGenerateParameters()
+            if let steps = p.steps, steps > 0 { ov.numStep = steps }
+            if let duration = p.duration, duration > 0 { ov.duration = Float(duration) }
+            if let speed = p.speed, speed > 0 { ov.speed = Float(speed) }
+            ov.seed = UInt64(bitPattern: seed)
+            let chunk = try await omni.generate(
+                text: text, voice: nonEmpty(p.voice), refAudio: refAudio, refText: nonEmpty(p.refText),
+                language: nonEmpty(p.language), ovParameters: ov)
+            try Task.checkCancellation()
+            try audio(chunk)
+        } else if model is KokoroModel || model is KittenTTSModel {
             // These make the whole take in one call; their generateStream
             // only runs it in a Task of its own, which a cancelled job
             // would leave computing on the GPU while the next job starts.

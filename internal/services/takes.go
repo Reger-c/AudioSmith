@@ -36,6 +36,7 @@ type Takes struct {
 	ready    func(context.Context, string) error
 	now      func() time.Time
 	logf     func(string, ...any)
+	async    func(func())
 
 	rmw     sync.Mutex // serializes read-modify-write of takes
 	mu      sync.Mutex // guards pending and closed; never held during I/O
@@ -50,7 +51,7 @@ var _ core.TakeService = (*Takes)(nil)
 func newTakes(cfg Config) *Takes {
 	t := &Takes{
 		store: cfg.Store.Takes(), bus: cfg.Bus, sched: cfg.Scheduler, licences: cfg.Licences,
-		ready: cfg.Ready, now: cfg.Now, logf: cfg.Logf, pending: map[string]core.Take{},
+		ready: cfg.Ready, now: cfg.Now, logf: cfg.Logf, async: cfg.Async, pending: map[string]core.Take{},
 	}
 	t.unsub = core.On(cfg.Bus, t.onJob)
 	return t
@@ -98,6 +99,10 @@ func SynthesizeParams(t core.Take, output string, stream bool) proto.SynthesizeP
 	if t.Seed != 0 {
 		p.Seed = &t.Seed
 	}
+	if t.Duration != 0 {
+		p.Duration = &t.Duration
+	}
+	p.Steps = t.Steps
 	return p
 }
 
@@ -126,7 +131,11 @@ func (s *Takes) Generate(ctx context.Context, req core.TakeRequest) (string, err
 
 	now := s.now()
 	t := r
-	t.ID = core.NewID(now)
+	if t.ID == "" {
+		t.ID = core.NewID(now)
+	} else if filepath.Base(t.ID) != t.ID || strings.ContainsAny(t.ID, `/\.`) {
+		return "", fmt.Errorf("generate: take id %q: %w", t.ID, core.ErrInvalid)
+	}
 	t.CreatedAt = now
 	t.File = t.ID + ".wav"
 	t.JobID, t.Starred = "", false
@@ -189,12 +198,12 @@ func (s *Takes) onJob(u jobs.Updated) {
 	}
 	s.wg.Add(1)
 	s.mu.Unlock()
-	go func() {
+	s.async(func() {
 		defer s.wg.Done()
 		if err := s.complete(j, id, t, known); err != nil {
 			s.logf("take %s from job %s: %v", id, j.ID, err)
 		}
-	}()
+	})
 }
 
 // complete saves the take a succeeded job made and publishes TakeCreated.
@@ -226,6 +235,10 @@ func (s *Takes) complete(j jobs.Job, id string, t core.Take, known bool) error {
 		if p.Seed != nil {
 			t.Seed = *p.Seed
 		}
+		if p.Duration != nil {
+			t.Duration = *p.Duration
+		}
+		t.Steps = p.Steps
 	}
 	var res proto.SynthesizeResult
 	if err := json.Unmarshal(j.Result, &res); err != nil {

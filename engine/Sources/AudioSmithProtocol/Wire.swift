@@ -350,6 +350,8 @@ public struct Output: Codable, Sendable {
 
 public struct SynthesizeParams: Codable, Sendable {
     public var model: String
+    /// Local snapshot directory of the model; nil resolves `model` in the cache.
+    public var modelPath: String?
     public var text: String
     public var voice: String?
     public var language: String?

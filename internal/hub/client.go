@@ -626,8 +626,21 @@ func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)
 	if err := linkSnapshot(repoDir, p.commit, p.files); err != nil {
 		return err
 	}
-	if !isCommit(p.rev) {
-		if err := writeAtomic(filepath.Join(repoDir, "refs", filepath.FromSlash(p.rev)), []byte(p.commit)); err != nil {
+	ref := p.rev
+	if isCommit(ref) {
+		// A pinned commit is found by its path; tools that resolve the
+		// repo by id (the engine for auxiliary repos and for families it
+		// cannot load from a directory, the Python tools) read refs/main.
+		// Point it here unless it names another snapshot that is there.
+		ref = "main"
+		if old, err := os.ReadFile(filepath.Join(repoDir, "refs", "main")); err == nil {
+			if commit := strings.TrimSpace(string(old)); commit != p.commit && isDir(filepath.Join(repoDir, "snapshots", commit)) {
+				ref = ""
+			}
+		}
+	}
+	if ref != "" {
+		if err := writeAtomic(filepath.Join(repoDir, "refs", filepath.FromSlash(ref)), []byte(p.commit)); err != nil {
 			return err
 		}
 	}

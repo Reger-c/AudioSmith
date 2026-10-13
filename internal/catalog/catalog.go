@@ -66,9 +66,9 @@ type Catalog struct {
 
 // Entry is one downloadable model.
 //
-// Revision is empty ("main") for the MVP presets while the v1 engine
-// downloads by repo id and reads refs/main; once the supervisor loads
-// snapshots by path (proto.LoadParams.Path), entries pin commits.
+// Revision pins the commit the hub downloads and the engine loads (by the
+// snapshot's path, offline): an update of the repo never changes a model
+// under the user. Moving a pin is a catalogue change, tested on the Mac.
 type Entry struct {
 	ID       string `json:"id"`                 // stable slug, used in settings and the DB: "kokoro-82m-bf16"
 	Label    string `json:"label"`              // shown in pickers (not translated: product names)
