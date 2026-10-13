@@ -7,9 +7,9 @@
 // The UI reads entries to decide which controls to show; the hub
 // (internal/hub) downloads an entry's files; the licence gate reads its
 // Licence; the engine confirms capabilities when it loads the model
-// (proto.LoadResult). Thread C owns this package.
+// (proto.LoadResult).
 //
-// Imports: nothing internal.
+// Imports: lang (to validate language codes).
 package catalog
 
 import (
@@ -19,6 +19,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/hehehai/AudioSmith/internal/lang"
 )
 
 // Task is a kind of work a model does. One model may do several.
@@ -172,8 +174,9 @@ func Parse(data []byte) (*Catalog, error) {
 	return &c, c.Validate()
 }
 
-// Validate checks ids, repos and labels are unique and set, tasks and
-// capabilities are known, and every entry has a licence.
+// Validate checks ids, repos and labels are unique and set, tasks,
+// capabilities and language codes (internal/lang) are known, and every
+// entry has a licence.
 func (c *Catalog) Validate() error {
 	if c.Version < 1 {
 		return fmt.Errorf("version %d", c.Version)
@@ -214,6 +217,11 @@ func (c *Catalog) Validate() error {
 		for _, a := range e.Aux {
 			if a.Repo == "" || a.Repo == e.Repo {
 				return fmt.Errorf("%s: bad aux repo %q", e.ID, a.Repo)
+			}
+		}
+		for _, l := range e.Languages {
+			if lang.Canonical(l.Code) == "" {
+				return fmt.Errorf("%s: unknown language code %q", e.ID, l.Code)
 			}
 		}
 	}

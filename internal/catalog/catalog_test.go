@@ -159,3 +159,14 @@ func TestRevisionsArePinned(t *testing.T) {
 		}
 	}
 }
+
+func TestUnknownLanguageCode(t *testing.T) {
+	c := *Builtin()
+	c.Entries = slices.Clone(c.Entries)
+	e := c.Entries[0]
+	e.Languages = []Language{{Code: "xx-nonsense"}}
+	c.Entries[0] = e
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "xx-nonsense") {
+		t.Errorf("validate: %v", err)
+	}
+}
