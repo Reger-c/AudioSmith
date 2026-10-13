@@ -1,9 +1,9 @@
 import AudioSmithProtocol
 import Foundation
 
-let engineVersion = "0.2.0"
+let engineVersion = "0.3.0"
 /// The MLX the engine is built with (Package.resolved pins mlx-swift).
-let mlxVersion = "0.31.6"
+let mlxVersion = "0.32.3"
 
 /// `audiosmith-engine --text "…" [--model repo] [--voice v] [--output out.wav] …`
 /// runs one synthesis and exits: a smoke test without the app. It prints
