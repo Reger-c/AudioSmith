@@ -35,8 +35,9 @@ func TestEndToEnd(t *testing.T) {
 	a.autoplay = false
 	// Engine events arrive on other goroutines; apply them here, in order,
 	// as the window's main thread would.
-	events := make(chan func(), 256)
+	events := make(chan func(), 4096)
 	a.enginePost = func(fn func()) { events <- fn }
+	a.postQueue = a.enginePost
 	h.sup = engine.NewSupervisor(engine.Config{Bin: enginePath, Bus: a.bus, LogDir: h.logDir,
 		Log: func(e core.LogEntry) { t.Logf("%s %s: %s", e.Level, e.Source, e.Message) }, Logf: t.Logf})
 	a.connectEngine(h)

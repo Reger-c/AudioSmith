@@ -198,8 +198,9 @@ func TestStudioOverTheSupervisor(t *testing.T) {
 	h := &engineHost{bin: bin, logDir: t.TempDir()}
 	a := newApp(h, lib)
 	a.autoplay = false
-	events := make(chan func(), 256)
+	events := make(chan func(), 4096)
 	a.enginePost = func(fn func()) { events <- fn }
+	a.postQueue = a.enginePost
 	h.sup = engine.NewSupervisor(engine.Config{Bin: bin, Bus: a.bus, LogDir: h.logDir, Env: enginetest.Env(""),
 		Log: func(e core.LogEntry) { a.logs.Append(e) }, Logf: t.Logf})
 	a.connectEngine(h)

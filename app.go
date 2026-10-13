@@ -20,6 +20,10 @@ import (
 type app struct {
 	win    *mygo.Window // nil in tests
 	toasts []string     // shown by the next build of the view
+	// postQueue replaces the window's queue in tests that run real
+	// goroutines (scheduler, supervisor): they pump it on the test's
+	// goroutine. nil: post runs fn at once (other tests).
+	postQueue func(func())
 
 	shellState
 	studioState
@@ -41,6 +45,10 @@ func newApp(eng *engineHost, lib *library) *app {
 // post runs fn on the main thread and redraws; directly in tests.
 func (a *app) post(fn func()) {
 	if a.win == nil {
+		if a.postQueue != nil {
+			a.postQueue(fn)
+			return
+		}
 		fn()
 		return
 	}
