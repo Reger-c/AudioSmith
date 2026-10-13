@@ -171,8 +171,8 @@ var categoryTable = []CategoryInfo{
 		o("ningxia", "Ningxia", "宁夏话", "a Ningxia accent", "宁夏话", "", "宁夏话"),
 		o("beijing", "Beijing", "北京话", "a Beijing accent", "京腔", "", ""),
 		o("tianjin", "Tianjin", "天津话", "a Tianjin accent", "天津话", "", ""),
-		o("cantonese", "Cantonese-accented", "广普", "a Cantonese-accented Mandarin", "广东口音的普通话", "", ""),
-		o("taiwanese", "Taiwanese Mandarin", "台湾腔", "a Taiwanese Mandarin accent", "台湾腔", "", ""),
+		o("cantonese", "Cantonese-accented", "广普", "a Cantonese accent", "广东口音的普通话", "", ""),
+		o("taiwanese", "Taiwanese Mandarin", "台湾腔", "a Taiwanese accent", "台湾腔", "", ""),
 		o("shanghai", "Shanghai", "上海口音", "a Shanghainese accent", "上海口音", "", ""),
 	}},
 }
