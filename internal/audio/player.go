@@ -7,10 +7,10 @@ import (
 	myaudio "github.com/egoist/mygo/audio"
 )
 
-// Player plays one take at a time, identified by an id. It is used from
-// the UI thread only (not goroutine-safe). Load decodes the whole file
-// into memory: thread A switches it to a stream (myaudio.OpenStream) so
-// long audio plays without loading it all.
+// Player plays one take at a time, identified by an id, streaming it from
+// its file (myaudio.OpenStream decodes about a second ahead), so long
+// audio plays without being read into memory. Loading opens the file and
+// reads its header only. Use it from the UI thread (not goroutine-safe).
 type Player struct {
 	id string
 	p  *myaudio.Player
@@ -18,16 +18,17 @@ type Player struct {
 
 func (pl *Player) load(id, path string) error {
 	pl.Stop()
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	snd, err := myaudio.DecodeSound(data)
+	p, err := myaudio.OpenStream(f) // closes f when the player closes
 	if err != nil {
+		f.Close()
 		return err
 	}
 	pl.id = id
-	pl.p = snd.NewPlayer()
+	pl.p = p
 	return nil
 }
 
@@ -46,10 +47,10 @@ func (pl *Player) Toggle(id, path string) error {
 	return nil
 }
 
-// Stop stops and forgets the loaded audio.
+// Stop stops, closes the stream (and its file) and forgets the audio.
 func (pl *Player) Stop() {
 	if pl.p != nil {
-		pl.p.Stop()
+		pl.p.Close()
 	}
 	pl.p = nil
 	pl.id = ""
