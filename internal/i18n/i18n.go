@@ -13,9 +13,12 @@
 // calls and fails when a supported locale lacks one.
 //
 // Thread C owns this package: M0 ships en and zh-Hans, M7 the rest.
-// Today it is a stub that knows only English. Every function is safe from
-// any goroutine; switching the locale takes effect at the next build pass
-// (the shell rebuilds the native menu itself).
+// TestKeyParity (parity_test.go) scans every non-test .go file for T/N/X
+// calls with literal messages, plus the catalogue's about texts, and fails
+// when zh-Hans lacks one, keeps one nothing uses, or changes its format
+// verbs (a translation may reorder them with %[2]s). Every function is
+// safe from any goroutine; switching the locale takes effect at the next
+// build pass (the shell rebuilds the native menu itself).
 //
 // Imports: nothing internal.
 package i18n
@@ -43,6 +46,19 @@ func init() { SetLocale("en") }
 
 // Supported lists the UI languages, as BCP-47 tags, English first.
 func Supported() []string { return []string{"en", "zh-Hans"} }
+
+// Name is the name of a supported language in that language, as a
+// language picker shows it ("English", "简体中文"); the tag itself for
+// others.
+func Name(tag string) string {
+	switch tag {
+	case "en":
+		return "English"
+	case "zh-Hans":
+		return "简体中文"
+	}
+	return tag
+}
 
 // Locale returns the active tag.
 func Locale() string { return current.Load().tag }
