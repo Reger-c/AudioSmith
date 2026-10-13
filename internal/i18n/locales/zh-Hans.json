@@ -37,6 +37,7 @@
   "Free the memory the loaded model takes": "释放已加载模型占用的内存",
   "Generate": "生成",
   "Generate speech (⌘↩)": "生成语音（⌘↩）",
+  "Generate take": "生成录音",
   "Generating…": "正在生成…",
   "History": "历史",
   "Language": "语言",
