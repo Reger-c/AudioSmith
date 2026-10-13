@@ -17,7 +17,7 @@ run() { # name, then engine arguments
   "$ENGINE" "$@" --output "$OUT/$name.wav" > "$OUT/$name.json" 2> "$OUT/$name.err"
   local code=$?
   if [[ $code -eq 0 && -s "$OUT/$name.wav" ]]; then
-    printf 'ok    %-10s %3ss  %s\n' "$name" $((SECONDS - started)) "$(grep '"done"' "$OUT/$name.json")"
+    printf 'ok    %-10s %3ss  %s\n' "$name" $((SECONDS - started)) "$(grep '"result"' "$OUT/$name.json")"
   else
     fail=1
     printf 'FAIL  %-10s exit %s\n' "$name" "$code"
@@ -29,4 +29,5 @@ run() { # name, then engine arguments
 run kokoro-en --text "Hello from AudioSmith. This voice was generated on your Mac with MLX." --voice af_heart
 run kokoro-zh --text "你好，这是在 Mac 上用 MLX 生成的语音。" --voice zf_xiaobei
 run kokoro-fast --text "The same voice, a little faster." --voice am_adam --speed 1.3
+run kokoro-24 --text "Twenty-four bit, streamed." --voice af_heart --bits 24 --stream
 exit $fail
