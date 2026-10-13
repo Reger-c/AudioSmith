@@ -1,4 +1,4 @@
-package main
+package engine
 
 import (
 	"os"
@@ -29,19 +29,19 @@ func TestEngineProcess(t *testing.T) {
 	if err := os.WriteFile(path, []byte(fakeEngineScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	events := make(chan engineEvent, 16)
+	events := make(chan Event, 16)
 	type exit struct {
 		err  error
 		tail string
 	}
 	exits := make(chan exit, 1)
-	e := &engineProcess{
-		path:    path,
-		logPath: filepath.Join(dir, "engine.log"),
-		onEvent: func(ev engineEvent) { events <- ev },
-		onExit:  func(err error, tail string) { exits <- exit{err, tail} },
+	e := &Process{
+		Bin:     path,
+		LogPath: filepath.Join(dir, "engine.log"),
+		OnEvent: func(ev Event) { events <- ev },
+		OnExit:  func(err error, tail string) { exits <- exit{err, tail} },
 	}
-	next := func() engineEvent {
+	next := func() Event {
 		t.Helper()
 		select {
 		case ev := <-events:
@@ -49,7 +49,7 @@ func TestEngineProcess(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("no event from the engine")
 		}
-		return engineEvent{}
+		return Event{}
 	}
 
 	if err := e.Restart(); err != nil {
@@ -59,7 +59,7 @@ func TestEngineProcess(t *testing.T) {
 		t.Fatalf("first event %+v", ev)
 	}
 
-	id, err := e.Send(engineRequest{Cmd: "synthesize", Text: `He said "hi"`, Model: "m"})
+	id, err := e.Send(Request{Cmd: "synthesize", Text: `He said "hi"`, Model: "m"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestEngineProcess(t *testing.T) {
 	}
 
 	// An unexpected exit is reported with the engine's last stderr lines.
-	e.Send(engineRequest{Cmd: "crash"})
+	e.Send(Request{Cmd: "crash"})
 	select {
 	case x := <-exits:
 		if x.err == nil || !strings.Contains(x.tail, "fatal: boom") {
@@ -85,10 +85,10 @@ func TestEngineProcess(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("exit not reported")
 	}
-	if _, err := e.Send(engineRequest{Cmd: "ping"}); err == nil {
+	if _, err := e.Send(Request{Cmd: "ping"}); err == nil {
 		t.Error("Send succeeded to a dead engine")
 	}
-	data, _ := os.ReadFile(e.logPath)
+	data, _ := os.ReadFile(e.LogPath)
 	if !strings.Contains(string(data), "engine log line") {
 		t.Errorf("log %q", data)
 	}
@@ -101,11 +101,11 @@ func TestEngineProcess(t *testing.T) {
 }
 
 func TestEngineMissing(t *testing.T) {
-	e := &engineProcess{}
+	e := &Process{}
 	if err := e.Restart(); err == nil || !strings.Contains(err.Error(), "build-engine.sh") {
 		t.Fatalf("err %v", err)
 	}
-	if got := findEngine(t.TempDir()); got != "" && os.Getenv("AUDIOSMITH_ENGINE") == "" {
+	if got := Find(t.TempDir()); got != "" && os.Getenv("AUDIOSMITH_ENGINE") == "" {
 		t.Errorf("found %q in an empty directory", got)
 	}
 }
@@ -120,8 +120,8 @@ func TestFindEngineIsAbsolute(t *testing.T) {
 	}
 	t.Chdir(dir)
 	t.Setenv("AUDIOSMITH_ENGINE", "")
-	got := findEngine("res")
+	got := Find("res")
 	if !filepath.IsAbs(got) || filepath.Base(got) != "audiosmith-engine" {
-		t.Fatalf("findEngine = %q", got)
+		t.Fatalf("Find = %q", got)
 	}
 }

@@ -1,36 +1,39 @@
-package main
+package audio
 
 import (
 	"os"
 	"time"
 
-	"github.com/egoist/mygo/audio"
+	myaudio "github.com/egoist/mygo/audio"
 )
 
-// player plays one clip at a time with MyGo's audio package.
-type player struct {
-	clipID string
-	p      *audio.Player
+// Player plays one take at a time, identified by an id. It is used from
+// the UI thread only (not goroutine-safe). Load decodes the whole file
+// into memory: thread A switches it to a stream (myaudio.OpenStream) so
+// long audio plays without loading it all.
+type Player struct {
+	id string
+	p  *myaudio.Player
 }
 
-func (pl *player) load(id, path string) error {
-	pl.stop()
+func (pl *Player) load(id, path string) error {
+	pl.Stop()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	snd, err := audio.DecodeSound(data)
+	snd, err := myaudio.DecodeSound(data)
 	if err != nil {
 		return err
 	}
-	pl.clipID = id
+	pl.id = id
 	pl.p = snd.NewPlayer()
 	return nil
 }
 
-// toggle plays the clip, loading it first, or pauses it while it plays.
-func (pl *player) toggle(id, path string) error {
-	if pl.clipID != id || pl.p == nil {
+// Toggle plays id's audio at path, loading it first, or pauses it while it plays.
+func (pl *Player) Toggle(id, path string) error {
+	if pl.id != id || pl.p == nil {
 		if err := pl.load(id, path); err != nil {
 			return err
 		}
@@ -43,21 +46,29 @@ func (pl *player) toggle(id, path string) error {
 	return nil
 }
 
-func (pl *player) stop() {
+// Stop stops and forgets the loaded audio.
+func (pl *Player) Stop() {
 	if pl.p != nil {
 		pl.p.Stop()
 	}
 	pl.p = nil
-	pl.clipID = ""
+	pl.id = ""
 }
 
-func (pl *player) playing(id string) bool {
-	return pl.p != nil && pl.clipID == id && pl.p.Playing()
+// Current is the id of the loaded audio, playing or paused; "" when none.
+func (pl *Player) Current() string { return pl.id }
+
+// Active reports whether anything is playing.
+func (pl *Player) Active() bool { return pl.p != nil && pl.p.Playing() }
+
+// Playing reports whether id is playing.
+func (pl *Player) Playing(id string) bool {
+	return pl.p != nil && pl.id == id && pl.p.Playing()
 }
 
-// progress is where the clip id is, from 0 to 1.
-func (pl *player) progress(id string) float32 {
-	if pl.p == nil || pl.clipID != id {
+// Progress is where id is, from 0 to 1 (0 when it is not loaded).
+func (pl *Player) Progress(id string) float32 {
+	if pl.p == nil || pl.id != id {
 		return 0
 	}
 	d := pl.p.Duration()
@@ -67,8 +78,9 @@ func (pl *player) progress(id string) float32 {
 	return float32(pl.p.Position()) / float32(d)
 }
 
-func (pl *player) seek(id string, fraction float32) {
-	if pl.p == nil || pl.clipID != id {
+// Seek moves id to fraction (0–1) of its length, if it is loaded.
+func (pl *Player) Seek(id string, fraction float32) {
+	if pl.p == nil || pl.id != id {
 		return
 	}
 	pl.p.Seek(time.Duration(float64(pl.p.Duration()) * float64(fraction)))

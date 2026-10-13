@@ -1,4 +1,11 @@
-package main
+// Package engine runs audiosmith-engine, the Swift helper that does the
+// speech work, and talks to it.
+//
+// Today it holds the protocol-1 client the MVP uses (Process, Request,
+// Event: one process, one job, one model). Thread B replaces it with the
+// protocol-2 Supervisor declared in supervisor.go, speaking the wire format
+// of package proto; the v1 client stays until the Studio runs on jobs.
+package engine
 
 import (
 	"bufio"
@@ -15,9 +22,9 @@ import (
 	"sync"
 )
 
-// engineRequest is one line written to audiosmith-engine's stdin. See
+// Request is one protocol-1 line written to audiosmith-engine's stdin. See
 // engine/Sources/AudioSmithEngine/Protocol.swift for the protocol.
-type engineRequest struct {
+type Request struct {
 	ID          string   `json:"id,omitempty"`
 	Cmd         string   `json:"cmd"`
 	Model       string   `json:"model,omitempty"`
@@ -33,8 +40,8 @@ type engineRequest struct {
 	Output      string   `json:"output,omitempty"`
 }
 
-// engineEvent is one line the engine writes to stdout.
-type engineEvent struct {
+// Event is one protocol-1 line the engine writes to stdout.
+type Event struct {
 	ID              string   `json:"id"`
 	Event           string   `json:"event"`
 	Message         string   `json:"message"`
@@ -50,24 +57,25 @@ type engineEvent struct {
 	Output          string   `json:"output"`
 }
 
-// backend is what the view needs from the engine; tests replace it.
-type backend interface {
+// Backend is what the app needs from a protocol-1 engine; tests replace it.
+type Backend interface {
 	// Send writes a request, giving it an ID when it has none, and returns the ID.
-	Send(req engineRequest) (string, error)
+	Send(req Request) (string, error)
 	// Restart stops the engine process, if any, and starts a new one.
 	Restart() error
 	Stop()
 	Path() string
 }
 
-// engineProcess runs audiosmith-engine as a child process. Events arrive
-// on a goroutine of its own through onEvent; onExit reports the process
-// ending, with its last stderr lines.
-type engineProcess struct {
-	path    string
-	logPath string
-	onEvent func(engineEvent)
-	onExit  func(err error, stderrTail string)
+// Process runs audiosmith-engine as a child process and implements
+// Backend. Events arrive on a goroutine of its own through OnEvent; OnExit
+// reports the process ending, with its last stderr lines. Set the fields
+// before the first Restart.
+type Process struct {
+	Bin     string // the executable (Find)
+	LogPath string // stderr is appended here; "" = not logged
+	OnEvent func(Event)
+	OnExit  func(err error, stderrTail string)
 
 	mu     sync.Mutex
 	cmd    *exec.Cmd
@@ -76,19 +84,19 @@ type engineProcess struct {
 	gen    int // bumps on every start, so a dying old process reports nothing
 }
 
-func (e *engineProcess) Path() string { return e.path }
+func (e *Process) Path() string { return e.Bin }
 
-func (e *engineProcess) Restart() error {
+func (e *Process) Restart() error {
 	e.Stop()
 	return e.start()
 }
 
-func (e *engineProcess) start() error {
-	if e.path == "" {
+func (e *Process) start() error {
+	if e.Bin == "" {
 		return errors.New("audiosmith-engine was not found: build it with scripts/build-engine.sh, or set AUDIOSMITH_ENGINE")
 	}
-	cmd := exec.Command(e.path)
-	cmd.Dir = filepath.Dir(e.path)
+	cmd := exec.Command(e.Bin)
+	cmd.Dir = filepath.Dir(e.Bin)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -102,7 +110,7 @@ func (e *engineProcess) start() error {
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting %s: %w", e.path, err)
+		return fmt.Errorf("starting %s: %w", e.Bin, err)
 	}
 
 	e.mu.Lock()
@@ -113,8 +121,8 @@ func (e *engineProcess) start() error {
 
 	tail := newLineTail(40)
 	var logFile *os.File
-	if e.logPath != "" {
-		logFile, _ = os.OpenFile(e.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if e.LogPath != "" {
+		logFile, _ = os.OpenFile(e.LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	}
 	var stderrDone sync.WaitGroup
 	stderrDone.Add(1)
@@ -135,13 +143,13 @@ func (e *engineProcess) start() error {
 		sc := bufio.NewScanner(stdout)
 		sc.Buffer(make([]byte, 64*1024), 4*1024*1024)
 		for sc.Scan() {
-			var ev engineEvent
+			var ev Event
 			if err := json.Unmarshal(sc.Bytes(), &ev); err != nil {
 				tail.add("stdout: " + sc.Text())
 				continue
 			}
-			if e.current(gen) && e.onEvent != nil {
-				e.onEvent(ev)
+			if e.current(gen) && e.OnEvent != nil {
+				e.OnEvent(ev)
 			}
 		}
 		stderrDone.Wait()
@@ -153,21 +161,21 @@ func (e *engineProcess) start() error {
 			e.mu.Lock()
 			e.cmd, e.stdin = nil, nil
 			e.mu.Unlock()
-			if e.onExit != nil {
-				e.onExit(err, tail.String())
+			if e.OnExit != nil {
+				e.OnExit(err, tail.String())
 			}
 		}
 	}()
 	return nil
 }
 
-func (e *engineProcess) current(gen int) bool {
+func (e *Process) current(gen int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.gen == gen
 }
 
-func (e *engineProcess) Send(req engineRequest) (string, error) {
+func (e *Process) Send(req Request) (string, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.stdin == nil {
@@ -189,7 +197,7 @@ func (e *engineProcess) Send(req engineRequest) (string, error) {
 
 // Stop ends the engine: closing stdin makes it exit by itself; a kill
 // follows for one stuck in a computation.
-func (e *engineProcess) Stop() {
+func (e *Process) Stop() {
 	e.mu.Lock()
 	cmd, stdin := e.cmd, e.stdin
 	e.gen++ // the old process's exit is expected: don't report it
@@ -203,9 +211,10 @@ func (e *engineProcess) Stop() {
 	}
 }
 
-// findEngine looks for audiosmith-engine: $AUDIOSMITH_ENGINE, then the app's
-// resources (packaged, mygo dev, or go run from the project).
-func findEngine(resources string) string {
+// Find looks for audiosmith-engine: $AUDIOSMITH_ENGINE, then the app's
+// resources (packaged, mygo dev, or go run from the project). It returns
+// an absolute path, or "" when there is none.
+func Find(resources string) string {
 	if p := os.Getenv("AUDIOSMITH_ENGINE"); p != "" {
 		if abs, err := filepath.Abs(p); err == nil {
 			return abs

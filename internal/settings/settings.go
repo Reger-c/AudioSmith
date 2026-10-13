@@ -1,0 +1,124 @@
+// Package settings is the user's preferences: one typed, versioned
+// document, persisted as JSON by the store (settings table, key "app"),
+// read by any goroutine, changed through Service.Update, announced with
+// Changed on the core.Bus. Thread C implements Service in M0 and owns the
+// schema; other modules add their section here (a field with a default in
+// Defaults) through C or main.
+//
+// Not settings: secrets (HF token, API keys) live in the macOS Keychain;
+// window geometry stays with MyGo (WindowOptions.StateKey); editor
+// contents are drafts (core.DraftService).
+//
+// Imports: nothing internal (Changed satisfies core.Event structurally).
+package settings
+
+import (
+	"context"
+	"encoding/json"
+)
+
+// Version is the schema version Defaults writes. Bump it when a field's
+// meaning changes and migrate older documents in Migrate.
+const Version = 1
+
+// Settings is the whole document. Zero values must be valid (they are what
+// a field added in a newer version reads as in an older document, before
+// Migrate fills it in).
+type Settings struct {
+	Version    int        `json:"version"`
+	General    General    `json:"general"`
+	Appearance Appearance `json:"appearance"`
+	Studio     Studio     `json:"studio"`
+	Models     Models     `json:"models"`
+	Engine     Engine     `json:"engine"`
+	Privacy    Privacy    `json:"privacy"`
+}
+
+// General: language and app behaviour.
+type General struct {
+	// Language is the UI language as a BCP-47 tag ("en", "zh-Hans"), or ""
+	// to follow the system (mygo.App.Locale()); see i18n.Match.
+	Language string `json:"language"`
+	// OpenAtLogin, CloseToTray, SingleInstance… arrive with M2.
+}
+
+// Appearance: theme and scale.
+type Appearance struct {
+	Theme        string  `json:"theme"`        // "system" | "light" | "dark"
+	Scale        float64 `json:"scale"`        // UI scale, 0.9–1.25 (1 = 100 %)
+	ReduceMotion bool    `json:"reduceMotion"` // in addition to the system setting
+}
+
+// Studio: defaults of the TTS form.
+type Studio struct {
+	Model    string `json:"model"`    // catalog.Entry.ID last used ("" = the first)
+	Autoplay bool   `json:"autoplay"` // play each take when it is ready
+}
+
+// Models: where and how models download.
+type Models struct {
+	CacheDir   string   `json:"cacheDir"`   // "" = hub.CacheDir()
+	Endpoints  []string `json:"endpoints"`  // mirrors to race; nil = default
+	AutoUnload int      `json:"autoUnload"` // minutes idle before unloading a model; 0 = never
+}
+
+// Engine: resource limits.
+type Engine struct {
+	// MemoryBudgetGB caps resident models across workers; 0 = automatic
+	// (engine.Config.MemoryBudget).
+	MemoryBudgetGB float64 `json:"memoryBudgetGB"`
+}
+
+// Privacy: what may leave the machine.
+type Privacy struct {
+	// AllowNetworkSearch enables web lookups that are not downloads the
+	// user asked for (voice portraits, gallery updates). Off by default.
+	AllowNetworkSearch bool `json:"allowNetworkSearch"`
+}
+
+// Defaults returns the settings of a fresh install. They match the MVP's
+// behaviour (Kokoro first, autoplay on, system theme, English unless the
+// system language is supported).
+func Defaults() Settings {
+	return Settings{
+		Version:    Version,
+		Appearance: Appearance{Theme: "system", Scale: 1},
+		Studio:     Studio{Autoplay: true},
+	}
+}
+
+// Migrate upgrades a stored document to Version, filling fields added
+// since with their defaults. Unknown fields are dropped.
+func Migrate(data []byte) (Settings, error) {
+	s := Defaults()
+	if len(data) == 0 {
+		return s, nil
+	}
+	if err := json.Unmarshal(data, &s); err != nil {
+		return Defaults(), err
+	}
+	// Version 1 is the first; later versions add their steps here.
+	if s.Appearance.Scale == 0 {
+		s.Appearance.Scale = 1
+	}
+	if s.Appearance.Theme == "" {
+		s.Appearance.Theme = "system"
+	}
+	s.Version = Version
+	return s, nil
+}
+
+// Changed is published after an update is saved. Topic "settings.changed".
+type Changed struct{ Old, New Settings }
+
+func (Changed) Topic() string { return "settings.changed" }
+
+// Service holds the current settings. Goroutine-safe.
+type Service interface {
+	// Get returns the current settings: a copy, from memory (no I/O), so
+	// views may call it while building.
+	Get() Settings
+	// Update applies fn to a copy, saves it, swaps it in and publishes
+	// Changed; a no-op change publishes nothing. fn must not block.
+	Update(ctx context.Context, fn func(*Settings)) error
+}

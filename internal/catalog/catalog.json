@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "kokoro-82m-bf16",
+      "label": "Kokoro 82M",
+      "family": "kokoro",
+      "repo": "mlx-community/Kokoro-82M-bf16",
+      "tasks": ["tts"],
+      "about": "Fast, light, 54 voices in 9 languages. Language follows the voice prefix (af_ = US English, zf_ = Chinese…).",
+      "languages": [
+        {"code": "en-US"},
+        {"code": "en-GB"},
+        {"code": "zh"},
+        {"code": "ja"},
+        {"code": "es"},
+        {"code": "fr"},
+        {"code": "it"},
+        {"code": "pt-BR"},
+        {"code": "hi"}
+      ],
+      "voices": [
+        {"id": "af_heart", "language": "en-US", "gender": "female"},
+        {"id": "af_bella", "language": "en-US", "gender": "female"},
+        {"id": "af_nicole", "language": "en-US", "gender": "female"},
+        {"id": "af_sarah", "language": "en-US", "gender": "female"},
+        {"id": "af_sky", "language": "en-US", "gender": "female"},
+        {"id": "am_adam", "language": "en-US", "gender": "male"},
+        {"id": "am_michael", "language": "en-US", "gender": "male"},
+        {"id": "am_puck", "language": "en-US", "gender": "male"},
+        {"id": "bf_emma", "language": "en-GB", "gender": "female"},
+        {"id": "bf_isabella", "language": "en-GB", "gender": "female"},
+        {"id": "bm_george", "language": "en-GB", "gender": "male"},
+        {"id": "bm_lewis", "language": "en-GB", "gender": "male"},
+        {"id": "zf_xiaobei", "language": "zh", "gender": "female"},
+        {"id": "zf_xiaoni", "language": "zh", "gender": "female"},
+        {"id": "zf_xiaoxiao", "language": "zh", "gender": "female"},
+        {"id": "zf_xiaoyi", "language": "zh", "gender": "female"},
+        {"id": "zm_yunjian", "language": "zh", "gender": "male"},
+        {"id": "zm_yunxi", "language": "zh", "gender": "male"},
+        {"id": "jf_alpha", "language": "ja", "gender": "female"},
+        {"id": "jm_kumo", "language": "ja", "gender": "male"},
+        {"id": "ef_dora", "language": "es", "gender": "female"},
+        {"id": "ff_siwis", "language": "fr", "gender": "female"},
+        {"id": "if_sara", "language": "it", "gender": "female"},
+        {"id": "pf_dora", "language": "pt-BR", "gender": "female"},
+        {"id": "hf_alpha", "language": "hi", "gender": "female"}
+      ],
+      "capabilities": ["speed"],
+      "sampleRate": 24000,
+      "size": 390000000,
+      "minMemoryGB": 2,
+      "quantization": "bf16",
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/hexgrad/Kokoro-82M", "commercial": true, "verified": true}
+    },
+    {
+      "id": "qwen3-tts-0.6b-customvoice-8bit",
+      "label": "Qwen3-TTS 0.6B CustomVoice",
+      "family": "qwen3_tts",
+      "repo": "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit",
+      "tasks": ["tts"],
+      "about": "Chinese and English with named speakers. The voice field also takes a style, e.g. \"Vivian, calm and warm\".",
+      "languages": [
+        {"code": "zh", "value": "Chinese"},
+        {"code": "en", "value": "English"},
+        {"code": "ja", "value": "Japanese"},
+        {"code": "ko", "value": "Korean"},
+        {"code": "de", "value": "German"},
+        {"code": "fr", "value": "French"},
+        {"code": "es", "value": "Spanish"},
+        {"code": "it", "value": "Italian"},
+        {"code": "pt", "value": "Portuguese"},
+        {"code": "ru", "value": "Russian"}
+      ],
+      "voices": [
+        {"id": "Vivian"},
+        {"id": "Serena"},
+        {"id": "Uncle_Fu"},
+        {"id": "Dylan"},
+        {"id": "Eric"},
+        {"id": "Ryan"},
+        {"id": "Aiden"}
+      ],
+      "capabilities": ["sampling", "voiceStyle", "language"],
+      "sampleRate": 24000,
+      "size": 2000000000,
+      "minMemoryGB": 4,
+      "quantization": "8bit",
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice", "commercial": true, "verified": true}
+    },
+    {
+      "id": "qwen3-tts-0.6b-base-8bit",
+      "label": "Qwen3-TTS 0.6B Base (voice clone)",
+      "family": "qwen3_tts",
+      "repo": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit",
+      "tasks": ["tts"],
+      "about": "Clones the voice of a reference clip; give its transcript too for best results.",
+      "languages": [
+        {"code": "zh", "value": "Chinese"},
+        {"code": "en", "value": "English"},
+        {"code": "ja", "value": "Japanese"},
+        {"code": "ko", "value": "Korean"},
+        {"code": "de", "value": "German"},
+        {"code": "fr", "value": "French"},
+        {"code": "es", "value": "Spanish"},
+        {"code": "it", "value": "Italian"},
+        {"code": "pt", "value": "Portuguese"},
+        {"code": "ru", "value": "Russian"}
+      ],
+      "capabilities": ["sampling", "clone", "language"],
+      "sampleRate": 24000,
+      "size": 2000000000,
+      "minMemoryGB": 4,
+      "quantization": "8bit",
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base", "commercial": true, "verified": true}
+    },
+    {
+      "id": "marvis-tts-250m-v0.2-8bit",
+      "label": "Marvis TTS 250M",
+      "family": "marvis",
+      "repo": "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit",
+      "tasks": ["tts"],
+      "about": "English conversational voices; clones a voice from reference audio.",
+      "languages": [
+        {"code": "en"}
+      ],
+      "voices": [
+        {"id": "conversational_a", "language": "en"},
+        {"id": "conversational_b", "language": "en"}
+      ],
+      "capabilities": ["sampling", "clone"],
+      "sampleRate": 24000,
+      "size": 670000000,
+      "minMemoryGB": 2,
+      "quantization": "8bit",
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Marvis-AI/marvis-tts-250m-v0.2", "commercial": true, "verified": false}
+    },
+    {
+      "id": "soprano-80m-bf16",
+      "label": "Soprano 80M",
+      "family": "soprano",
+      "repo": "mlx-community/Soprano-80M-bf16",
+      "tasks": ["tts"],
+      "about": "Tiny English model, very fast.",
+      "languages": [
+        {"code": "en"}
+      ],
+      "capabilities": ["sampling"],
+      "size": 220000000,
+      "minMemoryGB": 1,
+      "quantization": "bf16",
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/ekwek/Soprano-80M", "commercial": true, "verified": false}
+    }
+  ]
+}

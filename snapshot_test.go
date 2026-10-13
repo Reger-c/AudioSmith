@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/store/historyjson"
 )
 
 // TestSnapshots renders each page to PNG with MyGo's renderer, for looking
@@ -25,7 +28,7 @@ func TestSnapshots(t *testing.T) {
 		a, _, tt := newTestApp(t)
 		tt.SetDark(dark)
 		tt.SetScale(2)
-		a.handleEvent(engineEvent{Event: "loaded", Model: modelPresets[0].Repo})
+		a.handleEvent(engine.Event{Event: "loaded", Model: kokoro})
 		texts := []string{
 			"Hello from AudioSmith. This voice was generated on your Mac with MLX.",
 			"你好，这是在 Mac 上用 MLX 生成的语音。",
@@ -33,12 +36,10 @@ func TestSnapshots(t *testing.T) {
 		}
 		for i, text := range texts {
 			at := time.Date(2026, 10, 13, 21, 50+i, 0, 0, time.Local)
-			c := &clip{ID: newClipID(at), CreatedAt: at, Text: text, Model: modelPresets[0].Repo,
+			c := core.Take{ID: historyjson.NewTakeID(at), CreatedAt: at, Text: text, Model: kokoro,
 				Voice: []string{"af_heart", "zf_xiaobei", "am_adam"}[i], Speed: 1, SampleRate: 24000,
 				AudioSeconds: 5.1 - float64(i), GenSeconds: 1.2}
-			c.File = c.ID + ".wav"
-			writeTestWAV(t, a.lib.path(c), 24000, 1.2)
-			a.lib.add(c)
+			addTake(t, a, c, 1.2)
 			a.lastClipID = c.ID
 		}
 		suffix := "light"
@@ -62,8 +63,8 @@ func TestSnapshots(t *testing.T) {
 		// Generating, half way.
 		a.generate()
 		half := 0.5
-		a.handleEvent(engineEvent{ID: a.job.id, Event: "status", Message: "Generating…"})
-		a.handleEvent(engineEvent{ID: a.job.id, Event: "progress", Fraction: &half, AudioSeconds: 2.4})
+		a.handleEvent(engine.Event{ID: a.job.id, Event: "status", Message: "Generating…"})
+		a.handleEvent(engine.Event{ID: a.job.id, Event: "progress", Fraction: &half, AudioSeconds: 2.4})
 		save("generating")
 		a.job = nil
 

@@ -5,6 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/hehehai/AudioSmith/internal/audio"
+	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/store/historyjson"
 )
 
 // TestEndToEnd drives the real audiosmith-engine through the app's state:
@@ -17,22 +22,22 @@ func TestEndToEnd(t *testing.T) {
 	if os.Getenv("AUDIOSMITH_E2E") == "" {
 		t.Skip("set AUDIOSMITH_E2E=1 to run the real engine")
 	}
-	enginePath := findEngine("resources")
+	enginePath := engine.Find("resources")
 	if enginePath == "" {
 		t.Fatal("no engine: run scripts/build-engine.sh")
 	}
-	lib, err := loadLibrary(t.TempDir())
+	lib, err := historyjson.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	events := make(chan func(), 64)
-	eng := &engineProcess{path: enginePath, logPath: filepath.Join(t.TempDir(), "engine.log")}
+	eng := &engine.Process{Bin: enginePath, LogPath: filepath.Join(t.TempDir(), "engine.log")}
 	a := newApp(eng, lib)
 	a.autoplay = false
 	// Events arrive on the engine's goroutine; apply them here, in order,
 	// as the window's main thread would.
-	eng.onEvent = func(ev engineEvent) { events <- func() { a.handleEvent(ev) } }
-	eng.onExit = func(err error, tail string) { events <- func() { a.engineExited(err, tail) } }
+	eng.OnEvent = func(ev engine.Event) { events <- func() { a.handleEvent(ev) } }
+	eng.OnExit = func(err error, tail string) { events <- func() { a.engineExited(err, tail) } }
 	defer eng.Stop()
 
 	waitFor := func(what string, timeout time.Duration, done func() bool) {
@@ -57,7 +62,7 @@ func TestEndToEnd(t *testing.T) {
 
 	a.preload()
 	waitFor("load", 10*time.Minute, func() bool { return a.job == nil })
-	if a.loadedModel != modelPresets[0].Repo || a.jobError != "" {
+	if a.loadedModel != catalog.Builtin().Entries[0].Repo || a.jobError != "" {
 		t.Fatalf("loaded %q, error %q", a.loadedModel, a.jobError)
 	}
 
@@ -78,14 +83,14 @@ func TestEndToEnd(t *testing.T) {
 		if c == nil || c.Voice != tc.voice || c.AudioSeconds < 0.5 || c.SampleRate != 24000 {
 			t.Fatalf("take %d: %+v", i, c)
 		}
-		peaks, err := wavePeaks(a.lib.path(c), 50)
+		peaks, err := audio.Peaks(a.takeStore.AudioPath(*c), 50)
 		if err != nil || len(peaks) != 50 {
 			t.Fatalf("take %d audio unreadable: %v", i, err)
 		}
 		t.Logf("take %d: %.2f s of audio in %.2f s (%.1f× realtime)", i, c.AudioSeconds, c.GenSeconds, c.RTF())
 	}
-	if len(a.lib.clips) != 2 {
-		t.Fatalf("history has %d takes", len(a.lib.clips))
+	if len(a.takes) != 2 {
+		t.Fatalf("history has %d takes", len(a.takes))
 	}
 
 	a.unload()
