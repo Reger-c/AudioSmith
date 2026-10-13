@@ -5,6 +5,11 @@
 # AudioSmith.app/Contents/Resources/engine/.
 #
 # Usage: scripts/build-engine.sh [Release|Debug]
+#
+# The shared scheme (engine/.swiftpm/xcode/xcshareddata/xcschemes) keeps code
+# coverage off: Xcode's generated one instrumented every module, which made
+# the engine 60 % larger and had it write default.profraw beside itself
+# (inside the signed app). ARCHS=arm64: MLX runs on Apple silicon only.
 set -euo pipefail
 
 CONFIG="${1:-Release}"
@@ -33,6 +38,8 @@ xcodebuild build \
   -skipPackagePluginValidation \
   -skipMacroValidation \
   -onlyUsePackageVersionsFromResolvedFile \
+  ARCHS=arm64 \
+  CLANG_ENABLE_CODE_COVERAGE=NO \
   CODE_SIGNING_ALLOWED=NO \
   > "$LOG" 2>&1 || true
 grep -E "error:|\*\* BUILD" "$LOG" | sort -u | head -40 || true
