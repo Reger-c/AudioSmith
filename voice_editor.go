@@ -9,6 +9,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
@@ -181,7 +182,7 @@ func (a *app) voiceEditor(c *ui.Context) {
 		return
 	}
 	if e.consent.phase == "recording" {
-		c.After(100e6)
+		c.After(100 * time.Millisecond)
 	}
 	ui.Column(c.Key("editor-"+v.ID)).Padding(px(t, 16)).Gap(px(t, 14)).Children(func() {
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
@@ -509,11 +510,11 @@ func (a *app) editorAlerts(c *ui.Context, v *core.Voice) {
 	e := a.edit
 	id := v.ID
 	if ui.AlertDialog(c, &e.unlockOpen, i18n.T("Unlock this voice?"), i18n.T("Takes will no longer reuse the locked audio and seed, so they may sound a little different each time."),
-		i18n.T("Cancel"), i18n.T("Unlock")) == 1 {
+		i18n.T("Cancel"), i18n.T("Unlock voice")) == 1 {
 		a.voiceAction(func(ctx context.Context, svc core.VoiceService) (core.Voice, error) { return svc.Unlock(ctx, id) }, i18n.T("Voice unlocked"))
 	}
 	if ui.AlertDialog(c, &e.revokeOpen, i18n.T("Revoke the verification?"), i18n.T("The consent recording is deleted. You can record it again at any time."),
-		i18n.T("Cancel"), i18n.T("Revoke")) == 1 {
+		i18n.T("Cancel"), i18n.T("Revoke verification")) == 1 {
 		a.voiceAction(func(ctx context.Context, svc core.VoiceService) (core.Voice, error) { return svc.RevokeConsent(ctx, id) }, i18n.T("Verification revoked"))
 	}
 }

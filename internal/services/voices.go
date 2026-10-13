@@ -125,14 +125,11 @@ func (s *Voices) SaveFiles(ctx context.Context, v core.Voice, f core.VoiceFiles)
 	s.mu.Lock()
 	now := s.now()
 	created := v.ID == ""
+	in := v
 	var old core.Voice
 	if created {
 		v.ID, v.CreatedAt = core.NewID(now), now
-		refSeconds := v.RefSeconds
 		keepFiles(&v, core.Voice{}) // a new profile has no files until f adds them
-		if f.Reference != "" {
-			v.RefSeconds = refSeconds
-		}
 	} else {
 		var err error
 		if old, err = s.store.Get(ctx, v.ID); err != nil {
@@ -140,11 +137,14 @@ func (s *Voices) SaveFiles(ctx context.Context, v core.Voice, f core.VoiceFiles)
 			return v, err
 		}
 		v.CreatedAt = old.CreatedAt
-		refSeconds := v.RefSeconds
 		keepFiles(&v, old)
-		if f.Reference != "" {
-			v.RefSeconds = refSeconds
-		}
+	}
+	// What describes a new file comes with it.
+	if f.Reference != "" {
+		v.RefSeconds = in.RefSeconds
+	}
+	if f.Sample != "" {
+		v.SampleText = in.SampleText
 	}
 	v.UpdatedAt = now
 	var obsolete []string // files to remove once the profile is saved

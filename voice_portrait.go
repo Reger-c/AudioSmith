@@ -81,8 +81,8 @@ func portraitFrom(data []byte) ([]byte, error) {
 	}
 	b := img.Bounds()
 	side := min(b.Dx(), b.Dy())
-	crop := image.Rect(b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2, 0, 0)
-	crop.Max = crop.Min.Add(image.Pt(side, side))
+	min := image.Pt(b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2)
+	crop := image.Rectangle{Min: min, Max: min.Add(image.Pt(side, side))}
 	dst := image.NewRGBA(image.Rect(0, 0, portraitSize, portraitSize))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), img, crop, draw.Src, nil)
 	var out bytes.Buffer

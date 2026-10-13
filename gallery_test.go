@@ -1,0 +1,195 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/gallery"
+	"github.com/hehehai/AudioSmith/internal/jobs"
+)
+
+func TestGalleryPage(t *testing.T) {
+	dir := t.TempDir()
+	a, eng, _ := newTestAppIn(t, dir)
+	tt := ui.NewTester(a.view, 1200, 1800)
+	g := &a.gallery
+	a.navigate("/gallery")
+	tt.Frame()
+	all := gallery.Default().Len()
+	first := gallery.Default().All()[0]
+	if !tt.HasText(itoa(all)+" voices") || !tt.HasText(first.Name.En) {
+		t.Fatalf("gallery: %q", tt.Texts())
+	}
+
+	// Search, a category tab, a facet.
+	g.text = "whisper"
+	tt.Frame()
+	if g.page.Total == 0 || g.page.Total >= all {
+		t.Errorf("search: %d", g.page.Total)
+	}
+	g.text = ""
+	tt.Frame()
+	games := gallery.Default().Search(gallery.Query{Category: "games"}).Total
+	if err := tt.Click("Games " + itoa(games)); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if g.page.Total != games || g.tab == 0 {
+		t.Errorf("tab: %d %d", g.page.Total, g.tab)
+	}
+	if err := tt.Click("Gender"); err != nil {
+		t.Fatal(err)
+	}
+	var female string
+	for _, it := range tt.Menu() {
+		if strings.HasPrefix(it, "Female") {
+			female = it
+		}
+	}
+	if female == "" {
+		t.Fatalf("menu %q", tt.Menu())
+	}
+	if err := tt.ChooseMenuItem(female); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if g.filters[gallery.FacetGender] != "female" || !tt.HasText("Gender: Female") {
+		t.Errorf("facet: %v %q", g.filters, tt.Texts())
+	}
+	for _, it := range g.page.Items {
+		if it.Category != "games" || it.Attrs.Gender != "female" {
+			t.Fatalf("filtered item %+v", it)
+		}
+	}
+	tt.Click("Reset")
+	tt.Frame()
+	if g.page.Total != all {
+		t.Errorf("reset: %d", g.page.Total)
+	}
+	// Paging.
+	if len(g.page.Items) != galleryPageSize {
+		t.Errorf("page %d", len(g.page.Items))
+	}
+	g.limit += galleryPageSize
+	tt.Frame()
+	if len(g.page.Items) != 2*galleryPageSize {
+		t.Errorf("more %d", len(g.page.Items))
+	}
+	g.limit = galleryPageSize
+	tt.Frame()
+
+	// Favorites persist.
+	if err := tt.Click("Add to favorites"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !g.favs.Has(first.ID) {
+		t.Fatal("not a favorite")
+	}
+	tt.Click("★ Favorites")
+	tt.Frame()
+	if g.page.Total != 1 {
+		t.Errorf("favorites only: %d", g.page.Total)
+	}
+	g.favOnly = false
+	b, _, _ := newTestAppIn(t, dir)
+	if !b.gallery.favs.Has(first.ID) {
+		t.Error("favorite not saved")
+	}
+	tt.Frame()
+
+	// Preview: licence first, then a background job, cached.
+	if err := tt.Click("Preview"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.licenceOpen {
+		t.Fatal("no licence dialog")
+	}
+	a.licenceOpen = false
+	acceptLicences(t, a)
+	tt.Frame()
+	sent := len(eng.sent)
+	tt.Click("Preview")
+	if len(eng.sent) != sent+1 {
+		t.Fatal("no preview job")
+	}
+	req := eng.last(t)
+	if req.Spec.Priority != jobs.PriorityBackground || req.Spec.Owner != galleryOwner+first.ID || req.Model != omni ||
+		!strings.HasPrefix(req.Output.Path, a.voiceCacheDir()) || req.Text == "" || req.Seed == nil || *req.Seed != first.Seed {
+		t.Fatalf("preview request %+v %+v", req.Spec, req.SynthesizeParams)
+	}
+	tt.Frame()
+	if !tt.HasText("Rendering the preview…") && !strings.Contains(strings.Join(tt.Texts(), "|"), "Rendering") {
+		t.Errorf("rendering: %q", tt.Texts())
+	}
+	writeTestWAV(t, req.Output.Path, 24000, 1)
+	eng.succeed(req.ID, proto.SynthesizeResult{Output: req.Output.Path, SampleRate: 24000, AudioSeconds: 1, Seconds: 1})
+	p := g.previews[first.ID]
+	if p.rendering || p.err != "" {
+		t.Fatalf("preview %+v", p)
+	}
+	a.pl.Stop()
+	tt.Frame()
+	tt.Click("Preview")
+	if len(eng.sent) != sent+1 {
+		t.Error("a cached preview rendered again")
+	}
+
+	// Use voice: a designed voice with the preview as its sample, in Design.
+	if err := tt.Click("Use voice"); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.voices) != 1 {
+		t.Fatalf("voices %+v", a.voices)
+	}
+	v := a.voices[0]
+	if v.Origin != "gallery:"+first.ID || v.Kind != core.VoiceDesigned || v.Seed != first.Seed || v.Sample != "sample.wav" || v.Name != first.Name.En {
+		t.Fatalf("voice %+v", v)
+	}
+	if a.router.Path() != "/design" || a.design.linked != v.ID {
+		t.Errorf("design: %s %s", a.router.Path(), a.design.linked)
+	}
+	// Using it again finds it; Use in Studio picks it there.
+	a.navigate("/gallery")
+	tt.Frame()
+	tt.Click("More actions")
+	if err := tt.ChooseMenuItem("Use in Studio"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(a.voices) != 1 || a.studioVoice != v.ID || a.router.Path() != "/studio" || a.preset().Repo != omni {
+		t.Errorf("use in studio: %d %s %s", len(a.voices), a.router.Path(), a.preset().Repo)
+	}
+	if _, err := os.Stat(filepath.Join(a.voiceCacheDir(), filepath.Base(req.Output.Path))); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGalleryPreviewFailure(t *testing.T) {
+	a, eng, _ := newVoiceTestApp(t)
+	acceptLicences(t, a)
+	tt := ui.NewTester(a.view, 1200, 1800)
+	a.navigate("/gallery")
+	tt.Frame()
+	tt.Click("Preview")
+	req := eng.last(t)
+	eng.fail(req.ID, proto.CodeOOM, "out of memory")
+	tt.Frame()
+	if !tt.HasText("Preview failed") {
+		t.Errorf("failure: %q", tt.Texts())
+	}
+	// Open in Design without saving.
+	first := gallery.Default().All()[0]
+	tt.Click("More actions")
+	tt.ChooseMenuItem("Open in Design without saving")
+	if a.router.Path() != "/design" || a.design.linked != "" || int64(a.design.seed) != first.Seed || len(a.voices) != 0 {
+		t.Errorf("open in design: %+v", a.design)
+	}
+}

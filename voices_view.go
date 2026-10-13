@@ -232,7 +232,7 @@ func (a *app) voiceDeleteAlert(c *ui.Context) {
 		return
 	}
 	if ui.AlertDialog(c, &a.deleteOpen, i18n.T("Delete “%s”?", v.Name), i18n.T("Its reference, samples and portrait are deleted too. Takes made with it stay. This cannot be undone."),
-		i18n.T("Cancel"), i18n.T("Delete")) == 1 {
+		i18n.T("Cancel"), i18n.T("Delete voice")) == 1 {
 		a.deleteVoiceNow(v.ID)
 	}
 }
