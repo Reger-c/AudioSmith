@@ -7,6 +7,13 @@ import PackageDescription
 //
 // Build it with xcodebuild (scripts/build-engine.sh), not `swift build`:
 // only Xcode compiles MLX's Metal kernels into default.metallib.
+//
+// Dependencies: the compatibility set Voxt validated, kept together:
+//   hehehai/mlx-audio-swift 2a6e75d  (upstream mlx-audio-swift + Voxt fixes)
+//   mlx-swift 0.31.6, mlx-swift-lm c6446cf, swift-transformers 1.3.4, swift-huggingface 0.10.2
+// Do not move to mlx-swift 0.32.x yet: it makes Metal command encoders
+// thread-local, and mlx-audio-swift builds graphs in Tasks that hop threads,
+// which crashes generation with "There is no Stream(gpu, N) in current thread".
 let package = Package(
     name: "AudioSmithEngine",
     platforms: [.macOS(.v14)],
@@ -14,14 +21,15 @@ let package = Package(
         .executable(name: "audiosmith-engine", targets: ["AudioSmithEngine"]),
     ],
     dependencies: [
-        // Pinned: mlx-audio-swift moves fast and has no stable tags we can rely on.
         .package(
-            url: "https://github.com/Blaizzy/mlx-audio-swift.git",
-            revision: "244458d7b61e54ff135073ddc9ed76782bb20758"
+            url: "https://github.com/hehehai/mlx-audio-swift.git",
+            revision: "2a6e75d28ae6a399ba7c7aec842384ef7a3142b5"
         ),
-        // The MLX that mlx-audio-swift resolves to at that revision (0.32.3).
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", .upToNextMinor(from: "0.32.3")),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", .upToNextMinor(from: "3.32.3")),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.6"),
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift-lm.git",
+            revision: "c6446cf7bfb7cea76408013b614d4b2c530eaa03"
+        ),
     ],
     targets: [
         .executableTarget(

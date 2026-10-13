@@ -36,13 +36,6 @@ final class Synthesizer: @unchecked Sendable {
         self.events = events
         // Keep MLX's buffer cache small: this process lives as long as the app.
         Memory.cacheLimit = 256 * 1024 * 1024
-        // MLX C++ caches compiled graphs (MLXNN's GELU, SiLU, Upsample…) on the
-        // calling thread's default stream, which is thread-local and has its
-        // own Metal command encoder. Swift concurrency builds a graph on one
-        // thread and evaluates it on another, which then fails with "There is
-        // no Stream(gpu, N) in current thread". Uncompiled, every op runs on
-        // mlx-swift's global streams, which any thread can use.
-        MLX.compile(enable: false)
     }
 
     /// Loads modelID unless it is already loaded; returns the model.
