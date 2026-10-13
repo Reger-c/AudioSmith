@@ -176,7 +176,7 @@ func (r *Resampler) run(dst []float32, limit int64) []float32 {
 		if r.exact {
 			row := r.table[int(r.p)*r.taps : (int(r.p)+1)*r.taps]
 			for c := range r.ch {
-				dst = append(dst, dot(r.buf[c][start:start+r.taps], row))
+				dst = append(dst, filter.Dot(r.buf[c][start:start+r.taps], row))
 			}
 		} else {
 			pf := float64(r.p) / float64(r.l) * tablePhases
@@ -186,7 +186,7 @@ func (r *Resampler) run(dst []float32, limit int64) []float32 {
 			row1 := r.table[(i0+1)*r.taps : (i0+2)*r.taps]
 			for c := range r.ch {
 				x := r.buf[c][start : start+r.taps]
-				dst = append(dst, (1-f)*dot(x, row0)+f*dot(x, row1))
+				dst = append(dst, (1-f)*filter.Dot(x, row0)+f*filter.Dot(x, row1))
 			}
 		}
 		r.nOut++
@@ -203,22 +203,6 @@ func (r *Resampler) run(dst []float32, limit int64) []float32 {
 		r.base += int64(drop)
 	}
 	return dst
-}
-
-func dot(x, h []float32) float32 {
-	h = h[:len(x)]
-	var s0, s1, s2, s3 float32
-	i := 0
-	for ; i+4 <= len(x); i += 4 {
-		s0 += x[i] * h[i]
-		s1 += x[i+1] * h[i+1]
-		s2 += x[i+2] * h[i+2]
-		s3 += x[i+3] * h[i+3]
-	}
-	for ; i < len(x); i++ {
-		s0 += x[i] * h[i]
-	}
-	return (s0 + s1) + (s2 + s3)
 }
 
 // Buffer resamples a whole buffer to rate.

@@ -128,3 +128,69 @@ func BenchmarkKWeighting(b *testing.B) {
 		c.Process(x.Samples)
 	}
 }
+
+func truePeakOf(b dsp.Buffer) float64 {
+	tp := NewTruePeak(b.Rate, b.Channels)
+	p := tp.Process(nil, b.Samples)
+	p = tp.Flush(p)
+	if len(p) != len(b.Samples) {
+		panic("true peak: frame count")
+	}
+	return float64(dsp.Peak(p))
+}
+
+func TestTruePeak(t *testing.T) {
+	// EBU Tech 3341 cases 15–18 style: tones whose samples miss the crest.
+	cases := []struct {
+		rate         int
+		f, phase     float64
+		samplePeakDB float64 // what a sample-peak meter shows
+	}{
+		{48000, 12000, math.Pi / 4, -9.03}, // fs/4 at 45°: samples at ±0.707·A
+		{48000, 8000, math.Pi / 6, -6},     // fs/6 at 30°: hits the crest
+		{48000, 6000, math.Pi / 8, -6.69},  // fs/8 at 22.5°
+		{44100, 11025, math.Pi / 4, -9.03},
+		{24000, 6000, math.Pi / 4, -9.03},
+		{96000, 24000, math.Pi / 4, -9.03},
+	}
+	for _, c := range cases {
+		b := dsptest.Sine(c.rate, 2, c.f, -6, 1, c.phase)
+		sp := dsp.DB(float64(dsp.Peak(b.Samples)))
+		tp := dsp.DB(truePeakOf(b))
+		if math.Abs(sp-c.samplePeakDB) > 0.05 {
+			t.Errorf("%d/%v: sample peak %.2f, want %.2f", c.rate, c.f, sp, c.samplePeakDB)
+		}
+		// Tech 3341 tolerance: +0.2 / −0.4 dB.
+		if tp < -6.4 || tp > -5.8 {
+			t.Errorf("%d/%v: true peak %.2f dBTP, want −6.0 (+0.2/−0.4)", c.rate, c.f, tp)
+		}
+	}
+	// Sample peaks are never under-read, and streaming in pieces is the same.
+	n := dsptest.Noise(48000, 2, -10, 0.5, 4)
+	d := NewTruePeak(48000, 2)
+	var got []float32
+	for s := n.Samples; len(s) > 0; {
+		k := min(len(s), 2*333)
+		got = d.Process(got, s[:k])
+		s = s[k:]
+	}
+	got = d.Flush(got)
+	for i, v := range n.Samples {
+		if got[i] < float32(math.Abs(float64(v))) {
+			t.Fatalf("sample %d: true peak %v below |sample| %v", i, got[i], v)
+		}
+	}
+	if TruePeakFactor(48000) != 4 || TruePeakFactor(44100) != 5 || TruePeakFactor(24000) != 8 || TruePeakFactor(192000) != 1 {
+		t.Error("factors")
+	}
+}
+
+func BenchmarkTruePeak48k(b *testing.B) {
+	x := dsptest.Noise(48000, 2, -20, 10, 1)
+	d := NewTruePeak(48000, 2)
+	b.SetBytes(int64(len(x.Samples) * 4))
+	var out []float32
+	for b.Loop() {
+		out = d.Process(out[:0], x.Samples)
+	}
+}
