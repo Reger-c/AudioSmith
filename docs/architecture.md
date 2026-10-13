@@ -1,6 +1,6 @@
 # AudioSmith architecture
 
-*State at the end of M0 (2026-10-13). M0a wrote the skeleton and the contracts; threads A (services + SQLite), B (protocol 2, supervisor, jobs), C (shell, catalogue, hub, i18n), #9 (text, document and language libraries) and #11 (DSP) built them; the integration thread (#10) wired them together (§5). Product plan: `plan/parity-plan.md` §3–§4. Wire format: [protocol-v2.md](protocol-v2.md).*
+*State at the end of M0 (2026-10-13). M0a wrote the skeleton and the contracts; threads A (services + SQLite), B (protocol 2, supervisor, jobs), C (shell, catalogue, hub, i18n), #9 (text, document and language libraries), #11 (DSP) and #12 (voice design, gallery) built them; the integration thread (#10) wired them together (§5). Product plan: `plan/parity-plan.md` §3–§4. Wire format: [protocol-v2.md](protocol-v2.md).*
 
 ## 1. Package map
 
@@ -31,7 +31,10 @@ github.com/hehehai/AudioSmith
 │   │   └── markup/, normalize/, lexicon/, autocast/
 │   ├── doc/             document import: TXT/MD/EPUB/DOCX, cue sheets (M1/M3; not wired yet)
 │   │   └── subtitle/, textenc/
-│   └── lang/            the language table, 652 languages                              (leaf)
+│   ├── lang/            the language table, 652 languages                              (leaf)
+│   ├── voicedesign/     Voice Design: description ⇄ attributes, recipes per model (M1; not wired yet)
+│   └── gallery/         the Voice Gallery: ~1,100 archetypes, facets, presets, preview planner (M1; not wired yet)
+│       └── persona/     the .asvoice voice file (and VoiceStudio .ovsvoice import)
 └── engine/              the Swift helper (audiosmith-engine), Fixtures/, Tests/
 ```
 
@@ -48,6 +51,7 @@ hub ──▶ catalog, jobs (the download executor)              catalog ──�
 licence ──▶ catalog, core       notify, logs ──▶ core
 text/* ──▶ text                 doc ──▶ text, doc/subtitle, doc/textenc      doc/subtitle ──▶ text
 dsp/* ──▶ dsp siblings only (wav, edit, mix, qc… ──▶ dsp; loudness ──▶ dsp, dynamics, filter; …)
+voicedesign ──▶ text            gallery ──▶ voicedesign, text, jobs, engine/proto     gallery/persona ──▶ voicedesign, lang
 core, jobs, engine/proto, settings, i18n, audio, lang, text, doc/textenc, dsp, dsp/filter ──▶ (nothing internal)
 ```
 
@@ -146,7 +150,7 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 
 ### Threads and merges
 
-M0a (`ff57a69`) wrote the package skeleton and these contracts. Three threads then worked in parallel, each owning files, with no sub-threads: **A** services + SQLite (`5d98053`), **C** shell, catalogue, hub, i18n, settings, licences (`6e88272`), **B** protocol 2 in Swift and Go, supervisor, scheduler (`8be41fb`). Thread **#9** added the pure-Go libraries `text`, `doc` and `lang` for M1 (`ae59b3d`), and thread **#11** the DSP tree `dsp` (`84e716b`): mixing, loudness, mastering, QC and editing live there, not in `internal/audio`, which keeps peaks and playback. The integration thread (#10) did steps I1–I5 and the leftovers:
+M0a (`ff57a69`) wrote the package skeleton and these contracts. Three threads then worked in parallel, each owning files, with no sub-threads: **A** services + SQLite (`5d98053`), **C** shell, catalogue, hub, i18n, settings, licences (`6e88272`), **B** protocol 2 in Swift and Go, supervisor, scheduler (`8be41fb`). Thread **#9** added the pure-Go libraries `text`, `doc` and `lang` for M1 (`ae59b3d`), thread **#11** the DSP tree `dsp` (`84e716b`): mixing, loudness, mastering, QC and editing live there, not in `internal/audio`, which keeps peaks and playback; and thread **#12** `voicedesign`, `gallery` and `gallery/persona` (`ecd3762`). The integration thread (#10) did steps I1–I5 and the leftovers:
 
 - **I1.** `openLibrary` builds store + bus → settings, licence gate, scheduler → services. The Studio's Generate goes through `TakeService.Generate` (licence and download checks; `take:<id>` jobs); the Studio-owned job path and the double save of takes are gone. `selectModel(entry)` replaced the shell's `chooseModel`.
 - **I2.** The status bar lists every unfinished job (any owner), each cancellable by id; ⌘E shows the gpu worker's memory and Clear cache; the workers' status comes from `Supervisor.Status` and `StatusChanged`.
@@ -173,6 +177,7 @@ Threads now own areas, not M0 contracts. Each keeps `CGO_ENABLED=0 go test ./...
 |---|---|
 | `internal/text/**`, `internal/doc/**`, `internal/lang/**` | thread #9's successor (M1 text pipeline); the UI wires them in M1 |
 | `internal/dsp/**` | thread #11's successor (M1 mastering, QC, joining chunks); the UI wires it in M1 |
+| `internal/voicedesign/**`, `internal/gallery/**` | thread #12's successor (M1 voice library, design page, gallery); the UI wires them in M1 |
 | `internal/engine/**`, `engine/**`, `docs/protocol-v2.md`, `scripts/*engine*.sh` | the engine thread of the milestone |
 | everything else | assigned per milestone by main; `README.md` and this file: main |
 
