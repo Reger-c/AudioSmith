@@ -2,6 +2,7 @@ package core
 
 import (
 	"crypto/rand"
+	"sync"
 	"time"
 )
 
@@ -15,16 +16,13 @@ const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 //
 // IDs are opaque everywhere else: takes made before M0 keep their
 // "20060102-150405.000" ids, and code must not parse ids of any shape.
+//
+// Within one process, IDs of one millisecond are monotonic (ULID's
+// monotonic mode): an ID made in the same millisecond as the previous one
+// is the previous one plus one, so IDs made one after the other sort in
+// that order (the jobs of a graph run in the order they were made).
 func NewID(t time.Time) string {
-	var b [16]byte
-	ms := uint64(t.UnixMilli())
-	for i := 5; i >= 0; i-- {
-		b[i] = byte(ms)
-		ms >>= 8
-	}
-	if _, err := rand.Read(b[6:]); err != nil {
-		panic(err) // crypto/rand does not fail on supported platforms
-	}
+	b := lastID.next(uint64(t.UnixMilli()))
 	// 128 bits → 26 base32 digits (the first carries 3 bits).
 	var out [26]byte
 	var acc uint64
@@ -42,4 +40,40 @@ func NewID(t time.Time) string {
 	}
 	out[0] = crockford[acc&31]
 	return string(out[:])
+}
+
+// lastID is the last ID made, for monotonic IDs.
+var lastID monotonic
+
+type monotonic struct {
+	mu   sync.Mutex
+	ms   uint64
+	b    [16]byte
+	used bool
+}
+
+// next returns the bytes of a new ID for millisecond ms: the last ID plus
+// one when it is of the same millisecond, else random after the time.
+func (m *monotonic) next(ms uint64) [16]byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.used && ms == m.ms {
+		for i := 15; i >= 6; i-- {
+			m.b[i]++
+			if m.b[i] != 0 {
+				break
+			}
+		}
+		return m.b
+	}
+	var b [16]byte
+	for i := 5; i >= 0; i-- {
+		b[i] = byte(ms >> (8 * (5 - i)))
+	}
+	if _, err := rand.Read(b[6:]); err != nil {
+		panic(err) // crypto/rand does not fail on supported platforms
+	}
+	b[6] &= 0x7f // leaves room to count up within the millisecond
+	m.ms, m.b, m.used = ms, b, true
+	return b
 }
