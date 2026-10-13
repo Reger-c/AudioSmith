@@ -32,6 +32,9 @@ type ProjectChanged struct {
 	Deleted bool
 }
 
+// DraftSaved: DraftService wrote a draft (for an "autosaved" hint).
+type DraftSaved struct{ Key string }
+
 // LicenceChanged: the user accepted or revoked a model licence.
 type LicenceChanged struct {
 	Acceptance LicenceAcceptance
@@ -49,6 +52,7 @@ func (TakeUpdated) Topic() string        { return "take.updated" }
 func (TakeDeleted) Topic() string        { return "take.deleted" }
 func (VoiceChanged) Topic() string       { return "voice.changed" }
 func (ProjectChanged) Topic() string     { return "project.changed" }
+func (DraftSaved) Topic() string         { return "draft.saved" }
 func (LicenceChanged) Topic() string     { return "licence.changed" }
 func (NotificationPosted) Topic() string { return "notification.posted" }
 func (LogAppended) Topic() string        { return "log.appended" }

@@ -28,6 +28,13 @@ type TakeService interface {
 	Delete(ctx context.Context, id string) error
 	// SetStarred stars or unstars a take.
 	SetStarred(ctx context.Context, id string, starred bool) error
+	// Add saves a take made outside Generate whose audio is already in
+	// AudioDir (the protocol-1 engine link until Generate runs on jobs;
+	// later imports), filling ID and CreatedAt when empty, and publishes
+	// TakeCreated. It returns the take as stored.
+	Add(ctx context.Context, t Take) (Take, error)
+	// AudioDir is the directory take audio lives in. Pure: no I/O.
+	AudioDir() string
 	// AudioPath is the absolute path of the take's audio file. Pure: no I/O.
 	AudioPath(t Take) string
 	// Export copies the take's audio to dst (streamed, not read into memory).
