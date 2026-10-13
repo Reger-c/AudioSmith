@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -97,14 +96,7 @@ func New(o Options) *Client {
 	}
 	hc := o.HTTPClient
 	if hc == nil {
-		hc = &http.Client{Transport: &http.Transport{
-			Proxy:                 proxyFunc(o.Proxy),
-			DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-			TLSHandshakeTimeout:   15 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
-			MaxIdleConnsPerHost:   16,
-			ForceAttemptHTTP2:     true,
-		}}
+		hc = NewHTTPClient(o.Proxy, 30*time.Second)
 	}
 	return &Client{opts: o, http: hc, repoLock: map[string]*sync.Mutex{}, progressEvery: 250 * time.Millisecond}
 }

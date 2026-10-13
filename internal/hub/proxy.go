@@ -200,6 +200,28 @@ func proxyFunc(mode string) func(*http.Request) (*url.URL, error) {
 	}
 }
 
+// ProxyFunc is the proxy rule of mode ("" automatic: environment, then the
+// macOS system proxy; ProxyDirect; or a proxy URL) for an http.Transport.
+// Loopback hosts never go through a proxy. Other packages that reach the
+// network for the user (LLM and translation endpoints) use it, or
+// NewHTTPClient, so the Models settings' proxy applies to them too.
+func ProxyFunc(mode string) func(*http.Request) (*url.URL, error) { return proxyFunc(mode) }
+
+// NewHTTPClient is an HTTP client through ProxyFunc(mode), with dial and
+// TLS timeouts. responseHeader bounds the wait for response headers (the
+// hub uses 30 s); 0 means no bound, for slow streaming answers such as an
+// LLM's. Requests are otherwise bounded by their context.
+func NewHTTPClient(mode string, responseHeader time.Duration) *http.Client {
+	return &http.Client{Transport: &http.Transport{
+		Proxy:                 proxyFunc(mode),
+		DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: responseHeader,
+		MaxIdleConnsPerHost:   16,
+		ForceAttemptHTTP2:     true,
+	}}
+}
+
 // DescribeProxy says which proxy downloads from huggingface.co use under
 // mode, for the settings page: "http://127.0.0.1:7897", or "" for none.
 // It may run scutil: not from a build pass.

@@ -863,3 +863,42 @@ func TestCleanEngineCopies(t *testing.T) {
 		t.Error("removed a full copy")
 	}
 }
+
+// Every secret is an AudioSmith item with its own account and label; the
+// HF token keeps the account it always had.
+func TestSecrets(t *testing.T) {
+	saved := security
+	defer func() { security = saved }()
+	var stdin string
+	security = func(in string, a ...string) ([]byte, error) { stdin = in; return nil, nil }
+	if DefaultKeychain.Service != "AudioSmith" || DefaultKeychain.Account != "huggingface-token" {
+		t.Errorf("HF token item moved: %+v", DefaultKeychain)
+	}
+	if err := Secret("llm.openai", "AudioSmith OpenAI API key").Set("sk-1"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdin, `-s "AudioSmith" -a "llm.openai" -l "AudioSmith OpenAI API key"`) {
+		t.Errorf("stdin %q", stdin)
+	}
+	Secret("mt.deepl", "").Set("k")
+	if !strings.Contains(stdin, `-l "AudioSmith mt.deepl"`) {
+		t.Errorf("default label: %q", stdin)
+	}
+}
+
+// NewHTTPClient follows the proxy mode, and 0 leaves response headers unbounded.
+func TestNewHTTPClient(t *testing.T) {
+	c := NewHTTPClient("http://127.0.0.1:9", 0)
+	tr := c.Transport.(*http.Transport)
+	if tr.ResponseHeaderTimeout != 0 {
+		t.Error("bounded")
+	}
+	req, _ := http.NewRequest("GET", "https://api.openai.com/v1/models", nil)
+	if u, _ := tr.Proxy(req); u == nil || u.Host != "127.0.0.1:9" {
+		t.Errorf("proxy %v", u)
+	}
+	local, _ := http.NewRequest("GET", "http://localhost:11434/api/tags", nil)
+	if u, _ := ProxyFunc("http://127.0.0.1:9")(local); u != nil {
+		t.Errorf("loopback proxied via %v", u)
+	}
+}

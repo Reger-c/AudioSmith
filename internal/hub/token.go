@@ -36,8 +36,21 @@ const (
 var ErrNoKeychain = errors.New("no keychain on this system")
 
 // Keychain is a generic password item of the login keychain (or of the
-// keychain file File, for tests).
-type Keychain struct{ Service, Account, File string }
+// keychain file File, for tests). AudioSmith keeps every secret under
+// Service "AudioSmith", one Account per secret: "huggingface-token" (the
+// HF token, DefaultKeychain), "llm.<provider>" (LLM API keys),
+// "mt.<service>" (translation API keys); see Secret. Label is what
+// Keychain Access shows; "" uses "AudioSmith <account>".
+type Keychain struct{ Service, Account, Label, File string }
+
+// KeychainService is the Keychain service of AudioSmith's secrets.
+const KeychainService = "AudioSmith"
+
+// Secret is the Keychain item of one of AudioSmith's secrets, e.g.
+// Secret("llm.openai", "AudioSmith OpenAI API key").
+func Secret(account, label string) Keychain {
+	return Keychain{Service: KeychainService, Account: account, Label: label}
+}
 
 // with appends the keychain file to a security command, when there is one.
 func (k Keychain) with(args ...string) []string {
@@ -48,7 +61,7 @@ func (k Keychain) with(args ...string) []string {
 }
 
 // DefaultKeychain is where AudioSmith keeps the HF token.
-var DefaultKeychain = Keychain{Service: "AudioSmith", Account: "huggingface-token"}
+var DefaultKeychain = Secret("huggingface-token", "AudioSmith Hugging Face token")
 
 // security runs /usr/bin/security with args, feeding it stdin.
 var security = func(stdin string, args ...string) ([]byte, error) {
@@ -92,7 +105,11 @@ func (k Keychain) Set(token string) error {
 	if strings.ContainsAny(token, "\"\\\n\r") {
 		return errors.New("the token has characters a Hugging Face token never has")
 	}
-	cmd := fmt.Sprintf("add-generic-password -U -s %q -a %q -l %q -w \"%s\"", k.Service, k.Account, "AudioSmith Hugging Face token", token)
+	label := k.Label
+	if label == "" {
+		label = "AudioSmith " + k.Account
+	}
+	cmd := fmt.Sprintf("add-generic-password -U -s %q -a %q -l %q -w \"%s\"", k.Service, k.Account, label, token)
 	if k.File != "" {
 		cmd += fmt.Sprintf(" %q", k.File)
 	}

@@ -1,6 +1,6 @@
 # AudioSmith architecture
 
-*State at the end of M0 (2026-10-13). M0a wrote the skeleton and the contracts; threads A (services + SQLite), B (protocol 2, supervisor, jobs), C (shell, catalogue, hub, i18n), #9 (text, document and language libraries), #11 (DSP) and #12 (voice design, gallery) built them; the integration thread (#10) wired them together (§5). Product plan: `plan/parity-plan.md` §3–§4. Wire format: [protocol-v2.md](protocol-v2.md).*
+*State at the end of M0 (2026-10-13). M0a wrote the skeleton and the contracts; threads A (services + SQLite), B (protocol 2, supervisor, jobs), C (shell, catalogue, hub, i18n), #9 (text, document and language libraries), #11 (DSP), #12 (voice design, gallery) and #13 (LLM, translation) built them; the integration thread (#10) wired them together (§5). Product plan: `plan/parity-plan.md` §3–§4. Wire format: [protocol-v2.md](protocol-v2.md).*
 
 ## 1. Package map
 
@@ -32,6 +32,8 @@ github.com/hehehai/AudioSmith
 │   ├── doc/             document import: TXT/MD/EPUB/DOCX, cue sheets (M1/M3; not wired yet)
 │   │   └── subtitle/, textenc/
 │   ├── lang/            the language table, 652 languages                              (leaf)
+│   ├── llm/             provider-agnostic chat-model layer (M2/M4; not wired yet)
+│   ├── translate/       translation over LLMs and MT services, glossaries (M4; not wired yet)
 │   ├── voicedesign/     Voice Design: description ⇄ attributes, recipes per model (M1; not wired yet)
 │   └── gallery/         the Voice Gallery: ~1,100 archetypes, facets, presets, preview planner (M1; not wired yet)
 │       └── persona/     the .asvoice voice file (and VoiceStudio .ovsvoice import)
@@ -51,6 +53,7 @@ hub ──▶ catalog, jobs (the download executor)              catalog ──�
 licence ──▶ catalog, core       notify, logs ──▶ core
 text/* ──▶ text                 doc ──▶ text, doc/subtitle, doc/textenc      doc/subtitle ──▶ text
 dsp/* ──▶ dsp siblings only (wav, edit, mix, qc… ──▶ dsp; loudness ──▶ dsp, dynamics, filter; …)
+llm ──▶ core                    translate ──▶ core, lang, llm, text, text/markup
 voicedesign ──▶ text            gallery ──▶ voicedesign, text, jobs, engine/proto     gallery/persona ──▶ voicedesign, lang
 core, jobs, engine/proto, settings, i18n, audio, lang, text, doc/textenc, dsp, dsp/filter ──▶ (nothing internal)
 ```
@@ -141,7 +144,7 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | Engine executors: `RegisterExecutors(sched, sup, ExecutorOptions{ModelPath, Licences})` | `internal/engine/executors.go` | done |
 | Protocol 2 (+ `SynthesizeParams.modelPath`, OmniVoice `steps`/`duration`) | `internal/engine/proto`, `engine/Fixtures`, [protocol-v2.md](protocol-v2.md) | done |
 | Catalogue v2: entries, aux repos, hidden, **pinned commits**, licences, language codes validated with `lang` | `internal/catalog` | done |
-| Downloader: `Status/Plan/Download/Verify/Delete`, mirror race, proxy, token; `DownloadSpec`, `DownloadExecutor`, `EntryOf`, `ErrorOf` | `internal/hub` | done |
+| Downloader: `Status/Plan/Download/Verify/Delete`, mirror race, proxy, token; `DownloadSpec`, `DownloadExecutor`, `EntryOf`, `ErrorOf`; for other network users `ProxyFunc`, `NewHTTPClient`, and Keychain items `Secret(account, label)` | `internal/hub` | done |
 | Settings document + `Service` (in the store's documents, `settings:app`) | `internal/settings` | done |
 | Licence gate, notification centre (persists info/success/warning), logs | `internal/licence`, `internal/notify`, `internal/logs` | done |
 | i18n: `T`, `N`, `X`, `SetLocale`, `Match`, `Supported`, `Name`, `DateTime`, `Date` | `internal/i18n` | done (en, zh-Hans) |
@@ -150,7 +153,7 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 
 ### Threads and merges
 
-M0a (`ff57a69`) wrote the package skeleton and these contracts. Three threads then worked in parallel, each owning files, with no sub-threads: **A** services + SQLite (`5d98053`), **C** shell, catalogue, hub, i18n, settings, licences (`6e88272`), **B** protocol 2 in Swift and Go, supervisor, scheduler (`8be41fb`). Thread **#9** added the pure-Go libraries `text`, `doc` and `lang` for M1 (`ae59b3d`), thread **#11** the DSP tree `dsp` (`84e716b`): mixing, loudness, mastering, QC and editing live there, not in `internal/audio`, which keeps peaks and playback; and thread **#12** `voicedesign`, `gallery` and `gallery/persona` (`ecd3762`). The integration thread (#10) did steps I1–I5 and the leftovers:
+M0a (`ff57a69`) wrote the package skeleton and these contracts. Three threads then worked in parallel, each owning files, with no sub-threads: **A** services + SQLite (`5d98053`), **C** shell, catalogue, hub, i18n, settings, licences (`6e88272`), **B** protocol 2 in Swift and Go, supervisor, scheduler (`8be41fb`). Thread **#9** added the pure-Go libraries `text`, `doc` and `lang` for M1 (`ae59b3d`), thread **#11** the DSP tree `dsp` (`84e716b`): mixing, loudness, mastering, QC and editing live there, not in `internal/audio`, which keeps peaks and playback; thread **#12** `voicedesign`, `gallery` and `gallery/persona` (`ecd3762`); and thread **#13** `llm` and `translate` (`fcb99f5`). The integration thread (#10) did steps I1–I5 and the leftovers:
 
 - **I1.** `openLibrary` builds store + bus → settings, licence gate, scheduler → services. The Studio's Generate goes through `TakeService.Generate` (licence and download checks; `take:<id>` jobs); the Studio-owned job path and the double save of takes are gone. `selectModel(entry)` replaced the shell's `chooseModel`.
 - **I2.** The status bar lists every unfinished job (any owner), each cancellable by id; ⌘E shows the gpu worker's memory and Clear cache; the workers' status comes from `Supervisor.Status` and `StatusChanged`.
@@ -178,6 +181,7 @@ Threads now own areas, not M0 contracts. Each keeps `CGO_ENABLED=0 go test ./...
 | `internal/text/**`, `internal/doc/**`, `internal/lang/**` | thread #9's successor (M1 text pipeline); the UI wires them in M1 |
 | `internal/dsp/**` | thread #11's successor (M1 mastering, QC, joining chunks); the UI wires it in M1 |
 | `internal/voicedesign/**`, `internal/gallery/**` | thread #12's successor (M1 voice library, design page, gallery); the UI wires them in M1 |
+| `internal/llm/**`, `internal/translate/**` | thread #13's successor (M2 dictation clean-up, M4 dubbing translation). Network calls use `hub.NewHTTPClient` (the settings' proxy) and keys live in the Keychain as `hub.Secret("llm.<provider>" / "mt.<service>", …)` |
 | `internal/engine/**`, `engine/**`, `docs/protocol-v2.md`, `scripts/*engine*.sh` | the engine thread of the milestone |
 | everything else | assigned per milestone by main; `README.md` and this file: main |
 
@@ -195,7 +199,7 @@ Rules that stay:
 | Waveform cache | `~/Library/Caches/AudioSmith/peaks/<take id>.f32` |
 | Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app, rotated at 5 MB) and `engine-gpu.log` (engine stderr) |
 | Models | the Hugging Face cache, `~/.cache/huggingface/hub` (`HF_HUB_CACHE`/`HF_HOME`, or Settings → Models → Model folder) |
-| HF token | the login Keychain, service "AudioSmith", account "huggingface-token" (or `$HF_TOKEN`, or huggingface-cli's token file) |
+| Secrets | the login Keychain, service "AudioSmith": account "huggingface-token" (HF token; or `$HF_TOKEN`, or huggingface-cli's token file), later "llm.<provider>", "mt.<service>" |
 
 ## 7. Testing
 

@@ -41,7 +41,8 @@ All long work runs as jobs in one persistent queue: generation, preloads and dow
 │  internal/engine    supervisor + executors, protocol 2   │──stdin──▶ ┌───────────────────────────┐
 │  internal/hub       model downloads (HF API, mirrors)    │◀─stdout── │ audiosmith-engine (Swift) │
 │  internal/catalog, licence, settings, i18n, notify,      │           │ mlx-audio-swift + MLX     │
-│  logs, audio, text, doc, lang, dsp, voicedesign, gallery │           │ offline, writes WAV takes │
+│  logs, audio, text, doc, lang, dsp, voicedesign,         │           │ offline, writes WAV takes │
+│  gallery, llm, translate                                 │           │                           │
 └──────────────────────────────────────────────────────────┘           └───────────────────────────┘
 ```
 
