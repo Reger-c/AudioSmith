@@ -9,12 +9,13 @@ import (
 
 func TestStreamReadsWhatArrives(t *testing.T) {
 	s := NewStream(1000, 1, 0)
+	r := s.NewReader()
 	got := make(chan []float32)
 	go func() {
 		var all []float32
 		buf := make([]float32, 64)
 		for {
-			n, err := s.Read(buf)
+			n, err := r.Read(buf)
 			all = append(all, buf[:n]...)
 			if err == io.EOF {
 				break
@@ -28,7 +29,7 @@ func TestStreamReadsWhatArrives(t *testing.T) {
 	binary.LittleEndian.PutUint16(pcm[2:], uint16(0x8000))
 	time.Sleep(10 * time.Millisecond) // the reader waits meanwhile
 	s.AppendPCM16(pcm)
-	if s.Len() != -1 {
+	if r.Len() != -1 {
 		t.Error("length known before Finish")
 	}
 	s.Finish()
@@ -42,35 +43,42 @@ func TestStreamReadsWhatArrives(t *testing.T) {
 			t.Errorf("sample %d: %v want %v", i, all[i], want[i])
 		}
 	}
-	if s.Len() != 5 || !s.Done() || s.Seconds() != 0.005 {
-		t.Errorf("len %d done %v seconds %v", s.Len(), s.Done(), s.Seconds())
+	if r.Len() != 5 || !s.Done() || s.Seconds() != 0.005 {
+		t.Errorf("len %d done %v seconds %v", r.Len(), s.Done(), s.Seconds())
 	}
 	// Seeking back replays; past the end stops at the end.
-	s.SetPosition(3)
+	r.SetPosition(3)
 	buf := make([]float32, 8)
-	if n, _ := s.Read(buf); n != 2 {
+	if n, _ := r.Read(buf); n != 2 {
 		t.Errorf("after seek read %d", n)
 	}
-	s.SetPosition(99)
-	if _, err := s.Read(buf); err != io.EOF {
+	r.SetPosition(99)
+	if _, err := r.Read(buf); err != io.EOF {
 		t.Errorf("past the end: %v", err)
+	}
+	// A second reader starts at the start; closing one leaves the other.
+	r2 := s.NewReader()
+	r.Close()
+	if n, _ := r2.Read(buf); n != 5 {
+		t.Errorf("second reader read %d", n)
 	}
 	// Appending after Finish is ignored.
 	s.Append([]float32{1})
-	if s.Len() != 5 {
+	if r2.Len() != 5 {
 		t.Error("appended after Finish")
 	}
 }
 
 func TestStreamCloseWakesReader(t *testing.T) {
 	s := NewStream(1000, 2, 0)
+	r := s.NewReader()
 	done := make(chan error)
 	go func() {
-		_, err := s.Read(make([]float32, 8))
+		_, err := r.Read(make([]float32, 8))
 		done <- err
 	}()
 	time.Sleep(5 * time.Millisecond)
-	s.Close()
+	r.Close()
 	select {
 	case err := <-done:
 		if err != io.EOF {

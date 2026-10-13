@@ -8,21 +8,19 @@ import (
 
 // Stream is audio that grows while it plays: the Studio's preview of a
 // take still rendering. The render's chunks are appended as they arrive
-// (Append, AppendPCM16) and Finish marks the end. It is a mygo/audio
-// Decoder: Read waits for audio that has not arrived yet (the player
-// plays silence meanwhile) and ends after Finish. Samples are kept as
-// 16-bit, up to a cap; audio past the cap is dropped (the take's file has
-// it all).
+// (Append, AppendPCM16) and Finish marks the end. Readers (NewReader) are
+// mygo/audio Decoders over it, each with its own position: Read waits for
+// audio that has not arrived yet (the player plays silence meanwhile) and
+// ends after Finish. Samples are kept as 16-bit, up to a cap; audio past
+// the cap is dropped (the take's file has it all).
 //
-// Append, Finish and Close may be called from any goroutine; the player
-// reads from its own.
+// Every method may be called from any goroutine.
 type Stream struct {
 	mu       sync.Mutex
 	cond     sync.Cond
 	rate     int
 	channels int
 	samples  []int16
-	pos      int // next sample to read
 	max      int // samples kept at most
 	done     bool
 	closed   bool
@@ -79,7 +77,7 @@ func (s *Stream) AppendPCM16(data []byte) {
 	s.cond.Broadcast()
 }
 
-// Finish marks the end: Read returns io.EOF once it has read everything.
+// Finish marks the end: readers return io.EOF once they read everything.
 func (s *Stream) Finish() {
 	s.mu.Lock()
 	s.done = true
@@ -104,7 +102,7 @@ func (s *Stream) Seconds() float64 {
 	return float64(len(s.samples)/s.channels) / float64(s.rate)
 }
 
-// Close ends the stream for good, waking a Read that waits.
+// Close ends the stream for good (an abandoned render), waking readers.
 func (s *Stream) Close() error {
 	s.mu.Lock()
 	s.closed = true
@@ -113,48 +111,73 @@ func (s *Stream) Close() error {
 	return nil
 }
 
+// NewReader returns a decoder of the stream from its start.
+func (s *Stream) NewReader() *StreamReader { return &StreamReader{s: s} }
+
+// StreamReader reads a Stream: a mygo/audio Decoder. Closing it (the
+// player does when it closes) wakes a Read that waits, and leaves the
+// stream to other readers.
+type StreamReader struct {
+	s      *Stream
+	pos    int // next sample (guarded by s.mu)
+	closed bool
+}
+
 // SampleRate implements mygo/audio.Decoder.
-func (s *Stream) SampleRate() int { return s.rate }
+func (r *StreamReader) SampleRate() int { return r.s.rate }
 
 // Channels implements mygo/audio.Decoder.
-func (s *Stream) Channels() int { return s.channels }
+func (r *StreamReader) Channels() int { return r.s.channels }
 
 // Read implements mygo/audio.Decoder: it waits until there is audio to
-// read, the stream is finished or it is closed.
-func (s *Stream) Read(buf []float32) (int, error) {
+// read, the stream is finished, or either is closed.
+func (r *StreamReader) Read(buf []float32) (int, error) {
+	s := r.s
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for s.pos >= len(s.samples) && !s.done && !s.closed {
+	for r.pos >= len(s.samples) && !s.done && !s.closed && !r.closed {
 		s.cond.Wait()
 	}
-	if s.closed || s.pos >= len(s.samples) {
+	if r.closed || s.closed || r.pos >= len(s.samples) {
 		return 0, io.EOF
 	}
-	n := min(len(buf), len(s.samples)-s.pos)
+	n := min(len(buf), len(s.samples)-r.pos)
 	n -= n % s.channels
 	for i := range n {
-		buf[i] = float32(s.samples[s.pos+i]) / 32768
+		buf[i] = float32(s.samples[r.pos+i]) / 32768
 	}
-	s.pos += n
+	r.pos += n
 	return n, nil
 }
 
 // SetPosition implements mygo/audio.Decoder; a frame past the audio that
 // arrived so far moves to its end.
-func (s *Stream) SetPosition(frame int64) error {
+func (r *StreamReader) SetPosition(frame int64) error {
+	s := r.s
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pos = min(max(int(frame), 0)*s.channels, len(s.samples))
+	r.pos = min(max(int(frame), 0)*s.channels, len(s.samples))
 	return nil
 }
 
 // Len implements mygo/audio.Decoder: unknown (-1) until the stream is
 // finished.
-func (s *Stream) Len() int64 {
+func (r *StreamReader) Len() int64 {
+	s := r.s
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.done {
 		return -1
 	}
 	return int64(len(s.samples) / s.channels)
+}
+
+// Close implements io.Closer.
+func (r *StreamReader) Close() error {
+	s := r.s
+	s.mu.Lock()
+	r.closed = true
+	s.cond.Broadcast()
+	s.mu.Unlock()
+	return nil
 }

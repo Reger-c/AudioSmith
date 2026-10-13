@@ -2,22 +2,39 @@ package main
 
 // The Studio's form and its actions. The form autosaves as a draft
 // (core.DraftService, key "studio") and comes back at the next start.
-// Until generation runs on jobs (integration step I1: TakeService.Generate)
-// generate builds the take's recipe and the engine request and hands
-// both to the engine link (enginelink.go).
+// generate builds the take's recipe (text, model, voice, parameters and
+// the output options of the render pipeline) and hands it to the engine
+// link (startTake), which queues a take.render job through TakeService.
+//
+// Its parts:
+//
+//	studio_view.go     the page: composer, generate bar, job status, inspector
+//	studio_editor.go   the script editor (markup highlighting, diagnostics, import)
+//	studio_controls.go the insert menu, language picker, Audio quality and Voice controls popovers
+//	studio_output.go   the latest take: details, Check audio, Save as…, drag out
+//	studio_preview.go  the streaming preview and the render's chunk progress
+//	studio_voice.go    the voice and cloning section (seam for the voice library)
+//	studio_notices.go  translations of render and markup findings
 
 import (
 	"context"
+	"crypto/rand"
+	"math/big"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
+
+// Bit depths of the Audio quality popover, by index.
+var bitDepths = []int{16, 24, 32}
 
 // studioState is the Studio form.
 type studioState struct {
@@ -25,7 +42,7 @@ type studioState struct {
 	modelLabel    string // a catalog label, or catalog.CustomLabel
 	customRepo    string
 	voice         string
-	language      string
+	language      string // the value the model's language parameter takes; "" = auto
 	speed         float64
 	modelDefaults bool // leave temperature / top-p / max tokens to the model
 	temperature   float64
@@ -36,6 +53,21 @@ type studioState struct {
 	duration      float64 // target seconds (models with CapDuration); 0 = natural
 	// autoplay mirrors settings.Studio.Autoplay; the checkbox changes the setting.
 	autoplay bool
+
+	// Audio quality.
+	steps     float64 // diffusion steps (models with Steps); 0 = the model's
+	bitsIndex int     // into bitDepths
+	evenOut   bool    // master with services.MasterDefault
+	normalize bool    // read numbers, dates… as words
+	// Voice controls: a pinned seed makes takes repeatable.
+	seedPinned bool
+	seed       float64
+	// recentLangs are the languages chosen last, newest first (codes).
+	recentLangs [4]string
+
+	script      scriptEditor
+	composer    composerState
+	renderState // the render the Studio follows: chunk progress, preview
 
 	// savedDraft is the form as last handed to the draft service (or restored).
 	savedDraft studioDraft
@@ -56,6 +88,8 @@ func newStudioState(prefs settings.Settings) studioState {
 		topP:          0.9,
 		maxTokens:     1200,
 		autoplay:      prefs.Studio.Autoplay,
+		evenOut:       true,
+		normalize:     true,
 		text:          "Hello from AudioSmith. This voice was generated on your Mac with MLX.",
 	}
 	if v := first.VoiceIDs(); len(v) > 0 {
@@ -64,11 +98,13 @@ func newStudioState(prefs settings.Settings) studioState {
 	if l := first.LanguageOptions(); len(l) > 0 {
 		s.language = l[0]
 	}
+	s.script = newScriptEditor()
 	s.savedDraft = s.toDraft()
 	return s
 }
 
-// studioDraft is the Studio form as saved between runs.
+// studioDraft is the Studio form as saved between runs. Version 2 added
+// the output options, the seed and the recent languages.
 type studioDraft struct {
 	Version       int     `json:"version"`
 	Text          string  `json:"text"`
@@ -84,15 +120,25 @@ type studioDraft struct {
 	RefAudio      string  `json:"refAudio,omitempty"`
 	RefText       string  `json:"refText,omitempty"`
 	Duration      float64 `json:"duration,omitempty"`
+
+	Steps       float64   `json:"steps,omitempty"`
+	Bits        int       `json:"bits,omitempty"`
+	RawVolume   bool      `json:"rawVolume,omitempty"`   // Even out volume off
+	NoNormalize bool      `json:"noNormalize,omitempty"` // normalisation off
+	SeedPinned  bool      `json:"seedPinned,omitempty"`
+	Seed        float64   `json:"seed,omitempty"`
+	Recent      [4]string `json:"recentLanguages"`
 }
 
 const studioDraftKey = "studio"
 
 func (s *studioState) toDraft() studioDraft {
-	return studioDraft{Version: 1, Text: s.text, ModelLabel: s.modelLabel, CustomRepo: s.customRepo,
+	return studioDraft{Version: 2, Text: s.text, ModelLabel: s.modelLabel, CustomRepo: s.customRepo,
 		Voice: s.voice, Language: s.language, Speed: s.speed, ModelDefaults: s.modelDefaults,
 		Temperature: s.temperature, TopP: s.topP, MaxTokens: s.maxTokens,
-		RefAudio: s.refAudio, RefText: s.refText, Duration: s.duration}
+		RefAudio: s.refAudio, RefText: s.refText, Duration: s.duration,
+		Steps: s.steps, Bits: bitDepths[min(max(s.bitsIndex, 0), len(bitDepths)-1)], RawVolume: !s.evenOut,
+		NoNormalize: !s.normalize, SeedPinned: s.seedPinned, Seed: s.seed, Recent: s.recentLangs}
 }
 
 // applyDraft restores a draft, ignoring a model the catalogue no longer has.
@@ -110,6 +156,10 @@ func (s *studioState) applyDraft(d studioDraft) {
 		s.temperature, s.topP, s.maxTokens = d.Temperature, d.TopP, d.MaxTokens
 	}
 	s.refAudio, s.refText, s.duration = d.RefAudio, d.RefText, d.Duration
+	s.steps, s.evenOut, s.normalize = d.Steps, !d.RawVolume, !d.NoNormalize
+	s.bitsIndex = max(slices.Index(bitDepths, d.Bits), 0)
+	s.seedPinned, s.seed, s.recentLangs = d.SeedPinned, d.Seed, d.Recent
+	s.script.reset(s.text)
 	s.savedDraft = s.toDraft()
 }
 
@@ -148,6 +198,9 @@ func (a *app) preset() catalog.Entry {
 	}
 	return catalog.Custom(strings.TrimSpace(a.customRepo))
 }
+
+// traits are the render traits of the form's model.
+func (a *app) traits() services.Traits { return modelInfo(a.preset().Repo).Traits }
 
 // selectModel makes e the Studio's model, as its Model select does (the
 // ⌘E switcher and the palette call it). The settings remember it as the
@@ -189,6 +242,7 @@ func (a *app) generate() {
 	if !a.canGenerate() {
 		return
 	}
+	a.startRender()
 	a.startTake(a.recipe(time.Now()))
 }
 
@@ -196,12 +250,26 @@ func (a *app) generate() {
 // model takes is set, so its defaults apply to the rest.
 func (a *app) recipe(now time.Time) core.Take {
 	p := a.preset()
+	tr := a.traits()
 	t := core.Take{
 		ID:       core.NewID(now),
 		Text:     strings.TrimSpace(a.text),
 		Model:    p.Repo,
 		Voice:    strings.TrimSpace(a.voice),
 		Language: strings.TrimSpace(a.language),
+		Render: &core.TakeRender{
+			Bits:        bitDepths[min(max(a.bitsIndex, 0), len(bitDepths)-1)],
+			NoNormalize: !a.normalize,
+		},
+	}
+	if t.Render.Bits == 16 {
+		t.Render.Bits = 0
+	}
+	if a.evenOut {
+		t.Render.Master = services.MasterDefault
+	}
+	if a.seedPinned && a.seed > 0 {
+		t.Seed, t.Render.SeedPinned = int64(a.seed), true
 	}
 	if p.Has(catalog.CapSpeed) {
 		t.Speed = a.speed
@@ -215,12 +283,17 @@ func (a *app) recipe(now time.Time) core.Take {
 	if p.Has(catalog.CapDuration) && a.duration > 0 {
 		t.Duration = a.duration
 	}
+	if tr.Steps && a.steps > 0 {
+		t.Steps = int(a.steps)
+	}
 	return t
 }
 
-// reuse copies a take's recipe back into the form.
+// reuse copies a take's whole recipe back into the form: text, model,
+// voice, language, parameters, seed (pinned) and output options.
 func (a *app) reuse(t *core.Take) {
 	a.text = t.Text
+	a.script.set(t.Text)
 	if p, ok := catalog.Builtin().ByRepo(t.Model); ok {
 		a.modelLabel = p.Label
 	} else {
@@ -235,7 +308,22 @@ func (a *app) reuse(t *core.Take) {
 		a.temperature, a.topP, a.maxTokens = t.Temperature, t.TopP, float64(t.MaxTokens)
 	}
 	a.refAudio, a.refText = t.RefAudio, t.RefText
+	a.duration, a.steps = t.Duration, float64(t.Steps)
+	a.seedPinned, a.seed = t.Seed != 0, float64(t.Seed)
+	if r := t.Render; r != nil {
+		a.bitsIndex = max(slices.Index(bitDepths, r.Bits), 0)
+		a.evenOut = r.Master != "" && r.Master != "raw"
+		a.normalize = !r.NoNormalize
+	} else {
+		a.bitsIndex, a.evenOut, a.normalize = 0, false, true
+	}
 	a.showPage("studio")
+}
+
+// newSeed pins a new random seed.
+func (a *app) newSeed() {
+	n, _ := rand.Int(rand.Reader, big.NewInt(1<<31-2))
+	a.seed, a.seedPinned = float64(n.Int64()+1), true
 }
 
 func (a *app) chooseRefAudio() {
@@ -250,4 +338,13 @@ func (a *app) chooseRefAudio() {
 		}
 		a.post(func() { a.refAudio = paths[0] })
 	}()
+}
+
+// snapped rounds a slider's value to a step, so labels and requests show
+// 1.05 rather than 1.0473; the slider moves smoothly in between.
+func snapped(e ui.Element, v *float64, step float64) ui.Element {
+	if e.Changed() {
+		*v = float64(int(*v/step+0.5)) * step
+	}
+	return e
 }

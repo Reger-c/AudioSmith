@@ -14,7 +14,8 @@ import (
 type Player struct {
 	id     string
 	p      *myaudio.Player
-	stream *Stream // the audio of a take still rendering (PlayStream); nil for files
+	stream *Stream       // the audio of a take still rendering (PlayStream); nil for files
+	reader *StreamReader // the player's reader of stream
 }
 
 func (pl *Player) load(id, path string) error {
@@ -58,8 +59,8 @@ func (pl *Player) Toggle(id, path string) error {
 // PlayStream) closes it.
 func (pl *Player) PlayStream(id string, s *Stream) {
 	pl.Stop()
-	pl.id, pl.stream = id, s
-	pl.p = myaudio.NewPlayer(s)
+	pl.id, pl.stream, pl.reader = id, s, s.NewReader()
+	pl.p = myaudio.NewPlayer(pl.reader)
 	pl.p.Play()
 }
 
@@ -68,13 +69,13 @@ func (pl *Player) Streaming(id string) bool { return pl.p != nil && pl.id == id 
 
 // Stop stops, closes the stream (and its file) and forgets the audio.
 func (pl *Player) Stop() {
-	if pl.stream != nil {
-		pl.stream.Close() // wakes the player's decoder if it waits for audio
+	if pl.reader != nil {
+		pl.reader.Close() // wakes the player's decoder if it waits for audio
 	}
 	if pl.p != nil {
 		pl.p.Close()
 	}
-	pl.p, pl.stream = nil, nil
+	pl.p, pl.stream, pl.reader = nil, nil, nil
 	pl.id = ""
 }
 
