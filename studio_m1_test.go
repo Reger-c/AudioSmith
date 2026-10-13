@@ -90,7 +90,13 @@ func TestAudioQualityPopover(t *testing.T) {
 	if a.steps != services.StepsQuality || !tt.HasText("Voice refinement  48 steps") {
 		t.Errorf("steps %v", a.steps)
 	}
-	tt.Click("Reset")
+	if r, ok := tt.Find("More steps sound cleaner and take longer."); ok {
+		tt.Scroll(r.X+20, r.Y, 0, 1000) // the popover scrolls to its end
+		tt.Frame()
+	}
+	if err := tt.Click("Reset"); err != nil {
+		t.Fatal(err)
+	}
 	if a.steps != 0 || a.bitsIndex != 0 || !a.evenOut {
 		t.Errorf("after reset: %v %v %v", a.steps, a.bitsIndex, a.evenOut)
 	}

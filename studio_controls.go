@@ -321,47 +321,49 @@ func (a *app) qualityPopover(c *ui.Context) {
 		a.composer.qualityOpen = !a.composer.qualityOpen
 	}
 	ui.Popover(c, btn, &a.composer.qualityOpen, func() {
-		ui.Column(c.Key("quality-pop")).Width(px(t, 320)).Gap(px(t, 12)).Padding(px(t, 10)).Children(func() {
-			ui.Text(c, i18n.T("WAV precision")).Bold()
-			ui.Segmented(c.Key("bits"), &a.bitsIndex, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float")).Label(i18n.T("WAV precision"))
-			desc := []string{i18n.T("Standard: plays everywhere."), i18n.T("For editing: more headroom."), i18n.T("Original: the model's own samples.")}
-			bits := bitDepths[min(max(a.bitsIndex, 0), 2)]
-			ui.Text(c, desc[min(max(a.bitsIndex, 0), 2)]+" "+i18n.T("About %.1f MB a minute.", mbPerMinute(bits, p.SampleRate))).
-				FontSize(px(t, 12)).TextColor(t.TextMuted)
-			if tr.Steps {
+		ui.Scroll(c.Key("quality-pop-scroll")).MaxHeight(px(t, 300)).Children(func() {
+			ui.Column(c.Key("quality-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
+				ui.Text(c, i18n.T("WAV precision")).Bold()
+				ui.Segmented(c.Key("bits"), &a.bitsIndex, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float")).Label(i18n.T("WAV precision"))
+				desc := []string{i18n.T("Standard: plays everywhere."), i18n.T("For editing: more headroom."), i18n.T("Original: the model's own samples.")}
+				bits := bitDepths[min(max(a.bitsIndex, 0), 2)]
+				ui.Text(c, desc[min(max(a.bitsIndex, 0), 2)]+" "+i18n.T("About %.1f MB a minute.", mbPerMinute(bits, p.SampleRate))).
+					FontSize(px(t, 12)).TextColor(t.TextMuted)
+				if tr.Steps {
+					ui.Divider(c)
+					steps := a.steps
+					if steps == 0 {
+						steps = services.StepsBalanced
+					}
+					ui.Text(c, i18n.T("Voice refinement  %d steps", int(steps))).Bold()
+					tier := slices.Index(tierSteps, steps)
+					if ui.Segmented(c.Key("tier"), &tier, i18n.T("Fast"), i18n.T("Balanced"), i18n.T("Quality")).Label(i18n.T("Performance")).Changed() && tier >= 0 {
+						a.steps = tierSteps[tier]
+					}
+					if ui.StepSlider(c.Key("steps"), &steps, 8, 64, 4).Label(i18n.T("Refinement steps")).Changed() {
+						a.steps = steps
+					}
+					ui.Text(c, i18n.T("More steps sound cleaner and take longer.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				}
 				ui.Divider(c)
-				steps := a.steps
-				if steps == 0 {
-					steps = services.StepsBalanced
-				}
-				ui.Text(c, i18n.T("Voice refinement  %d steps", int(steps))).Bold()
-				tier := slices.Index(tierSteps, steps)
-				if ui.Segmented(c.Key("tier"), &tier, i18n.T("Fast"), i18n.T("Balanced"), i18n.T("Quality")).Label(i18n.T("Performance")).Changed() && tier >= 0 {
-					a.steps = tierSteps[tier]
-				}
-				if ui.StepSlider(c.Key("steps"), &steps, 8, 64, 4).Label(i18n.T("Refinement steps")).Changed() {
-					a.steps = steps
-				}
-				ui.Text(c, i18n.T("More steps sound cleaner and take longer.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-			}
-			ui.Divider(c)
-			ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
-					ui.Text(c, i18n.T("Even out volume"))
-					ui.Text(c, i18n.T("Masters the take to broadcast loudness (−18 LUFS).")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
+					ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
+						ui.Text(c, i18n.T("Even out volume"))
+						ui.Text(c, i18n.T("Masters the take to broadcast loudness (−18 LUFS).")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					})
+					ui.Switch(c.Key("even-out"), &a.evenOut).Label(i18n.T("Even out volume"))
 				})
-				ui.Switch(c.Key("even-out"), &a.evenOut).Label(i18n.T("Even out volume"))
-			})
-			ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
-					ui.Text(c, i18n.T("Read numbers as words"))
-					ui.Text(c, i18n.T("Numbers, times, dates, money and abbreviations, before the model reads them.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
+					ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
+						ui.Text(c, i18n.T("Read numbers as words"))
+						ui.Text(c, i18n.T("Numbers, times, dates, money and abbreviations, before the model reads them.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					})
+					ui.Switch(c.Key("normalize"), &a.normalize).Label(i18n.T("Read numbers as words"))
 				})
-				ui.Switch(c.Key("normalize"), &a.normalize).Label(i18n.T("Read numbers as words"))
+				if ui.Button(c.Key("quality-reset"), i18n.T("Reset")).Clicked() {
+					a.bitsIndex, a.steps, a.evenOut, a.normalize = 0, 0, true, true
+				}
 			})
-			if ui.Button(c.Key("quality-reset"), i18n.T("Reset")).Clicked() {
-				a.bitsIndex, a.steps, a.evenOut, a.normalize = 0, 0, true, true
-			}
 		})
 	})
 }
@@ -375,77 +377,79 @@ func (a *app) voicePopover(c *ui.Context) {
 		a.composer.voiceOpen = !a.composer.voiceOpen
 	}
 	ui.Popover(c, btn, &a.composer.voiceOpen, func() {
-		ui.Column(c.Key("voice-pop")).Width(px(t, 320)).Gap(px(t, 12)).Padding(px(t, 10)).Children(func() {
-			if p.Has(catalog.CapSpeed) {
-				ui.Field(c, i18n.T("Speed  %.2f×", a.speed), func() {
-					snapped(ui.Slider(c.Key("speed"), &a.speed, 0.5, 2).Label(i18n.T("Speed")), &a.speed, 0.05)
-				})
-			}
-			if p.Has(catalog.CapDuration) {
-				ui.Field(c, i18n.T("Duration (seconds, 0 = natural)"), func() {
-					ui.NumberInput(c.Key("duration"), &a.duration, 0, 600, 0.5).Label(i18n.T("Duration"))
-				})
-				if a.duration > 0 && p.Has(catalog.CapSpeed) {
-					ui.Text(c, i18n.T("A duration overrides the speed.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		ui.Scroll(c.Key("voice-pop-scroll")).MaxHeight(px(t, 300)).Children(func() {
+			ui.Column(c.Key("voice-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
+				if p.Has(catalog.CapSpeed) {
+					ui.Field(c, i18n.T("Speed  %.2f×", a.speed), func() {
+						snapped(ui.Slider(c.Key("speed"), &a.speed, 0.5, 2).Label(i18n.T("Speed")), &a.speed, 0.05)
+					})
 				}
-			}
-			ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
-					ui.Text(c, i18n.T("Pin the seed"))
-					ui.Text(c, i18n.T("The same seed and settings make the same take.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				if p.Has(catalog.CapDuration) {
+					ui.Field(c, i18n.T("Duration (seconds, 0 = natural)"), func() {
+						ui.NumberInput(c.Key("duration"), &a.duration, 0, 600, 0.5).Label(i18n.T("Duration"))
+					})
+					if a.duration > 0 && p.Has(catalog.CapSpeed) {
+						ui.Text(c, i18n.T("A duration overrides the speed.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					}
+				}
+				ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
+					ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
+						ui.Text(c, i18n.T("Pin the seed"))
+						ui.Text(c, i18n.T("The same seed and settings make the same take.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					})
+					ui.Switch(c.Key("seed-pin"), &a.seedPinned).Label(i18n.T("Pin the seed"))
 				})
-				ui.Switch(c.Key("seed-pin"), &a.seedPinned).Label(i18n.T("Pin the seed"))
+				if a.seedPinned {
+					ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+						ui.NumberInput(c.Key("seed"), &a.seed, 1, 1<<31-1, 1).Label(i18n.T("Seed")).Grow(1)
+						if ui.Button(c.Key("new-seed"), i18n.T("New seed")).Clicked() {
+							a.newSeed()
+						}
+					})
+				}
+				if p.Has(catalog.CapGuidance) {
+					g := a.guidance
+					if g == 0 {
+						g = 2
+					}
+					ui.Field(c, i18n.T("Prompt guidance  %.1f", g), func() {
+						if snapped(ui.Slider(c.Key("guidance"), &g, 1, 4).Label(i18n.T("Prompt guidance")), &g, 0.1).Changed() {
+							a.guidance = g
+						}
+					})
+				}
+				if p.Has(catalog.CapExaggeration) {
+					x := a.exaggeration
+					if x == 0 {
+						x = 0.5
+					}
+					ui.Field(c, i18n.T("Expressiveness  %.2f", x), func() {
+						if snapped(ui.Slider(c.Key("exaggeration"), &x, 0.25, 2).Label(i18n.T("Expressiveness")), &x, 0.05).Changed() {
+							a.exaggeration = x
+						}
+					})
+				}
+				if p.Has(catalog.CapSampling) {
+					ui.Divider(c)
+					ui.Checkbox(c.Key("defaults"), &a.modelDefaults, i18n.T("Use the model's sampling defaults"))
+					if !a.modelDefaults {
+						ui.Field(c, i18n.T("Temperature  %.2f", a.temperature), func() {
+							snapped(ui.Slider(c.Key("temperature"), &a.temperature, 0, 1.5).Label(i18n.T("Temperature")), &a.temperature, 0.05)
+						})
+						ui.Field(c, i18n.T("Top P  %.2f", a.topP), func() {
+							snapped(ui.Slider(c.Key("topp"), &a.topP, 0.05, 1).Label(i18n.T("Top P")), &a.topP, 0.05)
+						})
+						ui.Field(c, i18n.T("Max tokens"), func() {
+							ui.NumberInput(c.Key("maxtokens"), &a.maxTokens, 50, 8000, 50).Label(i18n.T("Max tokens"))
+						})
+					}
+				}
+				if ui.Button(c.Key("voice-reset"), i18n.T("Reset")).Clicked() {
+					a.speed, a.duration, a.seedPinned, a.modelDefaults = 1, 0, false, true
+					a.guidance, a.exaggeration = 0, 0
+					a.temperature, a.topP, a.maxTokens = 0.7, 0.9, 1200
+				}
 			})
-			if a.seedPinned {
-				ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-					ui.NumberInput(c.Key("seed"), &a.seed, 1, 1<<31-1, 1).Label(i18n.T("Seed")).Grow(1)
-					if ui.Button(c.Key("new-seed"), i18n.T("New seed")).Clicked() {
-						a.newSeed()
-					}
-				})
-			}
-			if p.Has(catalog.CapGuidance) {
-				g := a.guidance
-				if g == 0 {
-					g = 2
-				}
-				ui.Field(c, i18n.T("Prompt guidance  %.1f", g), func() {
-					if snapped(ui.Slider(c.Key("guidance"), &g, 1, 4).Label(i18n.T("Prompt guidance")), &g, 0.1).Changed() {
-						a.guidance = g
-					}
-				})
-			}
-			if p.Has(catalog.CapExaggeration) {
-				x := a.exaggeration
-				if x == 0 {
-					x = 0.5
-				}
-				ui.Field(c, i18n.T("Expressiveness  %.2f", x), func() {
-					if snapped(ui.Slider(c.Key("exaggeration"), &x, 0.25, 2).Label(i18n.T("Expressiveness")), &x, 0.05).Changed() {
-						a.exaggeration = x
-					}
-				})
-			}
-			if p.Has(catalog.CapSampling) {
-				ui.Divider(c)
-				ui.Checkbox(c.Key("defaults"), &a.modelDefaults, i18n.T("Use the model's sampling defaults"))
-				if !a.modelDefaults {
-					ui.Field(c, i18n.T("Temperature  %.2f", a.temperature), func() {
-						snapped(ui.Slider(c.Key("temperature"), &a.temperature, 0, 1.5).Label(i18n.T("Temperature")), &a.temperature, 0.05)
-					})
-					ui.Field(c, i18n.T("Top P  %.2f", a.topP), func() {
-						snapped(ui.Slider(c.Key("topp"), &a.topP, 0.05, 1).Label(i18n.T("Top P")), &a.topP, 0.05)
-					})
-					ui.Field(c, i18n.T("Max tokens"), func() {
-						ui.NumberInput(c.Key("maxtokens"), &a.maxTokens, 50, 8000, 50).Label(i18n.T("Max tokens"))
-					})
-				}
-			}
-			if ui.Button(c.Key("voice-reset"), i18n.T("Reset")).Clicked() {
-				a.speed, a.duration, a.seedPinned, a.modelDefaults = 1, 0, false, true
-				a.guidance, a.exaggeration = 0, 0
-				a.temperature, a.topP, a.maxTokens = 0.7, 0.9, 1200
-			}
 		})
 	})
 }
