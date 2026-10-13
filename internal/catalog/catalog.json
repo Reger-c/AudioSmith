@@ -214,7 +214,7 @@
       "about": "Transcribes 99 languages and detects which one is spoken; can translate speech into English.",
       "capabilities": ["language", "translate"],
       "sampleRate": 16000,
-      "size": 468666034,
+      "size": 468669937,
       "minMemoryGB": 2,
       "quantization": "4bit",
       "hidden": true,
@@ -222,6 +222,7 @@
       "aux": [
         {"repo": "openai/whisper-large-v3", "revision": "06f233fe06e710322aca913c1bc4249a0d71fce1", "licence": "apache-2.0", "files": [
           {"path": "added_tokens.json", "size": 34648},
+          {"path": "generation_config.json", "size": 3903},
           {"path": "merges.txt", "size": 493869},
           {"path": "normalizer.json", "size": 52666},
           {"path": "preprocessor_config.json", "size": 340},

@@ -1,5 +1,9 @@
 // swift-tools-version:6.2
+import Foundation
 import PackageDescription
+
+/// The engine's own Info.plist, linked into the binary (Support/Info.plist).
+let infoPlist = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Support/Info.plist").path
 
 // audiosmith-engine is the TTS backend of AudioSmith: a long-running helper
 // process that loads MLX Audio models and turns text into WAV files. The Go
@@ -48,7 +52,8 @@ let package = Package(
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             ],
             path: "Sources/AudioSmithEngine",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", infoPlist])]
         ),
         // Decodes engine/Fixtures with the Swift types (scripts/test-engine.sh).
         .testTarget(

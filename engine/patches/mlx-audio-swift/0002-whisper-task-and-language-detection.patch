@@ -1,0 +1,41 @@
+diff --git a/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift b/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
+index 4ceb4ed..ccd9c5b 100644
+--- a/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
++++ b/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
+@@ -12,6 +12,9 @@ public final class WhisperModel: Module, STTGenerationModel {
+ 
+     private var tokenizer: WhisperTokenizer?
+ 
++    /// "transcribe" (default) or "translate" (into English). AudioSmith patch.
++    public var task: String = "transcribe"
++
+     public init(config: WhisperConfig, generationConfig: WhisperGenerationConfig? = nil) {
+         self.config = config
+         self.generationConfig = generationConfig
+@@ -195,9 +198,24 @@ public final class WhisperModel: Module, STTGenerationModel {
+         let encoderHidden = model.encoder(features)
+ 
+         var caches = (0..<config.decoderLayers).map { _ in WhisperLayerCache() }
++        // AudioSmith patch: without a language, detect it from the logits
++        // after <|startoftranscript|> (as OpenAI's detect_language does),
++        // so the prompt carries a language token and the result reports it.
++        var promptLanguage = generationParameters.language
++        if tokenizer.isMultilingual, tokenizer.resolveLanguage(promptLanguage) == nil, !tokenizer.languageToId.isEmpty {
++            var probeCaches = (0..<config.decoderLayers).map { _ in WhisperLayerCache() }
++            let sot = MLXArray([Int32(tokenizer.startOfTranscriptId)]).expandedDimensions(axis: 0)
++            let probeHidden = model.decoder(tokens: sot, startPosition: 0, encoderHidden: encoderHidden, caches: &probeCaches)
++            let probeLogits = model.decoder.projectToVocab(probeHidden[0, -1]).asType(.float32)
++            eval(probeLogits)
++            let scores = probeLogits.asArray(Float.self)
++            if let best = tokenizer.languageToId.filter({ $0.value < scores.count }).max(by: { scores[$0.value] < scores[$1.value] }) {
++                promptLanguage = best.key
++            }
++        }
+         let promptIds = tokenizer.buildPromptTokens(
+-            language: generationParameters.language,
+-            task: "transcribe"
++            language: promptLanguage,
++            task: task
+         )
+ 
+         let promptArray = MLXArray(promptIds.map(Int32.init)).expandedDimensions(axis: 0)

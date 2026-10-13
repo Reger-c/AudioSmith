@@ -1,0 +1,97 @@
+diff --git a/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxModel.swift b/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxModel.swift
+index a9d97ed..fb30fe5 100644
+--- a/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxModel.swift
++++ b/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxModel.swift
+@@ -462,12 +462,37 @@ public final class ChatterboxModel: Module, SpeechGenerationModel, @unchecked Se
+     // MARK: - Text Tokenization
+ 
+     /// Tokenize text into token IDs for T3.
+-    func tokenizeText(_ text: String) throws -> MLXArray {
++    func tokenizeText(_ text: String, language: String? = nil) throws -> MLXArray {
+         guard let tokenizer = tokenizer else {
+             throw AudioGenerationError.modelNotInitialized("Tokenizer not loaded")
+         }
+ 
+-        let encoded = tokenizer.encode(text: text)
++        // AudioSmith patch: prepare the text as Resemble's EnTokenizer and
++        // MTLTokenizer do — the multilingual model takes lowercase NFKD text,
++        // Chinese as Cangjie codes, Korean as jamo, and a [lang] prefix; both
++        // spell spaces [SPACE] (their tokenizer.json splits on whitespace).
++        var prepared = text
++        if !config.meanflow {
++            if config.t3Config.isMultilingual {
++                prepared = prepared.lowercased().decomposedStringWithCompatibilityMapping
++                let lang = language?.trimmingCharacters(in: .whitespaces).lowercased()
++                    .split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init)
++                if lang == "zh" {
++                    prepared = cangjie(prepared)
++                } else if lang == "ko" {
++                    prepared = String(prepared.unicodeScalars.flatMap { s -> [Unicode.Scalar] in
++                        guard (0xAC00 ... 0xD7A3).contains(s.value) else { return [s] }
++                        let base = s.value - 0xAC00
++                        var out = [Unicode.Scalar(0x1100 + base / (21 * 28))!, Unicode.Scalar(0x1161 + (base % (21 * 28)) / 28)!]
++                        if base % 28 > 0 { out.append(Unicode.Scalar(0x11A7 + base % 28)!) }
++                        return out
++                    }.map(Character.init)).trimmingCharacters(in: .whitespaces)
++                }
++                if let lang, !lang.isEmpty { prepared = "[\(lang)]" + prepared }
++            }
++            prepared = prepared.replacingOccurrences(of: " ", with: "[SPACE]")
++        }
++        let encoded = tokenizer.encode(text: prepared)
+ 
+         if config.meanflow {
+             // Turbo: GPT-2 tokenizer — use raw token IDs, no SOT/EOT wrapping
+@@ -482,6 +507,43 @@ public final class ChatterboxModel: Module, SpeechGenerationModel, @unchecked Se
+         }
+     }
+ 
++    /// Cangjie codes of Chinese characters (Cangjie5_TC.json beside the
++    /// weights), as [cj_x]…[cj_.] tokens, numbered among the characters
++    /// sharing a code like Resemble's ChineseCangjieConverter. AudioSmith patch.
++    private var cangjieTable: (word2cj: [String: String], cj2word: [String: [String]])?
++
++    private func cangjie(_ text: String) -> String {
++        if cangjieTable == nil {
++            var word2cj: [String: String] = [:]
++            var cj2word: [String: [String]] = [:]
++            if let dir = modelDir,
++               let data = try? Data(contentsOf: dir.appendingPathComponent("Cangjie5_TC.json")),
++               let entries = try? JSONSerialization.jsonObject(with: data) as? [String] {
++                for entry in entries {
++                    let parts = entry.split(separator: "\t", omittingEmptySubsequences: false)
++                    guard parts.count >= 2 else { continue }
++                    let word = String(parts[0]), code = String(parts[1])
++                    word2cj[word] = code
++                    cj2word[code, default: []].append(word)
++                }
++            }
++            cangjieTable = (word2cj, cj2word)
++        }
++        guard let table = cangjieTable, !table.word2cj.isEmpty else { return text }
++        var out = ""
++        for ch in text {
++            let glyph = String(ch)
++            guard ch.unicodeScalars.first?.properties.generalCategory == .otherLetter, let code = table.word2cj[glyph] else {
++                out.append(ch)
++                continue
++            }
++            let i = table.cj2word[code]?.firstIndex(of: glyph) ?? 0
++            for c in code + (i > 0 ? String(i) : "") { out += "[cj_\(c)]" }
++            out += "[cj_.]"
++        }
++        return out
++    }
++
+     // MARK: - Reference Audio Processing
+ 
+     /// Process reference audio to extract speaker embedding and prompt tokens.
+@@ -721,7 +783,7 @@ public final class ChatterboxModel: Module, SpeechGenerationModel, @unchecked Se
+         }
+ 
+         // Tokenize text
+-        let textTokens = try tokenizeText(text)
++        let textTokens = try tokenizeText(text, language: language)
+         print("[Chatterbox] Text tokenized: \(textTokens.shape)")
+ 
+         let temperature = generationParameters.temperature
