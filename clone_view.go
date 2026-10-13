@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -18,14 +19,11 @@ func (a *app) clonePage(c *ui.Context) {
 	}
 	header(c, title, func() {
 		if ui.Button(c.Key("clone-back"), i18n.T("Cancel")).Clicked() {
-			if s.mic.rec != nil {
-				s.mic.rec.Cancel()
-				s.mic = micState{device: s.mic.device, channels: s.mic.channels}
-			}
+			a.micCancel(&s.mic)
 			a.navigate("/voices")
 		}
 	})
-	if s.busy != "" || s.mic.phase == "recording" {
+	if s.busy != "" || s.mic.phase != "" {
 		c.After(100 * time.Millisecond) // the timer, the level
 	}
 	page := ui.Scroll(c.Key("clone-scroll")).Grow(1).MinHeight(0)
@@ -74,9 +72,6 @@ func (a *app) cloneSources(c *ui.Context) {
 			ui.Column(c).Grow(1).Center().Gap(px(t, 6)).Children(func() {
 				ui.Text(c, i18n.T("Drop a clip here, or click to choose")).Bold()
 				hint := i18n.T("WAV, MP3, M4A, FLAC, OGG, AAC — or a video")
-				if !a.tools.Can(toolDecodeAny) {
-					hint = i18n.T("WAV files for now: other formats need the engine's media support.")
-				}
 				ui.Text(c, hint).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.Center)
 			})
 		})
@@ -94,12 +89,7 @@ func (a *app) cloneSources(c *ui.Context) {
 // micControls are a recorder's button, timer, level and device pickers.
 func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 	t := c.Theme()
-	if !a.tools.Can(toolCapture) {
-		ui.Text(c, i18n.T("Record")).Bold()
-		ui.Text(c, i18n.T("Recording needs the engine's microphone support, which is not available yet.")).
-			FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.Center)
-		return
-	}
+	a.micEnded(m)
 	switch m.phase {
 	case "recording":
 		secs := time.Since(m.started).Seconds()
@@ -107,8 +97,8 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 			a.micStop(m)
 		}
 		ui.Text(c, i18n.T("%.1f s", secs)).FontSize(px(t, 18)).Bold()
-		ui.Meter(c, float64(m.level), 0, 0.3, nil).Width(px(t, 160)).Label(i18n.T("Input level"))
-		if m.level >= 0.025 {
+		ui.Meter(c, float64(levelFraction(m.level)), 0, 1, nil).Width(px(t, 160)).Label(i18n.T("Input level"))
+		if inputDetected(m.level) {
 			ui.Text(c, i18n.T("Input detected")).FontSize(px(t, 12)).TextColor(t.Success)
 		} else {
 			ui.Text(c, i18n.T("No input detected")).FontSize(px(t, 12)).TextColor(t.TextMuted)
@@ -128,18 +118,14 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 	}
 	busy := m.phase != ""
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		labels := []string{i18n.T("System default")}
+		labels, ids := []string{i18n.T("System default")}, []string{""}
 		for _, d := range a.clone.devices {
-			labels = append(labels, d.Name)
+			labels, ids = append(labels, d.Name), append(ids, d.ID)
 		}
-		dev := m.device
-		if dev == "" {
-			dev = labels[0]
-		}
+		dev := labels[max(slices.Index(ids, m.device), 0)]
 		if ui.Select(c.Key("mic-device"), &dev, labels).Label(i18n.T("Input device")).Disabled(busy).Changed() {
-			m.device = dev
-			if dev == labels[0] {
-				m.device = ""
+			if i := slices.Index(labels, dev); i >= 0 {
+				m.device = ids[i]
 			}
 		}
 		ch := m.channels
@@ -149,6 +135,8 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 	})
 	if m.err != "" {
 		ui.Text(c, m.err).FontSize(px(t, 12)).TextColor(t.Danger).TextAlign(ui.Center)
+	} else if a.clone.devicesErr != "" && m.phase == "" {
+		ui.Text(c, a.clone.devicesErr).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.Center)
 	}
 }
 
@@ -212,13 +200,13 @@ func (a *app) cloneClip(c *ui.Context) {
 				if ui.Button(c.Key("clone-unclean"), i18n.T("Undo")).Clicked() {
 					a.cloneUndoClean()
 				}
-			case a.tools.Can(toolEnhance):
+			default:
 				if ui.Button(c.Key("clone-clean"), i18n.T("Clean reference noise")).Tooltip(i18n.T("Remove background noise and room echo")).Clicked() {
 					a.cloneClean(false)
 				}
-			default:
-				ui.Button(c.Key("clone-clean"), i18n.T("Clean reference noise")).Disabled(true).
-					Tooltip(i18n.T("This needs an engine feature that is not available yet."))
+				if s.cleanErr != "" {
+					ui.Text(c, i18n.T("Could not clean the clip: %s", s.cleanErr)).FontSize(px(t, 12)).TextColor(t.Danger).Grow(1).MinWidth(0)
+				}
 			}
 		})
 	})
@@ -297,7 +285,7 @@ func (a *app) cloneDetails(c *ui.Context) {
 				a.cloneTranscribe()
 			}
 		default:
-			if a.tools.Can(toolTranscribe) && ui.Button(c.Key("asr-run"), i18n.T("Transcribe the part kept")).Clicked() {
+			if ui.Button(c.Key("asr-run"), i18n.T("Transcribe the part kept")).Clicked() {
 				a.cloneTranscribe()
 			}
 		}

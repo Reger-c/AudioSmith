@@ -18,6 +18,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/gallery/persona"
+	"github.com/hehehai/AudioSmith/internal/jobs"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
@@ -32,7 +33,7 @@ func designAttrs(a vd.Attributes) json.RawMessage {
 }
 
 func TestVoicesLibrary(t *testing.T) {
-	a, _, _ := newVoiceTestApp(t)
+	a, _ := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	addVoice(t, a, core.Voice{Name: "Narrator", Kind: core.VoiceCloned, RefText: "Once upon a time.", Style: "calm"}, 6)
 	addVoice(t, a, core.Voice{Name: "Grandma", Kind: core.VoiceDesigned, DesignAttrs: designAttrs(vd.Attributes{Gender: "female", Age: "elderly"}), Seed: 7}, 0)
@@ -134,7 +135,7 @@ func TestVoicesEmptyAndReload(t *testing.T) {
 }
 
 func TestCloneFlowUpload(t *testing.T) {
-	a, _, ft := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	a.navigate("/voices")
 	tt.Frame()
@@ -143,7 +144,7 @@ func TestCloneFlowUpload(t *testing.T) {
 	if a.router.Path() != "/voices/new" || !tt.HasText("Drop a clip here, or click to choose") || !tt.HasText("Record") {
 		t.Fatalf("clone page: %s %q", a.router.Path(), tt.Texts())
 	}
-	// A 30 s clip, its speech from 12 s: the best 15 s start there.
+	// A 30 s clip: by energy, its best 15 s start at 12 s, at once.
 	clip := filepath.Join(t.TempDir(), "long.wav")
 	writeSpeech(clip, 30, []span{{0.5, 1.2}, {12, 18}, {18.4, 26}, {27, 29}})
 	a.cloneDropped([]string{clip})
@@ -155,7 +156,21 @@ func TestCloneFlowUpload(t *testing.T) {
 	if s.selLo < 11 || s.selLo > 12 || s.sel().Len() > refIdealHigh+0.01 {
 		t.Errorf("best window %.2f–%.2f", s.selLo, s.selHi)
 	}
-	if s.transcript != ft.transcript || s.asr != "done" {
+	// Then the engine's VAD (Silero) has its say, while the user hasn't.
+	vad := eng.lastOf(t, proto.MethodVADDetect)
+	if p := params[proto.VADParams](t, vad); p.Audio != s.work || p.Model != defaultModel(catalog.DefaultVAD) {
+		t.Errorf("vad params %+v", p)
+	}
+	eng.succeed(vad.ID, proto.VADResult{Regions: []proto.Region{{Start: 2, End: 9}, {Start: 9.5, End: 16}}})
+	if s.selLo < 1.8 || s.selLo > 2 {
+		t.Errorf("VAD window %.2f–%.2f", s.selLo, s.selHi)
+	}
+	// The kept part is transcribed.
+	p := answerTranscribe(t, eng, "This is what my voice sounds like.")
+	if p.Model != defaultModel(catalog.DefaultSTT) {
+		t.Errorf("stt model %q", p.Model)
+	}
+	if s.transcript != "This is what my voice sounds like." || s.asr != "done" {
 		t.Errorf("transcript %q %s", s.transcript, s.asr)
 	}
 	if !tt.HasText("long.wav") || !tt.HasText("Save as voice profile") {
@@ -164,14 +179,15 @@ func TestCloneFlowUpload(t *testing.T) {
 
 	// Typing wins over a later machine transcript.
 	s.transcript = "My own words."
-	ft.transcript = "Machine words."
 	tt.Frame()
 	tt.Click("Transcribe the part kept")
+	answerTranscribe(t, eng, "Machine words.")
 	if s.transcript != "My own words." || s.autoText != "Machine words." {
 		t.Errorf("transcript overwritten: %q", s.transcript)
 	}
 
 	// Keep all: 30 s needs no transcript; over 75 s would.
+	tt.Frame()
 	tt.Click("Keep all")
 	if s.sel().Len() < 29.9 || a.cloneProblem() != "" {
 		t.Errorf("keep all: %v %q", s.sel(), a.cloneProblem())
@@ -188,8 +204,7 @@ func TestCloneFlowUpload(t *testing.T) {
 		t.Fatal("saved without a name")
 	}
 	s.name = "My Narrator"
-	png := testPNG(t, 300, 200)
-	a.clonePortrait(png)
+	a.clonePortrait(testPNG(t, 300, 200))
 	tt.Frame()
 	if s.portrait == nil {
 		t.Fatal("portrait not taken")
@@ -211,9 +226,25 @@ func TestCloneFlowUpload(t *testing.T) {
 	if a.router.Path() != "/voices" || a.edit == nil || a.edit.id != v.ID {
 		t.Errorf("after save: %s %+v", a.router.Path(), a.edit)
 	}
-	// The Studio's model (Kokoro) can't clone: no prompt is cached.
-	if len(ft.encoded) != 0 {
-		t.Errorf("encoded %v", ft.encoded)
+	// The Studio's model (Kokoro) can't reuse prompts: none is encoded.
+	for _, r := range eng.sent {
+		if r.Cmd == proto.MethodTTSEncodeVoice {
+			t.Error("encoded a prompt for Kokoro")
+		}
+	}
+	// A model that can: the prompt is cached in the voice.
+	e, _ := catalog.Builtin().ByRepo(qwenBase)
+	e.Capabilities = append(e.Capabilities, catalog.CapVoicePrompt)
+	a.encodePrompt(v, e)
+	enc := eng.lastOf(t, proto.MethodTTSEncodeVoice)
+	ep := params[proto.EncodeVoiceParams](t, enc)
+	if ep.Model != qwenBase || ep.RefAudio != a.voicePath(&v, v.RefAudio) || ep.RefText != "My own words." {
+		t.Fatalf("encode %+v", ep)
+	}
+	os.WriteFile(ep.PromptPath, []byte("prompt"), 0o644)
+	eng.succeed(enc.ID, proto.EncodeVoiceResult{VoicePrompt: ep.PromptPath, Model: qwenBase, Format: "qwen3_tts/1"})
+	if got := a.findVoice(v.ID); got.Prompts[qwenBase] == "" {
+		t.Errorf("prompt not kept: %+v", got.Prompts)
 	}
 }
 
@@ -250,12 +281,16 @@ func TestCloneRules(t *testing.T) {
 		t.Errorf("straddle %v", w)
 	}
 
-	a, _, ft := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	a.startClone("")
 	long := filepath.Join(t.TempDir(), "long.wav")
 	writeSpeech(long, 80, []span{{1, 79}})
-	ft.transcript = ""
 	a.cloneLoad(long, "long.wav", false)
+	// The engine's VAD fails (no model): the energy VAD's window stays.
+	eng.fail(eng.lastOf(t, proto.MethodVADDetect).ID, proto.CodeModelNotDownloaded, "no model")
+	if a.clone.sel().Len() > 15.01 || a.clone.asr != "running" {
+		t.Errorf("after VAD failure: %v %s", a.clone.sel(), a.clone.asr)
+	}
 	a.clone.selLo, a.clone.selHi = 0, 80
 	a.clone.transcript = ""
 	if p := a.cloneProblem(); !strings.Contains(p, "75 seconds") {
@@ -270,82 +305,124 @@ func TestCloneRules(t *testing.T) {
 		t.Errorf("short: %q", p)
 	}
 
-	// Without the engine's media support only WAV files load.
-	ft.can[toolDecodeAny] = false
+	// Anything else is decoded by the engine's media worker.
 	a.cloneLoad("/x/interview.mp4", "interview.mp4", false)
-	if !strings.Contains(a.clone.err, "Only WAV") {
-		t.Errorf("mp4 without media: %q", a.clone.err)
+	if a.clone.busy == "" {
+		t.Error("not busy while decoding")
 	}
-	ft.can[toolDecodeAny] = true
-	a.cloneLoad("/x/interview.mp4", "interview.mp4", false)
-	if a.clone.err != "" || a.clone.seconds != 8 || ft.decodedOther != 1 {
+	dec := eng.lastOf(t, proto.MethodMediaDecode)
+	dp := params[proto.DecodeParams](t, dec)
+	if dp.Input != "/x/interview.mp4" || dp.SampleRate != refRate || dp.Channels != 1 || dec.Spec.Lane != jobs.LaneMedia {
+		t.Fatalf("decode %+v %s", dp, dec.Spec.Lane)
+	}
+	writeSpeech(dp.Output.Path, 8, []span{{0.5, 7.5}})
+	eng.succeed(dec.ID, proto.DecodeResult{AudioOut: proto.AudioOut{Output: dp.Output.Path, SampleRate: refRate, Channels: 1, AudioSeconds: 8}})
+	if a.clone.err != "" || a.clone.seconds != 8 || !a.clone.hasClip() || a.clone.asr != "running" {
 		t.Errorf("mp4: %q %v", a.clone.err, a.clone.seconds)
+	}
+	// A file the engine can't read.
+	a.cloneLoad("/x/broken.m4a", "broken.m4a", false)
+	eng.fail(eng.lastOf(t, proto.MethodMediaDecode).ID, proto.CodeUnsupportedMedia, "bad")
+	if !strings.Contains(a.clone.err, "format cannot be read") || a.clone.hasClip() {
+		t.Errorf("broken: %q", a.clone.err)
+	}
+	// A slow, older clip loses to a newer one.
+	a.cloneLoad("/x/a.mp3", "a.mp3", false)
+	old := eng.lastOf(t, proto.MethodMediaDecode)
+	short := filepath.Join(t.TempDir(), "short.wav")
+	writeSpeech(short, 6, []span{{0.3, 5.7}})
+	a.cloneLoad(short, "short.wav", false)
+	op := params[proto.DecodeParams](t, old)
+	writeSpeech(op.Output.Path, 8, nil)
+	eng.succeed(old.ID, proto.DecodeResult{AudioOut: proto.AudioOut{Output: op.Output.Path, AudioSeconds: 8}})
+	if a.clone.srcName != "short.wav" || a.clone.seconds > 6.1 {
+		t.Errorf("older clip won: %s %v", a.clone.srcName, a.clone.seconds)
 	}
 }
 
-func TestCloneNoASRAndGoTools(t *testing.T) {
-	a, _, ft := newVoiceTestApp(t)
+func TestCloneNoASR(t *testing.T) {
+	a, eng := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
-	ft.transcribeErr = errNoASR
 	a.startClone("")
 	clip := filepath.Join(t.TempDir(), "c.wav")
 	writeSpeech(clip, 8, []span{{0.5, 7}})
 	a.cloneLoad(clip, "c.wav", false)
+	eng.fail(eng.lastOf(t, proto.MethodSTTTranscribe).ID, proto.CodeModelNotDownloaded, "Whisper is not downloaded")
 	tt.Frame()
 	if a.clone.asr != "noasr" || !tt.HasText("No speech-to-text model is installed: transcribing needs one.") {
 		t.Fatalf("no ASR: %s %q", a.clone.asr, tt.Texts())
+	}
+	tt.Click("Retry transcription")
+	eng.fail(eng.lastOf(t, proto.MethodSTTTranscribe).ID, proto.CodeOOM, "oom")
+	tt.Frame()
+	if a.clone.asr != "failed" || !tt.HasText("Transcription failed") {
+		t.Errorf("failed: %s %q", a.clone.asr, tt.Texts())
+	}
+	tt.Click("Retry transcription")
+	answerTranscribe(t, eng, "Hello.")
+	if a.clone.transcript != "Hello." {
+		t.Errorf("retry: %q", a.clone.transcript)
+	}
+	tt.Frame()
+	tt.Click("Clean reference noise")
+	eng.fail(eng.lastOf(t, proto.MethodEnhanceRun).ID, proto.CodeModelNotDownloaded, "no model")
+	tt.Frame()
+	if !tt.HasText("Could not clean the clip: The model is not downloaded. Download it on the Models page.") {
+		t.Errorf("clean failure: %q", tt.Texts())
 	}
 	tt.Click("Models")
 	if a.router.Path() != "/models" {
 		t.Errorf("Models link: %s", a.router.Path())
 	}
-
-	// The pure-Go tools: WAV only, no microphone, no cleaning.
-	a.tools = goTools{}
-	a.startClone("")
-	tt.Frame()
-	if !tt.HasText("Recording needs the engine's microphone support, which is not available yet.") ||
-		!tt.HasText("WAV files for now: other formats need the engine's media support.") {
-		t.Errorf("go tools: %q", tt.Texts())
-	}
-	a.cloneLoad(clip, "c.wav", false)
-	tt.Frame()
-	if a.clone.seconds < 7.9 || a.clone.asr != "noasr" || len(a.clone.speech) == 0 {
-		t.Errorf("go tools clip: %+v", a.clone)
-	}
 }
 
 func TestCloneRecordAndUseOnce(t *testing.T) {
-	a, eng, ft := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	a.startClone("")
 	tt.Frame()
-	a.clone.mic.device = "Studio Mic"
+	if len(a.clone.devices) != 3 {
+		t.Fatalf("devices %+v", a.clone.devices)
+	}
+	a.clone.mic.device = a.clone.devices[1].ID
 	a.clone.mic.channels = 1
+	tt.Frame()
+	if !tt.HasText("Fake USB Interface") {
+		t.Errorf("device picker: %q", tt.Texts())
+	}
 	if err := tt.Click("Record"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	m := &a.clone.mic
-	if m.phase != "recording" || m.level != 0.1 || !tt.HasText("Input detected") || !tt.HasText("Stop recording") {
+	if m.phase != "recording" || !tt.HasText("Input detected") || !tt.HasText("Stop recording") {
 		t.Fatalf("recording: %+v %q", m, tt.Texts())
 	}
-	if len(ft.recorded) != 1 || ft.recorded[0] != (captureOptions{Device: "mic1", Channels: 1}) {
-		t.Errorf("capture options %+v", ft.recorded)
+	start := params[proto.CaptureParams](t, eng.lastOf(t, proto.MethodCaptureStart))
+	if start.Device != a.clone.devices[1].ID || start.Channels != 1 || !strings.HasPrefix(start.Output.Path, a.referencesDir()) {
+		t.Errorf("capture params %+v", start)
 	}
-	m.started = m.started.Add(-6e9) // six seconds later
+	writeSpeech(start.Output.Path, 6, []span{{0.3, 5.7}})
 	tt.Click("Stop recording")
 	tt.Frame()
 	s := &a.clone
-	if !s.hasClip() || !s.cleaned || ft.enhanced != 1 || s.transcript == "" || s.srcName != "Recording" {
+	if !s.hasClip() || s.srcName != "Recording" || s.busy == "" {
 		t.Fatalf("after recording: %+v", s)
 	}
+	// A recording is cleaned, then transcribed.
+	answerEnhance(t, eng)
+	answerTranscribe(t, eng, "Recorded words.")
+	if !s.cleaned || s.transcript != "Recorded words." {
+		t.Fatalf("cleaned/transcribed: %+v", s)
+	}
+	tt.Frame()
 	tt.Click("Undo")
 	if s.cleaned || s.original != "" {
 		t.Error("undo clean")
 	}
 
 	// Use it once in the Studio: the model switches to one that clones.
+	tt.Frame()
 	if err := tt.Click("Use without saving"); err != nil {
 		t.Fatal(err)
 	}
@@ -357,17 +434,26 @@ func TestCloneRecordAndUseOnce(t *testing.T) {
 	}
 	take := a.recipe(time.Now())
 	a.applyStudioVoice(&take, a.preset())
-	if take.RefAudio != a.studioClip.Path || take.RefText != ft.transcript || take.VoiceID != "" {
+	if take.RefAudio != a.studioClip.Path || take.RefText != "Recorded words." || take.VoiceID != "" {
 		t.Errorf("take %+v", take)
 	}
 	if _, err := os.Stat(take.RefAudio); err != nil {
 		t.Error(err)
 	}
-	_ = eng
+
+	// The microphone refused.
+	a.startClone("")
+	eng.callErr[proto.MethodCaptureStart] = &proto.Error{Code: proto.CodePermissionDenied, Message: "denied"}
+	tt.Frame()
+	tt.Click("Record")
+	tt.Frame()
+	if !tt.HasText("AudioSmith may not use the microphone. Allow it in System Settings → Privacy & Security → Microphone.") {
+		t.Errorf("denied: %q", tt.Texts())
+	}
 }
 
 func TestReplaceReference(t *testing.T) {
-	a, eng, _ := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	v := addVoice(t, a, core.Voice{Name: "Me", Kind: core.VoiceCloned, RefText: "old"}, 5)
 	// Lock it to a take and verify it.
@@ -407,7 +493,7 @@ func TestReplaceReference(t *testing.T) {
 }
 
 func TestVoiceTryAndLock(t *testing.T) {
-	a, eng, _ := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	v := addVoice(t, a, core.Voice{Name: "Me", Kind: core.VoiceCloned, RefText: "Reference words.", Style: "whisper", Language: "en"}, 5)
 	a.openVoiceEditor(v.ID)
@@ -417,10 +503,8 @@ func TestVoiceTryAndLock(t *testing.T) {
 	if !tt.HasText("Test phrase") {
 		t.Fatalf("try: %q", tt.Texts())
 	}
-	a.edit.tryModel = "OmniVoice (non-commercial)"
-	if _, ok := catalog.Builtin().ByLabel(a.edit.tryModel); !ok {
-		a.edit.tryModel = catalog.Builtin().Entries[len(catalog.Builtin().Entries)-1].Label
-	}
+	om, _ := catalog.Builtin().ByRepo(omni)
+	a.edit.tryModel = om.Label
 	acceptLicences(t, a)
 	tt.Frame()
 	if err := tt.Click("Generate preview"); err != nil {
@@ -473,7 +557,7 @@ func TestVoiceTryAndLock(t *testing.T) {
 }
 
 func TestVoiceConsent(t *testing.T) {
-	a, _, _ := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	v := addVoice(t, a, core.Voice{Name: "Me", Kind: core.VoiceCloned}, 5)
 	a.openVoiceEditor(v.ID)
@@ -486,8 +570,9 @@ func TestVoiceConsent(t *testing.T) {
 	if err := tt.Click("Record"); err != nil {
 		t.Fatal(err)
 	}
-	a.edit.consent.started = a.edit.consent.started.Add(-5e9)
 	tt.Frame()
+	start := params[proto.CaptureParams](t, eng.lastOf(t, proto.MethodCaptureStart))
+	writeSpeech(start.Output.Path, 4, []span{{0.2, 3.8}})
 	tt.Click("Stop recording")
 	tt.Frame()
 	got := a.findVoice(v.ID)
@@ -552,7 +637,7 @@ func TestPortraits(t *testing.T) {
 	}
 
 	// On a saved voice.
-	a, _, _ := newVoiceTestApp(t)
+	a, _ := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	v := addVoice(t, a, core.Voice{Name: "Face", Kind: core.VoiceCloned}, 3)
 	a.setVoicePortrait(v.ID, testPNG(t, 100, 100))
@@ -574,7 +659,7 @@ func TestPortraits(t *testing.T) {
 }
 
 func TestVoiceFilesUI(t *testing.T) {
-	a, _, _ := newVoiceTestApp(t)
+	a, _ := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	ctx := context.Background()
 	v := addVoice(t, a, core.Voice{Name: "Shared", Kind: core.VoiceCloned, RefText: "Hello."}, 4)
@@ -623,7 +708,7 @@ func TestVoiceFilesUI(t *testing.T) {
 }
 
 func TestStudioSeam(t *testing.T) {
-	a, _, _ := newVoiceTestApp(t)
+	a, _ := newVoiceTestApp(t)
 	kok, _ := catalog.Builtin().ByRepo(kokoro)
 	om, _ := catalog.Builtin().ByRepo(omni)
 	base, _ := catalog.Builtin().ByRepo(qwenBase)

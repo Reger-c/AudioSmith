@@ -173,7 +173,7 @@ func TestGalleryPage(t *testing.T) {
 }
 
 func TestGalleryPreviewFailure(t *testing.T) {
-	a, eng, _ := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	acceptLicences(t, a)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	a.navigate("/gallery")

@@ -33,7 +33,6 @@ import (
 
 // voicesState is the voice area's view state.
 type voicesState struct {
-	tools        voiceTools
 	voices       []core.Voice // the library, by name
 	voicesLoaded bool
 	// portraits are decoded portraits by voice id; portraitFor the
@@ -60,8 +59,10 @@ type voicesState struct {
 	studioVoice string
 	studioClip  *clipRef
 
-	// voiceJobs are the takes the voice pages generate, by take id.
+	// voiceJobs are the takes the voice pages generate, by take id;
+	// voiceWork the other engine jobs they wait for, by owner.
 	voiceJobs map[string]*voiceJob
+	voiceWork map[string]func(jobs.Job)
 }
 
 // clipRef is a reference clip used without saving it as a voice.
@@ -72,11 +73,9 @@ type clipRef struct {
 // openVoices connects the voice pages to the library: it subscribes to
 // voice, take and job events (once, here) and loads the first snapshot.
 func (a *app) openVoices(lib *library) {
-	if a.tools == nil {
-		a.tools = goTools{}
-	}
 	a.portraits, a.portraitFor = map[string]*ui.Bitmap{}, map[string]string{}
 	a.voiceJobs = map[string]*voiceJob{}
+	a.voiceWork = map[string]func(jobs.Job){}
 	a.voiceSel = -1
 	a.voiceGrid.Selected = &a.voiceSel
 	a.voiceGrid.Key = func(i int) any {
@@ -88,10 +87,13 @@ func (a *app) openVoices(lib *library) {
 	core.On(lib.bus, func(ev core.VoiceChanged) { a.post(func() { a.voiceChanged(ev) }) })
 	core.On(lib.bus, func(ev core.TakeCreated) { a.post(func() { a.voiceTakeCreated(ev.Take) }) })
 	core.On(lib.bus, func(u jobs.Updated) {
-		if u.Chunk != nil || !strings.HasPrefix(u.Job.Owner, takeOwner) {
-			return
+		switch {
+		case u.Chunk != nil:
+		case strings.HasPrefix(u.Job.Owner, takeOwner):
+			a.post(func() { a.voiceJobUpdated(u.Job) })
+		case strings.HasPrefix(u.Job.Owner, voiceWorkOwner) && u.Job.State.Terminal():
+			a.post(func() { a.voiceWorkDone(u.Job) })
 		}
-		a.post(func() { a.voiceJobUpdated(u.Job) })
 	})
 	a.openGallery(lib)
 	a.design.reset()

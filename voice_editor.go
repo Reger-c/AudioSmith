@@ -181,7 +181,7 @@ func (a *app) voiceEditor(c *ui.Context) {
 	if v == nil {
 		return
 	}
-	if e.consent.phase == "recording" {
+	if e.consent.phase != "" {
 		c.After(100 * time.Millisecond)
 	}
 	ui.Column(c.Key("editor-"+v.ID)).Padding(px(t, 16)).Gap(px(t, 14)).Children(func() {
@@ -410,6 +410,7 @@ func (a *app) editorConsent(c *ui.Context, v *core.Voice) {
 	t := c.Theme()
 	e := a.edit
 	ui.Collapsible(c.Key("editor-consent"), i18n.T("Voice ownership"), &e.consentOpen, func() {
+		a.loadDevices() // once
 		ui.Column(c).Gap(px(t, 8)).Children(func() {
 			switch {
 			case v.Verified():

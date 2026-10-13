@@ -1,113 +1,61 @@
 package main
 
-// Fakes of the engine's voice tools (voiceTools) for the voice pages'
-// tests, until thread E's enginetest fakes for media.*, vad.detect,
-// stt.transcribe, enhance.run, capture.* and tts.encodeVoice land.
+// Helpers for the voice pages' tests over the fake engine
+// (enginefake_test.go): answering their jobs, test clips, voices.
 
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"math"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
 )
 
-type fakeTools struct {
-	mu            sync.Mutex
-	can           map[string]bool
-	transcript    string
-	transcribeErr error
-	transcribed   []string // paths
-	enhanced      int
-	devices       []captureDevice
-	recorded      []captureOptions
-	recSeconds    float64
-	encoded       []string // models
-	decodedOther  int
+// answer finishes the last engine job of kind with result.
+func answer(t *testing.T, eng *fakeEngine, kind string, result any) sentReq {
+	t.Helper()
+	r := eng.lastOf(t, kind)
+	eng.succeed(r.ID, result)
+	return r
 }
 
-func newFakeTools() *fakeTools {
-	return &fakeTools{
-		can:        map[string]bool{toolDecodeAny: true, toolTranscribe: true, toolEnhance: true, toolCapture: true, toolEncode: true},
-		transcript: "This is what my voice sounds like.",
-		devices:    []captureDevice{{ID: "mic1", Name: "Studio Mic"}},
-		recSeconds: 6,
+// params decodes a request's params.
+func params[T any](t *testing.T, r sentReq) T {
+	t.Helper()
+	var p T
+	if err := json.Unmarshal(r.Params, &p); err != nil {
+		t.Fatal(err)
 	}
+	return p
 }
 
-func (f *fakeTools) Can(tool string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.can[tool]
+// answerTranscribe answers the last stt.transcribe with text.
+func answerTranscribe(t *testing.T, eng *fakeEngine, text string) proto.TranscribeParams {
+	t.Helper()
+	r := eng.lastOf(t, proto.MethodSTTTranscribe)
+	p := params[proto.TranscribeParams](t, r)
+	eng.succeed(r.ID, proto.TranscribeResult{Model: p.Model, Text: text, Language: "en"})
+	return p
 }
 
-func (f *fakeTools) Decode(ctx context.Context, src, out string) (float64, error) {
-	if isWAVPath(src) {
-		return decodeWAV(src, out)
+// answerEnhance answers the last enhance.run, writing its output.
+func answerEnhance(t *testing.T, eng *fakeEngine) proto.EnhanceParams {
+	t.Helper()
+	r := eng.lastOf(t, proto.MethodEnhanceRun)
+	p := params[proto.EnhanceParams](t, r)
+	data, err := os.ReadFile(p.Audio)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !f.Can(toolDecodeAny) {
-		return 0, errNeedsEngine
-	}
-	f.mu.Lock()
-	f.decodedOther++
-	f.mu.Unlock()
-	// A video or compressed file: the media worker would decode it.
-	writeSpeech(out, 8, []span{{0.5, 7.5}})
-	return 8, nil
+	os.WriteFile(p.Output.Path, data, 0o644)
+	eng.succeed(r.ID, proto.EnhanceResult{AudioOut: proto.AudioOut{Output: p.Output.Path, SampleRate: refRate, Channels: 1}})
+	return p
 }
-
-func (f *fakeTools) Speech(ctx context.Context, path string) ([]span, error) {
-	return goTools{}.Speech(ctx, path)
-}
-
-func (f *fakeTools) Transcribe(ctx context.Context, path, lang string) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.transcribed = append(f.transcribed, path)
-	return f.transcript, f.transcribeErr
-}
-
-func (f *fakeTools) Enhance(ctx context.Context, in, out string) error {
-	f.mu.Lock()
-	f.enhanced++
-	f.mu.Unlock()
-	return copyWAV(in, out)
-}
-
-func (f *fakeTools) Devices(context.Context) ([]captureDevice, error) { return f.devices, nil }
-
-func (f *fakeTools) Record(ctx context.Context, o captureOptions, out string, level func(float32)) (recording, error) {
-	f.mu.Lock()
-	f.recorded = append(f.recorded, o)
-	secs := f.recSeconds
-	f.mu.Unlock()
-	level(0.1)
-	return &fakeRecording{out: out, seconds: secs}, nil
-}
-
-func (f *fakeTools) EncodeVoice(ctx context.Context, model, ref, refText, out string) error {
-	f.mu.Lock()
-	f.encoded = append(f.encoded, model)
-	f.mu.Unlock()
-	return os.WriteFile(out, []byte("prompt"), 0o644)
-}
-
-type fakeRecording struct {
-	out     string
-	seconds float64
-}
-
-func (r *fakeRecording) Stop() error {
-	return writeSpeech(r.out, r.seconds, []span{{0.3, r.seconds - 0.3}})
-}
-
-func (r *fakeRecording) Cancel() { os.Remove(r.out) }
-
-var _ voiceTools = (*fakeTools)(nil)
 
 // writeSpeech writes a mono 16-bit WAV of seconds with a voiced tone in
 // the speech spans and near silence elsewhere.
@@ -147,13 +95,11 @@ func writeSpeech(path string, seconds float64, speech []span) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-// newVoiceTestApp is newTestApp with fake voice tools.
-func newVoiceTestApp(t *testing.T) (*app, *fakeEngine, *fakeTools) {
+// newVoiceTestApp is newTestApp, for the voice pages.
+func newVoiceTestApp(t *testing.T) (*app, *fakeEngine) {
 	t.Helper()
 	a, eng, _ := newTestApp(t)
-	ft := newFakeTools()
-	a.tools = ft
-	return a, eng, ft
+	return a, eng
 }
 
 // addVoice saves a voice through the service, with a reference clip of

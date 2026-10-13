@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -9,31 +10,34 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
-// voiceDesignRepo is a Qwen3-TTS VoiceDesign model, not in the built-in
-// catalogue yet (thread E adds it): tests add it with withDesignCatalog.
-const voiceDesignRepo = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit"
-
-// withDesignCatalog makes the voice pages offer a Qwen3-TTS VoiceDesign
-// model too.
-func withDesignCatalog(t *testing.T) {
+// withDesignCatalog offers the catalogue's Qwen3-TTS VoiceDesign entry,
+// hidden until the Mac smoke suite passes, to the voice pages.
+func withDesignCatalog(t *testing.T) catalog.Entry {
 	t.Helper()
 	c := *catalog.Builtin()
-	c.Entries = append(append([]catalog.Entry(nil), c.Entries...), catalog.Entry{
-		ID: "qwen3-tts-1.7b-voicedesign-8bit", Label: "Qwen3-TTS 1.7B VoiceDesign", Family: "qwen3_tts", Repo: voiceDesignRepo,
-		Tasks: []catalog.Task{catalog.TaskTTS}, About: "x", Capabilities: []catalog.Capability{catalog.CapDesign, catalog.CapLanguage, catalog.CapSampling},
-		Languages: []catalog.Language{{Code: "en", Value: "English"}, {Code: "zh", Value: "Chinese"}},
-		Licence:   catalog.Licence{ID: "apache-2.0", Name: "Apache 2.0", Commercial: true, Verified: true},
-	})
+	c.Entries = append([]catalog.Entry(nil), c.Entries...)
+	var vdEntry catalog.Entry
+	for i, e := range c.Entries {
+		if e.Family == "qwen3_tts" && e.Has(catalog.CapDesign) {
+			c.Entries[i].Hidden = false
+			vdEntry = c.Entries[i]
+		}
+	}
+	if vdEntry.ID == "" {
+		t.Fatal("no Qwen3-TTS VoiceDesign entry in the catalogue")
+	}
 	saved := voiceCatalog
 	voiceCatalog = func() *catalog.Catalog { return &c }
 	t.Cleanup(func() { voiceCatalog = saved })
+	return vdEntry
 }
 
 func TestDesignPage(t *testing.T) {
-	a, eng, _ := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	d := &a.design
 	a.navigate("/design")
@@ -156,15 +160,20 @@ func TestDesignPage(t *testing.T) {
 }
 
 func TestDesignModels(t *testing.T) {
-	withDesignCatalog(t)
-	a, _, _ := newVoiceTestApp(t)
+	if ms := designModels(); len(ms) != 1 || ms[0].Repo != omni {
+		t.Fatalf("built-in design models %v", ms)
+	}
+	vdm := withDesignCatalog(t)
+	a, _ := newVoiceTestApp(t)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	d := &a.design
-	if ms := designModels(); len(ms) != 2 || ms[1].Repo != voiceDesignRepo {
+	if ms := designModels(); len(ms) != 2 || ms[1].Repo != vdm.Repo {
 		t.Fatalf("design models %v", ms)
 	}
+	// Not downloaded here.
+	os.RemoveAll(hub.RepoDir(a.lib.settings.Get().Models.CacheDir, vdm.Repo))
 	a.navigate("/design")
-	d.model = "Qwen3-TTS 1.7B VoiceDesign"
+	d.model = vdm.Label
 	d.description = "a cheerful young woman, bright voice"
 	tt.Frame()
 	texts := strings.Join(tt.Texts(), "|")
@@ -191,7 +200,7 @@ func TestDesignModels(t *testing.T) {
 }
 
 func TestDesignSampleOnDemand(t *testing.T) {
-	a, eng, _ := newVoiceTestApp(t)
+	a, eng := newVoiceTestApp(t)
 	acceptLicences(t, a)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	v := addVoice(t, a, core.Voice{Name: "Kid", Kind: core.VoiceDesigned, Language: "zh",
