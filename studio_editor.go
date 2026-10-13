@@ -201,7 +201,7 @@ func (a *app) scriptView(c *ui.Context) {
 	st.Font = ui.Font{Family: "system-ui", Size: px(t, 15)}
 	st.Placeholder = i18n.T("Type or paste the text to speak…")
 	st.Label = i18n.T("Script")
-	ui.Column(c.Key("script-box")).Grow(1).MinHeight(px(t, 140)).Radius(8).Border(1, t.Border).Background(t.Surface).
+	ui.Column(c.Key("script-box")).Grow(1).MinHeight(px(t, 140)).Radius(8).Border(1, t.Border).Background(editor.DefaultTheme(t).Background).
 		Padding(px(t, 6), px(t, 4)).Children(func() {
 		editor.View(c.Key("script"), st).Grow(1).MinHeight(0)
 	})

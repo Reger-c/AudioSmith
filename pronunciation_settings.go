@@ -286,7 +286,7 @@ func (a *app) pronunciationSettings(c *ui.Context) {
 			for _, h := range []struct {
 				label string
 				w     float32
-			}{{i18n.T("Term"), 0}, {i18n.T("Say it as"), 0}, {i18n.T("Type"), 130}, {i18n.T("Languages"), 90}, {i18n.T("On"), 44}, {"", 64}} {
+			}{{i18n.T("Term"), 0}, {i18n.T("Say it as"), 0}, {i18n.T("Type"), 130}, {i18n.T("Languages"), 90}, {i18n.T("On"), 44}, {"", 40}} {
 				txt := ui.Text(c, h.label).FontSize(px(t, 11)).Bold().TextColor(t.TextMuted)
 				if h.w > 0 {
 					txt.Width(px(t, h.w)).Shrink(0)
@@ -322,7 +322,7 @@ func (a *app) pronunciationSettings(c *ui.Context) {
 				if ui.Switch(c.Key("on"), &e.Enabled).Label(i18n.T("On")).Changed() {
 					changed = true
 				}
-				if ui.Button(c.Key("remove"), i18n.T("Remove")).Width(px(t, 64)).Shrink(0).Clicked() {
+				if ui.Button(c.Key("remove"), "✕").Label(i18n.T("Remove")).Tooltip(i18n.T("Remove")).Shrink(0).Clicked() {
 					remove = i
 				}
 			})

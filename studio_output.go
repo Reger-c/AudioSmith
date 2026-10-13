@@ -232,18 +232,18 @@ func (a *app) outputPanel(c *ui.Context, t *core.Take, latest bool) {
 			a.waveform(c, t)
 			a.dragHandle(c, t)
 		})
-		ui.Row(c).Gap(px(th, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).MinWidth(0).Gap(px(th, 2)).Children(func() {
-				title := t.Text
-				if latest {
-					title = i18n.T("Latest take")
-				}
-				ui.Text(c, title).FontSize(px(th, 13)).Bold().SingleLine().Ellipsis("…")
-				ui.Text(c, renderedIn(t)+" · "+fileDetails(t)).FontSize(px(th, 11)).TextColor(th.TextMuted).SingleLine().Ellipsis("…")
-				if latest {
-					ui.Text(c, clipMeta(t)).FontSize(px(th, 11)).TextColor(th.TextMuted).SingleLine().Ellipsis("…")
-				}
-			})
+		ui.Column(c).Gap(px(th, 2)).Children(func() {
+			title := t.Text
+			if latest {
+				title = i18n.T("Latest take")
+			}
+			ui.Text(c, title).FontSize(px(th, 13)).Bold().SingleLine().Ellipsis("…")
+			ui.Text(c, renderedIn(t)+" · "+fileDetails(t)).FontSize(px(th, 11)).TextColor(th.TextMuted).SingleLine().Ellipsis("…")
+			if latest {
+				ui.Text(c, clipMeta(t)).FontSize(px(th, 11)).TextColor(th.TextMuted).SingleLine().Ellipsis("…")
+			}
+		})
+		ui.Row(c).Gap(px(th, 8)).AlignItems(ui.Center).Wrap().Children(func() {
 			a.starButton(c, t)
 			check := ui.Button(c.Key("check"), i18n.T("Check audio")).Tooltip(i18n.T("Look for clipping, silences and jumps in loudness"))
 			if check.Clicked() {

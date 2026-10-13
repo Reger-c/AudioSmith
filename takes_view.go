@@ -173,11 +173,11 @@ func (a *app) takeRow(c *ui.Context, cl *core.Take) {
 			}
 			a.waveform(c, cl)
 		})
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
-				ui.Text(c, cl.Text).FontSize(px(t, 13)).MaxLines(3).Ellipsis("…")
-				ui.Text(c, clipMeta(cl)).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-			})
+		ui.Column(c).Gap(px(t, 2)).Children(func() {
+			ui.Text(c, cl.Text).FontSize(px(t, 13)).MaxLines(3).Ellipsis("…")
+			ui.Text(c, clipMeta(cl)).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+		})
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
 			a.starButton(c, cl)
 			details := i18n.T("Details")
 			if selected {

@@ -34,6 +34,7 @@ type composerState struct {
 type insertItem struct {
 	key, label  string
 	open, close string // text before and after the selection
+	hint        string // what it inserts, as shown; open when empty
 	nonVerbal   bool
 }
 
@@ -109,7 +110,11 @@ func (a *app) insertMenu(c *ui.Context) {
 						color = t.TextMuted
 					}
 					ui.Text(c, it.label).TextColor(color).Grow(1)
-					ui.Text(c, it.open).FontSize(px(t, 11)).TextColor(t.TextMuted)
+					hint := it.hint
+					if hint == "" {
+						hint = it.open
+					}
+					ui.Text(c, hint).FontSize(px(t, 11)).TextColor(t.TextMuted)
 				})
 			}
 			section(i18n.T("Pauses"))
@@ -120,7 +125,7 @@ func (a *app) insertMenu(c *ui.Context) {
 			for _, it := range deliveryItems() {
 				item(it, (it.key == "slow" || it.key == "fast") && !tr.Speed)
 			}
-			item(insertItem{key: "say", label: i18n.T("Pronounce as…"), open: "[[", close: "|]]"}, false)
+			item(insertItem{key: "say", label: i18n.T("Pronounce as…"), open: "[[", close: "|]]", hint: "[[word|say]]"}, false)
 			section(i18n.T("Expressions"))
 			if !tr.NonVerbal {
 				ui.Text(c, i18n.T("%s cannot voice expressions; they are left out.", a.preset().Label)).

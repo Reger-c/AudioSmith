@@ -104,6 +104,11 @@ func TestDictionaryOverridesAndNormalisation(t *testing.T) {
 	if got := p.Segments[0].Text; !strings.Contains(got, "崇庆") || strings.Contains(got, "2024") || strings.Contains(got, " ") {
 		t.Errorf("zh text %q", got)
 	}
+	// Abbreviations before a dictionary term still read.
+	nguyen := lexicon.Compile([]lexicon.Entry{{Term: "Nguyen", Replacement: "win", Type: lexicon.Respelling, Scope: lexicon.Global, Enabled: true}}, "en")
+	if got := Build("Mr. Nguyen called.", Options{Lang: "en", Lexicon: nguyen}).Segments[0].Text; got != "Mister win called." {
+		t.Errorf("abbreviation %q", got)
+	}
 	// Normalisation off.
 	if got := Build("It is 3:30.", Options{Lang: "en", NoNormalize: true}).Segments[0].Text; got != "It is 3:30." {
 		t.Errorf("unnormalised %q", got)

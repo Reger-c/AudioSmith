@@ -288,12 +288,16 @@ func Build(src string, o Options) Plan {
 	return p
 }
 
-// addBlock lowers one block: dictionary, normalisation, chunks.
+// addBlock lowers one block: normalisation, dictionary, chunks. Written
+// forms are read first ("Mr. Nguyen" → "Mister Nguyen"), so a dictionary
+// term next to them still matches, and its respelling is said as given;
+// inline [[word|say]] overrides are markup, which normalisation skips.
 func (p *Plan) addBlock(b *block, o Options) {
-	s := o.Lexicon.Apply(b.text.String()).Text
+	s := b.text.String()
 	if !o.NoNormalize {
 		s = normalize.Text(s, o.Lang, normalize.Options{})
 	}
+	s = o.Lexicon.Apply(s).Text
 	max := o.MaxChars
 	if mostlyCJK(s) && o.MaxCharsCJK > 0 {
 		max = o.MaxCharsCJK

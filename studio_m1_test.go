@@ -401,9 +401,14 @@ func TestHistoryStarFilterSearchAndDetails(t *testing.T) {
 			t.Errorf("details lack %q: %q", want, tt.Texts())
 		}
 	}
-	tt.Click("世界。")
+	tt.Scroll(900, 500, 0, 2000) // the details pane, to its chunks
+	tt.Frame()
+	if err := tt.Click("世界。"); err != nil {
+		t.Fatal(err)
+	}
 	if a.pl.Current() != "B" {
-		t.Error("a chunk does not play")
+		r, _ := tt.Find("世界。")
+		t.Errorf("a chunk does not play: %q at %v (%q)", a.pl.Current(), r, a.toasts)
 	}
 	if err := tt.Click("Load the whole recipe into the studio, seed included"); err != nil {
 		tt.Click("Reuse")

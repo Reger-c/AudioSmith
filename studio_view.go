@@ -174,7 +174,7 @@ func (a *app) generateBar(c *ui.Context) {
 		a.voicePopover(c)
 		a.qualityPopover(c)
 		if s := a.voiceControlsSummary(); s != "" {
-			ui.Text(c, s).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			ui.Text(c, s).FontSize(px(t, 12)).TextColor(t.TextMuted).SingleLine().Ellipsis("…").MinWidth(0)
 		}
 		ui.Spacer(c)
 		if a.job != nil {
