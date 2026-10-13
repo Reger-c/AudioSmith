@@ -36,11 +36,26 @@ type WorkerStatus struct {
 	Hello      *proto.HelloResult // nil until ready
 	Stats      *proto.StatsResult // last engine.stats, polled while jobs run; nil before the first
 	Running    []string           // ids of requests in flight
-	Err        string             // why it failed: crash, protocol mismatch, missing binary…
+	Err        string             // why it failed, in English (details for logs and bug reports)
+	Reason     FailReason         // why it failed, for a translated message; "" unless failed
 	StderrTail string             // last stderr lines after a crash
 	Restarts   int                // automatic restarts since Start
+	RestartAt  time.Time          // when the next automatic restart happens; zero = none planned
 	Since      time.Time          // when State last changed
 }
+
+// FailReason classifies a failed worker, so the UI can explain it in the
+// user's language and offer the right fix.
+type FailReason string
+
+const (
+	FailMissing   FailReason = "missing"   // no executable: build it (scripts/build-engine.sh) or set AUDIOSMITH_ENGINE
+	FailStart     FailReason = "start"     // the executable could not be started
+	FailProtocol  FailReason = "protocol"  // it speaks another protocol version or role: rebuild it; not restarted
+	FailHandshake FailReason = "handshake" // engine.hello was not answered in time
+	FailCrashed   FailReason = "crashed"   // it exited without being asked to
+	FailStuck     FailReason = "stuck"     // killed because a cancelled job did not stop within the grace period
+)
 
 // StatusChanged is published on the core.Bus whenever a worker's State,
 // PID, loaded models or Err change. Topic "engine.status".
@@ -68,6 +83,17 @@ type Config struct {
 	// in 10 min); beyond it the worker stays failed until Restart.
 	MaxRestarts   int
 	RestartWindow time.Duration
+	// CancelGrace is how long a cancelled job may take to end before its
+	// worker is killed and restarted (default 5 s).
+	CancelGrace time.Duration
+	// StatsEvery is how often engine.stats is polled while jobs run
+	// (default 2 s); it is also polled when a job starts and ends.
+	// Negative: never (tests).
+	StatsEvery time.Duration
+	// Env is added to the engine processes' environment (HF_HUB_CACHE,
+	// proxies…; tests select a fake engine with it).
+	Env  []string
+	Logf func(format string, args ...any) // supervisor diagnostics; default log.Printf
 }
 
 // Supervisor runs and talks to the engine workers. Goroutine-safe.

@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -235,28 +234,4 @@ func Find(resources string) string {
 		}
 	}
 	return ""
-}
-
-// lineTail keeps the last lines written to it.
-type lineTail struct {
-	mu    sync.Mutex
-	max   int
-	lines []string
-}
-
-func newLineTail(max int) *lineTail { return &lineTail{max: max} }
-
-func (t *lineTail) add(line string) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.lines = append(t.lines, line)
-	if len(t.lines) > t.max {
-		t.lines = t.lines[len(t.lines)-t.max:]
-	}
-}
-
-func (t *lineTail) String() string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return strings.Join(t.lines, "\n")
 }
