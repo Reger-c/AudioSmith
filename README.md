@@ -90,16 +90,16 @@ scripts/mac.sh go tool mygo build
 
 ## Versions
 
-The engine uses the dependency set Voxt validated, locked in `engine/Package.resolved` (builds use it strictly):
+The engine builds on upstream mlx-audio-swift with AudioSmith's patch series, locked in `engine/Package.resolved` (builds use it strictly):
 
 | Dependency | Pin |
 |---|---|
-| [hehehai/mlx-audio-swift](https://github.com/hehehai/mlx-audio-swift) | `2a6e75d` (upstream + Voxt fixes) |
-| mlx-swift | `0.31.6` |
-| mlx-swift-lm | `c6446cf` |
-| swift-transformers / swift-huggingface | `1.3.4` / `0.10.2` |
+| [Blaizzy/mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) | `244458d` (2026-10-10) + `engine/patches/mlx-audio-swift/*.patch`, applied by `scripts/fetch-engine-deps.sh` into `engine/.build/deps/` |
+| mlx-swift | `0.32.3` |
+| mlx-swift-lm | `3.32.3` |
+| swift-transformers / swift-huggingface | `1.3.5` / `0.13.0` |
 
-Keep them together. **Don't move to upstream mlx-audio-swift HEAD / mlx-swift 0.32.x without the per-model Mac smoke tests**: MLX 0.32 makes Metal command encoders thread-local, and Kokoro's `generateStream` in mlx-audio-swift yields unevaluated audio from its own `Task`, which crashes with `There is no Stream(gpu, N) in current thread` (a one-line fix, planned for M1).
+The patches (see `engine/patches/README.md`): Kokoro evaluates its audio before yielding it (mlx-swift 0.32 makes default streams thread-local: a lazy array yielded from a model's own `Task` crashes with `There is no Stream(gpu, N) in current thread`); Whisper detects the language and takes a task; Chatterbox spells spaces and takes a language (Cangjie for Chinese). **Moving a pin, or adding a patch, needs the per-model Mac smoke suite** (`scripts/smoke-models.sh`): every catalogue model passes it before it is listed.
 
 MyGo is pinned in `go.mod`; `go tool mygo` runs the CLI at that version. Its SQLite plugin loads a prebuilt library: `go test` downloads it once (sha256-checked) into `~/.cache/mygo/natives`, `MYGO_SQLITE_LIBRARY` points it at a local copy (CI does this), and `mygo build` bundles it into the app.
 
@@ -113,6 +113,8 @@ MyGo is pinned in `go.mod`; `go tool mygo` runs the CLI at that version. Its SQL
 | `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .` | anywhere | Renders every page and overlay, light and dark, English and Chinese, to PNG |
 | `scripts/test-engine.sh` | Mac | The Swift protocol types against `engine/Fixtures` |
 | `scripts/smoke-engine.sh` | Mac | The engine binary alone: three Kokoro takes |
+| `scripts/smoke-models.sh [ids]` | Mac + network | **The model gate.** Each catalogue model (or the listed ids) is downloaded, run offline and checked: TTS takes read back by Whisper (and design tags by pitch), transcripts, word times, VAD, denoising; reports RTF and memory to `/tmp/audiosmith-smoke/report.md` |
+| `AUDIOSMITH_E2E=1 go test -run TestRealEngineMedia -v ./internal/engine` | Mac | The media and listen workers: probe and decode of WAV, AIFF, M4A, MP3, MOV; the microphone |
 | `AUDIOSMITH_E2E=1 go test -run TestEndToEnd -v .` | Mac | The app's state driving the real engine: start, preload, English and Chinese takes, cancel by id, unload |
 | `AUDIOSMITH_E2E=1 go test -run TestRealEngineConformance ./internal/engine` | Mac | Raw protocol 2 against the built engine |
 | `AUDIOSMITH_E2E=1 AUDIOSMITH_E2E_MODELS=kokoro-82m-bf16,omnivoice-bf16 go test -run TestModelLifecycle -v -timeout 40m .` | Mac + network | Download into an empty model folder, cancel and resume, accept the licence, generate with the engine offline (`sandbox-exec`), OmniVoice duration and cloning, delete |

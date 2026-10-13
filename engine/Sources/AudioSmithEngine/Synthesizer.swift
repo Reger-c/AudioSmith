@@ -206,8 +206,12 @@ final class Synthesizer: @unchecked Sendable {
                 if let speed = p.speed, speed > 0 { ov.speed = Float(speed) }
                 if let g = p.guidance, g > 0 { ov.guidanceScale = Float(g) }
                 ov.seed = UInt64(bitPattern: seed)
+                let (instruct, dropped) = omniVoiceInstruct(voice, text: text)
+                if !dropped.isEmpty {
+                    out.logLine("warning", "OmniVoice does not know the voice attributes \(dropped.joined(separator: ", ")): ignored", job: job)
+                }
                 let chunk = try await omni.generate(
-                    text: text, voice: voice, refAudio: refAudio, refText: refText,
+                    text: text, voice: instruct, refAudio: refAudio, refText: refText,
                     language: nonEmpty(p.language), ovParameters: ov)
                 try Task.checkCancellation()
                 try audio(chunk)

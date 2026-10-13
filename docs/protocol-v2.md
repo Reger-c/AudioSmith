@@ -168,6 +168,7 @@ What `voice`, `instruct` and the clone fields mean, by model (catalogue capabili
 |---|---|
 | `voice` | A built-in speaker id (Kokoro `af_heart`, CustomVoice `Vivian`). For design models [`design`, `voiceStyle`] — Qwen3-TTS VoiceDesign (free text, English or Chinese) and OmniVoice (attribute tags) — the voice description, as `voicedesign.Lowered.Voice` makes it. CustomVoice also takes `"Speaker, instruction"`. |
 | `instruct` | A style or emotion instruction [`instruct`]. CustomVoice appends it to the speaker (`Vivian` + `用非常开心的语气说`); design models use it as the description when `voice` is empty. |
+| OmniVoice `voice` | Its attribute tags, normalised by the engine as OmniVoice's own Python does: items split on `,`/`，`; a Chinese dialect makes every item Chinese and an English accent every item English, otherwise Chinese text makes them Chinese (`female, young adult` + Chinese text → `女，青年`). Unknown items and a second item of one category are dropped with a `log` warning instead of failing the take. |
 | `language` | The catalogue's `Language.Value` for the model ("Chinese", "en"…). |
 | `refAudio`, `refText` | Clone reference and its transcript [`clone`]. Any format AVFoundation reads. |
 | `voicePrompt` | A file `tts.encodeVoice` wrote for this model [`voicePrompt`]. It wins over `refAudio`. If it cannot be used (made for another model, an older format), the engine logs a warning and uses `refAudio`; without `refAudio` it fails with `bad_request`. The app therefore sends both. |
@@ -211,6 +212,7 @@ Encodes a clone reference once (speaker embedding, codec tokens… whatever the 
 ```
 
 - The file's content is the engine's business; `format` names the family and version. Its metadata records the model, so a prompt is never applied to another one (see `voicePrompt` above).
+- **Which models (M1):** Qwen3-TTS Base (0.6B and 1.7B), format `qwen3_tts/1`: a safetensors file with the reference's codec codes, its transcript's token ids and the speaker embedding. They need `refText`; without it the request fails with `bad_request`. Others answer `unsupported`.
 - The app keeps prompts next to the voice, one per model, and makes them again after a model update.
 - A model that cannot (catalogue capability `voicePrompt` unset) answers `unsupported`, `data:{"capability":"voicePrompt"}`. Cloning then sends `refAudio` every time.
 

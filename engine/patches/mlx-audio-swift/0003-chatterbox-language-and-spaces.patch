@@ -1,3 +1,28 @@
+diff --git a/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxConfig.swift b/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxConfig.swift
+index 35d8c88..f7ef3b3 100644
+--- a/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxConfig.swift
++++ b/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxConfig.swift
+@@ -370,6 +370,8 @@ public struct ChatterboxConfiguration: Codable, Sendable {
+         case decoderAttentionHeadDim = "decoder_attention_head_dim"
+         case quantization
+         case quantizationConfig = "quantization_config"
++        case multilingual
++        case vocabSize = "vocab_size"
+     }
+ 
+     public init(
+@@ -426,6 +428,11 @@ public struct ChatterboxConfiguration: Codable, Sendable {
+             self.t3Config = t3
+         } else if modelType == "chatterbox_turbo" {
+             self.t3Config = .turbo
++        } else if try container.decodeIfPresent(Bool.self, forKey: .multilingual) == true
++            || container.decodeIfPresent(Int.self, forKey: .vocabSize) == T3Configuration.multilingual.textTokensDictSize {
++            // AudioSmith patch: the multilingual checkpoints (mlx-community/
++            // chatterbox-*) say so with "multilingual" / "vocab_size" only.
++            self.t3Config = .multilingual
+         } else {
+             self.t3Config = .englishOnly
+         }
 diff --git a/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxModel.swift b/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxModel.swift
 index a9d97ed..fb30fe5 100644
 --- a/Sources/MLXAudioTTS/Models/Chatterbox/ChatterboxModel.swift
