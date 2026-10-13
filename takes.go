@@ -21,6 +21,8 @@ import (
 	"github.com/hehehai/AudioSmith/internal/audio"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -52,6 +54,9 @@ type library struct {
 
 	hubMu  sync.Mutex
 	hubCli *hub.Client // for the current settings; nil until needed
+
+	synthMu sync.Mutex
+	synth   func() jobs.Executor // the engine's tts.synthesize, for renders (useEngine)
 }
 
 // libraryOptions adjust openLibrary for tests.
@@ -115,8 +120,64 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 	l.svc = services.New(services.Config{
 		Store: st, Bus: bus, Scheduler: l.sched, Licences: l.licences,
 		Ready: l.modelReady, Async: o.Async,
+		Synth:     l.synthExecutor,
+		ModelPath: l.modelSnapshot,
+		Models:    modelInfo,
+		CacheDir:  cacheDir,
+		KeepTakes: func() int { return l.settings.Get().Studio.KeepTakes },
+	})
+	core.On(bus, func(ev settings.Changed) {
+		if n := ev.New.Studio.KeepTakes; n > 0 && (ev.Old.Studio.KeepTakes == 0 || n < ev.Old.Studio.KeepTakes) {
+			go func() {
+				if _, err := l.svc.Render.Prune(context.Background()); err != nil {
+					log.Printf("history: %v", err)
+				}
+			}()
+		}
 	})
 	return l, nil
+}
+
+// useEngine gives renders the engine's tts.synthesize executor; fn is
+// asked as each render starts (the engine may connect later).
+func (l *library) useEngine(fn func() jobs.Executor) {
+	l.synthMu.Lock()
+	l.synth = fn
+	l.synthMu.Unlock()
+}
+
+func (l *library) synthExecutor() jobs.Executor {
+	l.synthMu.Lock()
+	fn := l.synth
+	l.synthMu.Unlock()
+	if fn == nil {
+		return nil
+	}
+	return fn()
+}
+
+// modelInfo describes a model to the services: its render traits (by
+// family), pinned revision, and the languages of its language values and
+// voices.
+func modelInfo(repo string) services.ModelInfo {
+	e := entryFor(repo)
+	caps := make([]string, len(e.Capabilities))
+	for i, c := range e.Capabilities {
+		caps[i] = string(c)
+	}
+	info := services.ModelInfo{Traits: services.TraitsFor(e.Family, caps), Revision: e.Revision,
+		Languages: map[string]string{}, VoiceLanguages: map[string]string{}}
+	for _, l := range e.Languages {
+		if l.Value != "" {
+			info.Languages[l.Value] = l.Code
+		}
+	}
+	for _, v := range e.Voices {
+		if v.Language != "" {
+			info.VoiceLanguages[v.ID] = v.Language
+		}
+	}
+	return info
 }
 
 // hubToken finds the HF token for downloads (tests replace it).
@@ -229,6 +290,15 @@ type takesState struct {
 // events (once, here) and loads the first snapshot and the Studio's draft.
 func (a *app) openTakes(lib *library) {
 	a.lib = lib
+	// Renders run each chunk through the engine's tts.synthesize, on the
+	// supervisor connectEngine makes (asked as each render starts).
+	host := a.eng
+	lib.useEngine(func() jobs.Executor {
+		if host == nil || host.sup == nil {
+			return nil
+		}
+		return engine.Executor(host.sup, proto.RoleGPU, proto.MethodTTSSynthesize)
+	})
 	a.takeStore = lib.store.Takes()
 	a.peaks = map[string][]float32{}
 	a.peaksPending = map[string]bool{}
