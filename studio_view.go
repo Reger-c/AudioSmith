@@ -167,7 +167,7 @@ func (a *app) inspector(c *ui.Context) {
 			ui.Autocomplete(c.Key("voice"), &a.voice, voices).Placeholder(i18n.T("Model default")).Label(voiceLabel)
 		})
 	}
-	if languages := p.LanguageOptions(); len(languages) > 0 || custom {
+	if languages := p.LanguageOptions(); len(languages) > 0 || custom || p.Has(catalog.CapLanguage) {
 		ui.Field(c, i18n.T("Language"), func() {
 			ui.Autocomplete(c.Key("language"), &a.language, languages).Placeholder(i18n.T("Auto")).Label(i18n.T("Language"))
 		})

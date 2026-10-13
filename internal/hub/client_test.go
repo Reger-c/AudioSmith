@@ -464,8 +464,15 @@ func TestDelete(t *testing.T) {
 	old := filepath.Join(repo, "snapshots", strings.Repeat("f", 40))
 	os.MkdirAll(old, 0o755)
 	os.Symlink(shared, filepath.Join(old, "config.json"))
+	// The engine's copy of the repo goes with it.
+	cp := EngineCopy(c.opts.CacheDir, testRepo)
+	os.MkdirAll(cp, 0o755)
+	os.WriteFile(filepath.Join(cp, "config.json"), []byte("{}"), 0o644)
 	if err := c.Delete(ctx, h.entry()); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(cp); !os.IsNotExist(err) {
+		t.Errorf("engine copy left: %v", err)
 	}
 	blobs, _ := os.ReadDir(filepath.Join(repo, "blobs"))
 	if len(blobs) != 1 || blobs[0].Name() != filepath.Base(shared) {

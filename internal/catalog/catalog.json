@@ -168,12 +168,11 @@
       "revision": "8fb0b754cad788aaefec690cd55c207e8a628f85",
       "tasks": ["tts"],
       "about": "646 languages. Designs a voice from a description (\"female, young adult, british accent\") or clones a reference clip; can hit an exact duration. Non-commercial licence.",
-      "capabilities": ["clone", "design", "voiceStyle", "language", "duration"],
+      "capabilities": ["clone", "design", "voiceStyle", "language", "duration", "speed"],
       "sampleRate": 24000,
       "size": 1639492513,
       "minMemoryGB": 8,
       "quantization": "bf16",
-      "hidden": true,
       "licence": {"id": "cc-by-nc-4.0", "name": "CC BY-NC 4.0", "url": "https://huggingface.co/k2-fsa/OmniVoice", "commercial": false, "requiresAcceptance": true, "verified": true}
     }
   ]

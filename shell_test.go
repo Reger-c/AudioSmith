@@ -241,8 +241,10 @@ func TestShortcutSheet(t *testing.T) {
 	if !tt.Focused("Script") {
 		t.Fatal("script not focused")
 	}
+	before := strings.Count(a.text, "?")
 	tt.TypeKey(ui.Shift, ui.KeySlash, "?")
-	if a.sheetOpen || !strings.HasSuffix(a.text, "?") {
+	// Where the click put the caret depends on the platform's fonts.
+	if a.sheetOpen || strings.Count(a.text, "?") != before+1 {
 		t.Errorf("? in the script: sheet %v text %q", a.sheetOpen, a.text)
 	}
 	a.navigate("/history")

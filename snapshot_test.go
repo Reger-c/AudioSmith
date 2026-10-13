@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/store/historyjson"
 )
@@ -81,7 +83,17 @@ func TestSnapshots(t *testing.T) {
 		half := 0.5
 		eng.progress(a.job.id, "generating", half, 2.4)
 		save("generating")
-		a.job = nil
+
+		// The queue: the take, and a download waiting behind another.
+		dlJob, _ := eng.host.sched.Submit(context.Background(), jobs.Spec{Kind: "x.download", Lane: jobs.LaneNet,
+			Title: i18n.T("Download %s", "Qwen3-TTS 0.6B Base (voice clone)"), Owner: "model:x"})
+		eng.update(dlJob, func(j *jobs.Job) { j.State = jobs.StateQueued })
+		a.jobsOpen = true
+		save("jobs")
+		a.jobsOpen = false
+		eng.cancelled(dlJob)
+		eng.cancelled(a.job.id)
+		a.toasts = nil
 
 		a.modelLabel = "Qwen3-TTS 0.6B Base (voice clone)"
 		a.modelChanged()
@@ -108,6 +120,13 @@ func TestSnapshots(t *testing.T) {
 		a.licenceOpen = false
 		dl.downloading = false
 
+		// Generate with a model that is not downloaded.
+		a.navigate("/studio")
+		a.selectModel(entry(t, "soprano-80m-bf16"))
+		a.generate()
+		save("studio-download")
+		a.jobError, a.needDownload = "", nil
+
 		at := time.Date(2026, 10, 13, 21, 58, 3, 0, time.Local)
 		for i, l := range []core.LogEntry{
 			{Source: "app", Message: "AudioSmith 0.1.0 started"},
@@ -128,6 +147,10 @@ func TestSnapshots(t *testing.T) {
 		a.tokenInfo, a.proxyInfo = i18n.T("No token: gated models cannot download."), i18n.T("Downloads go through %s.", "http://127.0.0.1:7897")
 		a.navigate("/settings/models")
 		save("settings-models")
+		a.navigate("/settings/studio")
+		save("settings-studio")
+		a.navigate("/settings/engine")
+		save("settings-engine")
 
 		a.navigate("/studio")
 		a.openPalette()

@@ -1,268 +1,203 @@
-# AudioSmith architecture (M0)
+# AudioSmith architecture
 
-*Written by M0a ("skeleton + contracts"), 2026-10-13. It covers:*
-- *the package layout the MVP was split into;*
-- *the contracts the three parallel M0 threads implement;*
-- *which files each thread may touch, so their branches merge cleanly.*
-
-*Product plan: `plan/parity-plan.md` §3–§4. Wire format: [protocol-v2.md](protocol-v2.md).*
+*State at the end of M0 (2026-10-13). M0a wrote the skeleton and the contracts; threads A (services + SQLite), B (protocol 2, supervisor, jobs), C (shell, catalogue, hub, i18n) and #9 (text, document and language libraries) built them; the integration thread (#10) wired them together (§5). Product plan: `plan/parity-plan.md` §3–§4. Wire format: [protocol-v2.md](protocol-v2.md).*
 
 ## 1. Package map
 
 ```
 github.com/hehehai/AudioSmith
-├── *.go                 package main: the UI (views + view state), MyGo wiring
+├── *.go                 package main: the UI (views + view state) and the wiring
 ├── internal/
 │   ├── core/            domain types, service interfaces, event bus, sentinel errors   (leaf)
-│   ├── store/           persistence contract (repositories) + schema.sql sketch
-│   │   └── historyjson/ the MVP history.json, behind store.Takes; later the importer
-│   ├── jobs/            job queue contract: lanes, priorities, states, DAG, Scheduler, Executor
-│   ├── engine/          engine processes: v1 client (in use) + v2 Supervisor contract
-│   │   └── proto/       protocol v2 wire types (leaf); fixtures in engine/Fixtures/
-│   ├── catalog/         model catalogue schema + catalog.json (the 5 presets as data)  (leaf)
-│   ├── hub/             HF cache location + Downloader contract
-│   ├── settings/        typed, versioned settings document + Service contract          (leaf)
-│   ├── i18n/            T / N / X keyed by English source; locales/*.json               (leaf)
-│   └── audio/           waveform peaks, the player (later: streaming, mixer, loudness, QC)
-└── engine/              the Swift helper (audiosmith-engine), Fixtures/
+│   ├── services/        TakeService, VoiceService, ProjectService, DraftService
+│   ├── store/           persistence contract (repositories)
+│   │   ├── sqlitestore/ SQLite store: migrations, FTS5, jobs tables, history.json import
+│   │   └── historyjson/ the MVP history.json format (read by the importer)
+│   ├── jobs/            the job queue: lanes, priorities, states, DAG, Scheduler, MemStore (leaf)
+│   ├── engine/          Supervisor (one engine process per role), job executors
+│   │   ├── proto/       protocol-2 wire types (leaf); fixtures in engine/Fixtures/
+│   │   └── enginetest/  a scripted protocol-2 engine for tests (the test binary re-runs itself)
+│   ├── catalog/         model catalogue: catalog.json (entries, pinned commits, licences)
+│   ├── hub/             model files: HF cache layout, downloader, model.download jobs, token, proxy
+│   ├── licence/         the licence gate (core.LicenceService) over the store's licences
+│   ├── settings/        the typed, versioned settings document + Service                (leaf)
+│   ├── notify/          the notification centre (kept in the store's documents)
+│   ├── logs/            log ring + rotated files
+│   ├── i18n/            T / N / X keyed by English source; locales/*.json; dates     (leaf)
+│   ├── audio/           waveform peaks + disk cache, streaming player
+│   ├── text/            script pipeline: segmentation, chunk keys (M1; not wired yet)
+│   │   └── markup/, normalize/, lexicon/, autocast/
+│   ├── doc/             document import: TXT/MD/EPUB/DOCX, cue sheets (M1/M3; not wired yet)
+│   │   └── subtitle/, textenc/
+│   └── lang/            the language table, 652 languages                              (leaf)
+└── engine/              the Swift helper (audiosmith-engine), Fixtures/, Tests/
 ```
 
 ### Import rules
 
-Arrows point to what a package may import. No cycles. `core` imports nothing internal.
+Arrows point to what a package may import. No cycles. Leaves import nothing internal.
 
 ```
 main ──▶ every internal package
-store ──▶ core, jobs              hub ──▶ catalog
-engine ──▶ core, engine/proto     jobs, catalog, settings, i18n, audio, engine/proto ──▶ (nothing internal)
-internal/services (A, new) ──▶ core, store, jobs, catalog, hub, settings
+services ──▶ core, store, jobs, engine/proto (the job's params), i18n (job titles)
+store ──▶ core, jobs            store/sqlitestore ──▶ core, jobs, store, store/historyjson
+engine ──▶ core, engine/proto, jobs (its executors)        engine/enginetest ──▶ engine/proto
+hub ──▶ catalog, jobs (the download executor)              catalog ──▶ lang
+licence ──▶ catalog, core       notify, logs ──▶ core
+text/* ──▶ text                 doc ──▶ text, doc/subtitle, doc/textenc      doc/subtitle ──▶ text
+core, jobs, engine/proto, settings, i18n, audio, lang, text, doc/textenc ──▶ (nothing internal)
 ```
 
-Event types live next to their publisher, and their topic starts with the publisher's name:
-- `core.TakeCreated` → `take.created`
-- `jobs.Updated` → `job.updated`
-- `engine.StatusChanged` → `engine.status`
-- `settings.Changed` → `settings.changed`
-- `hub.DownloadProgress` → `model.download`
+`jobs` keeps its own `ErrNotFound`/`ErrInvalid`/`ErrClosed` (it cannot import `core`); callers map them to `core` sentinels where needed.
 
-They satisfy `core.Event` (a `Topic() string` method) without importing `core`.
+Event types live next to their publisher, and their topic starts with the publisher's name. They satisfy `core.Event` (a `Topic() string` method) without importing `core`:
+
+| Event | Topic | Publisher |
+|---|---|---|
+| `core.TakeCreated/Updated/Deleted`, `VoiceChanged`, `ProjectChanged`, `DraftSaved`, `LicenceChanged`, `NotificationPosted`, `LogAppended` | `take.*`, `voice.changed`, … | services, licence, notify, logs |
+| `jobs.Updated` | `job.updated` | the scheduler (after the change is saved) |
+| `engine.StatusChanged` | `engine.status` | the supervisor |
+| `settings.Changed` | `settings.changed` | the settings store |
+| `hub.DownloadProgress` | `model.download` | the download executor (≤4×/s) |
 
 ### Why the UI stays in package main
 
-- **MyGo's conventions.** `mygo dev`, `mygo build` and `ui.View` build the root `main` package. Every MyGo example keeps its views there. `go tool mygo vet .` runs `go vet ./...` and the UI-lifetime checks over every package, so nothing would be lost by moving.
-- **Views need the window.** They need the `*mygo.Window` (for `Update` and dialogs), `ui.Context`, and the app's view state. All of that lives on the main thread. A package boundary there would mean passing an "env" struct everywhere, for no isolation gain: the **domain** is what must be goroutine-safe and testable, and it now lives in `internal/`.
-- **Parallel work without a package boundary.** Each UI area has its own files and its own state struct, embedded in `app` (Go field promotion keeps `a.text` and `a.job` working). Areas talk through a few named functions (§3.4).
-- **Reusable widgets go in `internal/widgets`.** Waveform, timeline and tokenizers can move there when they grow (M1+). `internal/ui` is avoided because it would shadow `mygo/ui`.
+- **MyGo's conventions.** `mygo dev`, `mygo build` and `ui.View` build the root `main` package. `go tool mygo vet .` runs `go vet ./...` and the UI-lifetime checks over every package, so nothing would be lost by moving.
+- **Views need the window** (`*mygo.Window` for `Update` and dialogs, `ui.Context`, the view state), all on the main thread. The **domain** is what must be goroutine-safe and testable, and it lives in `internal/`.
+- **Areas** have their own files and state structs, embedded in `app`; they talk through the seams of §3.4.
+- **Reusable widgets go in `internal/widgets`** when they grow (M1+). `internal/ui` is avoided because it would shadow `mygo/ui`.
 
-## 2. Target data flow (end of M0)
+## 2. Data flow
 
 ```
           MyGo main thread                           goroutines
-┌──────────────────────────────┐  calls (go …)   ┌──────────────────────────────────────┐
-│ views (build pass: no I/O)   │───────────────▶ │ internal/services  (core.*Service)   │
-│ app view state + snapshots   │                 │   │ store (SQLite)  │ licences, hub  │
-│        ▲ Window.Update       │                 │   ▼                                  │
-│        │                     │                 │ jobs.Scheduler ── Executors          │
-└────────┼─────────────────────┘                 │   │ "tts.synthesize" → engine.Supervisor ──stdio v2──▶ engine --role gpu
-         │                                       │   │ "model.download" → hub.Downloader
-   core.Bus subscriber ◀── Publish ──────────────┤   ▼ persists jobs (store.Jobs)       │
-   (main.go wiring, once)                        └──────────────────────────────────────┘
-                                         Local API (M5): another Bus subscriber + service caller
+┌──────────────────────────────┐  calls (go …)   ┌─────────────────────────────────────────────┐
+│ views (build pass: no I/O)   │───────────────▶ │ library: store (SQLite) · bus · settings ·  │
+│ app view state + snapshots   │                 │   licence gate · hub client · services      │
+│        ▲ Window.Update       │                 │   │                                          │
+│        │                     │                 │ jobs.Scheduler (persists to the jobs table)  │
+└────────┼─────────────────────┘                 │   ├ "tts.synthesize", "models.load" ──▶ engine executors ──▶ Supervisor ──stdio v2──▶ engine --role gpu (offline)
+         │                                       │   └ "model.download" (LaneNet) ──▶ hub.Client (HF API, mirrors, resume)
+   core.Bus subscribers ◀── Publish ─────────────┤                                              │
+   (wiring code, once)                           └─────────────────────────────────────────────┘
 ```
 
-How the Studio's Generate works once A and B are merged (integration step I1, §5):
-1. **Click.** `generate` (Studio) calls `Takes.Generate` on a goroutine.
-2. **Service.**
-   - It checks `Licences.Check(model)` and `hub` status.
-   - It submits a job: kind `tts.synthesize`, `LaneGPU`, `PriorityInteractive`, owner `take:<id>`.
-   - It returns the job id.
-3. **Scheduler.** It persists the job and runs the executor, which calls `Supervisor.Call(gpu, jobID, "tts.synthesize", params, notify)`.
-4. **Progress.** `job.progress` and `tts.chunk` notifications become `jobs.Updated` on the bus. The UI subscriber posts them to the main thread and updates its job view.
-5. **Done.** On the result, the service saves the take (`store.Takes.Put`) and publishes `TakeCreated`. The UI adds it to its snapshot and autoplays it.
+`openLibrary` (takes.go) builds the domain in this order: SQLite store (migrated; history.json imported once) → bus → settings → licence gate → scheduler over the store's jobs table, with the `model.download` executor → services (`services.New` gets the scheduler, the gate and `Ready`, which asks the hub whether a model's pinned snapshot is on disk). `connectEngine` makes the supervisor and registers the engine executors; `startEngine` (when the window opens) starts the gpu worker, then the scheduler, so jobs left from the last run (downloads, idempotent takes) continue.
+
+How the Studio's Generate works:
+1. **Click.** `generate` (studio.go) builds the take's recipe with a new ULID and calls `startTake`, which runs `Takes.Generate` on a goroutine and follows the job by its owner, `take:<id>`, even before Generate returns.
+2. **Service.** `Generate` checks the licence (`*core.LicenceRequiredError` → the UI shows the licence dialog, then generates) and that the model is downloaded (`core.ErrNotDownloaded` → the UI offers Download next to the error). It submits `tts.synthesize` on `LaneGPU`, `PriorityInteractive`, idempotent, two attempts, and returns the job id.
+3. **Scheduler.** It persists the job and runs the executor. The executor checks the licence again, fills `modelPath` with the local snapshot (`hub.Status` over the catalogue's pinned commit; a missing model fails with `model_not_downloaded`), and calls `Supervisor.Call(gpu, jobID, "tts.synthesize", …)`.
+4. **Progress.** `job.progress` and `tts.chunk` become `jobs.Updated` on the bus; the UI's subscriber posts them to the main thread (the Studio's job view, the status bar's job list).
+5. **Done.** TakeService saves the take (`store.Takes.Put`) and publishes `TakeCreated`; the UI adds it to its snapshot and, because it is the take the Studio waits for (`awaitTake`), makes it the latest take and autoplays it. After a restart, a re-run job's take is rebuilt from the job's params.
+
+Downloads (Models page, or Download next to the Studio's error) are `model.download` jobs owned by `model:<repo>`: three at a time on `LaneNet`, cancellable by id, resumed after a restart (idempotent; the hub resumes partial files). The licence dialog comes before the download of a model whose licence needs accepting.
 
 ## 3. Threading and state rules
 
-1. **The build pass does no I/O.** A view reads only `app` fields, in-memory snapshots and memory-only getters (`settings.Service.Get`, `catalog.Builtin`, `i18n.T`). Store, service, hub and engine calls happen in action handlers that start a goroutine, or in background jobs.
-   - **Known MVP violations, which thread A fixes:**
-     - waveform peaks are decoded in `takes_view.go`;
-     - the player decodes whole files;
-     - `copyFile` reads whole files;
-     - history writes happen on the main thread.
-2. **`app` is main-thread only.** Goroutines reach it through `a.post(fn)`, which is `Window.Update`; in tests, it runs fn directly. Results that may be stale (the page changed, the take was deleted, the job was cancelled) are checked against current state inside `fn` before they are applied.
-3. **Bus subscriptions are set up once, in wiring code, never in a build pass.**
-   - A UI handler only calls `a.post`.
-   - An API/SSE handler uses `core.NewStream`.
-   - Handlers must not block: delivery is synchronous on the publisher's goroutine.
-   - Publishers publish after their change is durable, and never while holding a lock.
-4. **Services, the scheduler, the supervisor and the downloader are goroutine-safe.** They take a `context.Context`, return copies, and wrap `core.Err*` sentinels.
-5. **MyGo lifetime rules hold** (see `.agents/skills/mygo-maintenance`):
-   - keys before stateful widgets;
-   - never store elements;
-   - dialogs on goroutines;
-   - persistent callbacks capture `c.Services()`, not the `Context`.
-6. **One queue.** All long work is a `jobs` job: TTS, downloads, exports, and later ASR, separation and mux. The engine does not queue. The scheduler sends a worker no more jobs than its `hello.concurrency`.
-7. **The engine is stateless.** Truth (library, queue, licences, settings) lives in Go. A worker crash interrupts its jobs; it does not lose data.
+1. **The build pass does no I/O.** A view reads only `app` fields, in-memory snapshots and memory-only getters (`settings.Service.Get`, `catalog.Builtin`, `i18n.T`). Store, service, hub and engine calls happen in action handlers that start a goroutine, or in jobs. (The MVP's violations — peaks decoded in the view, whole-file player, `copyFile`, history writes on the main thread — are gone since thread A.)
+2. **`app` is main-thread only.** Goroutines reach it through `a.post(fn)`, which is `Window.Update`. In tests it runs fn at once, or queues it (`postQueue`) in tests that run real goroutines. Results that may be stale are checked against current state inside `fn`.
+3. **Bus subscriptions are set up once, in wiring code** (`openLibrary`, `openShell`, `openTakes`, `connectEngine`), never in a build pass. Handlers must not block: delivery is synchronous on the publisher's goroutine. Publishers publish after their change is durable, never while holding a lock.
+4. **Services, the scheduler, the supervisor, the hub client, the settings store and the notification centre are goroutine-safe.** They take a `context.Context`, return copies, and wrap `core.Err*` sentinels.
+5. **MyGo lifetime rules hold** (see `.agents/skills/mygo-maintenance`): keys before stateful widgets; never store elements; dialogs on goroutines; persistent callbacks capture `c.Services()`, not the `Context`.
+6. **One queue.** All long work is a `jobs` job: TTS, preloads, downloads; later ASR, separation, exports, mux. The engine does not queue. The scheduler sends a worker no more jobs than its lane allows (gpu 1).
+7. **The engine is stateless and offline.** Truth (library, queue, licences, settings, model files) lives in Go. A worker crash interrupts its jobs; it does not lose data. Engines start with `hello.offline: true` and load the snapshot paths the executors give them.
+8. **Quit order.** `OnWillQuit` stops the supervisor and closes the scheduler (running jobs are recorded as interrupted); then `OnQuit` stops playback, waits for notification saves, closes the logs, and closes the library (drafts flushed, takes being saved waited for, the database closed).
 
 ### 3.4 Seams inside package main
 
-Areas call each other only through these functions and fields. A thread that changes one keeps its signature, or coordinates through main.
-
-| Seam | Defined in (owner) | Used by |
+| Seam | Defined in | Used by |
 |---|---|---|
-| `a.showPage(name)`, `a.currentPage()` | shell.go (C) | studio.go (`reuse`), tests |
-| `a.engineSummary() engineSummary` | enginelink.go (B) | shell.go (sidebar; later the status bar and ⌘E) |
-| `a.startSynthesis(take, req)`, `a.preload()`, `a.cancel()`, `a.unload()`, `a.restartEngine()` | enginelink.go (B) | studio.go, studio_view.go, engine_view.go |
-| `a.job` (`kind`, `status`, `fraction`, `audioSeconds`, `started`): the UI's view of the running job | enginelink.go (B) | studio_view.go (A) |
-| `a.engState`, `a.loadedModel`: still read by studio_view.go (Preload/Unload) | enginelink.go (B) | studio_view.go (A) |
-| `a.takeFinished(take)` | takes.go (A) | enginelink.go (B), on `done` |
-| `a.preset()`, `a.generate()` | studio.go (A) | shell.go (⌘↩), enginelink.go (B) |
-| `a.toast(msg)`, `a.post(fn)` | app.go (C) | everyone |
+| `a.lib` (`*library`: store, bus, settings, licences, sched, svc, hub(), modelSnapshot) | takes.go | every area |
+| `a.showPage(name)`, `a.navigate(path)`, `a.currentPage()` | shell.go | studio.go (`reuse`), notifications, tests |
+| `a.engineSummary() engineSummary` | enginelink.go | shell (sidebar, status bar, ⌘E), Models page |
+| `a.startTake(recipe)`, `a.preload()`, `a.cancel()`, `a.unload()`, `a.flushEngine()`, `a.restartEngine()`, `a.startEngine()` | enginelink.go | studio, ⌘E, Engine page, main |
+| `a.job` (the Studio's job: `kind`, `status`, `fraction`, `audioSeconds`, `started`), `a.jobError`, `a.needDownload` | enginelink.go | studio_view.go |
+| `a.takeCreated(take)`, `a.awaitTake` | takes.go | the bus subscriber; enginelink.go clears `awaitTake` on failure |
+| `a.preset()`, `a.generate()`, `a.selectModel(entry)` | studio.go | shell (⌘↩, ⌘E, palette), tests |
+| `a.download(entry)`, `a.cancelDownload(entry)`, `a.model(entry)`, `a.downloadUpdated(job)` | shell_models.go | Models page, Studio (Download), status bar |
+| `a.jobsChanged(job)`, `a.activeJobs()`, `a.cancelJobByID(job)` | shell_status.go | enginelink.go's subscriber, status bar |
+| `a.updateSettings(fn)`, `a.prefs` | shell_settings.go | every area that changes a setting |
+| `a.askLicence(entry, then)` | shell_models.go | Models page, Studio (Generate, Preload) |
+| `a.toast(msg)`, `a.notify(…)`, `a.post(fn)`, `a.async(fn)` | app.go, shell_status.go | everyone |
 
 ## 4. Contracts (summary)
 
-| Contract | File | Implemented by |
+| Contract | File | State |
 |---|---|---|
-| Domain types (Take, Voice, Project, LicenceAcceptance, Notification, LogEntry), `NewID` (ULID) | `internal/core/{take,domain,ids}.go` | done |
-| Event bus: `Bus.Publish/Subscribe`, `core.On[T]`, `core.NewStream` (buffered, lag flag) | `internal/core/bus.go` | done (small, tested) |
-| Services: `TakeService`, `VoiceService`, `ProjectService`, `LicenceService` (+ `LicenceRequiredError`), `NotificationService`, `LogService`, `DraftService`, bundled as `core.Services` | `internal/core/services.go` | A (takes, voices, projects, drafts), C (licences, notifications, logs) |
-| Store: `Store` → `Takes`, `Voices`, `Projects`, `Licences`, `Documents`, `jobs.Store`; schema sketch | `internal/store/store.go`, `schema.sql` | A (SQLite); historyjson implements `Takes` today |
-| Jobs: `Lane` (gpu 1, listen 1, media 2, net 3, cpu 2), `Priority`, `State`, `Spec`, `Job`, `Progress`, `Error`, `Node` (DAG), `Scheduler`, `Executor`, `Store`, event `Updated` | `internal/jobs/jobs.go` | B |
-| Engine supervisor: `Supervisor.Start/Call/Status/Restart/Stop`, `Config` (roles, memory budget, restart budget), `WorkerStatus`, event `StatusChanged` | `internal/engine/supervisor.go` | B |
-| Protocol v2: envelope, methods, params/results, error codes, `LegacyReady`; fixtures | `internal/engine/proto`, `engine/Fixtures`, [protocol-v2.md](protocol-v2.md) | B (Swift side + supervisor) |
-| Catalogue: `Catalog{version, entries}`, `Entry{id, label, family, repo, revision, tasks, languages, voices, capabilities, sampleRate, size, files, minMemoryGB, quantization, licence}`, `Licence{id, name, url, commercial, requiresAcceptance, gated, verified}` | `internal/catalog` | C (data + validation done; C extends) |
-| Downloader: `CacheDir`, `RepoDir`, `Downloader.Status/Plan/Download/Verify/Delete`, `Options` (mirror race, token), event `DownloadProgress` | `internal/hub/hub.go` | C |
-| Settings: `Settings{general, appearance, studio, models, engine, privacy}`, `Defaults`, `Migrate`, `Service.Get/Update`, event `Changed` | `internal/settings` | C |
-| i18n: `T`, `N`, `X`, `SetLocale`, `Locale`, `Match`, `Supported`; catalogs `locales/<tag>.json` | `internal/i18n` | C (stub done; every UI string is already wrapped) |
+| Domain types (Take, Voice, Project, LicenceAcceptance, Notification, LogEntry), `NewID` (ULID) | `internal/core/{take,domain,ids}.go` | done; Take gained `Duration`, `Steps` (OmniVoice) |
+| Event bus: `Publish/Subscribe`, `core.On[T]`, `core.NewStream` | `internal/core/bus.go` | done |
+| Services, bundled as `core.Services` | `internal/core/services.go`, `internal/services` | done; `TakeRequest.Recipe.ID` may be chosen by the caller |
+| Store: Takes, Voices, Projects, Licences, Documents, `jobs.Store` | `internal/store`, `sqlitestore/migrations/001_init.sql` | done (SQLite) |
+| Jobs: lanes, priorities, states, DAG, retry, interrupted-on-restart | `internal/jobs` | done |
+| Engine supervisor: `Start/Call/Status/Restart/Stop`, `SetMemoryBudget`, `SetIdleUnload`, `SetCacheDir` | `internal/engine/supervisor.go` | done |
+| Engine executors: `RegisterExecutors(sched, sup, ExecutorOptions{ModelPath, Licences})` | `internal/engine/executors.go` | done |
+| Protocol 2 (+ `SynthesizeParams.modelPath`, OmniVoice `steps`/`duration`) | `internal/engine/proto`, `engine/Fixtures`, [protocol-v2.md](protocol-v2.md) | done |
+| Catalogue v2: entries, aux repos, hidden, **pinned commits**, licences, language codes validated with `lang` | `internal/catalog` | done |
+| Downloader: `Status/Plan/Download/Verify/Delete`, mirror race, proxy, token; `DownloadSpec`, `DownloadExecutor`, `EntryOf`, `ErrorOf` | `internal/hub` | done |
+| Settings document + `Service` (in the store's documents, `settings:app`) | `internal/settings` | done |
+| Licence gate, notification centre (persists info/success/warning), logs | `internal/licence`, `internal/notify`, `internal/logs` | done |
+| i18n: `T`, `N`, `X`, `SetLocale`, `Match`, `Supported`, `Name`, `DateTime`, `Date` | `internal/i18n` | done (en, zh-Hans) |
 
-## 5. The three parallel threads
+## 5. M0: how it was built, and what changed from the sketch
 
-All three branch from this commit (`pi/c4-m0a`). **No thread opens sub-threads.** Each keeps `CGO_ENABLED=0 go test ./...`, `go tool mygo vet .` and `TestSnapshots` green on Linux, and merges back through main.
+### Threads and merges
 
-### Ownership (who may edit what)
+M0a (`ff57a69`) wrote the package skeleton and these contracts. Three threads then worked in parallel, each owning files, with no sub-threads: **A** services + SQLite (`5d98053`), **C** shell, catalogue, hub, i18n, settings, licences (`6e88272`), **B** protocol 2 in Swift and Go, supervisor, scheduler (`8be41fb`). Thread **#9** added the pure-Go libraries `text`, `doc` and `lang` for M1 (`ae59b3d`). The integration thread (#10) did steps I1–I5 and the leftovers:
 
-| Path | A: services + SQLite | B: protocol v2 + supervisor + jobs | C: shell + catalogue + i18n |
-|---|---|---|---|
-| `internal/core/**` | **owner** | request changes | request changes |
-| `internal/services/**` (new) | **owner** | — | — |
-| `internal/store/**` | **owner** | — | — |
-| `internal/audio/**` | **owner** | — | — |
-| `internal/jobs/**` | implements `jobs.Store` only in `internal/store` | **owner** | — |
-| `internal/engine/**`, `engine/**` (Swift, Package.*, Fixtures, Tests) | — | **owner** | — |
-| `scripts/build-engine.sh`, `scripts/smoke-engine.sh`, `.gitignore` | — | **owner** | — |
-| `docs/protocol-v2.md` | — | **owner** | — |
-| `internal/catalog/**`, `internal/hub/**`, `internal/settings/**`, `internal/i18n/**` | — | — | **owner** |
-| `internal/licence/`, `internal/logs/`, `internal/notify/` (new; services C implements) | — | — | **owner** |
-| `studio.go`, `studio_view.go`, `takes.go`, `takes_view.go` | **owner** | — | — |
-| `testutil_test.go`, `studio_test.go`, `takes_test.go` | **owner** | — | — |
-| `enginelink.go`, `engine_view.go`, `enginelink_test.go`, `e2e_test.go` | — | **owner** | — |
-| `main.go`, `app.go`, `shell.go`, new `shell_*.go`, `shell_test.go` (new) | — | — | **owner** |
-| `snapshot_test.go`, `mygo.json`, `resources/**`, `docs/screenshots/**` | — | — | **owner** |
-| `go.mod` / `go.sum` | none expected (the SQLite plugin is in the mygo module) | none expected | may make purego direct (Keychain); tell main |
-| `README.md`, `docs/architecture.md` | main only, at merge time | ← | ← |
+- **I1.** `openLibrary` builds store + bus → settings, licence gate, scheduler → services. The Studio's Generate goes through `TakeService.Generate` (licence and download checks; `take:<id>` jobs); the Studio-owned job path and the double save of takes are gone. `selectModel(entry)` replaced the shell's `chooseModel`.
+- **I2.** The status bar lists every unfinished job (any owner), each cancellable by id; ⌘E shows the gpu worker's memory and Clear cache; the workers' status comes from `Supervisor.Status` and `StatusChanged`.
+- **I3.** Settings drive the Studio's defaults (Settings → Studio: default model, autoplay), and, at run time, the memory budget, the idle unload limit and the model folder (the engine restarts into a new folder when idle). The hub client follows endpoints, proxy and folder.
+- **I4.** `model.download` jobs on `LaneNet` (hub.DownloadExecutor); the Models page follows `jobs.Updated`; downloads survive a restart.
+- **I5.** Engines start offline and load local snapshots by path; catalogue revisions are pinned to commits.
+- **Leftovers.** `px()` scaling in every view; localized dates; a dialog instead of `log.Fatalf` when the database cannot open; zh-Hans says 生成结果 for "take"; notifications persist.
 
-Rules:
-- **Every user-visible string goes through `i18n.T`**, in any file. C owns `locales/*.json` and the key-parity test, and fills zh-Hans for the strings that exist when C finishes. Strings added later by A or B are translated by whoever merges last (main tells C).
-- **Need a change in a file you do not own?** Write it under "Decisions needed" in your handoff instead of editing. Exceptions: a one-line call-site change at a §3.4 seam, plus fixing the compile errors your own contract change causes in others' files. Note both in the commit message.
-- **Wiring in `main.go` (C).** A and B add their wiring as functions in their own files (`openTakeStore`, `newEngineProcess`, `connectEngine`). main.go calls them, and C adds the call lines when asked. To keep it simple, A and B may each add **one** line to `main.go`, inside a comment-marked block.
+### Deviations from the M0a sketch (all accepted by main)
 
-### Thread A: service layer + SQLite + migration + UI-thread I/O
+- **Schema** (thread A): `internal/store/sqlitestore/migrations/001_init.sql` (embedded; `go:embed` cannot reach a parent directory). `takes`, `voices` and `projects` have `seq INTEGER PRIMARY KEY` plus `id TEXT UNIQUE` (FTS external content needs a stable rowid); FTS uses `tokenize='trigram'` (substring search, CJK; queries under 3 characters use `LIKE`); `takes.project_id` is `ON DELETE SET NULL` (deleting a project never orphans audio silently; revisit in M3); `job_deps.after_id` has no FK (graph nodes save in any order); `job_events` is filled by triggers.
+- **Services** (A): `core.TakeService` gained `Add` (takes made elsewhere: imports) and `AudioDir`; new event `core.DraftSaved`; `services` imports `engine/proto` and `i18n` (both leaves).
+- **Library** (A, then I1): `openTakeStore` returns the `*library`, which owns the store, bus, settings, gate, scheduler and services. If the database cannot open, the app shows why and quits; there is no fallback that would put takes somewhere temporary.
+- **Behaviour** (A): takes whose WAV was deleted by hand stay listed (Play explains the error; the waveform is flat). The history.json import still skips them.
+- **Engine** (B): `internal/engine` imports `internal/jobs` for its executors. Cancel grace stays 5 s; Kokoro gets sentence chunking in M1 (a long Kokoro take can outlast the grace on a slow Mac, which restarts the worker without losing data). The supervisor stops on `OnWillQuit`.
+- **Shell** (C): search inputs are `ui.TextInput` (MyGo's `SearchField` hard-codes English labels); the mirror-race winner is kept 24 h in memory only; licence acceptances carry no terms fingerprint yet.
+- **Hub** (I5): for a pinned commit the hub also writes `refs/main` (unless it names another snapshot that is there), so swift-huggingface and the Python tools resolve the repo by id offline.
 
-- **Store.** `internal/store/sqlitestore` on `github.com/egoist/mygo/plugins/sqlite`:
-  - migration 1 from `schema.sql`;
-  - backup before migrating;
-  - FTS triggers;
-  - `jobs.Store` on the jobs tables.
-  - Note: the plugin's `go test` downloads a prebuilt SQLite library (checksum-verified). Check this works offline in CI, or set `MYGO_SQLITE_LIBRARY`.
-- **Import.** Bring in `history.json` on first run: read it with `historyjson.Read`, keep the file, and mark the import done in `documents` (`migration:historyjson`).
-- **Services.** `internal/services`:
-  - `TakeService` (Generate against a `jobs.Scheduler`, faked in tests until B lands);
-  - `VoiceService` and `ProjectService` (CRUD stubs are fine in M0);
-  - `DraftService` (debounced).
-  - Every service publishes on `core.Bus`.
-- **UI.** Studio and History go through the services:
-  - snapshots are refreshed from `TakeCreated`/`TakeDeleted`, not by `reloadTakes()` on the main thread;
-  - Studio drafts autosave.
-- **UI-thread I/O.**
-  - Peaks: computed by a background job and cached on disk (`<PathCache>/peaks/<take>.f32`); a placeholder is drawn until they are ready.
-  - Player: `myaudio.OpenStream`.
-  - Export: `io.Copy`.
-- **Tests:**
-  - the store against a temp DB;
-  - the importer against an MVP `history.json` fixture;
-  - services with a fake scheduler;
-  - the existing view tests.
+### Ownership from M1 on
 
-### Thread B: protocol v2 (Swift) + supervisor + job queue + multi-role engine
+Threads now own areas, not M0 contracts. Each keeps `CGO_ENABLED=0 go test ./...`, `go tool mygo vet .`, `TestSnapshots` and the i18n parity test green, and merges through main.
 
-- **Swift.**
-  - Protocol v2 per [protocol-v2.md](protocol-v2.md): `Codable` types mirroring `proto`, `engine.hello`, the job registry by id, `job.cancel`, `job.progress`, streaming `tts.chunk`, `--role`.
-  - Multi-model residency (an LRU in `Synthesizer`).
-  - `FixtureTests.swift` decoding `engine/Fixtures`.
-  - Engine CLI smoke mode kept.
-- **Go.**
-  - `engine.Supervisor` implementation: spawn per role, handshake with a timeout, `LegacyReady` detection, id routing, cancel with a grace period, restart with backoff, stats polling, memory-budget eviction, `StatusChanged`.
-  - A scripted v2 fake engine for tests, in Go: a test binary or `os/exec` of the test itself, replaying the fixtures.
-- **Jobs.** The `jobs.Scheduler` implementation:
-  - lanes, priority, DAG, cancel cascade, retry of retryable errors, interrupted-on-restart;
-  - an in-memory `jobs.Store` for tests;
-  - executors for `models.load` and `tts.synthesize` over the supervisor.
-- **UI.** `enginelink.go` moves to supervisor + scheduler:
-  - `startSynthesis` submits a job; `jobs.Updated` fills `a.job`; success calls `a.takeFinished`;
-  - `engineSummary` is filled from `Supervisor.Status`;
-  - the Engine page shows the workers.
-  - The v1 client is deleted once nothing uses it.
-- **Mac** (via `scripts/mac.sh`, when the Mac is free):
-  - build, e2e and smoke tests;
-  - the spike list from the plan §4 M0.5: mlx-swift 0.32.3 retest, offline load from a local snapshot path, two MLX processes' memory, Demucs/RoFormer build, OmniVoice/Sortformer/DeepFilterNet smoke.
+| Path | Owner |
+|---|---|
+| `internal/text/**`, `internal/doc/**`, `internal/lang/**` | thread #9's successor (M1 text pipeline); the UI wires them in M1 |
+| `internal/engine/**`, `engine/**`, `docs/protocol-v2.md`, `scripts/*engine*.sh` | the engine thread of the milestone |
+| everything else | assigned per milestone by main; `README.md` and this file: main |
 
-### Thread C: app shell + catalogue/downloader + licence gate
+Rules that stay:
+- **Every user-visible string goes through `i18n.T`**, and whoever adds strings fills zh-Hans (the parity test fails otherwise).
+- **A change in a file another running thread owns** goes under "Decisions needed" in the handoff, except a one-line call-site change at a §3.4 seam or a compile fix caused by your own contract change (say so in the commit message).
 
-- **Shell.**
-  - `ui.Router` replaces `page`; routes `/studio`, `/history`, `/engine`, `/settings/{section...}`, `/models`, `/logs`. `showPage` maps names to paths.
-  - Sidebar with ⌘1–9.
-  - `audiosmith://` deep links (`mygo.json` `urlSchemes`, `App.OnOpenURL`).
-  - Status bar (engine via `engineSummary`, jobs, version, logs toggle).
-  - Command palette ⌘K over a command registry, and the `?` shortcut sheet.
-  - Notification centre plus toasts (`core.NotificationService` in `internal/notify`).
-  - Logs panel (`core.LogService` ring + rotated files in `internal/logs`).
-  - ⌘E quick switch (UI over `engineSummary` plus B's unload/flush calls).
-- **Settings.**
-  - `settings.Service` implementation, persisted through `store.Documents` (`settings:app`). Until A merges, back it with a JSON file behind the same interface.
-  - Settings pages: General (language), Appearance (theme, scale), Models (cache dir, mirrors, token), Engine (memory budget).
-  - Theme scale: replace hard-coded pixel sizes with `Theme.Rem/Space`.
-- **i18n.**
-  - en + zh-Hans catalogs for every string, catalogue `about` texts included;
-  - the key-parity test (scan `i18n.T/N/X` literals in all `*.go`);
-  - language switch at run time, rebuilding the native menu;
-  - pass the language to MyGo's updater later.
-- **Catalogue and hub.**
-  - Verify the licences of the 5 presets (two are `verified:false`).
-  - Add entries planned for M1 only if their family loads; check with B's `hello.families`.
-  - Implement `hub.Downloader`: HF API listing, parallel ranged + resumable downloads, sha256, refs written last, mirror race (`hf-mirror.com`), token from the Keychain (purego `SecItem*` or the `security` CLI), disk preflight. It runs as `model.download` jobs once B's scheduler lands; until then, use a direct goroutine behind the same interface.
-  - Models page: list, download, progress, delete, verify.
-- **Licence gate.** `core.LicenceService` (`internal/licence`) over `store.Licences` (in memory until A merges), plus the acceptance dialog. The Studio's Generate path calls `Check` (integration I1).
+## 6. Data on disk (macOS)
 
-### Merge order and integration
+| What | Where |
+|---|---|
+| Library database (takes, voices, projects, licences, jobs, settings `settings:app`, drafts `draft:*`, notifications) | `~/Library/Application Support/AudioSmith/audiosmith.db` (WAL; `audiosmith.db.bak-<v>` before each migration) |
+| Take audio | `~/Library/Application Support/AudioSmith/clips/<take id>.wav` |
+| MVP history | `…/AudioSmith/history.json`, imported once and kept |
+| Waveform cache | `~/Library/Caches/AudioSmith/peaks/<take id>.f32` |
+| Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app, rotated at 5 MB) and `engine-gpu.log` (engine stderr) |
+| Models | the Hugging Face cache, `~/.cache/huggingface/hub` (`HF_HUB_CACHE`/`HF_HOME`, or Settings → Models → Model folder) |
+| HF token | the login Keychain, service "AudioSmith", account "huggingface-token" (or `$HF_TOKEN`, or huggingface-cli's token file) |
 
-1. **Merge order.** Merge each thread as soon as it is green, in any order; conflicts are limited to the §3.4 seams. Preferred: **C** first (mostly new files), then **A**, then **B**. B touches the most behaviour and benefits from A's `jobs.Store` and C's catalogue.
-2. **Integration steps after the merges** (main assigns them; each is small):
-   - **I1.** Studio Generate → `TakeService.Generate` → scheduler → supervisor. The licence check and hub status are part of Generate.
-   - **I2.** The status bar and ⌘E read `engine.Supervisor.Status` and the job list.
-   - **I3.** Settings drive the Studio defaults (model, autoplay), the engine memory budget and the hub endpoints.
-   - **I4.** `model.download` jobs on `LaneNet`; the Models page shows `jobs.Updated`.
-   - **I5.** Delete the v1 client and the v1 Swift protocol.
-3. **M0 acceptance** (plan §4):
-   - every old feature passes its regression tests;
-   - concurrent queueing and cancel by id work;
-   - models download, delete and resume;
-   - the UI switches between en and zh-Hans.
-
-## 6. Testing
+## 7. Testing
 
 | What | Command | Notes |
 |---|---|---|
-| All Go tests | `CGO_ENABLED=0 go test ./...` | Views in `ui.Tester` with a fake v1 engine. Protocol fixtures; the catalogue pins the 5 presets. |
-| MyGo vet | `go tool mygo vet .` | Runs `go vet ./...` and the UI-lifetime checks. |
-| Snapshots | `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .` | M0a: byte-identical to the MVP except the Engine page's temp path. |
-| Race | `go test -race ./...` | Needs cgo; run when touching shared state (bus, services, scheduler). |
-| Mac e2e | `AUDIOSMITH_E2E=1 go test -run TestEndToEnd -v .` | Real engine (thread B). |
+| All Go tests | `CGO_ENABLED=0 go test ./...` | Views in `ui.Tester` with fake engines; the real scheduler and supervisor against a scripted engine; the hub against a fake HF; protocol fixtures; i18n key parity. The SQLite library is downloaded and cached on first run (`MYGO_SQLITE_LIBRARY` overrides it; see `.github/workflows/ci.yml`). |
+| MyGo vet | `go tool mygo vet .` | `go vet ./...` and the UI-lifetime checks |
+| Race | `go test -race ./...` | needs cgo |
+| Snapshots | `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .` | every page, light/dark, en/zh-Hans |
+| Swift fixtures | `scripts/test-engine.sh` | Mac: the Swift wire types against `engine/Fixtures` |
+| Engine smoke | `scripts/smoke-engine.sh` | Mac: the engine binary alone |
+| Real engine | `AUDIOSMITH_E2E=1 go test -run 'TestEndToEnd' -v .` and `… -run TestRealEngineConformance ./internal/engine` | Mac, built engine, Kokoro in the HF cache |
+| Model lifecycle | `AUDIOSMITH_E2E=1 AUDIOSMITH_E2E_MODELS=kokoro-82m-bf16,omnivoice-bf16 go test -run TestModelLifecycle -v -timeout 40m .` | Mac + network: download, cancel, resume, licence, generate offline under `sandbox-exec`, delete |
+| Keychain, proxy | `AUDIOSMITH_MAC=1 go test -run TestMacKeychainAndProxy -v ./internal/hub` | Mac |

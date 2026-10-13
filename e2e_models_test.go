@@ -160,6 +160,9 @@ func TestModelLifecycle(t *testing.T) {
 		waitFor("unloaded", time.Minute, func() bool { return a.loadedModel == "" })
 		a.deleteModel(e)
 		waitFor("deleted", time.Minute, func() bool { return m.local.State == hub.Missing })
+		if _, err := os.Stat(hub.EngineCopy(models, e.Repo)); err == nil {
+			t.Errorf("%s: the engine's copy is left", e.Label)
+		}
 		t.Logf("%s: deleted", e.Label)
 	}
 }

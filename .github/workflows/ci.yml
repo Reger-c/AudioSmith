@@ -1,0 +1,74 @@
+# Linux CI: the Go side (views in ui.Tester, services, store, jobs, the
+# supervisor against a scripted engine, the hub against a fake HF, the
+# protocol fixtures, i18n key parity) and MyGo's vet. The Swift engine and
+# the end-to-end tests need a Mac with Apple silicon; they are not run here
+# (README: Tests).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    env:
+      # The MyGo SQLite plugin loads a prebuilt library. Tests would download
+      # it on first use; CI fetches it once, checks its sha256 against the
+      # plugin's manifest and points the plugin at it.
+      SQLITE_ASSET: mygo-sqlite3-linux-amd64.so
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: SQLite library for the MyGo plugin
+        id: sqlite
+        run: |
+          dir="$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)/plugins/sqlite"
+          read -r url sum < <(jq -r '.libraries[0].files["linux-amd64"] | "\(.url) \(.sha256)"' "$dir/mygo-plugin.json")
+          echo "sha=$sum" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        id: sqlite-cache
+        with:
+          path: ~/.cache/mygo-ci/sqlite
+          key: mygo-sqlite-${{ steps.sqlite.outputs.sha }}
+
+      - name: Fetch and verify the SQLite library
+        run: |
+          mkdir -p ~/.cache/mygo-ci/sqlite
+          lib=~/.cache/mygo-ci/sqlite/libmygo-sqlite3.so
+          if [ ! -f "$lib" ]; then
+            curl -fsSL --retry 3 -o "$lib" "${{ steps.sqlite.outputs.url }}"
+          fi
+          echo "${{ steps.sqlite.outputs.sha }}  $lib" | sha256sum -c -
+          echo "MYGO_SQLITE_LIBRARY=$lib" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: CGO_ENABLED=0 go test ./...
+
+      - name: Race
+        run: CGO_ENABLED=1 go test -race ./...
+
+      - name: MyGo vet
+        run: go tool mygo vet .
+
+      - name: Snapshots
+        run: |
+          AUDIOSMITH_SNAPSHOTS="$RUNNER_TEMP/shots" go test -run TestSnapshots .
+          ls "$RUNNER_TEMP/shots" | wc -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: ${{ runner.temp }}/shots
+          retention-days: 7

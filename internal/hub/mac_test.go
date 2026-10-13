@@ -2,7 +2,10 @@ package hub
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -16,7 +19,22 @@ func TestMacKeychainAndProxy(t *testing.T) {
 	if os.Getenv("AUDIOSMITH_MAC") == "" || runtime.GOOS != "darwin" {
 		t.Skip("set AUDIOSMITH_MAC=1 on a Mac")
 	}
+	// The login keychain is locked in an SSH session ("User interaction is
+	// not allowed"), so the commands run against a keychain of their own;
+	// the app uses the login keychain, unlocked in the user's session.
 	k := Keychain{Service: "AudioSmith (test)", Account: "huggingface-token"}
+	if _, err := security("", "show-keychain-info"); err != nil && strings.Contains(err.Error(), "User interaction is not allowed") {
+		file := filepath.Join(t.TempDir(), "test.keychain-db")
+		if out, err := exec.Command("/usr/bin/security", "create-keychain", "-p", "test", file).CombinedOutput(); err != nil {
+			t.Fatalf("create-keychain: %v %s", err, out)
+		}
+		defer exec.Command("/usr/bin/security", "delete-keychain", file).Run()
+		if out, err := exec.Command("/usr/bin/security", "unlock-keychain", "-p", "test", file).CombinedOutput(); err != nil {
+			t.Fatalf("unlock-keychain: %v %s", err, out)
+		}
+		k.File = file
+		t.Log("login keychain locked (SSH session): testing against a temporary keychain")
+	}
 	k.Delete()
 	const tok = "hf_probe_0123456789abcdef"
 	if err := k.Set(tok); err != nil {

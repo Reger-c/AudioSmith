@@ -8,7 +8,7 @@ import (
 )
 
 // TestBuiltin pins the five MVP presets, now data: the pickers must offer
-// exactly what the hard-coded presets offered.
+// what the hard-coded presets offered, in order, then OmniVoice (M0).
 func TestBuiltin(t *testing.T) {
 	c := Builtin()
 	want := []struct {
@@ -29,7 +29,7 @@ func TestBuiltin(t *testing.T) {
 		{"Soprano 80M", "mlx-community/Soprano-80M-bf16", "≈ 221 MB", nil, nil, false, true, false, false},
 	}
 	labels := c.Labels(TaskTTS)
-	if len(labels) != len(want)+1 || labels[len(labels)-1] != CustomLabel {
+	if len(labels) != len(want)+2 || labels[len(want)] != "OmniVoice" || labels[len(labels)-1] != CustomLabel {
 		t.Fatalf("labels %q", labels)
 	}
 	for i, w := range want {
@@ -65,29 +65,36 @@ func TestBuiltin(t *testing.T) {
 }
 
 // TestOmniVoice: the bf16 checkpoint only (the quantized ones crash the
-// pinned engine), non-commercial and gated behind acceptance, and hidden
-// from pickers until the generate path checks licences.
+// pinned engine), non-commercial and gated behind acceptance (the
+// services and the engine executors check it), offered since the engine
+// runs it end to end (TestModelLifecycle on the Mac).
 func TestOmniVoice(t *testing.T) {
 	c := Builtin()
 	e, ok := c.ByID("omnivoice-bf16")
-	if !ok || e.Repo != "mlx-community/OmniVoice-bf16" || !e.Hidden || e.Licence.Commercial || !e.Licence.RequiresAcceptance || e.Licence.ID != "cc-by-nc-4.0" {
+	if !ok || e.Repo != "mlx-community/OmniVoice-bf16" || e.Hidden || e.Licence.Commercial || !e.Licence.RequiresAcceptance || e.Licence.ID != "cc-by-nc-4.0" {
 		t.Fatalf("%+v", e)
 	}
-	if !e.Has(CapClone) || !e.Has(CapDesign) || !e.Has(CapDuration) {
+	if !e.Has(CapClone) || !e.Has(CapDesign) || !e.Has(CapDuration) || !e.Has(CapSpeed) {
 		t.Errorf("capabilities %v", e.Capabilities)
 	}
-	for _, x := range c.ForTask(TaskTTS) {
-		if x.ID == e.ID {
-			t.Error("a hidden entry is offered")
-		}
-	}
-	if slices.Contains(c.Labels(TaskTTS), e.Label) {
-		t.Error("a hidden entry is in the picker")
+	if !slices.Contains(c.Labels(TaskTTS), e.Label) {
+		t.Error("OmniVoice is not in the picker")
 	}
 	for _, x := range c.Entries {
 		if strings.Contains(strings.ToLower(x.Repo), "omnivoice") && x.Quantization != "bf16" {
 			t.Errorf("%s: only OmniVoice-bf16 loads", x.Repo)
 		}
+	}
+	// Hidden entries stay out of pickers.
+	h := *c
+	h.Entries = slices.Clone(c.Entries)
+	for i := range h.Entries {
+		if h.Entries[i].ID == e.ID {
+			h.Entries[i].Hidden = true
+		}
+	}
+	if slices.Contains(h.Labels(TaskTTS), e.Label) || slices.ContainsFunc(h.ForTask(TaskTTS), func(x Entry) bool { return x.ID == e.ID }) {
+		t.Error("a hidden entry is offered")
 	}
 }
 

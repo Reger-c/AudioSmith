@@ -100,7 +100,7 @@ type Entry struct {
 
 	// Hidden entries are listed on the Models page (download, licence)
 	// but not offered by pickers (ForTask, Labels) until the app can run
-	// them: OmniVoice waits for the licence gate in the generate path.
+	// them end to end (none at the end of M0).
 	Hidden bool `json:"hidden,omitempty"`
 
 	Licence Licence `json:"licence"`

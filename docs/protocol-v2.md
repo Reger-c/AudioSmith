@@ -82,8 +82,9 @@ Unknown members must be ignored by both sides, so optional fields can be added w
    - The app's supervisor gives a cancelled job 5 s to end, then kills and restarts the worker.
 7. **Models.** Job methods load the model they need if it is not resident, reporting stage `loading`.
    - With `hello.offline: true` they never download: missing files fail with `model_not_downloaded`, and the Go hub owns downloads.
-   - The app sends `offline: true` once the hub's downloads are wired in (integration I4 in [architecture.md](architecture.md)). Until then it sends `false`, and the engine downloads on first use as v1 does.
-   - `models.load` with a `path` loads that snapshot directory.
+   - The app sends `offline: true` (since integration I5). The engine executors fill each job's local snapshot directory (`models.load` `path`, `tts.synthesize` `modelPath`, from `hub.Status` over the catalogue's pinned commit) as the job starts; a model that is not downloaded fails the job with `model_not_downloaded` before the engine sees it.
+   - `models.load` with a `path` (and `tts.synthesize` with a `modelPath`) loads that snapshot directory.
+   - Families mlx-audio-swift cannot load from a directory (Marvis, OmniVoice, Spark in the pin) fall back to resolving the repo id in `hello.cacheDir`, where the hub put the same snapshot (standard layout; for a pinned commit it also writes `refs/main`, so swift-huggingface finds it without the network). Auxiliary repos (Kokoro's G2P) are always resolved that way.
    - Without a path, the engine resolves the repo in `hello.cacheDir` (it sets `HF_HUB_CACHE` to it). A repo counts as present when `<cacheDir>/mlx-audio/<owner>_<name>/config.json` exists or `<cacheDir>/models--<owner>--<name>/snapshots/` has a non-empty snapshot.
    - The engine keeps several models resident (`AUDIOSMITH_MAX_MODELS`, least recently used first out). The supervisor polls `engine.stats` while jobs run and after each, and unloads the least recently used idle models when all workers' models together exceed `engine.Config.MemoryBudget`.
 
@@ -143,7 +144,7 @@ Returns `{models:[…]}`.
 ### `tts.synthesize` (job)
 
 ```json
-→ {"id":"01JA…","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","text":"Hello from AudioSmith.","voice":"af_heart","speed":1.25,
+→ {"id":"01JA…","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","modelPath":"/…/snapshots/a71e4d38…","text":"Hello from AudioSmith.","voice":"af_heart","speed":1.25,
    "output":{"path":"/…/clips/01JA….wav","format":"wav","bits":16},"stream":true}}
 ← job.progress {stage:"loading"} … {stage:"generating", fraction, audioSeconds} … {stage:"writing"}
 ← tts.chunk {seq:0 …} … {seq:n, final:true}          (only with "stream":true)
@@ -153,6 +154,8 @@ Returns `{models:[…]}`.
 Parameters left unset use the model's defaults:
 - `speed`, `temperature`, `topP` and `seed` are pointers on the Go side;
 - `maxTokens`, `steps`, `instruct` and `duration` count as unset when absent.
+
+OmniVoice takes its own parameters through the same fields: `steps` (diffusion steps, default 32), `duration` (target seconds; the take comes out that long), `speed`, `seed`; `voice` is a design description ("female, young adult, british accent"), and `refAudio`/`refText` clone. It runs in the job's task and stops at the next diffusion step when cancelled.
 
 A model that cannot honour a parameter ignores it, unless that parameter is the point of the request: `refAudio` on a model that cannot clone fails with `unsupported`, `data.capability:"clone"`.
 

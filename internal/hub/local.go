@@ -220,8 +220,13 @@ func (c *Client) Delete(ctx context.Context, e catalog.Entry) error {
 	return Delete(c.opts.CacheDir, e)
 }
 
-// Delete is Client.Delete for a cache directory.
+// Delete is Client.Delete for a cache directory. The engine's own copy of
+// the repo (EngineCopy) goes too: it would take space, and the engine
+// would load it instead of a newer download.
 func Delete(cacheDir string, e catalog.Entry) error {
+	if err := os.RemoveAll(EngineCopy(cacheDir, e.Repo)); err != nil {
+		return err
+	}
 	repoDir := RepoDir(cacheDir, e.Repo)
 	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
 		return nil
@@ -272,6 +277,13 @@ func Delete(cacheDir string, e catalog.Entry) error {
 // EngineCopiesDir is where mlx-audio-swift keeps its own copies of the
 // snapshots it loads: <cache>/mlx-audio/<owner>_<name>/.
 func EngineCopiesDir(cacheDir string) string { return filepath.Join(cacheDir, "mlx-audio") }
+
+// EngineCopy is mlx-audio-swift's copy of one repo, made when the engine
+// resolves the repo by id (auxiliary repos, families it cannot load from a
+// directory).
+func EngineCopy(cacheDir, repo string) string {
+	return filepath.Join(EngineCopiesDir(cacheDir), strings.ReplaceAll(repo, "/", "_"))
+}
 
 // CleanEngineCopies removes the empty directories mlx-audio-swift leaves
 // in EngineCopiesDir after a failed load. Left there, the next load of

@@ -35,8 +35,17 @@ const (
 // ErrNoKeychain is returned off macOS, where there is no Keychain to use.
 var ErrNoKeychain = errors.New("no keychain on this system")
 
-// Keychain is a generic password item of the login keychain.
-type Keychain struct{ Service, Account string }
+// Keychain is a generic password item of the login keychain (or of the
+// keychain file File, for tests).
+type Keychain struct{ Service, Account, File string }
+
+// with appends the keychain file to a security command, when there is one.
+func (k Keychain) with(args ...string) []string {
+	if k.File != "" {
+		args = append(args, k.File)
+	}
+	return args
+}
 
 // DefaultKeychain is where AudioSmith keeps the HF token.
 var DefaultKeychain = Keychain{Service: "AudioSmith", Account: "huggingface-token"}
@@ -62,7 +71,7 @@ var security = func(stdin string, args ...string) ([]byte, error) {
 
 // Get returns the token saved, "" when there is none.
 func (k Keychain) Get() (string, error) {
-	out, err := security("", "find-generic-password", "-s", k.Service, "-a", k.Account, "-w")
+	out, err := security("", k.with("find-generic-password", "-s", k.Service, "-a", k.Account, "-w")...)
 	if err != nil {
 		if errors.Is(err, ErrNoKeychain) || strings.Contains(err.Error(), "could not be found") || isExit(err, 44) {
 			return "", nil
@@ -83,14 +92,18 @@ func (k Keychain) Set(token string) error {
 	if strings.ContainsAny(token, "\"\\\n\r") {
 		return errors.New("the token has characters a Hugging Face token never has")
 	}
-	cmd := fmt.Sprintf("add-generic-password -U -s %q -a %q -l %q -w \"%s\"\n", k.Service, k.Account, "AudioSmith Hugging Face token", token)
+	cmd := fmt.Sprintf("add-generic-password -U -s %q -a %q -l %q -w \"%s\"", k.Service, k.Account, "AudioSmith Hugging Face token", token)
+	if k.File != "" {
+		cmd += fmt.Sprintf(" %q", k.File)
+	}
+	cmd += "\n"
 	_, err := security(cmd, "-i")
 	return err
 }
 
 // Delete removes the saved token; none saved is not an error.
 func (k Keychain) Delete() error {
-	_, err := security("", "delete-generic-password", "-s", k.Service, "-a", k.Account)
+	_, err := security("", k.with("delete-generic-password", "-s", k.Service, "-a", k.Account)...)
 	if err != nil && (errors.Is(err, ErrNoKeychain) || strings.Contains(err.Error(), "could not be found") || isExit(err, 44)) {
 		return nil
 	}
