@@ -12,6 +12,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -33,6 +34,7 @@ const (
 // fakeHub serves one repo as the Hugging Face API and resolve endpoints do,
 // LFS files through a redirect to a "CDN" path, with ranges.
 type fakeHub struct {
+	repo  string
 	files map[string][]byte
 	lfs   map[string]bool
 	gated bool
@@ -60,6 +62,7 @@ func newFakeHub(t *testing.T) *fakeHub {
 		big[i] = byte(r.Uint32())
 	}
 	h := &fakeHub{
+		repo: testRepo,
 		files: map[string][]byte{
 			"config.json":            []byte(`{"model_type":"tiny"}`),
 			"model.safetensors":      big,
@@ -114,7 +117,7 @@ func (h *fakeHub) serve(w http.ResponseWriter, r *http.Request) {
 	authed := r.Header.Get("Authorization") == "Bearer "+testToken
 	p := r.URL.Path
 	switch {
-	case strings.HasPrefix(p, "/api/models/"+testRepo+"/revision/"):
+	case strings.HasPrefix(p, "/api/models/"+h.repo+"/revision/"):
 		h.mu.Lock()
 		h.apiCalls++
 		h.mu.Unlock()
@@ -123,7 +126,7 @@ func (h *fakeHub) serve(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "down", http.StatusServiceUnavailable)
 			return
 		}
-		rev := strings.TrimPrefix(p, "/api/models/"+testRepo+"/revision/")
+		rev := strings.TrimPrefix(p, "/api/models/"+h.repo+"/revision/")
 		if rev != "main" && rev != testCommit {
 			http.NotFound(w, r)
 			return
@@ -152,20 +155,20 @@ func (h *fakeHub) serve(w http.ResponseWriter, r *http.Request) {
 		if h.gated {
 			gated = "manual"
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": testRepo, "sha": testCommit, "gated": gated, "siblings": sibs})
-	case strings.HasPrefix(p, "/"+testRepo+"/resolve/"+testCommit+"/"):
+		json.NewEncoder(w).Encode(map[string]any{"id": h.repo, "sha": testCommit, "gated": gated, "siblings": sibs})
+	case strings.HasPrefix(p, "/"+h.repo+"/resolve/"+testCommit+"/"):
 		if h.gated && !authed {
 			http.Error(w, "gated", http.StatusUnauthorized)
 			return
 		}
-		path := strings.TrimPrefix(p, "/"+testRepo+"/resolve/"+testCommit+"/")
+		path := strings.TrimPrefix(p, "/"+h.repo+"/resolve/"+testCommit+"/")
 		if h.lfs[path] {
-			http.Redirect(w, r, "/cdn/"+path, http.StatusFound)
+			http.Redirect(w, r, "/cdn/"+h.repo+"/"+path, http.StatusFound)
 			return
 		}
 		h.content(w, r, path)
-	case strings.HasPrefix(p, "/cdn/"):
-		h.content(w, r, strings.TrimPrefix(p, "/cdn/"))
+	case strings.HasPrefix(p, "/cdn/"+h.repo+"/"):
+		h.content(w, r, strings.TrimPrefix(p, "/cdn/"+h.repo+"/"))
 	default:
 		http.NotFound(w, r)
 	}
@@ -685,5 +688,142 @@ func TestToken(t *testing.T) {
 	}
 	if MaskToken("hf_abcdefghijkl") != "hf_…ijkl" || MaskToken("short") != "•••••" {
 		t.Error(MaskToken("hf_abcdefghijkl"))
+	}
+}
+
+func TestAuxRepos(t *testing.T) {
+	h := newFakeHub(t)
+	g2p := newFakeHub(t)
+	g2p.repo = "acme/g2p"
+	g2p.files = map[string][]byte{"config.json": []byte(`{"g2p":1}`), "g2p.safetensors": bytes.Repeat([]byte{3}, 3000)}
+	g2p.lfs = map[string]bool{"g2p.safetensors": true}
+	both := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/acme/g2p/") {
+			g2p.serve(w, r)
+		} else {
+			h.serve(w, r)
+		}
+	}))
+	defer both.Close()
+	c := New(Options{CacheDir: t.TempDir(), Endpoints: []string{both.URL}, Official: both.URL, ChunkSize: 1024, ReserveBytes: -1})
+	c.progressEvery = 0
+	e := h.entry()
+	e.Aux = []catalog.Aux{{Repo: "acme/g2p"}}
+	ctx := context.Background()
+	p, err := c.Plan(ctx, e)
+	if err != nil || p.TotalBytes != sumSizes(h.files)+sumSizes(g2p.files) || len(p.Files) != len(h.files) {
+		t.Fatalf("plan %+v %v", p, err)
+	}
+	var last Progress
+	if err := c.Download(ctx, e, func(pr Progress) {
+		if pr.Bytes < last.Bytes || pr.Repo != testRepo {
+			t.Errorf("progress went from %+v to %+v", last, pr)
+		}
+		last = pr
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if last.Bytes != p.TotalBytes {
+		t.Errorf("last progress %+v", last)
+	}
+	l, _ := c.Status(ctx, e)
+	if l.State != Downloaded || l.Bytes != p.TotalBytes {
+		t.Errorf("status %+v", l)
+	}
+	if bad, err := c.Verify(ctx, e); err != nil || len(bad) != 0 {
+		t.Errorf("verify %v %v", bad, err)
+	}
+	// Without its aux repo the model is not usable.
+	os.RemoveAll(RepoDir(c.opts.CacheDir, "acme/g2p"))
+	l, _ = c.Status(ctx, e)
+	if l.State != Partial || !slices.Contains(l.Missing, "acme/g2p:") {
+		t.Errorf("status without aux %+v", l)
+	}
+	if bad, _ := c.Verify(ctx, e); !slices.Equal(bad, []string{"acme/g2p:"}) {
+		t.Errorf("verify without aux %v", bad)
+	}
+	// Deleting the model keeps aux repos (shared, small).
+	c.Download(ctx, e, nil)
+	c.Delete(ctx, e)
+	if _, err := os.Stat(RepoDir(c.opts.CacheDir, "acme/g2p")); err != nil {
+		t.Error("aux repo deleted")
+	}
+}
+
+func TestSystemProxy(t *testing.T) {
+	out := `<dictionary> {
+  ExceptionsList : <array> {
+    0 : *.local
+    1 : 169.254/16
+    2 : internal.example.com
+  }
+  ExcludeSimpleHostnames : 1
+  FTPPassive : 1
+  HTTPEnable : 1
+  HTTPPort : 7897
+  HTTPProxy : 127.0.0.1
+  HTTPSEnable : 1
+  HTTPSPort : 7898
+  HTTPSProxy : 127.0.0.1
+  SOCKSEnable : 1
+  SOCKSPort : 7899
+  SOCKSProxy : 127.0.0.1
+}
+`
+	p := parseScutil(out)
+	u := func(s string) *url.URL { x, _ := url.Parse(s); return x }
+	for in, want := range map[string]string{
+		"https://huggingface.co/api":   "http://127.0.0.1:7898",
+		"http://huggingface.co/":       "http://127.0.0.1:7897",
+		"ftp://example.com/":           "socks5://127.0.0.1:7899",
+		"https://printer.local/":       "",
+		"https://169.254.3.4/":         "",
+		"https://intranet/":            "",
+		"https://internal.example.com": "",
+	} {
+		got := ""
+		if x := p.forURL(u(in)); x != nil {
+			got = x.String()
+		}
+		if got != want {
+			t.Errorf("%s: %q, want %q", in, got, want)
+		}
+	}
+	if p := parseScutil("<dictionary> {\n  HTTPEnable : 0\n}\n"); p.forURL(u("https://huggingface.co")) != nil {
+		t.Error("disabled proxy used")
+	}
+
+	// Modes.
+	saved := scutilProxy
+	defer func() { scutilProxy = saved; sysProxy.read = time.Time{} }()
+	scutilProxy = func() (string, error) { return out, nil }
+	sysProxy.Lock()
+	sysProxy.read = time.Time{}
+	sysProxy.Unlock()
+	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"} {
+		t.Setenv(k, "")
+	}
+	req, _ := http.NewRequest("GET", "https://huggingface.co/api", nil)
+	check := func(mode, want string) {
+		t.Helper()
+		got, err := proxyFunc(mode)(req)
+		s := ""
+		if got != nil {
+			s = got.String()
+		}
+		if err != nil || s != want {
+			t.Errorf("mode %q: %q %v, want %q", mode, s, err, want)
+		}
+	}
+	check("", "http://127.0.0.1:7898")
+	check("direct", "")
+	check("socks5://10.0.0.2:1080", "socks5://10.0.0.2:1080")
+	check("10.0.0.2:3128", "http://10.0.0.2:3128")
+	local, _ := http.NewRequest("GET", "http://127.0.0.1:8080/api", nil)
+	if got, _ := proxyFunc("http://10.0.0.2:3128")(local); got != nil {
+		t.Error("loopback through a proxy")
+	}
+	if DescribeProxy("") != "http://127.0.0.1:7898" || DescribeProxy("direct") != "" {
+		t.Error(DescribeProxy(""))
 	}
 }

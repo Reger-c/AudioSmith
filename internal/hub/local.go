@@ -36,8 +36,33 @@ func (c *Client) Status(ctx context.Context, e catalog.Entry) (Local, error) {
 	return Status(c.opts.CacheDir, e)
 }
 
-// Status is Client.Status for a cache directory.
+// Status is Client.Status for a cache directory. An entry whose
+// auxiliary repos are not all there is Partial, and its Missing lists
+// them as "<repo>:".
 func Status(cacheDir string, e catalog.Entry) (Local, error) {
+	l, err := statusOne(cacheDir, e, true)
+	if err != nil {
+		return l, err
+	}
+	for _, a := range e.Aux {
+		al, err := statusOne(cacheDir, auxEntry(e, a), false)
+		if err != nil {
+			return l, err
+		}
+		l.Bytes += al.Bytes
+		if al.State != Downloaded {
+			l.Missing = append(l.Missing, a.Repo+":")
+			if l.State == Downloaded || al.State == Partial {
+				l.State = Partial
+			}
+		}
+	}
+	return l, nil
+}
+
+// statusOne is the status of one repo; weights asks for a weights file
+// when e lists no files.
+func statusOne(cacheDir string, e catalog.Entry, weights bool) (Local, error) {
 	repoDir := RepoDir(cacheDir, e.Repo)
 	var l Local
 	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
@@ -66,7 +91,7 @@ func Status(cacheDir string, e catalog.Entry) (Local, error) {
 		return l, nil
 	}
 	l.Snapshot = snap
-	weights := false
+	hasWeights := false
 	present := map[string]bool{}
 	err := filepath.WalkDir(snap, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -82,7 +107,7 @@ func Status(cacheDir string, e catalog.Entry) (Local, error) {
 		present[rel] = true
 		l.Bytes += st.Size()
 		if slices.Contains(weightExts, strings.ToLower(filepath.Ext(rel))) {
-			weights = true
+			hasWeights = true
 		}
 		return nil
 	})
@@ -95,7 +120,7 @@ func Status(cacheDir string, e catalog.Entry) (Local, error) {
 		}
 	}
 	switch {
-	case len(l.Missing) > 0 || incomplete || len(e.Files) == 0 && !weights:
+	case len(l.Missing) > 0 || incomplete || weights && len(e.Files) == 0 && !hasWeights:
 		l.State = Partial
 	default:
 		l.State = Downloaded
@@ -115,9 +140,33 @@ func nonEmpty(dir string) bool {
 
 // Verify hashes every file of e's snapshot against the HF API's listing
 // (or e.Files when they carry hashes) and returns those missing or bad;
-// bad blobs are removed, so that Download fetches them again.
+// bad blobs are removed, so that Download fetches them again. Files of
+// auxiliary repos are named "<repo>:<path>".
 func (c *Client) Verify(ctx context.Context, e catalog.Entry) ([]string, error) {
 	defer c.lockRepo(e.Repo)()
+	bad, err := c.verifyOne(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range e.Aux {
+		if commitOf(RepoDir(c.opts.CacheDir, a.Repo), auxEntry(e, a)) == "" {
+			bad = append(bad, a.Repo+":")
+			continue
+		}
+		unlock := c.lockRepo(a.Repo)
+		ab, err := c.verifyOne(ctx, auxEntry(e, a))
+		unlock()
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range ab {
+			bad = append(bad, a.Repo+":"+p)
+		}
+	}
+	return bad, nil
+}
+
+func (c *Client) verifyOne(ctx context.Context, e catalog.Entry) ([]string, error) {
 	repoDir := RepoDir(c.opts.CacheDir, e.Repo)
 	commit := commitOf(repoDir, e)
 	if commit == "" {
@@ -164,7 +213,8 @@ func (c *Client) Verify(ctx context.Context, e catalog.Entry) ([]string, error) 
 
 // Delete removes e's snapshot, the refs pointing at it, and the blobs no
 // other snapshot links to (partial downloads included). The repo
-// directory goes when no snapshot is left.
+// directory goes when no snapshot is left. Auxiliary repos stay: they are
+// small and other entries may share them.
 func (c *Client) Delete(ctx context.Context, e catalog.Entry) error {
 	defer c.lockRepo(e.Repo)()
 	return Delete(c.opts.CacheDir, e)

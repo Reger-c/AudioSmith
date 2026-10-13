@@ -114,7 +114,11 @@ type Options struct {
 	// ReserveBytes is the free space a download must leave on the cache
 	// volume. 0 = 2 GB; negative = no check.
 	ReserveBytes int64
-	// HTTPClient makes the requests; nil = a client with timeouts.
+	// Proxy is "" (automatic: environment, then the macOS system proxy),
+	// "direct", or a proxy URL; see proxy.go.
+	Proxy string
+	// HTTPClient makes the requests; nil = a client with timeouts and
+	// Proxy.
 	HTTPClient *http.Client
 }
 

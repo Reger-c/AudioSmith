@@ -128,6 +128,7 @@ func normalize(s Settings) Settings {
 	}
 	s.Appearance.Scale = best
 	s.Models.CacheDir = strings.TrimSpace(s.Models.CacheDir)
+	s.Models.Proxy = strings.TrimSpace(s.Models.Proxy)
 	var eps []string
 	for _, e := range s.Models.Endpoints {
 		e = strings.TrimRight(strings.TrimSpace(e), "/")

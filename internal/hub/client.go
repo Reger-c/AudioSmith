@@ -98,7 +98,7 @@ func New(o Options) *Client {
 	hc := o.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
+			Proxy:                 proxyFunc(o.Proxy),
 			DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 			TLSHandshakeTimeout:   15 * time.Second,
 			ResponseHeaderTimeout: 30 * time.Second,
@@ -323,13 +323,11 @@ type plan struct {
 	files  []remoteFile
 }
 
-// Plan lists the files of e at its revision and checks the disk.
+// Plan lists the files of e at its revision and checks the disk. Files
+// are e's own; the byte counts include its auxiliary repos.
 func (c *Client) Plan(ctx context.Context, e catalog.Entry) (Plan, error) {
-	p, err := c.plan(ctx, e)
-	if p == nil {
-		return Plan{}, err
-	}
-	return p.Plan, err
+	_, p, err := c.planAll(ctx, e)
+	return p, err
 }
 
 func (c *Client) plan(ctx context.Context, e catalog.Entry) (*plan, error) {
@@ -372,12 +370,42 @@ func (c *Client) plan(ctx context.Context, e catalog.Entry) (*plan, error) {
 	for missing := range want {
 		return nil, fmt.Errorf("%s@%s has no %s: %w", e.Repo, rev, missing, ErrNotFound)
 	}
-	p.FreeBytes = freeBytes(c.opts.CacheDir)
-	if c.opts.ReserveBytes > 0 && p.FreeBytes >= 0 && p.Bytes+c.opts.ReserveBytes > p.FreeBytes {
-		return p, fmt.Errorf("%s needs %s more and keeps %s free; %s free: %w",
-			e.Repo, catalog.HumanSize(p.Bytes), catalog.HumanSize(c.opts.ReserveBytes), catalog.HumanSize(p.FreeBytes), ErrDiskSpace)
-	}
 	return p, nil
+}
+
+// auxEntry is an auxiliary repo as an entry of its own.
+func auxEntry(e catalog.Entry, a catalog.Aux) catalog.Entry {
+	return catalog.Entry{ID: e.ID + "+" + a.Repo, Repo: a.Repo, Revision: a.Revision, Files: a.Files}
+}
+
+// planAll plans e's auxiliary repos and e (last), adds them up and checks
+// the disk for all of them.
+func (c *Client) planAll(ctx context.Context, e catalog.Entry) ([]*plan, Plan, error) {
+	var plans []*plan
+	var sum Plan
+	for _, a := range e.Aux {
+		p, err := c.plan(ctx, auxEntry(e, a))
+		if err != nil {
+			return nil, Plan{}, err
+		}
+		plans = append(plans, p)
+		sum.TotalBytes += p.TotalBytes
+		sum.Bytes += p.Bytes
+	}
+	p, err := c.plan(ctx, e)
+	if err != nil {
+		return nil, Plan{}, err
+	}
+	plans = append(plans, p)
+	sum.Revision, sum.Files, sum.Endpoint, sum.Gated = p.Revision, p.Files, p.Endpoint, p.Gated
+	sum.TotalBytes += p.TotalBytes
+	sum.Bytes += p.Bytes
+	sum.FreeBytes = freeBytes(c.opts.CacheDir)
+	if c.opts.ReserveBytes > 0 && sum.FreeBytes >= 0 && sum.Bytes+c.opts.ReserveBytes > sum.FreeBytes {
+		return plans, sum, fmt.Errorf("%s needs %s more and keeps %s free; %s free: %w",
+			e.Repo, catalog.HumanSize(sum.Bytes), catalog.HumanSize(c.opts.ReserveBytes), catalog.HumanSize(sum.FreeBytes), ErrDiskSpace)
+	}
+	return plans, sum, nil
 }
 
 // safeRel reports whether a repo path stays inside the snapshot.
@@ -450,14 +478,38 @@ type fileState struct {
 	failed error
 }
 
-// Download fetches what Plan lists into the cache.
+// Download fetches what Plan lists into the cache: the auxiliary repos
+// first, then e's.
 func (c *Client) Download(ctx context.Context, e catalog.Entry, progress func(Progress)) error {
 	defer c.lockRepo(e.Repo)()
-	p, err := c.plan(ctx, e)
+	plans, sum, err := c.planAll(ctx, e)
 	if err != nil {
 		return err
 	}
-	repoDir := RepoDir(c.opts.CacheDir, e.Repo)
+	var base int64
+	for _, p := range plans {
+		unlock := func() {}
+		if p.repo != e.Repo {
+			unlock = c.lockRepo(p.repo)
+		}
+		err := c.fetchPlan(ctx, p, func(pr Progress) {
+			if progress != nil {
+				pr.Repo, pr.Bytes, pr.TotalBytes = e.Repo, base+pr.Bytes, sum.TotalBytes
+				progress(pr)
+			}
+		})
+		unlock()
+		if err != nil {
+			return err
+		}
+		base += p.TotalBytes
+	}
+	return nil
+}
+
+// fetchPlan downloads one repo's plan.
+func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)) error {
+	repoDir := RepoDir(c.opts.CacheDir, p.repo)
 	blobs := filepath.Join(repoDir, "blobs")
 	if err := os.MkdirAll(blobs, 0o755); err != nil {
 		return err
@@ -469,7 +521,7 @@ func (c *Client) Download(ctx context.Context, e catalog.Entry, progress func(Pr
 	current.Store("")
 	report := throttle(c.progressEvery, func(final bool) {
 		if progress != nil {
-			progress(Progress{Repo: e.Repo, File: current.Load().(string), Bytes: done.Load(), TotalBytes: p.TotalBytes, Mirror: p.ep})
+			progress(Progress{Repo: p.repo, File: current.Load().(string), Bytes: done.Load(), TotalBytes: p.TotalBytes, Mirror: p.ep})
 		}
 	})
 	report(true)
@@ -543,7 +595,7 @@ func (c *Client) Download(ctx context.Context, e catalog.Entry, progress func(Pr
 				current.Store(t.file.Path)
 				err := c.fetch(ctx, p, t, func(n int64) { done.Add(n); report(false) })
 				if err != nil {
-					fail(fmt.Errorf("%s/%s: %w", e.Repo, t.file.Path, err))
+					fail(fmt.Errorf("%s/%s: %w", p.repo, t.file.Path, err))
 					continue
 				}
 				if err := c.taskDone(ctx, t); err != nil {

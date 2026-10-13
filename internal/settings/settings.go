@@ -57,9 +57,12 @@ type Studio struct {
 
 // Models: where and how models download.
 type Models struct {
-	CacheDir   string   `json:"cacheDir"`   // "" = hub.CacheDir()
-	Endpoints  []string `json:"endpoints"`  // mirrors to race; nil = default
-	AutoUnload int      `json:"autoUnload"` // minutes idle before unloading a model; 0 = never
+	CacheDir  string   `json:"cacheDir"`  // "" = hub.CacheDir()
+	Endpoints []string `json:"endpoints"` // mirrors to race; nil = default
+	// Proxy for downloads: "" = automatic (environment, then the macOS
+	// system proxy), "direct", or a proxy URL (hub.Options.Proxy).
+	Proxy      string `json:"proxy,omitempty"`
+	AutoUnload int    `json:"autoUnload"` // minutes idle before unloading a model; 0 = never
 }
 
 // Engine: resource limits.

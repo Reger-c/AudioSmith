@@ -6,6 +6,7 @@
   "%.1f× realtime": "%.1f× 实时",
   "%d characters": "%d 个字符",
   "%d takes": "%d 条录音",
+  "646 languages. Designs a voice from a description (\"female, young adult, british accent\") or clones a reference clip; can hit an exact duration. Non-commercial licence.": "支持 646 种语言。可按描述设计音色（如“female, young adult, british accent”）或克隆参考音频；能精确控制时长。非商业许可。",
   "Audio": "音频",
   "AudioSmith runs speech models in audiosmith-engine, a helper built on mlx-audio-swift that runs on the Mac's GPU with MLX. Models download from Hugging Face on first use, into the same cache as the Python tools.": "AudioSmith 在 audiosmith-engine 中运行语音模型。它是基于 mlx-audio-swift 的辅助程序，通过 MLX 在 Mac 的 GPU 上运行。模型在首次使用时从 Hugging Face 下载，存放在与 Python 工具相同的缓存中。",
   "Auto": "自动",
