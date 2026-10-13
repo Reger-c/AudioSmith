@@ -20,7 +20,9 @@ type TruePeak struct {
 	table             []float32 // phases 1..l-1, taps each
 	buf               [][]float32
 	pending           int // frames in buf not yet reported
-	started           bool
+	l1                float32
+	thresh            []float32
+	stage             []float32
 }
 
 const tpHalf = 24
@@ -39,13 +41,24 @@ func NewTruePeak(rate, channels int) *TruePeak {
 			w[i] = Sinc(x) * Kaiser(x/float64(t.half), 8)
 			sum += w[i]
 		}
+		var l1 float32
 		for i := range w {
 			row[i] = float32(w[i] / sum)
+			l1 += float32(math.Abs(w[i] / sum))
 		}
+		t.l1 = max(t.l1, l1)
 	}
 	t.Reset()
 	return t
 }
+
+// SetThreshold lets the detector skip work: for channel c, frames whose
+// true peak provably cannot exceed th[c] (by the interpolator's L1 bound
+// over the neighbourhood) are reported as their sample magnitude instead.
+// Values above th[c] stay exact. nil (the default) computes every frame.
+// A meter tracking a running maximum passes that maximum; a limiter passes
+// its ceiling.
+func (t *TruePeak) SetThreshold(th []float32) { t.thresh = th }
 
 // Factor returns the oversampling factor.
 func (t *TruePeak) Factor() int { return t.l }
@@ -100,21 +113,39 @@ func (t *TruePeak) emit(dst []float32, flush bool) []float32 {
 	if !flush {
 		ready = t.pending - t.half
 	}
-	for k := range max(ready, 0) {
-		idx := first + k
+	const block = 32
+	for k0 := 0; k0 < ready; k0 += block {
+		k1 := min(k0+block, ready)
 		for c := range t.ch {
 			b := t.buf[c]
-			m := float32(math.Abs(float64(b[idx])))
-			for p := 1; p < t.l; p++ {
-				row := t.table[(p-1)*t.taps : p*t.taps]
-				s := Dot(b[idx-t.half+1:idx+t.half+1], row)
-				if s < 0 {
-					s = -s
+			if t.thresh != nil {
+				// Bound every interpolated value in the block.
+				var m float32
+				for _, v := range b[first+k0-t.half+1 : first+k1+t.half] {
+					m = max(m, float32(math.Abs(float64(v))))
 				}
-				m = max(m, s)
+				if m*t.l1 <= t.thresh[c] {
+					for k := k0; k < k1; k++ {
+						t.stage = append(t.stage, float32(math.Abs(float64(b[first+k]))))
+					}
+					continue
+				}
 			}
-			dst = append(dst, m)
+			for k := k0; k < k1; k++ {
+				idx := first + k
+				m := float32(math.Abs(float64(b[idx])))
+				win := b[idx-t.half+1 : idx+t.half+1]
+				for p := 1; p < t.l; p++ {
+					s := Dot(win, t.table[(p-1)*t.taps:p*t.taps])
+					if s < 0 {
+						s = -s
+					}
+					m = max(m, s)
+				}
+				t.stage = append(t.stage, m)
+			}
 		}
+		dst = t.interleave(dst, k1-k0)
 	}
 	if ready > 0 {
 		t.pending -= ready
@@ -145,4 +176,29 @@ func Dot(x, h []float32) float32 {
 		s0 += x[i] * h[i]
 	}
 	return (s0 + s1) + (s2 + s3)
+}
+
+// interleave appends the staged block (channel-major, n frames) to dst
+// interleaved.
+func (t *TruePeak) interleave(dst []float32, n int) []float32 {
+	base := len(dst)
+	dst = append(dst, make([]float32, n*t.ch)...)
+	for c := range t.ch {
+		for k := range n {
+			dst[base+k*t.ch+c] = t.stage[c*n+k]
+		}
+	}
+	t.stage = t.stage[:0]
+	return dst
+}
+
+// Clone returns an independent copy of the detector's state.
+func (t *TruePeak) Clone() *TruePeak {
+	c := *t
+	c.stage = nil
+	c.buf = make([][]float32, len(t.buf))
+	for i, b := range t.buf {
+		c.buf[i] = append(make([]float32, 0, len(b)+t.half), b...)
+	}
+	return &c
 }

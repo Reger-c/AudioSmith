@@ -175,6 +175,12 @@ func NewLimiter(rate, channels int, p LimiterParams) *Limiter {
 	l.d = max(int(math.Round(p.LookaheadMs/1000*float64(rate))), 1)
 	if p.TruePeak {
 		l.tp = filter.NewTruePeak(rate, channels)
+		// Peaks under the ceiling need no gain: skip oversampling them.
+		th := make([]float32, channels)
+		for i := range th {
+			th[i] = float32(l.ceil)
+		}
+		l.tp.SetThreshold(th)
 	}
 	l.Reset()
 	return l

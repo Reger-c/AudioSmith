@@ -194,3 +194,28 @@ func BenchmarkTruePeak48k(b *testing.B) {
 		out = d.Process(out[:0], x.Samples)
 	}
 }
+
+func TestTruePeakThreshold(t *testing.T) {
+	x := dsptest.Noise(24000, 2, -25, 1, 9)
+	dsptest.Add(x, dsptest.Sine(24000, 2, 6000, -1, 0.2, math.Pi/4), 12000)
+	exact := NewTruePeak(24000, 2)
+	want := exact.Flush(exact.Process(nil, x.Samples))
+	th := float32(dsp.Amp(-4))
+	fast := NewTruePeak(24000, 2)
+	fast.SetThreshold([]float32{th, th})
+	got := fast.Flush(fast.Process(nil, x.Samples))
+	skipped := 0
+	for i := range want {
+		switch {
+		case want[i] > th && got[i] != want[i]:
+			t.Fatalf("frame %d: %v above threshold, got %v", i/2, want[i], got[i])
+		case got[i] > want[i]+1e-7:
+			t.Fatalf("frame %d: over-read %v > %v", i/2, got[i], want[i])
+		case got[i] != want[i]:
+			skipped++
+		}
+	}
+	if skipped == 0 {
+		t.Error("threshold skipped nothing")
+	}
+}
