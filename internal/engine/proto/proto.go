@@ -177,6 +177,7 @@ const (
 	CodeUnsupportedMedia  = "unsupported_media"  // an input exists but cannot be decoded; data: {"path":"…"}
 	CodePermissionDenied  = "permission_denied"  // macOS refused a permission; data: {"permission":"microphone"}
 	CodeDeviceUnavailable = "device_unavailable" // the capture device is unknown, gone or busy; data: {"device":"…"}
+	CodeContextTooLong    = "context_too_long"   // llm.generate: prompt + maxTokens over the context the engine allows; data: {"limit":16384,"actual":20000,"unit":"tokens"}
 )
 
 // Codes lists every error code the engine may send.
@@ -184,6 +185,7 @@ var Codes = []string{
 	CodeBadRequest, CodeMethodNotFound, CodeNotInitialized, CodeProtocolMismatch, CodeUnsupported,
 	CodeModelNotDownloaded, CodeModelLoadFailed, CodeLicenceRequired, CodeOOM, CodeBusy, CodeCancelled, CodeInternal,
 	CodeInputTooLong, CodeFileNotFound, CodeUnsupportedMedia, CodePermissionDenied, CodeDeviceUnavailable,
+	CodeContextTooLong,
 }
 
 // Retryable reports whether a job failing with code may be retried automatically.

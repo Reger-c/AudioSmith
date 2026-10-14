@@ -63,6 +63,7 @@ func (s *Server) routes() {
 	s.handle("POST /api/tools/probe", accessAdmin, s.toolProbe)
 	s.handle("POST /api/tools/direction", accessConsume, s.toolDirection)
 	s.handle("POST /api/tools/rate-fit", accessConsume, s.toolRateFit)
+	s.handle("POST /api/watermark/detect", accessConsume, s.watermarkDetect) // watermark.go (thread #14)
 
 	s.handle("GET /ws/tts", accessConsume, s.wsTTS)
 

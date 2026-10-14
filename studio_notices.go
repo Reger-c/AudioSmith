@@ -48,6 +48,8 @@ func codeText(code string, p map[string]string) string {
 		return i18n.T("The script has nothing to say.")
 	case services.NoticePostSkipped:
 		return i18n.T("The engine's file could not be read, so it was kept as it is (no volume levelling).")
+	case services.NoticeWatermarkFailed: // watermark_app.go (thread #14)
+		return i18n.T("The invisible watermark could not be added: %s", p["error"])
 	}
 	return code
 }

@@ -51,6 +51,9 @@ func (a *app) privacySettings(c *ui.Context) {
 		}
 	})
 
+	sectionTitle(c, i18n.T("Watermark"))
+	a.watermarkSettings(c) // watermark_app.go (thread #14)
+
 	sectionTitle(c, i18n.T("History"))
 	a.historySettings(c) // takes_view.go: the history's cap
 	muted(i18n.T("Starred takes and takes in a project are always kept."))

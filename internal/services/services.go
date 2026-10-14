@@ -74,6 +74,9 @@ type Config struct {
 	// none: books are then WAV only.
 	DataDir string
 	Encode  func() jobs.Executor
+
+	// Watermark marks every finished render (watermark.go); nil: none.
+	Watermark WatermarkFunc
 }
 
 // Services is the set of services over one store, as core.Services for

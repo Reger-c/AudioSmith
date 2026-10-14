@@ -461,6 +461,9 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		}
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
+	if _, notice := r.watermarkOutput(ctx, p.Output, 16); notice != nil { // watermark.go
+		warnings = append(warnings, *notice)
+	}
 	res.SampleRate, res.Channels, res.Frames = out.rate, out.channels, out.frames
 	res.AudioSeconds = out.seconds()
 	res.Report = rep

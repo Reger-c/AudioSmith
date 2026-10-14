@@ -181,9 +181,9 @@ func TestUnknownLanguageCode(t *testing.T) {
 
 func TestM1Entries(t *testing.T) {
 	c := Builtin()
-	for id, task := range map[string]Task{DefaultSTT: TaskSTT, DefaultAlign: TaskAlign, DefaultVAD: TaskVAD, DefaultEnhance: TaskEnhance, DefaultDictation: TaskSTT, DefaultSeparate: TaskSeparate, DefaultDiarize: TaskDiarize} {
+	for id, task := range map[string]Task{DefaultSTT: TaskSTT, DefaultAlign: TaskAlign, DefaultVAD: TaskVAD, DefaultEnhance: TaskEnhance, DefaultDictation: TaskSTT, DefaultSeparate: TaskSeparate, DefaultDiarize: TaskDiarize, DefaultLLM: TaskLLM} {
 		e, ok := c.ByID(id)
-		if !ok || !slices.Contains(e.Tasks, task) || e.SampleRate == 0 {
+		if !ok || !slices.Contains(e.Tasks, task) || e.SampleRate == 0 && task != TaskLLM {
 			t.Errorf("default %s: %+v", id, e)
 		}
 	}

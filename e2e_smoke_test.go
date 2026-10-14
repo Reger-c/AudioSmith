@@ -346,6 +346,10 @@ func TestModelSmoke(t *testing.T) {
 					r.Note = fmt.Sprintf("%d regions, %.2f–%.2f s", len(vr.Regions), vr.Regions[0].Start, vr.Regions[len(vr.Regions)-1].End)
 				}
 				add(r)
+			case "llm":
+				smokeLLM(e, snap, call, add)
+			case "watermark":
+				smokeWatermark(e, snap, ref, outDir, call, add)
 			case "separate":
 				smokeSeparate(e, snap, outDir, clip, call, add)
 			case "diarize":

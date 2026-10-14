@@ -96,6 +96,9 @@ type Backend interface {
 	Probe(ctx context.Context, path string) (proto.ProbeResult, error)
 	// CanEncode reports whether media.encode runs (M4A/AAC output).
 	CanEncode() bool
+	// DetectWatermark checks a file for the invisible watermark
+	// (AudioSeal, thread #14): core.ErrNotDownloaded without the model.
+	DetectWatermark(ctx context.Context, path string) (proto.WatermarkDetectResult, error)
 
 	// TempDir holds uploads and encoded responses (removed after use);
 	// DataDir is the app's data folder (the MCP sandbox's default parent).

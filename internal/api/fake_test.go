@@ -402,6 +402,13 @@ func (f *fakeBackend) EncodesFormat(format string) bool {
 	return f.formats[format]
 }
 
+func (f *fakeBackend) DetectWatermark(ctx context.Context, path string) (proto.WatermarkDetectResult, error) {
+	if _, err := os.Stat(path); err != nil {
+		return proto.WatermarkDetectResult{}, &proto.Error{Code: proto.CodeFileNotFound, Message: "no such file"}
+	}
+	return proto.WatermarkDetectResult{Probability: 1, Detected: true, Message: 0xA53C, Bits: make([]float64, 16), Confidence: 0.9, AudioSeconds: 1.5}, nil
+}
+
 func (f *fakeBackend) CanEncode() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
