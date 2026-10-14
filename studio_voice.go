@@ -29,6 +29,9 @@ func (a *app) studioVoiceSection(c *ui.Context, p catalog.Entry) {
 	if p.Has(catalog.CapClone) {
 		ui.Divider(c)
 		ui.Text(c, i18n.T("Voice cloning")).Bold()
+		if p.NeedsReference && a.refAudio == "" {
+			ui.Text(c.Key("ref-required"), i18n.T("Required: %s only clones voices.", p.Label)).FontSize(px(t, 12)).TextColor(t.Warning)
+		}
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 			name := i18n.T("No reference clip")
 			if a.refAudio != "" {

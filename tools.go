@@ -267,7 +267,7 @@ func (a *app) toolRefusal(err error) string {
 	case errors.Is(err, core.ErrNotDownloaded):
 		return i18n.T("Download the model first (Models).")
 	}
-	return err.Error()
+	return engineErrorText(err)
 }
 
 var timeNow = time.Now

@@ -235,10 +235,19 @@ func (a *app) readiness(st scriptStats) (msg string, warn bool) {
 	if m := a.model(p); p.ID != "custom" && m.known && m.local.State != hub.Downloaded && a.needDownload == nil {
 		return i18n.T("%s is not downloaded yet.", p.Label), true
 	}
+	if a.studioMissingReference() {
+		return studioNeedsReferenceText(p), true
+	}
 	if p.Has(catalog.CapClone) && len(p.Voices) == 0 && !p.Has(catalog.CapVoiceStyle) && a.refAudio == "" && a.voice == "" {
 		return i18n.T("No reference clip: the model speaks in its default voice."), false
 	}
 	return "", false
+}
+
+// studioNeedsReferenceText says what the Studio needs before model e
+// (which only clones voices) can generate.
+func studioNeedsReferenceText(e catalog.Entry) string {
+	return i18n.T("%s only clones voices: choose a reference clip under Voice cloning in the inspector, or a saved cloned voice.", e.Label)
 }
 
 func (a *app) generateBar(c *ui.Context) {
@@ -259,9 +268,13 @@ func (a *app) generateBar(c *ui.Context) {
 		if a.job != nil && a.job.kind == "synthesize" {
 			label = i18n.T("Generating…")
 		}
+		tip := i18n.T("Generate speech (⌘↩)")
+		if a.studioMissingReference() {
+			tip = studioNeedsReferenceText(a.preset())
+		}
 		if primaryButton(c.Key("generate"), label).
 			Disabled(!a.canGenerate()).
-			Tooltip(i18n.T("Generate speech (⌘↩)")).
+			Tooltip(tip).
 			Clicked() {
 			a.generate()
 		}

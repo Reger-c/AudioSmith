@@ -90,6 +90,12 @@ type Entry struct {
 	Tasks    []Task `json:"tasks"`
 	About    string `json:"about"` // one or two sentences, English (translated via i18n catalogs)
 
+	// NeedsReference: the model only clones (MOSS-TTS-Nano): a take needs
+	// a reference clip (or a saved voice that carries one), else the
+	// engine refuses it. The app does not send such a job, and pickers
+	// say so. Requires CapClone.
+	NeedsReference bool `json:"needsReference,omitempty"`
+
 	Languages    []Language    `json:"languages,omitempty"`
 	Voices       []VoiceOption `json:"voices,omitempty"` // built-in speakers; the first is the default
 	Capabilities []Capability  `json:"capabilities,omitempty"`
@@ -233,6 +239,9 @@ func (c *Catalog) Validate() error {
 			if !slices.Contains(knownCaps, cp) {
 				return fmt.Errorf("%s: unknown capability %q", e.ID, cp)
 			}
+		}
+		if e.NeedsReference && (!e.Has(CapClone) || !slices.Contains(e.Tasks, TaskTTS)) {
+			return fmt.Errorf("%s: needsReference without the clone capability", e.ID)
 		}
 		if e.Licence.ID == "" || e.Licence.Name == "" {
 			return fmt.Errorf("%s: no licence", e.ID)

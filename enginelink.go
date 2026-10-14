@@ -298,6 +298,8 @@ func (a *app) generateRefused(t core.Take, err error) {
 	case errors.Is(err, core.ErrNotDownloaded):
 		a.jobError = i18n.T("%s is not downloaded yet.", e.Label)
 		a.needDownload = &e
+	case errors.As(err, new(*core.NeedsReferenceError)):
+		a.jobError = engineErrorText(err)
 	default:
 		a.jobError = err.Error()
 	}
@@ -537,8 +539,58 @@ func jobErrorText(e *jobs.Error) string {
 		return i18n.T("AudioSmith may not use the microphone. Allow it in System Settings → Privacy & Security → Microphone.")
 	case proto.CodeDeviceUnavailable:
 		return i18n.T("The microphone is not available. Check that it is connected, or choose another input.")
+	case core.CodeNeedsReference:
+		var d struct{ Model string }
+		json.Unmarshal(e.Data, &d)
+		if d.Model == "" {
+			return needsReferenceText(modelInMessage(e.Message))
+		}
+		return needsReferenceText(entryFor(d.Model).Label)
+	case proto.CodeBadRequest:
+		// The engine's own refusal of a clone-only model without a
+		// reference (MOSS-TTS-Nano), in older or newer words.
+		if m := strings.ToLower(e.Message); strings.Contains(m, "only clones voices") || strings.Contains(m, "requires refaudio") {
+			return needsReferenceText(modelInMessage(e.Message))
+		}
 	}
-	return e.Message
+	return readableEngineMessage(e.Message)
+}
+
+// needsReferenceText explains that model only clones voices, wherever a
+// take was refused for want of a reference clip.
+func needsReferenceText(model string) string {
+	if model == "" {
+		model = "MOSS-TTS-Nano"
+	}
+	return i18n.T("%s only clones voices: it needs a reference clip or a saved cloned voice.", model)
+}
+
+// modelInMessage is the model an engine message starts with
+// ("MOSS-TTS-Nano-100M only clones…"), as the UI names it, or "".
+func modelInMessage(msg string) string {
+	for _, e := range catalog.Builtin().Entries {
+		if strings.HasPrefix(msg, catalog.ShortRepo(e.Repo)+" ") || strings.HasPrefix(msg, e.Label+" ") {
+			return e.Label
+		}
+	}
+	return ""
+}
+
+// readableEngineMessage turns Cocoa's generic sentence for a Swift error
+// without a description ("The operation couldn’t be completed.
+// (MLXAudioTTS.MossTTSNanoError error 0.)", what engines before 0.3.1
+// sent) into one that at least names the error; other messages pass.
+func readableEngineMessage(msg string) string {
+	const generic = "The operation couldn"
+	if !strings.HasPrefix(msg, generic) {
+		return msg
+	}
+	i, j := strings.LastIndex(msg, "("), strings.LastIndex(msg, ")")
+	if i < 0 || j < i {
+		return i18n.T("The engine failed without saying why.")
+	}
+	name := strings.TrimSuffix(strings.TrimSpace(msg[i+1:j]), ".")
+	return i18n.T("The engine failed: %s.", name)
 }
 
 // engineErrorText explains an error of an engine call or job (a
@@ -548,6 +600,10 @@ func engineErrorText(err error) string {
 	var je *jobs.Error
 	if errors.As(err, &je) {
 		return jobErrorText(je)
+	}
+	var nr *core.NeedsReferenceError
+	if errors.As(err, &nr) {
+		return needsReferenceText(nr.Model)
 	}
 	if errors.Is(err, context.Canceled) {
 		return i18n.T("Cancelled")

@@ -347,6 +347,10 @@ func (a *app) dubVoiceChoices() []dubVoiceChoice {
 		return out
 	}
 	e := entryFor(a.dub.Settings.Model)
+	if e.NeedsReference {
+		// It only clones: no default voice, no designs.
+		out = out[:1]
+	}
 	for i := range a.voices {
 		v := &a.voices[i]
 		if ok, _ := voiceUsable(v, e); ok {
@@ -354,6 +358,9 @@ func (a *app) dubVoiceChoices() []dubVoiceChoice {
 		}
 	}
 	for _, pr := range dubPresets() {
+		if e.NeedsReference {
+			break
+		}
 		out = append(out, dubVoiceChoice{dub.PresetPrefix + pr.ID, pr.Name.In(i18n.Locale()), i18n.T("Design presets")})
 	}
 	for _, v := range e.Voices {

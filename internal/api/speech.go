@@ -126,6 +126,10 @@ func (s *Server) prepare(ctx context.Context, p SpeechParams) (SpeakRequest, []s
 		return SpeakRequest{}, nil, "", &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedModel, Param: "model",
 			Message: e.Label + " cannot clone a voice: pick a model that can (GET /api/models)."}
 	}
+	if e.NeedsReference && strings.TrimSpace(p.RefAudio) == "" && vc.Saved == nil {
+		// A saved voice without a reference was refused above (VoiceFits).
+		return SpeakRequest{}, nil, "", errNeedsReference(e.Label)
+	}
 	req := SpeakRequest{Text: text, Model: e, Voice: vc.Saved, Speaker: vc.Speaker, Gender: vc.Gender,
 		Instructions: strings.TrimSpace(p.Instructions), Language: strings.TrimSpace(p.Language),
 		RefAudio: p.RefAudio, RefText: p.RefText,

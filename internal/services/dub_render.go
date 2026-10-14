@@ -201,21 +201,41 @@ func langValue(caps DubModelCaps, l string) string {
 // voiceFor resolves the voice segment i speaks with in lang, and why it
 // fell back to the default voice ("" when it did not).
 func (s *Dubs) voiceFor(ctx context.Context, p *dub.Project, seg dub.Segment, l string, caps DubModelCaps, cache map[string]dub.VoiceSpec) (dub.VoiceSpec, string) {
+	v, warn := s.castVoice(ctx, p, seg, l, caps, cache)
+	if caps.NeedsReference && caps.Clone && v.RefAudio == "" && v.VoicePrompt == "" && warn != DubWarnNoReference {
+		// A model that only clones cannot speak with a voice without a
+		// reference: the line clones its speaker (or fails, saying why).
+		auto, w := s.autoVoice(p, seg)
+		if auto.RefAudio != "" {
+			return auto, warn
+		}
+		return auto, w
+	}
+	return v, warn
+}
+
+// autoVoice is the clone of segment seg's own speaker (Auto).
+func (s *Dubs) autoVoice(p *dub.Project, seg dub.Segment) (dub.VoiceSpec, string) {
+	if p.Settings.VoiceMatch == dub.MatchLine {
+		name := filepath.Join("refs", "line-"+seg.ID+".wav")
+		return dub.VoiceSpec{RefAudio: s.Path(p.ID, name), RefText: seg.Text, Auto: true}, ""
+	}
+	r, ok := p.References[seg.Speaker]
+	if !ok {
+		return dub.VoiceSpec{}, DubWarnNoReference
+	}
+	return dub.VoiceSpec{RefAudio: s.Path(p.ID, r.File), RefText: r.Text, Auto: true}, ""
+}
+
+// castVoice is the voice segment seg is cast with.
+func (s *Dubs) castVoice(ctx context.Context, p *dub.Project, seg dub.Segment, l string, caps DubModelCaps, cache map[string]dub.VoiceSpec) (dub.VoiceSpec, string) {
 	ref := p.VoiceOf(seg)
 	switch ref {
 	case "", dub.VoiceAuto:
 		if !caps.Clone {
 			return dub.VoiceSpec{}, ""
 		}
-		if p.Settings.VoiceMatch == dub.MatchLine {
-			name := filepath.Join("refs", "line-"+seg.ID+".wav")
-			return dub.VoiceSpec{RefAudio: s.Path(p.ID, name), RefText: seg.Text, Auto: true}, ""
-		}
-		r, ok := p.References[seg.Speaker]
-		if !ok {
-			return dub.VoiceSpec{}, DubWarnNoReference
-		}
-		return dub.VoiceSpec{RefAudio: s.Path(p.ID, r.File), RefText: r.Text, Auto: true}, ""
+		return s.autoVoice(p, seg)
 	case dub.VoiceDefault:
 		return dub.VoiceSpec{}, ""
 	}

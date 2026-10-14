@@ -197,3 +197,30 @@ func TestM1Entries(t *testing.T) {
 		t.Errorf("TextLength = %d", n)
 	}
 }
+
+// TestNeedsReference: MOSS-TTS-Nano only clones (upstream
+// MossTTSNanoModel.generate throws without refAudio); every other speech
+// model speaks without a reference: its own voices (Kokoro, Kitten,
+// Marvis, Pocket TTS, CustomVoice), a default voice (Qwen3-TTS Base,
+// Soprano, Chatterbox's conds.safetensors), or a design (OmniVoice,
+// VoiceDesign). A flag needs the clone capability.
+func TestNeedsReference(t *testing.T) {
+	var got []string
+	for _, e := range Builtin().Entries {
+		if e.NeedsReference {
+			got = append(got, e.ID)
+		}
+	}
+	if !slices.Equal(got, []string{"moss-tts-nano-100m"}) {
+		t.Errorf("needsReference: %q", got)
+	}
+	c := Catalog{Version: 1, Entries: []Entry{{ID: "x", Label: "X", Family: "x", Repo: "o/x", Tasks: []Task{TaskTTS},
+		NeedsReference: true, Licence: Licence{ID: "mit", Name: "MIT", Commercial: true}}}}
+	if err := c.Validate(); err == nil {
+		t.Error("needsReference without clone validated")
+	}
+	c.Entries[0].Capabilities = []Capability{CapClone}
+	if err := c.Validate(); err != nil {
+		t.Error(err)
+	}
+}

@@ -68,7 +68,7 @@ Defaults, all checked against their upstream model cards. Every listed model pas
 
 | Task | Default | Others | Licence |
 |---|---|---|---|
-| Speech | Kokoro 82M (54 voices, 9 languages) | Qwen3-TTS 0.6B/1.7B (CustomVoice, clone, VoiceDesign), Chatterbox (23 languages), Chatterbox Turbo, MOSS-TTS-Nano, KittenTTS, Pocket TTS, Soprano, Marvis | Apache-2.0 / MIT / CC-BY-4.0 |
+| Speech | Kokoro 82M (54 voices, 9 languages) | Qwen3-TTS 0.6B/1.7B (CustomVoice, clone, VoiceDesign), Chatterbox (23 languages), Chatterbox Turbo, MOSS-TTS-Nano (clone only), KittenTTS, Pocket TTS, Soprano, Marvis | Apache-2.0 / MIT / CC-BY-4.0 |
 | Speech, 646 languages | — | **OmniVoice** (clone, design tags, exact duration) | **CC-BY-NC-4.0**: non-commercial, asks you to accept the licence first |
 | Transcription | Whisper large-v3 turbo | Qwen3-ASR 0.6B (dictation default), Parakeet TDT v3 | MIT / Apache-2.0 / CC-BY-4.0 |
 | Word timing, VAD, denoise | Qwen3-ForcedAligner, Silero VAD, DeepFilterNet 3 | | Apache-2.0 / MIT |
