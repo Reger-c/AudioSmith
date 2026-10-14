@@ -353,7 +353,10 @@
       "size": 292427770,
       "minMemoryGB": 1,
       "hidden": true,
-      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8", "commercial": true, "verified": true}
+      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8", "commercial": true, "verified": true},
+      "aux": [
+        {"repo": "beshkenadze/kitten-tts-g2p", "revision": "9c692b92682d959d9013a9cfe6a49541997add18", "licence": "mit"}
+      ]
     },
     {
       "id": "pocket-tts",
