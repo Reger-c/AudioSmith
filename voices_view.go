@@ -147,7 +147,7 @@ func (a *app) voiceCard(c *ui.Context, v *core.Voice) {
 	case selected:
 		card.Background(k.Pressed).Border(1, k.Pressed)
 	case hovered:
-		card.Background(k.Subtle)
+		card.Background(k.Subtle).Border(1, k.G[4])
 	}
 	card.Children(func() {
 		open := ui.ButtonBase(c.Key("open")).Grow(1).MinWidth(0).Label(v.Name)

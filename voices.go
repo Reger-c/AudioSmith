@@ -45,7 +45,6 @@ type voicesState struct {
 	voiceQuery  string
 	voiceKind   int // 0 all, 1 cloned, 2 designed
 	voiceGrid   ui.GridState
-	voiceSel    int    // grid selection (for the keyboard)
 	deleteVoice string // id the delete confirmation asks about
 	deleteOpen  bool
 	edit        *voiceEdit // the profile editor; nil when closed
@@ -77,8 +76,6 @@ func (a *app) openVoices(lib *library) {
 	a.portraits, a.portraitFor = map[string]*ui.Bitmap{}, map[string]string{}
 	a.voiceJobs = map[string]*voiceJob{}
 	a.voiceWork = map[string]func(jobs.Job){}
-	a.voiceSel = -1
-	a.voiceGrid.Selected = &a.voiceSel
 	a.voiceGrid.Key = func(i int) any {
 		if l := a.shownVoices(); i < len(l) {
 			return l[i].ID
