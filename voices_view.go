@@ -64,7 +64,7 @@ func (a *app) voicesPage(c *ui.Context) {
 		if labelOrIcon(c.Key("voices-design"), icons.MagicStick3, i18n.T("Design a voice"), narrow).Clicked() {
 			a.navigate("/design")
 		}
-		if primaryButton(c.Key("voices-new"), i18n.T("New voice from a clip")).Clicked() {
+		if primaryButton(c.Key("voices-new"), i18n.T("Clone a voice")).Clicked() {
 			a.startClone("")
 		}
 	})

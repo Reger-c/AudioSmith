@@ -140,7 +140,7 @@ func TestCloneFlowUpload(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 1800)
 	a.navigate("/voices")
 	tt.Frame()
-	tt.Click("New voice from a clip")
+	tt.Click("Clone a voice")
 	tt.Frame()
 	if a.router.Path() != "/clone" || !tt.HasText("Drop a clip here, or click to choose") || !tt.HasText("Record") {
 		t.Fatalf("clone page: %s %q", a.router.Path(), tt.Texts())
@@ -227,6 +227,18 @@ func TestCloneFlowUpload(t *testing.T) {
 	if a.router.Path() != "/voices" || a.edit == nil || a.edit.id != v.ID {
 		t.Errorf("after save: %s %+v", a.router.Path(), a.edit)
 	}
+	// Saved: the Clone page starts afresh next time (no clip, no name or
+	// words), keeping the microphone's choices.
+	if a.clone.hasClip() || a.clone.name != "" || a.clone.transcript != "" || a.clone.portrait != nil {
+		t.Errorf("the clone form kept %q %q %q", a.clone.srcName, a.clone.name, a.clone.transcript)
+	}
+	a.navigate("/clone")
+	tt.Frame()
+	if !tt.HasText("Drop a clip here, or click to choose") || tt.HasText("My Narrator") {
+		t.Errorf("Clone after a save: %q", tt.Texts())
+	}
+	a.navigate("/voices")
+	tt.Frame()
 	// The Studio's model (Kokoro) can't reuse prompts: none is encoded.
 	for _, r := range eng.sent {
 		if r.Cmd == proto.MethodTTSEncodeVoice {

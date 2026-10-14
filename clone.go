@@ -77,6 +77,16 @@ func (s *cloneState) hasClip() bool { return s.work != "" }
 // startClone opens the reference flow for a new voice, or to replace the
 // reference of voice replaceFor.
 func (a *app) startClone(replaceFor string) {
+	a.resetClone(replaceFor)
+	a.navigate("/clone")
+	a.loadDevices()
+}
+
+// resetClone empties the clone form (for a new voice, or to replace the
+// reference of voice replaceFor), keeping the microphone's choices: once
+// a voice is saved, or the clip goes to the Studio, the next visit starts
+// afresh.
+func (a *app) resetClone(replaceFor string) {
 	devices, loaded, mic := a.clone.devices, a.clone.devicesLoaded, a.clone.mic
 	a.micCancel(&a.clone.mic)
 	a.clone = cloneState{replaceFor: replaceFor, gen: a.clone.gen + 1, devices: devices, devicesLoaded: loaded,
@@ -84,8 +94,6 @@ func (a *app) startClone(replaceFor string) {
 	if v := a.findVoice(replaceFor); v != nil {
 		a.clone.name, a.clone.style, a.clone.language = v.Name, v.Style, v.Language
 	}
-	a.navigate("/clone")
-	a.loadDevices()
 }
 
 // loadDevices lists the microphones once.
@@ -490,6 +498,7 @@ func (a *app) cloneSave() {
 				}
 				a.voiceChanged(core.VoiceChanged{Voice: saved})
 				a.encodePrompt(saved, a.preset())
+				a.resetClone("") // the next visit to Clone starts with an empty form
 				a.navigate("/voices")
 				a.openVoiceEditor(saved.ID)
 			})
@@ -511,6 +520,7 @@ func (a *app) cloneUseOnce() {
 		}
 		a.studioClip = &clipRef{Path: path, Text: text, Name: name, Style: style}
 		a.studioVoice = ""
+		a.resetClone("") // the clip went to the Studio: the next visit starts afresh
 		if p := a.preset(); !p.Has(catalog.CapClone) {
 			if ms := cloneModels(); len(ms) > 0 {
 				a.selectModel(ms[0])
