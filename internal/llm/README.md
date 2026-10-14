@@ -1,6 +1,6 @@
 # internal/llm and internal/translate
 
-Pure-Go LLM layer (no cgo, stdlib + golang.org/x/text only) and the text skills built on it:
+Pure-Go LLM layer (no cgo; stdlib, golang.org/x/text and the engine's wire types in internal/engine/proto only) and the text skills built on it:
 dubbing translation (§2.5), dictation cleanup (§2.7), Directorial AI / Speech-rate fit tools (§2.8),
 LLM providers + per-skill routing (§2.9). Everything blocks and is goroutine-safe: call from
 goroutines / jobs executors, never from a build pass. Errors carry a code + params
@@ -19,7 +19,7 @@ goroutines / jobs executors, never from a build pass. Errors carry a code + para
 | Schema | `Object/Array/String/Number/Integer/Boolean/Enum`, `.Range`, `.Count`, `.Describe`, `Nullable`, `Closed`; `Validate`, `ExtractJSON` |
 | Usage | `Meter` (per provider/model/skill: calls, failures, attempts, tokens, elapsed; `OnRecord` hook for persisting), `EstimateTokens` |
 | Routing | `Skill`: translate, translate_cinematic, fit_rewrite, glossary_extract, dictation_cleanup, direction_parse. `Routing{Default, Skills map[Skill][]Route}` (stored in settings; skill → parent → default: cinematic→translate, fit_rewrite→cinematic, glossary→translate). `Registry` (`Configure([]ProviderConfig)`, `Register(id, Backend)` for the engine / fakes, `Providers`, `Models`). `Router{Registry, Timeout, Retry, Meter}`: `Chat/JSON(ctx, skill, req…)` try routes in order (fallback on anything but cancellation / streamed output), `SetRouting`, `SetLocalOnly` (privacy: local backends only), `Routes/Available/ProvidersFor`, `DefaultTemperature(skill)` |
-| Engine seam | `MethodGenerate = "llm.generate"` (params `GenerateParams`, result `GenerateResult`), notification `llm.token {text}` — **proposal**, not yet in protocol-v2.md |
+| Engine seam | `MethodGenerate = "llm.generate"` (params `GenerateParams`, result `GenerateResult`), notification `llm.token {job, text}`: aliases of `internal/engine/proto`'s types (protocol-v2.md §5.4); engine errors (`context_too_long`, `model_not_downloaded`, `busy`…) map to llm codes. The app registers it as provider `local` (`local_llm.go`) |
 
 ## internal/translate
 

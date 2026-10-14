@@ -56,21 +56,25 @@ type llmState struct {
 	llmChecked bool
 	llmProxy   string // the proxy setting the registry's client was made for
 	llmForm    llmForm
+	// localLLMHook replaces the engine call of the engine's own language
+	// model (local_llm.go) in tests.
+	localLLMHook llm.EngineCaller
 }
 
 // llmForm is Settings → Writing help. Controls bind to its fields, which
 // syncLLMForm sets from the settings when they change.
 type llmForm struct {
-	add     string                   // the preset label chosen in "Add a provider"
-	edits   map[string]*providerEdit // by provider id
-	hasKey  map[string]bool          // a key is in the Keychain
-	models  map[string][]string
-	test    map[string]string // the last test's answer
-	testErr map[string]bool
-	testing map[string]bool
-	route   string // "Use for writing help" label
-	clean   string // "Dictation clean-up" label
-	local   bool
+	add       string                   // the preset label chosen in "Add a provider"
+	edits     map[string]*providerEdit // by provider id
+	hasKey    map[string]bool          // a key is in the Keychain
+	models    map[string][]string
+	test      map[string]string // the last test's answer
+	testErr   map[string]bool
+	testing   map[string]bool
+	route     string // "Use for writing help" label
+	clean     string // "Dictation clean-up" label
+	local     bool
+	localPick string // "On this Mac (AudioSmith)" model label
 }
 
 // providerEdit is what a provider's card binds to.
@@ -131,6 +135,7 @@ func (a *app) openLLM() {
 	a.applyLLM()
 	a.syncLLMForm()
 	a.checkOllama()
+	a.checkLocalLLM() // local_llm.go
 }
 
 // applyLLM configures the registry and the router from a.prefs.
@@ -162,6 +167,7 @@ func (a *app) applyLLM() {
 		cfgs = append(cfgs, llm.ProviderConfig{ID: "ollama", Model: pickOllamaModel(a.llmOllama)})
 	}
 	a.llmReg.Configure(cfgs)
+	local := a.registerLocalLLM() // local_llm.go: the engine's own model
 	rt := llm.Routing{Default: routes(s.LLM.Default)}
 	if len(s.LLM.Skills) > 0 {
 		rt.Skills = map[llm.Skill][]llm.Route{}
@@ -171,8 +177,11 @@ func (a *app) applyLLM() {
 	}
 	if !s.LLM.Manual {
 		rt.Default = nil
+		if local {
+			rt.Default = append(rt.Default, llm.Route{Provider: localProvider})
+		}
 		if auto {
-			rt.Default = []llm.Route{{Provider: "ollama"}}
+			rt.Default = append(rt.Default, llm.Route{Provider: "ollama"})
 		}
 	}
 	a.llmRouter.SetRouting(rt)
@@ -307,11 +316,17 @@ func (a *app) providerModel(id string) string {
 	if id == "ollama" {
 		return pickOllamaModel(a.llmOllama)
 	}
+	if id == localProvider {
+		return a.localLLMEntry().Label
+	}
 	return ""
 }
 
 // providerName is a provider's display name.
 func providerName(id string, ps []settings.LLMProvider) string {
+	if id == localProvider {
+		return i18n.T("On this Mac (AudioSmith)")
+	}
 	for _, p := range ps {
 		if p.ID == id && p.Name != "" {
 			return p.Name
@@ -421,8 +436,11 @@ func presetLabels() []string {
 // routeOptions are the choices of "Use for writing help": automatic,
 // none, then each provider set up.
 func (a *app) routeOptions() (labels, ids []string) {
-	labels = []string{i18n.T("Automatic: Ollama on this Mac when it runs"), i18n.T("None: the built-in polish only")}
+	labels = []string{i18n.T("Automatic: AudioSmith's model, else Ollama on this Mac"), i18n.T("None: the built-in polish only")}
 	ids = []string{"auto", ""}
+	if a.localLLMReady() {
+		labels, ids = append(labels, providerName(localProvider, nil)), append(ids, localProvider)
+	}
 	for _, p := range a.prefs.LLM.Providers {
 		labels, ids = append(labels, providerName(p.ID, a.prefs.LLM.Providers)), append(ids, p.ID)
 	}
@@ -671,6 +689,8 @@ func (a *app) writingSettings(c *ui.Context) {
 			a.applyLLM()
 		}
 	})
+
+	a.localLLMSettings(c) // local_llm.go
 
 	sectionTitle(c, i18n.T("Providers"))
 	if len(a.prefs.LLM.Providers) == 0 {

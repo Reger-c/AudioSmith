@@ -1,0 +1,193 @@
+package main
+
+// The engine's own language model (llm.generate, docs/protocol-v2.md
+// §5.4) as writing help's provider "local": registered in the llm registry
+// when its catalogue entry is downloaded, and first in the automatic
+// routing (then a local Ollama; cloud providers only when chosen, as
+// threads/13.md decided). Settings → Writing help → "On this Mac
+// (AudioSmith)" picks and downloads the model (settings.LLM.LocalModel,
+// "" = catalog.DefaultLLM). A dub's translation runs on the gpu lane when
+// it goes to this model, so it queues with renders instead of colliding
+// with them.
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"time"
+
+	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/hub"
+	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/llm"
+	"github.com/hehehai/AudioSmith/internal/settings"
+)
+
+// localProvider is the registry id of the engine's language model.
+const localProvider = "local"
+
+// localLLMEntry is the engine's language model: the settings' choice, else
+// catalog.DefaultLLM.
+func (a *app) localLLMEntry() catalog.Entry {
+	c := catalog.Builtin()
+	if id := a.prefs.LLM.LocalModel; id != "" {
+		if e, ok := c.ByID(id); ok && slices.Contains(e.Tasks, catalog.TaskLLM) {
+			return e
+		}
+	}
+	e, _ := c.ByID(catalog.DefaultLLM)
+	return e
+}
+
+// localLLMOptions are the language models offered on this Mac.
+func localLLMOptions() []catalog.Entry {
+	return catalog.Builtin().ForTask(catalog.TaskLLM)
+}
+
+// localLLMReady reports whether the engine's language model is downloaded
+// (as the Models page last read it).
+func (a *app) localLLMReady() bool {
+	if a.models == nil {
+		return false
+	}
+	e := a.localLLMEntry()
+	if e.Repo == "" {
+		return false
+	}
+	m := a.model(e)
+	return m.known && m.local.State == hub.Downloaded
+}
+
+// registerLocalLLM registers (or removes) the engine's language model in
+// the registry and reports whether it is there.
+func (a *app) registerLocalLLM() bool {
+	if a.llmReg == nil {
+		return false
+	}
+	if !a.localLLMReady() {
+		a.llmReg.Register(localProvider, nil)
+		return false
+	}
+	e := a.localLLMEntry()
+	a.llmReg.Register(localProvider, &llm.EngineBackend{ID: localProvider, DefaultModel: e.Repo, Call: a.localLLMCall,
+		ListModels: func(context.Context) ([]llm.ModelInfo, error) { return []llm.ModelInfo{{ID: e.Repo}}, nil }})
+	return true
+}
+
+// localLLMCall sends llm.generate to the gpu worker, with the model's
+// snapshot (the engine runs offline). Any goroutine.
+func (a *app) localLLMCall(ctx context.Context, method string, params any, notify func(string, json.RawMessage)) (json.RawMessage, error) {
+	if a.localLLMHook != nil {
+		return a.localLLMHook(ctx, method, params, notify)
+	}
+	host := a.eng
+	if host == nil || host.sup == nil {
+		return nil, fmt.Errorf("the engine is not running: %w", core.ErrEngine)
+	}
+	if p, ok := params.(llm.GenerateParams); ok && p.ModelPath == "" && a.lib != nil {
+		dir, err := a.lib.modelSnapshot(ctx, p.Model)
+		if err != nil {
+			return nil, err
+		}
+		p.ModelPath = dir
+		params = p
+	}
+	return host.sup.Call(ctx, proto.RoleGPU, core.NewID(time.Now()), method, params, func(m proto.Message) {
+		if notify != nil {
+			notify(m.Method, m.Params)
+		}
+	})
+}
+
+// checkLocalLLM reads whether the engine's language model is downloaded,
+// in the background; setLocal then applies it.
+func (a *app) checkLocalLLM() {
+	if a.lib == nil || a.models == nil {
+		return
+	}
+	if e := a.localLLMEntry(); e.Repo != "" {
+		a.refreshModel(e)
+	}
+}
+
+// localLLMChanged follows the Models page: a language model was
+// downloaded or deleted.
+func (a *app) localLLMChanged(e catalog.Entry) {
+	if slices.Contains(e.Tasks, catalog.TaskLLM) && a.llmReg != nil {
+		a.applyLLM()
+	}
+}
+
+// translateLane is the lane of a dub's translation: gpu when it goes to
+// the engine's language model, else net. Any goroutine.
+func translateLane(router *llm.Router) jobs.Lane {
+	if router != nil {
+		if rs := router.Routes(llm.SkillTranslate); len(rs) > 0 && rs[0].Provider == localProvider {
+			return jobs.LaneGPU
+		}
+	}
+	return jobs.LaneNet
+}
+
+// localLLMSettings is Settings → Writing help → On this Mac (AudioSmith).
+func (a *app) localLLMSettings(c *ui.Context) {
+	t := c.Theme()
+	opts := localLLMOptions()
+	if len(opts) == 0 {
+		return
+	}
+	sectionTitle(c, i18n.T("On this Mac (AudioSmith)"))
+	ui.Text(c, i18n.T("AudioSmith can run a language model itself, offline: it translates dubs and cleans up text without sending anything off your Mac.")).
+		FontSize(px(t, 12)).TextColor(t.TextMuted)
+	cur := a.localLLMEntry()
+	var labels []string
+	for _, e := range opts {
+		labels = append(labels, i18n.T("%s (%s)", e.Label, mb(e.Size)))
+	}
+	i := slices.IndexFunc(opts, func(e catalog.Entry) bool { return e.ID == cur.ID })
+	if i < 0 {
+		i = 0
+		cur = opts[0]
+	}
+	f := &a.llmForm
+	if f.localPick == "" || !slices.Contains(labels, f.localPick) {
+		f.localPick = labels[i]
+	}
+	m := a.model(cur)
+	desc := i18n.T(cur.About)
+	switch {
+	case m.downloading:
+		pct := 0
+		if m.progress.TotalBytes > 0 {
+			pct = int(100 * m.progress.Bytes / m.progress.TotalBytes)
+		}
+		desc = i18n.T("Downloading… %d%%", pct)
+	case m.known && m.local.State == hub.Downloaded:
+		desc = i18n.T("Ready. Automatic writing help uses it first.")
+	case m.err != "":
+		desc = m.err
+	}
+	settingRow(c, "llm-engine", i18n.T("Language model"), desc, func() {
+		if ui.Select(c.Key("llm-engine-select"), &f.localPick, labels).Label(i18n.T("Language model")).Width(px(t, 260)).Changed() {
+			e := opts[max(slices.Index(labels, f.localPick), 0)]
+			id := e.ID
+			if id == catalog.DefaultLLM {
+				id = ""
+			}
+			a.updateSettings(func(s *settings.Settings) { s.LLM.LocalModel = id })
+			a.refreshModel(e)
+			a.applyLLM()
+			a.syncLLMForm()
+		}
+		if !(m.known && m.local.State == hub.Downloaded) && !m.downloading {
+			if ui.Button(c.Key("llm-engine-download"), i18n.T("Download")).Clicked() {
+				a.download(cur)
+			}
+		}
+	})
+}

@@ -16,7 +16,8 @@ let infoPlist = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appe
 //
 // Dependencies: upstream mlx-audio-swift with AudioSmith's patch series
 // (scripts/fetch-engine-deps.sh prepares it in .build/deps; see
-// engine/patches/README.md), mlx-swift 0.32.3 and mlx-swift-lm 3.32.3.
+// engine/patches/README.md), mlx-swift 0.32.3 and mlx-swift-lm 3.32.3
+// (MLXLLM + MLXGuidedGeneration for llm.generate).
 // mlx-swift 0.32 makes default streams thread-local: a model that yields an
 // unevaluated MLXArray from its own Task crashes the consumer with "There
 // is no Stream(gpu, N) in current thread". The patches evaluate before
@@ -32,6 +33,9 @@ let package = Package(
         .package(path: ".build/deps/mlx-audio-swift"),
         .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.32.3"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.32.3"),
+        // Tokenizers for the local LLM (already in the graph through
+        // mlx-audio-swift; Apache-2.0).
+        .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.3.5"),
         // Separation (M4), both MIT: HTDemucs and Mel-RoFormer ports to MLX
         // (built and measured in the M0 spikes, research/m0-spikes.md §5).
         .package(url: "https://github.com/kylehowells/demucs-mlx-swift.git", revision: "c8482739c621b90a64bf1a9f013712f6fea44eda"),
@@ -54,6 +58,11 @@ let package = Package(
                 .product(name: "MLXAudioSTS", package: "mlx-audio-swift"),
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                // The local LLM (llm.generate): MLXLLM's model families and
+                // xgrammar JSON constraints (vendored C++, Apache-2.0).
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXGuidedGeneration", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
                 .product(name: "DemucsMLX", package: "demucs-mlx-swift"),
                 .product(name: "SwiftRoFormer", package: "mel-roformer-mlx-swift"),
             ],

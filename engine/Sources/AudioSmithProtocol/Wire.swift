@@ -45,6 +45,7 @@ public enum Method {
     public static let mediaMux = "media.mux"
     public static let mediaThumbnail = "media.thumbnail"
     public static let mediaTranscode = "media.transcode"
+    public static let llmGenerate = "llm.generate"
     public static let captureDevices = "capture.devices"
     public static let captureStart = "capture.start"
     public static let captureStop = "capture.stop"
@@ -53,12 +54,14 @@ public enum Method {
     public static let ttsChunk = "tts.chunk"
     public static let log = "log"
     public static let captureLevel = "capture.level"
+    public static let llmToken = "llm.token"
 
     /// Long-running, cancellable requests that count against concurrency.
     public static func isJob(_ method: String) -> Bool {
         switch method {
         case modelsLoad, ttsSynthesize, ttsEncodeVoice, sttTranscribe, sttAlign, vadDetect, enhanceRun,
-             mediaDecode, mediaEncode, captureStart, separateRun, diarizeRun, mediaMux, mediaThumbnail, mediaTranscode:
+             mediaDecode, mediaEncode, captureStart, separateRun, diarizeRun, mediaMux, mediaThumbnail, mediaTranscode,
+             llmGenerate:
             return true
         default:
             return false
@@ -94,11 +97,13 @@ public enum Code {
     public static let unsupportedMedia = "unsupported_media"
     public static let permissionDenied = "permission_denied"
     public static let deviceUnavailable = "device_unavailable"
+    public static let contextTooLong = "context_too_long"
 
     public static let all: Set<String> = [
         badRequest, methodNotFound, notInitialized, protocolMismatch, unsupported, modelNotDownloaded,
         modelLoadFailed, licenceRequired, oom, busy, cancelled, `internal`,
         inputTooLong, fileNotFound, unsupportedMedia, permissionDenied, deviceUnavailable,
+        contextTooLong,
     ]
 }
 
@@ -533,6 +538,8 @@ public func paramsType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.captureStart: CaptureParams.self
     case Method.captureStop: CaptureStopParams.self
     case Method.captureLevel: LevelParams.self
+    case Method.llmGenerate: LLMGenerateParams.self
+    case Method.llmToken: LLMTokenParams.self
     default: nil
     }
 }
@@ -561,6 +568,7 @@ public func resultType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.mediaMux: MuxResult.self
     case Method.mediaThumbnail: ThumbnailResult.self
     case Method.mediaTranscode: TranscodeResult.self
+    case Method.llmGenerate: LLMGenerateResult.self
     case Method.captureDevices: DevicesResult.self
     case Method.captureStart: CaptureResult.self
     case Method.captureStop: CaptureStopResult.self

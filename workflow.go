@@ -112,6 +112,7 @@ func (a *app) openWorkflows(lib *library) {
 		Translator: func(ctx context.Context, name string) (translate.Translator, error) {
 			return dubMakeTranslator(router, dub.Settings{Translator: name})
 		},
+		TranslateLane: func() jobs.Lane { return translateLane(router) }, // local_llm.go
 	})
 	core.On(lib.bus, func(ev services.WorkflowChanged) { a.post(func() { a.wfChanged(ev) }) })
 	core.On(lib.bus, func(u jobs.Updated) {

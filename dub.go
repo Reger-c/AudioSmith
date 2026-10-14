@@ -144,6 +144,7 @@ func (a *app) openDubs(lib *library) {
 		Translator: func(ctx context.Context, s dub.Settings) (translate.Translator, error) {
 			return dubMakeTranslator(router, s)
 		},
+		TranslateLane: func() jobs.Lane { return translateLane(router) }, // local_llm.go
 		Extractor: func() *translate.Extractor {
 			if router == nil || !router.Available(llm.SkillGlossaryExtract) {
 				return nil
