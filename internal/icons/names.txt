@@ -102,3 +102,7 @@ headphones-round        # audition a line
 undo-left               # undo
 undo-right              # redo
 smile-circle            # reactions
+
+# Number inputs (numberInput).
+minus                   # decrease
+add                     # increase

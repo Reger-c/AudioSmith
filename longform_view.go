@@ -270,7 +270,7 @@ func (a *app) lfProduction(c *ui.Context, p *lfPage, locked bool) {
 	})
 	seed := float64(pr.Seed)
 	formRow(c, "lf-seed-row", i18n.T("Seed"), i18n.T("0: the project's own seed (%d), so a render can be made again from the cache.", p.doc.Seed), func() {
-		if ui.NumberInput(c.Key("lf-seed"), &seed, 0, 1<<31-1, 1).Label(i18n.T("Seed")).Width(px(t, 160)).Disabled(locked).Changed() {
+		if numberInput(c.Key("lf-seed"), &seed, 0, 1<<31-1, 1, numOpts{Label: i18n.T("Seed"), Width: px(t, 160), Disabled: locked}) {
 			pr.Seed = int64(seed)
 		}
 	})

@@ -50,3 +50,47 @@ func TestButtonHeights(t *testing.T) {
 		}
 	}
 }
+
+// TestNumberInput: the stepper stands as tall as its field, steps by step
+// within the bounds, and typing a number sets it.
+func TestNumberInput(t *testing.T) {
+	v := 1000.0
+	changes := 0
+	var stepsH float32
+	view := func(c *ui.Context) {
+		th := *c.Theme()
+		styleTheme(&th)
+		c.SetTheme(&th)
+		ui.Column(c).Padding(20).AlignItems(ui.Start).Children(func() {
+			if numberInput(c.Key("keep"), &v, 0, 1010, 10, numOpts{Label: "Keep at most", Width: 180}) {
+				changes++
+			}
+		})
+	}
+	tt := ui.NewTester(view, 400, 200)
+	tt.Frame()
+	tt.Frame()
+	if err := tt.Click("Increase"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if v != 1010 || changes != 1 {
+		t.Errorf("after +: %v (%d changes)", v, changes)
+	}
+	tt.Click("Increase") // at the top: nothing
+	tt.Frame()
+	if v != 1010 {
+		t.Errorf("past the top: %v", v)
+	}
+	tt.Click("Decrease")
+	tt.Frame()
+	if v != 1000 {
+		t.Errorf("after −: %v", v)
+	}
+	field, _ := tt.Find("Keep at most")
+	minus, _ := tt.Find("Decrease")
+	stepsH = minus.H
+	if field.H == 0 || stepsH < field.H-2 {
+		t.Errorf("stepper %.0f high beside a %.0f field", stepsH, field.H)
+	}
+}

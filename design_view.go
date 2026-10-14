@@ -216,7 +216,7 @@ func (a *app) designSeed(c *ui.Context) {
 			ui.Text(c, i18n.T("Seed")).FontSize(px(t, fsCaption))
 			infoTip(c.Key("seed-info"), i18n.T("The seed keeps the voice's identity while you change the details."))
 		})
-		ui.NumberInput(c.Key("seed"), &d.seed, 0, float64(vd.MaxSeed), 1).Label(i18n.T("Seed")).Grow(1).MinWidth(0)
+		numberInput(c.Key("seed"), &d.seed, 0, float64(vd.MaxSeed), 1, numOpts{Label: i18n.T("Seed"), Grow: true})
 		if iconButton(c.Key("new-seed"), icons.Refresh, i18n.T("New seed")).Tooltip(i18n.T("Another voice with the same description")).Clicked() {
 			d.seed = float64(vd.NewSeed())
 		}

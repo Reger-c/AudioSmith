@@ -389,7 +389,7 @@ func (a *app) voicePopover(c *ui.Context) {
 				}
 				if p.Has(catalog.CapDuration) {
 					ui.Field(c, i18n.T("Duration (seconds, 0 = natural)"), func() {
-						ui.NumberInput(c.Key("duration"), &a.duration, 0, 600, 0.5).Label(i18n.T("Duration"))
+						numberInput(c.Key("duration"), &a.duration, 0, 600, 0.5, numOpts{Label: i18n.T("Duration")})
 					})
 					if a.duration > 0 && p.Has(catalog.CapSpeed) {
 						caption(c, i18n.T("A duration overrides the speed."))
@@ -400,7 +400,7 @@ func (a *app) voicePopover(c *ui.Context) {
 				})
 				if a.seedPinned {
 					ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-						ui.NumberInput(c.Key("seed"), &a.seed, 1, 1<<31-1, 1).Label(i18n.T("Seed")).Grow(1)
+						numberInput(c.Key("seed"), &a.seed, 1, 1<<31-1, 1, numOpts{Label: i18n.T("Seed"), Grow: true})
 						if ui.Button(c.Key("new-seed"), i18n.T("New seed")).Clicked() {
 							a.newSeed()
 						}
@@ -439,7 +439,7 @@ func (a *app) voicePopover(c *ui.Context) {
 							snapped(ui.Slider(c.Key("topp"), &a.topP, 0.05, 1).Label(i18n.T("Top P")), &a.topP, 0.05)
 						})
 						ui.Field(c, i18n.T("Max tokens"), func() {
-							ui.NumberInput(c.Key("maxtokens"), &a.maxTokens, 50, 8000, 50).Label(i18n.T("Max tokens"))
+							numberInput(c.Key("maxtokens"), &a.maxTokens, 50, 8000, 50, numOpts{Label: i18n.T("Max tokens")})
 						})
 					}
 				}

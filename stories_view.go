@@ -130,8 +130,7 @@ func (a *app) reviewBuffer(c *ui.Context, p *lfPage, locked bool) {
 				if mc == 0 {
 					mc = 500
 				}
-				if ui.NumberInput(c.Key("st-maxchars"), &mc, 40, 2000, 10).Label(i18n.T("Max characters per line")).Tooltip(i18n.T("Max characters per line")).
-					Width(px(t, 150)).Disabled(locked).Changed() {
+				if numberInput(c.Key("st-maxchars"), &mc, 40, 2000, 10, numOpts{Label: i18n.T("Max characters per line"), Tooltip: i18n.T("Max characters per line"), Width: px(t, 150), Disabled: locked}) {
 					p.doc.MaxChars = int(mc)
 				}
 			}
@@ -327,7 +326,7 @@ func (a *app) lineOptions(c *ui.Context, p *lfPage, l *services.StoryLine, locke
 		})
 		formRow(c, "opt-pause", i18n.T("Pause after (ms)"), "", func() {
 			ms := float64(l.PauseAfter)
-			if ui.NumberInput(c.Key("pause-after"), &ms, 0, 10000, 50).Label(i18n.T("Pause after (ms)")).Width(px(t, 150)).Disabled(locked).Changed() {
+			if numberInput(c.Key("pause-after"), &ms, 0, 10000, 50, numOpts{Label: i18n.T("Pause after (ms)"), Width: px(t, 150), Disabled: locked}) {
 				l.PauseAfter = int(ms)
 			}
 		})

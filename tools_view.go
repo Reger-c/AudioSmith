@@ -209,10 +209,10 @@ func (a *app) rateFitTool(c *ui.Context) {
 			ui.Select(c.Key("rf-lang"), &rf.lang, labels).Label(i18n.T("Language")).Width(px(t, 200))
 		})
 		ui.Field(c, i18n.T("Slot (seconds)"), func() {
-			ui.NumberInput(c.Key("rf-slot"), &rf.slot, 0.1, 600, 0.1).Label(i18n.T("Slot (seconds)"))
+			numberInput(c.Key("rf-slot"), &rf.slot, 0.1, 600, 0.1, numOpts{Label: i18n.T("Slot (seconds)")})
 		})
 		ui.Field(c, i18n.T("Speed"), func() {
-			ui.NumberInput(c.Key("rf-speed"), &rf.speed, 0.5, 2, 0.05).Label(i18n.T("Speed"))
+			numberInput(c.Key("rf-speed"), &rf.speed, 0.5, 2, 0.05, numOpts{Label: i18n.T("Speed")})
 		})
 	})
 	canRewrite := a.llmCan(llm.SkillFitRewrite)

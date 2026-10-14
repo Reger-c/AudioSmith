@@ -322,7 +322,7 @@ func (a *app) historySettings(c *ui.Context) {
 	t := c.Theme()
 	a.history.keepTakes = float64(a.prefs.Studio.KeepTakes)
 	settingRow(c, "keep-takes", i18n.T("Keep at most"), i18n.T("Takes in the history; beyond it the oldest ones that are not starred are deleted. 0 keeps every take."), func() {
-		if ui.NumberInput(c.Key("keep-takes-input"), &a.history.keepTakes, 0, 100000, 10).Width(px(t, 120)).Label(i18n.T("Keep at most")).Changed() {
+		if numberInput(c.Key("keep-takes-input"), &a.history.keepTakes, 0, 100000, 10, numOpts{Label: i18n.T("Keep at most"), Width: px(t, 120)}) {
 			n := int(a.history.keepTakes)
 			a.updateSettings(func(s *settings.Settings) { s.Studio.KeepTakes = n })
 		}

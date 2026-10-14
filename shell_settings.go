@@ -595,13 +595,13 @@ func licenceName(id string) string {
 func (a *app) engineSettings(c *ui.Context) {
 	t := c.Theme()
 	settingRow(c, "memory", i18n.T("Memory budget"), i18n.T("How much memory models may take together, in GB; 0 lets AudioSmith decide. Models over it leave memory at once."), func() {
-		if ui.NumberInput(c.Key("memory-input"), &a.memoryGB, 0, 512, 1).Width(px(t, 120)).Label(i18n.T("Memory budget")).Changed() {
+		if numberInput(c.Key("memory-input"), &a.memoryGB, 0, 512, 1, numOpts{Label: i18n.T("Memory budget"), Width: px(t, 120)}) {
 			gb := a.memoryGB
 			a.updateSettings(func(s *settings.Settings) { s.Engine.MemoryBudgetGB = gb })
 		}
 	})
 	settingRow(c, "unload", i18n.T("Unload idle models"), i18n.T("Minutes without use before a model leaves memory; 0 keeps it."), func() {
-		if ui.NumberInput(c.Key("unload-input"), &a.autoUnload, 0, 240, 5).Width(px(t, 120)).Label(i18n.T("Unload idle models")).Changed() {
+		if numberInput(c.Key("unload-input"), &a.autoUnload, 0, 240, 5, numOpts{Label: i18n.T("Unload idle models"), Width: px(t, 120)}) {
 			m := int(a.autoUnload)
 			a.updateSettings(func(s *settings.Settings) { s.Models.AutoUnload = m })
 		}

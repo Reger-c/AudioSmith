@@ -196,7 +196,7 @@ func (a *app) twStepTunnel(c *ui.Context) {
 		})
 		ui.Row(c).Gap(px(t, sp3)).AlignItems(ui.End).Wrap().Children(func() {
 			ui.Field(c, i18n.T("Gateway port"), func() {
-				ui.NumberInput(c.Key("tw-port"), &w.port, 1024, 65535, 1).Label(i18n.T("Gateway port"))
+				numberInput(c.Key("tw-port"), &w.port, 1024, 65535, 1, numOpts{Label: i18n.T("Gateway port")})
 			})
 			ui.Column(c).Grow(1).Basis(px(t, 200)).MinWidth(0).Children(func() {
 				ui.Checkbox(c.Key("tw-all"), &w.all, i18n.T("Listen on every interface (a tunnel on another machine)"))

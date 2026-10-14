@@ -477,12 +477,12 @@ func (a *app) dubLineOptions(c *ui.Context, s dub.Segment, locked bool, after *f
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.End).Wrap().Children(func() {
 			start, end := s.Start, s.End
 			ui.Field(c, i18n.T("Start"), func() {
-				if ui.NumberInput(c.Key("start"), &start, 0, max(p.Source.Duration, s.End), 0.01).Label(i18n.T("Start")).Width(px(t, 150)).Disabled(locked).Changed() {
+				if numberInput(c.Key("start"), &start, 0, max(p.Source.Duration, s.End), 0.01, numOpts{Label: i18n.T("Start"), Width: px(t, 150), Disabled: locked}) {
 					*after = func() { a.dubSetTiming(id, start, s.End, true) }
 				}
 			})
 			ui.Field(c, i18n.T("End"), func() {
-				if ui.NumberInput(c.Key("end"), &end, 0, max(p.Source.Duration, s.End+10), 0.01).Label(i18n.T("End")).Width(px(t, 150)).Disabled(locked).Changed() {
+				if numberInput(c.Key("end"), &end, 0, max(p.Source.Duration, s.End+10), 0.01, numOpts{Label: i18n.T("End"), Width: px(t, 150), Disabled: locked}) {
 					*after = func() { a.dubSetTiming(id, s.Start, end, true) }
 				}
 			})

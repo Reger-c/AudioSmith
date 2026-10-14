@@ -439,7 +439,7 @@ func (a *app) wfNormalizePanel(c *ui.Context, n *workflow.Node) {
 		lo, hi, unit = workflow.MinPeak, workflow.MaxPeak, "dBFS"
 	}
 	ui.Field(c, i18n.T("Target (%s)", unit), func() {
-		if ui.NumberInput(c.Key("wf-norm-target-"+id), &n.P.Target, lo, hi, 1).Label(i18n.T("Target (%s)", unit)).Disabled(locked).Changed() {
+		if numberInput(c.Key("wf-norm-target-"+id), &n.P.Target, lo, hi, 1, numOpts{Label: i18n.T("Target (%s)", unit), Disabled: locked}) {
 			a.wfEdit(func(*workflow.Workflow) {})
 		}
 	})
