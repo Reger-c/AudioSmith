@@ -17,6 +17,11 @@ import (
 func main() {
 	// Dev builds are "AudioSmith Dev"; share data with the installed app.
 	mygo.App.SetName("AudioSmith")
+	// M2 (thread #17): one AudioSmith at a time (one library, one
+	// dictation shortcut); a second launch shows the first one's window.
+	if !mygo.App.RequestSingleInstanceLock() {
+		return
+	}
 
 	dataDir, err := mygo.App.Path(mygo.PathUserData)
 	if err != nil {
@@ -39,6 +44,8 @@ func main() {
 	mygo.App.WhenReady(func() {
 		a.openWindow() // shell.go
 		a.startEngine()
+		a.connectDictation() // M2: dictation.go (shortcut, menu bar icon, close to tray)
+		mygo.App.OnSecondInstance(func([]string, string) { a.post(a.showMainWindow) })
 	})
 	// The engines stop on OnWillQuit (enginelink.go), so the scheduler
 	// records interrupted jobs before the library closes the database.

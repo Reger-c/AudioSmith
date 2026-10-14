@@ -55,6 +55,10 @@ func settingsSections() []settingsSection {
 		{"studio", i18n.T("Studio"), "Studio"},
 		{"engine", i18n.T("Engine"), "Engine"},
 		{"pronunciation", i18n.T("Pronunciation"), "Pronunciation"}, // M1-G: pronunciation_settings.go
+		// M2 (thread #17): dictation_settings.go, transcribe_llm.go, permissions.go.
+		{"dictation", i18n.T("Dictation"), "Dictation"},
+		{"writing", i18n.T("Writing help"), "Writing help"},
+		{"permissions", i18n.T("Permissions"), "Permissions"},
 	}
 }
 
@@ -87,6 +91,7 @@ func (a *app) settingsChanged(old, new settings.Settings) {
 		}
 	}
 	a.applyEngineSettings(old, new)
+	a.m2SettingsChanged(old, new) // M2: dictation_settings.go
 	if old.Studio.Autoplay != new.Studio.Autoplay {
 		a.autoplay = new.Studio.Autoplay
 	}
@@ -299,6 +304,19 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 						r.Title(i18n.T("Pronunciation"))
 						a.lastSettings = "pronunciation"
 						a.pronunciationSettings(c)
+					// M2 (thread #17).
+					case r.Match("/dictation"):
+						r.Title(i18n.T("Dictation"))
+						a.lastSettings = "dictation"
+						a.dictationSettings(c)
+					case r.Match("/writing"):
+						r.Title(i18n.T("Writing help"))
+						a.lastSettings = "writing"
+						a.writingSettings(c)
+					case r.Match("/permissions"):
+						r.Title(i18n.T("Permissions"))
+						a.lastSettings = "permissions"
+						a.permissionsSettings(c)
 					default:
 						ui.Text(c, i18n.T("There is no page at %s.", a.router.Path())).TextColor(t.TextMuted)
 					}
@@ -332,14 +350,15 @@ func (a *app) generalSettings(c *ui.Context) {
 	t := c.Theme()
 	settingRow(c, "language", i18n.T("Language"), i18n.T("The language of the app. Following the system uses English unless the system's language is supported."), func() {
 		opts := languageOptions()
-		if ui.Select(c.Key("language-select"), &a.language, opts).Label(i18n.T("Language")).Width(px(t, 200)).Changed() {
+		if ui.Select(c.Key("language-select"), &a.settingsForm.language, opts).Label(i18n.T("Language")).Width(px(t, 200)).Changed() {
 			tag := ""
-			if i := slices.Index(opts, a.language); i > 0 {
+			if i := slices.Index(opts, a.settingsForm.language); i > 0 {
 				tag = i18n.Supported()[i-1]
 			}
 			a.updateSettings(func(s *settings.Settings) { s.General.Language = tag })
 		}
 	})
+	a.m2GeneralSettings(c) // M2: dictation_settings.go
 }
 
 func (a *app) appearanceSettings(c *ui.Context) {

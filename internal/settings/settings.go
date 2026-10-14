@@ -32,6 +32,10 @@ type Settings struct {
 	Models     Models     `json:"models"`
 	Engine     Engine     `json:"engine"`
 	Privacy    Privacy    `json:"privacy"`
+	// M2 (thread #17, m2.go).
+	LLM        LLM        `json:"llm"`
+	Transcribe Transcribe `json:"transcribe"`
+	Dictation  Dictation  `json:"dictation"`
 }
 
 // General: language and app behaviour.
@@ -39,7 +43,10 @@ type General struct {
 	// Language is the UI language as a BCP-47 tag ("en", "zh-Hans"), or ""
 	// to follow the system (mygo.App.Locale()); see i18n.Match.
 	Language string `json:"language"`
-	// OpenAtLogin, CloseToTray, SingleInstance… arrive with M2.
+	// CloseToTray keeps AudioSmith running in the menu bar when its
+	// window closes, so dictation keeps working (M2).
+	CloseToTray bool `json:"closeToTray,omitempty"`
+	// OpenAtLogin… arrives later.
 }
 
 // Appearance: theme and scale.
@@ -80,17 +87,22 @@ type Privacy struct {
 	// AllowNetworkSearch enables web lookups that are not downloads the
 	// user asked for (voice portraits, gallery updates). Off by default.
 	AllowNetworkSearch bool `json:"allowNetworkSearch"`
+	// LocalOnlyLLM keeps text on this Mac: only local language models
+	// (Ollama, LM Studio, the engine) are used (M2).
+	LocalOnlyLLM bool `json:"localOnlyLLM,omitempty"`
 }
 
 // Defaults returns the settings of a fresh install. They match the MVP's
 // behaviour (Kokoro first, autoplay on, system theme, English unless the
 // system language is supported).
 func Defaults() Settings {
-	return Settings{
+	s := Settings{
 		Version:    Version,
 		Appearance: Appearance{Theme: "system", Scale: 1},
 		Studio:     Studio{Autoplay: true},
 	}
+	defaultsM2(&s)
+	return s
 }
 
 // Migrate upgrades a stored document to Version, filling fields added
