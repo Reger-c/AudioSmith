@@ -321,10 +321,10 @@ extension MediaWorker {
         }
         let firstDub = audioInputs.count > originals.count ? audioInputs[originals.count] : nil
         let enabledAudio = defaultAudio ?? firstDub ?? audioInputs.first
+        // Inputs in a group get their enabled flag from it (setting it raises).
         if audioInputs.count > 1 {
             writer.add(AVAssetWriterInputGroup(inputs: audioInputs, defaultInput: enabledAudio))
         }
-        for input in audioInputs { input.marksOutputTrackAsEnabled = input === enabledAudio }
 
         // Subtitles.
         var subInputs: [AVAssetWriterInput] = []
@@ -356,8 +356,9 @@ extension MediaWorker {
                     return k < samples.count ? samples[k] : nil
                 })
             }
-            writer.add(AVAssetWriterInputGroup(inputs: subInputs, defaultInput: defaultSub))
-            for input in subInputs { input.marksOutputTrackAsEnabled = input === defaultSub }
+            if subInputs.count > 1 || defaultSub == nil {
+                writer.add(AVAssetWriterInputGroup(inputs: subInputs, defaultInput: defaultSub))
+            }
         }
 
         // Write.

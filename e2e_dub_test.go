@@ -70,6 +70,8 @@ func TestDubEngine(t *testing.T) {
 		{"Daniel", "Thanks for having me. I have loved trains since I was a little boy."},
 		{"Samantha", "What is the longest journey you have ever taken?"},
 		{"Daniel", "Probably the night train from London to the far north of Scotland."},
+		{"Samantha", "That sounds wonderful. Did you sleep well on the way, or did you stay up watching the hills?"},
+		{"Daniel", "I stayed up most of the night. The hills in the moonlight were too beautiful to miss, and the tea was good."},
 	}
 	var speech []float64
 	type turn struct {
