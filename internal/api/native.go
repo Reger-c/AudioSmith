@@ -621,6 +621,22 @@ func (s *Server) downloadModel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"model": id, "job_id": jobID, "events_url": "/api/jobs/" + jobID + "/events"})
 }
 
+// entryLanguages are the BCP-47 codes a model speaks or understands
+// (OmniVoice's 646 and Whisper's 100 come from the language table).
+func entryLanguages(e catalog.Entry) []string {
+	switch {
+	case len(e.Languages) == 0 && e.Family == "omnivoice":
+		return lang.OmniVoiceCodes()
+	case e.Family == "whisper":
+		return lang.WhisperCodes()
+	}
+	out := make([]string, 0, len(e.Languages))
+	for _, l := range e.Languages {
+		out = append(out, l.Code)
+	}
+	return out
+}
+
 // LanguageJSON is a language a model speaks.
 type LanguageJSON struct {
 	Code   string   `json:"code"`
@@ -647,15 +663,15 @@ func (s *Server) Languages(model string) ([]LanguageJSON, error) {
 	by := map[string]*LanguageJSON{}
 	var order []string
 	for _, e := range entries {
-		for _, l := range e.Languages {
-			j := by[l.Code]
+		for _, code := range entryLanguages(e) {
+			j := by[code]
 			if j == nil {
-				j = &LanguageJSON{Code: l.Code, Name: l.Code}
-				if info, ok := lang.Lookup(l.Code); ok {
+				j = &LanguageJSON{Code: code, Name: code}
+				if info, ok := lang.Lookup(code); ok {
 					j.Name, j.Native = info.Name, info.Native
 				}
-				by[l.Code] = j
-				order = append(order, l.Code)
+				by[code] = j
+				order = append(order, code)
 			}
 			if !slices.Contains(j.Models, e.ID) {
 				j.Models = append(j.Models, e.ID)

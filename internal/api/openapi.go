@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"cmp"
+	"slices"
 	_ "embed"
 	"encoding/json"
 	"net/http"
@@ -67,24 +69,11 @@ func Operations() []SpecOperation {
 		}
 	}
 	methodOrder := map[string]int{"GET": 0, "POST": 1, "PUT": 2, "DELETE": 3}
-	sortOps(out, func(a, b SpecOperation) bool {
-		if tagOrder[a.Tag] != tagOrder[b.Tag] {
-			return tagOrder[a.Tag] < tagOrder[b.Tag]
-		}
-		if a.Path != b.Path {
-			return a.Path < b.Path
-		}
-		return methodOrder[a.Method] < methodOrder[b.Method]
+	slices.SortFunc(out, func(a, b SpecOperation) int {
+		return cmp.Or(cmp.Compare(tagOrder[a.Tag], tagOrder[b.Tag]), strings.Compare(a.Path, b.Path),
+			cmp.Compare(methodOrder[a.Method], methodOrder[b.Method]))
 	})
 	return out
-}
-
-func sortOps(ops []SpecOperation, less func(a, b SpecOperation) bool) {
-	for i := 1; i < len(ops); i++ {
-		for j := i; j > 0 && less(ops[j], ops[j-1]); j-- {
-			ops[j], ops[j-1] = ops[j-1], ops[j]
-		}
-	}
 }
 
 func (s *Server) openapi(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +95,11 @@ var started = time.Now()
 func (s *Server) docs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
-	w.Write(docsHTML)
+	page := docsHTML
+	if r.URL.Query().Get("theme") == "dark" {
+		page = bytes.Replace(page, []byte(`theme="light"`), []byte(`theme="dark"`), 1)
+	}
+	w.Write(page)
 }
 
 func (s *Server) docsAsset(w http.ResponseWriter, r *http.Request) {

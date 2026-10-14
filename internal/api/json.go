@@ -134,9 +134,7 @@ func modelJSON(m Model, isDefault bool) ModelJSON {
 	for _, c := range e.Capabilities {
 		j.Capabilities = append(j.Capabilities, string(c))
 	}
-	for _, l := range e.Languages {
-		j.Languages = append(j.Languages, l.Code)
-	}
+	j.Languages = entryLanguages(e)
 	for _, v := range e.Voices {
 		j.Voices = append(j.Voices, SpeakerJSON{ID: v.ID, Language: v.Language, Gender: v.Gender})
 	}
