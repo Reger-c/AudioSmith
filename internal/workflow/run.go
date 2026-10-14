@@ -102,6 +102,10 @@ type Run struct {
 	Items     []RunItem `json:"items"`
 	// Steps are the step ids the run made jobs for.
 	Steps []string `json:"steps,omitempty"`
+	// Code and Err say why the run stopped before its end (a model not
+	// downloaded, the engine gone…).
+	Code string `json:"code,omitempty"`
+	Err  string `json:"err,omitempty"`
 }
 
 // Item returns the run's item with key, or nil.
