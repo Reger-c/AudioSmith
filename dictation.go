@@ -236,7 +236,7 @@ func (a *app) dictHotkey() {
 
 // dictModel is the model dictation transcribes with.
 func (a *app) dictModel() catalog.Entry {
-	return sttEntry(a.prefs.Dictation.Model, catalog.DefaultSTT)
+	return sttEntry(a.prefs.Dictation.Model, catalog.DefaultDictation)
 }
 
 // dictPressed handles a press of the shortcut (or Start in the tray).
