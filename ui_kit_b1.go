@@ -196,7 +196,9 @@ func emptyState(c *ui.Context, key string, ic icons.Icon, title, body string, fn
 	col := ui.Column(c.Key(key)).Grow(1).Center().Gap(px(t, sp3)).Padding(px(t, sp6))
 	col.Children(func() {
 		ui.Icon(c, ic.Linear).Size(px(t, 36), px(t, 36)).TextColor(k.Text3)
-		ui.Text(c, title).FontSize(px(t, fsSection)).FontWeight(600).TextAlign(ui.Center)
+		if title != "" {
+			ui.Text(c, title).FontSize(px(t, fsSection)).FontWeight(600).TextAlign(ui.Center)
+		}
 		if body != "" {
 			ui.Text(c, body).TextColor(k.Text2).TextAlign(ui.Center).MaxWidth(px(t, 420))
 		}

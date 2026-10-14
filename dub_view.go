@@ -1339,10 +1339,11 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 	t := c.Theme()
 	p := a.dub
 	g := &a.dubGloss
-	ui.Column(c.Key("dub-gloss")).Gap(px(t, 6)).Width(px(t, 620)).MaxHeight(px(t, 520)).Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.N(len(p.Glossary), "Glossary · %d term", "Glossary · %d terms", len(p.Glossary))).Bold().Grow(1)
-			if ui.Button(c.Key("g-auto"), i18n.T("Auto")).Tooltip(i18n.T("Ask the language model for names and recurring terms")).
+	w, h := c.Size()
+	ui.Column(c.Key("dub-gloss")).Gap(px(t, sp2)).Width(min(px(t, 620), w-px(t, 64))).MaxHeight(min(px(t, 520), h-px(t, 64))).Children(func() {
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+			sectionHeading(c, i18n.N(len(p.Glossary), "Glossary · %d term", "Glossary · %d terms", len(p.Glossary))).Grow(1)
+			if ghostIconButton(c.Key("g-auto"), icons.MagicStick3, i18n.T("Auto")).Label(i18n.T("Auto")).Tooltip(i18n.T("Ask the language model for names and recurring terms")).
 				Disabled(g.extracting || len(p.Segments) == 0 || a.llmRouter == nil).Clicked() {
 				a.dubExtractTerms()
 			}
@@ -1351,7 +1352,7 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 			}
 		})
 		if len(p.Glossary) == 0 {
-			ui.Text(c, i18n.T("No terms yet. Add one below, or Auto.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("No terms yet. Add one below, or Auto."))
 		}
 		for i, term := range p.Glossary {
 			ii := i
@@ -1363,7 +1364,7 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 					if ui.Button(c.Key("save"), i18n.T("Save")).Clicked() {
 						a.dubSaveTerm(ii)
 					}
-					if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
+					if ghostButton(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
 						g.editing = -1
 					}
 					return
@@ -1372,27 +1373,27 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 				if term.Note != "" {
 					line += " · " + term.Note
 				}
-				ui.Text(c, line).FontSize(px(t, 12)).Grow(1).MinWidth(0)
+				truncText(c, line).Grow(1)
 				if term.Auto {
-					ui.Badge(c, i18n.T("auto"))
+					chip(c, i18n.T("auto"))
 				}
-				if ui.Button(c.Key("edit"), i18n.T("Edit")).Clicked() {
+				if iconButton(c.Key("edit"), icons.Pen, i18n.T("Edit")).Clicked() {
 					g.editing, g.eSrc, g.eTgt, g.eNot = ii, term.Source, term.Target, term.Note
 				}
-				if iconButton(c.Key("del"), icons.Close, i18n.T("Delete %s", term.Source)).Clicked() {
+				if iconButton(c.Key("del"), icons.TrashBinMinimalistic, i18n.T("Delete %s", term.Source)).Clicked() {
 					a.dubDeleteTerm(ii)
 				}
 			})
 		}
 		ui.Row(c.Key("g-add")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.TextInput(c.Key("src"), &g.src).Placeholder(i18n.T("Source")).Label(i18n.T("Source term")).Grow(1)
-			ui.TextInput(c.Key("tgt"), &g.tgt).Placeholder(i18n.T("Translation")).Label(i18n.T("Translation")).Grow(1)
-			ui.TextInput(c.Key("note"), &g.note).Placeholder(i18n.T("Note (optional)")).Label(i18n.T("Note")).Grow(1)
-			if ui.Button(c.Key("add"), i18n.T("Add term")).Disabled(strings.TrimSpace(g.src) == "" || strings.TrimSpace(g.tgt) == "").Clicked() {
+			ui.TextInput(c.Key("src"), &g.src).Placeholder(i18n.T("Source")).Label(i18n.T("Source term")).Grow(1).MinWidth(0)
+			ui.TextInput(c.Key("tgt"), &g.tgt).Placeholder(i18n.T("Translation")).Label(i18n.T("Translation")).Grow(1).MinWidth(0)
+			ui.TextInput(c.Key("note"), &g.note).Placeholder(i18n.T("Note (optional)")).Label(i18n.T("Note")).Grow(1).MinWidth(0)
+			if primaryButton(c.Key("add"), i18n.T("Add term")).Disabled(strings.TrimSpace(g.src) == "" || strings.TrimSpace(g.tgt) == "").Clicked() {
 				a.dubAddTerm()
 			}
 		})
-		ui.Text(c, i18n.T("Terms go into every translation; yours win over auto ones.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Terms go into every translation; yours win over auto ones.")).TextColor(tok(t).Text3)
 	})
 }
 
@@ -1400,10 +1401,11 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 func (a *app) dubPastePanel(c *ui.Context) {
 	t := c.Theme()
 	ps := &a.dubPaste
-	ui.Column(c.Key("dub-paste")).Gap(px(t, 6)).Width(px(t, 620)).Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Paste translation · %s", dubLangName(a.dubLang))).Bold().Grow(1)
-			if ui.Button(c.Key("p-file"), i18n.T("Load .srt / .vtt…")).Clicked() {
+	w, _ := c.Size()
+	ui.Column(c.Key("dub-paste")).Gap(px(t, sp2)).Width(min(px(t, 620), w-px(t, 64))).Children(func() {
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+			sectionHeading(c, i18n.T("Paste translation · %s", dubLangName(a.dubLang))).Grow(1)
+			if ghostIconButton(c.Key("p-file"), icons.Import, i18n.T("Load .srt / .vtt…")).Label(i18n.T("Load .srt / .vtt…")).Clicked() {
 				a.dubPasteFile()
 			}
 			if iconButton(c.Key("p-close"), icons.Close, i18n.T("Close")).Clicked() {
@@ -1431,11 +1433,12 @@ func (a *app) dubPastePanel(c *ui.Context) {
 		}
 		pv := ps.preview
 		mode := map[dub.PasteMode]string{dub.PasteTimed: i18n.T("Timestamped"), dub.PasteNumbered: i18n.T("Numbered lines"), dub.PastePlain: i18n.T("Plain lines")}[pv.Mode]
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Badge(c, mode)
-			ui.Text(c, i18n.T("%d of %d segments matched", pv.Matched, len(pv.Rows))).FontSize(px(t, 12))
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
+			chip(c, mode)
+			ui.Text(c, i18n.T("%d of %d segments matched", pv.Matched, len(pv.Rows))).FontSize(px(t, fsCaption))
 			if pv.Unused > 0 {
-				ui.Text(c, i18n.N(pv.Unused, "%d pasted line went unused", "%d pasted lines went unused", pv.Unused)).FontSize(px(t, 12)).TextColor(t.Warning)
+				statusMark(c, icons.DangerTriangle, t.Warning)
+				caption(c, i18n.N(pv.Unused, "%d pasted line went unused", "%d pasted lines went unused", pv.Unused)).TextColor(t.Warning)
 			}
 		})
 		shown := 0
@@ -1447,17 +1450,19 @@ func (a *app) dubPastePanel(c *ui.Context) {
 				continue
 			}
 			shown++
-			ui.Text(c.Key("pv-"+r.ID), firstOf(r.Before, "—")+"  →  "+r.After).FontSize(px(t, 11)).TextColor(t.TextMuted).MaxLines(2)
+			caption(c.Key("pv-"+r.ID), firstOf(r.Before, "—")+"  →  "+r.After).MaxLines(2).Ellipsis("…")
 		}
 		if pv.Matched > shown {
-			ui.Text(c, i18n.N(pv.Matched-shown, "+ %d more", "+ %d more", pv.Matched-shown)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+			caption(c, i18n.N(pv.Matched-shown, "+ %d more", "+ %d more", pv.Matched-shown)).TextColor(tok(t).Text3)
 		}
 		if ps.err != "" {
-			ui.Text(c, ps.err).FontSize(px(t, 11)).TextColor(t.Danger)
+			caption(c, ps.err).TextColor(t.Danger)
 		}
-		if primaryButton(c.Key("p-apply"), i18n.N(pv.Matched, "Apply to %d segment", "Apply to %d segments", pv.Matched)).Disabled(pv.Matched == 0 || a.dubLocked()).Clicked() {
-			a.dubApplyPaste()
-		}
+		ui.Row(c).Justify(ui.End).Children(func() {
+			if primaryButton(c.Key("p-apply"), i18n.N(pv.Matched, "Apply to %d segment", "Apply to %d segments", pv.Matched)).Disabled(pv.Matched == 0 || a.dubLocked()).Clicked() {
+				a.dubApplyPaste()
+			}
+		})
 	})
 }
 

@@ -261,6 +261,17 @@ func b1Dub(t *testing.T, s *b1Shooter) {
 	a.dubStep = dubStepExport
 	save("dub-export")
 
+	a.dubPaste.open = true
+	a.dubPaste.text = "1\n00:00:00,500 --> 00:00:02,000\nHola.\n\n2\n00:00:02,800 --> 00:00:05,000\n¿Cómo estás hoy?\n"
+	save("dub-paste")
+	a.dubPaste = dubPasteState{}
+	a.dubGloss.open = true
+	a.dubSet(func(p *dub.Project) {
+		p.Glossary = translate.Glossary{{Source: "AudioSmith", Target: "AudioSmith", Note: "brand"}, {Source: "dubbing", Target: "doblaje", Auto: true}}
+	})
+	save("dub-glossary")
+	a.dubGloss.open = false
+
 	a.navigate("/batch")
 	save("batch-empty")
 	a.batchDropped([]string{d.src})

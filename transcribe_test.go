@@ -96,7 +96,7 @@ func TestTranscribeFileAccurate(t *testing.T) {
 	}
 
 	// Export SRT.
-	tt.Click("Export ▾")
+	tt.Click("Export")
 	tt.Frame()
 	if err := tt.Click("Subtitles (.srt)"); err != nil {
 		t.Fatal(err)
@@ -133,7 +133,11 @@ func TestTranscribeFileAccurate(t *testing.T) {
 	// Delete, confirmed.
 	a.navigate("/transcripts")
 	tt.Frame()
-	tt.Click("Delete…")
+	tt.Click("Transcript actions")
+	if err := tt.ChooseMenuItem("Delete…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 	tt.Frame()
 	if err := tt.Click("Delete"); err != nil {
 		t.Fatal(err)
