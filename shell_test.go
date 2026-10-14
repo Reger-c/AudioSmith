@@ -651,3 +651,42 @@ func TestNotificationsPersist(t *testing.T) {
 		t.Errorf("after restart %+v", b.notices)
 	}
 }
+
+// TestModelsPageKinds: tabs split the catalogue into TTS, ASR, LLM and
+// the rest, with counts; All lists everything.
+func TestModelsPageKinds(t *testing.T) {
+	a, _, tt := newTestApp(t)
+	useFakeHub(t, a)
+	a.navigate("/models")
+	tt.Frame()
+	n := len(catalog.Builtin().Entries)
+	if !tt.HasText("All  " + itoa(n)) {
+		t.Fatalf("no All tab with %d: %q", n, tt.Texts())
+	}
+	for _, c := range []struct {
+		tab       string
+		has, lack string
+	}{
+		{"TTS", "Kokoro 82M", "Whisper large-v3 turbo"},
+		{"ASR", "Whisper large-v3 turbo", "Kokoro 82M"},
+		{"LLM", "Qwen3 4B Instruct (2507)", "Kokoro 82M"},
+		{"Other", "HTDemucs", "Qwen3 4B Instruct (2507)"},
+	} {
+		label := ""
+		for _, s := range tt.Texts() {
+			if strings.HasPrefix(s, c.tab+"  ") {
+				label = s
+			}
+		}
+		if label == "" {
+			t.Fatalf("no %s tab: %q", c.tab, tt.Texts())
+		}
+		if err := tt.Click(label); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		if !tt.HasText(c.has) || tt.HasText(c.lack) {
+			t.Errorf("%s: want %q and not %q", c.tab, c.has, c.lack)
+		}
+	}
+}

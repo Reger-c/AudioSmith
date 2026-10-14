@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -288,13 +289,60 @@ func (a *app) modelsPage(c *ui.Context) {
 			}
 		})
 	})
-	ui.Scroll(c).Grow(1).Children(func() {
+	entries := catalog.Builtin().Entries
+	counts := make([]int, len(modelKinds))
+	for _, e := range entries {
+		counts[0]++
+		counts[modelKindOf(e)]++
+	}
+	labels := make([]string, len(modelKinds))
+	for i, k := range modelKinds {
+		labels[i] = k() + "  " + itoa(counts[i])
+	}
+	ui.Row(c).Padding(px(t, sp1), px(t, sp6), px(t, sp2)).Children(func() {
+		if a.pageWidth(c) < px(t, 640) {
+			// Too narrow for the tabs: the same choice as a select.
+			cur := labels[a.modelsKind]
+			if ui.Select(c.Key("models-kind-select"), &cur, labels).Label(i18n.T("Kind of model")).Width(px(t, 220)).Changed() {
+				a.modelsKind = max(slices.Index(labels, cur), 0)
+			}
+			return
+		}
+		ui.Segmented(c.Key("models-kind"), &a.modelsKind, labels...).Label(i18n.T("Kind of model"))
+	})
+	ui.Scroll(c.Key("models-scroll-" + itoa(a.modelsKind))).Grow(1).Children(func() {
 		ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp2)).MaxWidth(px(t, 880)).Children(func() {
-			for _, e := range catalog.Builtin().Entries {
-				a.modelCard(c, e)
+			for _, e := range entries {
+				if a.modelsKind == 0 || modelKindOf(e) == a.modelsKind {
+					a.modelCard(c, e)
+				}
 			}
 		})
 	})
+}
+
+// modelKinds are the Models page's tabs: all, then speech synthesis,
+// speech recognition (with word alignment), language models and the
+// rest (separation, speakers, VAD, enhancement, watermark).
+var modelKinds = []func() string{
+	func() string { return i18n.T("All") },
+	func() string { return i18n.T("TTS") },
+	func() string { return i18n.T("ASR") },
+	func() string { return i18n.T("LLM") },
+	func() string { return i18n.T("Other") },
+}
+
+// modelKindOf is the tab (an index of modelKinds) a catalogue entry is in.
+func modelKindOf(e catalog.Entry) int {
+	switch {
+	case slices.Contains(e.Tasks, catalog.TaskTTS):
+		return 1
+	case slices.Contains(e.Tasks, catalog.TaskSTT), slices.Contains(e.Tasks, catalog.TaskAlign):
+		return 2
+	case slices.Contains(e.Tasks, catalog.TaskLLM):
+		return 3
+	}
+	return 4
 }
 
 func (a *app) modelCard(c *ui.Context, e catalog.Entry) {

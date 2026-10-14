@@ -19,8 +19,9 @@ import (
 //
 // Add fields to your area's struct, not here.
 type app struct {
-	win    *mygo.Window // nil in tests
-	toasts []string     // shown by the next build of the view
+	modelsKind int          // the Models page's tab (modelKinds)
+	win        *mygo.Window // nil in tests
+	toasts     []string     // shown by the next build of the view
 	// postQueue replaces the window's queue in tests that run real
 	// goroutines (scheduler, supervisor): they pump it on the test's
 	// goroutine. nil: post runs fn at once (other tests).
