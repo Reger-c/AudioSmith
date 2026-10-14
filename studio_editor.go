@@ -135,9 +135,9 @@ func scriptTheme(t *ui.Theme) *editor.Theme {
 	th := editor.DefaultTheme(t)
 	th.Cursor = k.Text
 	for kind, col := range map[editor.TokenKind]ui.Color{
-		editor.TokenKeyword:  k.Accent,
-		editor.TokenType:     k.Accent,
-		editor.TokenFunction: k.Accent,
+		editor.TokenKeyword:  k.AccentInk,
+		editor.TokenType:     k.AccentInk,
+		editor.TokenFunction: k.AccentInk,
 		editor.TokenString:   k.Text2,
 		editor.TokenInvalid:  t.Warning,
 		editor.TokenComment:  k.Text3,

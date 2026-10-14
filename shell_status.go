@@ -104,7 +104,7 @@ func (a *app) statusBar(c *ui.Context) {
 		bell := statusButton(c, "status-bell", i18n.T("Notifications"), func() {
 			ui.Icon(c, bellIcon.Get(unread > 0)).Size(px(t, 14), px(t, 14))
 			if unread > 0 {
-				ui.Text(c, itoa(unread)).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Accent)
+				ui.Text(c, itoa(unread)).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.AccentInk)
 			}
 		})
 		if bell.Clicked() {
@@ -290,7 +290,7 @@ func (a *app) quickSwitch(c *ui.Context) {
 							ui.Text(c, i18n.T("Downloaded")).FontSize(px(t, fsMicro)).TextColor(k.Text3)
 						}
 						if chosen {
-							ui.Icon(c, icons.Check.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Accent)
+							ui.Icon(c, icons.Check.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.AccentInk)
 						}
 					})
 				})

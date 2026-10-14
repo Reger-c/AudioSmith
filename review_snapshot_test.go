@@ -132,7 +132,7 @@ func TestSnapshotsAccents(t *testing.T) {
 		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
 	}
 	os.MkdirAll(out, 0o755)
-	t.Cleanup(func() { setAccent("blue") })
+	t.Cleanup(func() { setAccent("teal") })
 	for _, name := range []string{"blue", "indigo", "teal"} {
 		for _, dark := range []bool{false, true} {
 			setAccent(name)

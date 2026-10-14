@@ -52,8 +52,8 @@ var (
 // accentSet is an accent in the light and the dark theme.
 type accentSet struct{ light, dark string }
 
-// accents are the candidates for the one brand accent (the design review
-// picks one; accentName is the one in use).
+// accents are the brand accent candidates; the design review (2026-10-14)
+// chose teal. accentName is the one in use.
 var accents = map[string]accentSet{
 	"blue":   {"#2f6bf0", "#4f86f7"},
 	"indigo": {"#5752e0", "#7d79f2"},
@@ -62,7 +62,7 @@ var accents = map[string]accentSet{
 
 // accentName is the brand accent (a key of accents); setAccent changes
 // it.
-var accentName = "blue"
+var accentName = "teal"
 
 // tokens are the colours of one appearance.
 type tokens struct {
@@ -78,8 +78,10 @@ type tokens struct {
 	Text, Text2, Text3 ui.Color // primary, secondary, tertiary
 	// Ink: the primary button (near-black, near-white in the dark).
 	Ink, InkHover, InkPressed, OnInk ui.Color
-	// Accent: state only (selection, progress, focus, links, playing).
-	Accent, AccentSoft ui.Color
+	// Accent: state only (selection, progress, focus, links, playing);
+	// AccentInk is the accent as text on the background (markup, counts),
+	// darker in the light theme for contrast.
+	Accent, AccentSoft, AccentInk ui.Color
 	// Record: recording and destructive actions (red-orange).
 	Record, RecordSoft ui.Color
 	// Semantic colours, for small dots and text only.
@@ -108,6 +110,10 @@ func makeTokens(dark bool) *tokens {
 	k.Ink, k.OnInk = g[9], g[0]
 	k.Accent = accent
 	k.AccentSoft = accent.Alpha(0.12)
+	k.AccentInk = accent
+	if !dark {
+		k.AccentInk = accent.Mix(ui.Hex("#000000"), 0.18)
+	}
 	k.RecordSoft = k.Record.Alpha(0.12)
 	k.Danger = k.Record
 	return k
@@ -151,6 +157,9 @@ func styleTheme(th *ui.Theme) {
 		th.AccentPressed = k.Accent.Mix(ui.Hex("#000000"), 0.15)
 	}
 	th.AccentText = ui.Hex("#ffffff")
+	if th.Dark && accentName == "teal" {
+		th.AccentText = ui.Hex("#06201c") // dark text on the light teal
+	}
 	th.Danger, th.Warning, th.Success = k.Danger, k.Warning, k.Success
 	th.Selection = k.Accent.Alpha(0.22)
 	th.Focus = k.Accent.Alpha(0.5)

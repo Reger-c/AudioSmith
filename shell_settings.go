@@ -337,7 +337,7 @@ func (a *app) settingsDialog(c *ui.Context) {
 		panel.Width(min(w-2*margin, px(t, 900))).Height(h-2*margin).Radius(px(t, radiusCard)).Background(k.Bg).Clip().
 			Shadow(0, 16, 48, 0, ui.RGBA(0, 0, 0, 0.28)).Label(i18n.T("Settings"))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Width(min(px(t, 212), (w-2*margin)*0.3)).Shrink(0).Background(k.Sidebar).Children(func() {
+			ui.Column(c).Width(min(px(t, 252), (w-2*margin)*0.3)).Shrink(0).Background(k.Sidebar).Children(func() {
 				ui.Row(c).Height(px(t, 52)).Shrink(0).AlignItems(ui.Center).Padding(0, px(t, sp4)).Children(func() {
 					ui.Text(c, i18n.T("Settings")).FontSize(px(t, fsSection)).FontWeight(600).SingleLine()
 				})

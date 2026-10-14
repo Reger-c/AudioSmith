@@ -510,35 +510,39 @@ func (a *app) sidebar(c *ui.Context) {
 	side.SurfaceHover, side.SurfacePressed = k.G[2], k.G[3]
 	chosen := side
 	chosen.Accent = k.Text
-	ui.Sidebar(c, &a.nav, func() {
-		for _, g := range navGroups {
-			open := a.sectionOpen(g.id)
-			ui.SidebarSection(c.Key("nav-"+g.id), groupTitle(g.id), open, func() {
-				for _, p := range g.pages {
-					sel := p.path == a.nav
-					if sel {
-						c.SetTheme(&chosen)
-					} else {
-						c.SetTheme(&side)
+	// The list scrolls: a fade at its foot says there is more below.
+	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Sidebar(c, &a.nav, func() {
+			for _, g := range navGroups {
+				open := a.sectionOpen(g.id)
+				ui.SidebarSection(c.Key("nav-"+g.id), groupTitle(g.id), open, func() {
+					for _, p := range g.pages {
+						sel := p.path == a.nav
+						if sel {
+							c.SetTheme(&chosen)
+						} else {
+							c.SetTheme(&side)
+						}
+						item := ui.SidebarItem(c, p.path, p.icon.Get(sel), pageTitle(p.path)).Padding(px(t, 5), px(t, sp2))
+						c.SetTheme(t)
+						if sel {
+							item.Background(k.Pressed).FontWeight(600)
+						} else {
+							item.TextColor(k.G[8])
+						}
+						if b := a.navBadge(p.path); b != "" {
+							item.Children(func() { ui.Badge(c, b) })
+						}
 					}
-					item := ui.SidebarItem(c, p.path, p.icon.Get(sel), pageTitle(p.path))
-					c.SetTheme(t)
-					if sel {
-						item.Background(k.Pressed).FontWeight(600)
-					} else {
-						item.TextColor(k.G[8])
-					}
-					if b := a.navBadge(p.path); b != "" {
-						item.Children(func() { ui.Badge(c, b) })
-					}
-				}
-			})
-		}
-	}).Grow(1).Background(ui.Transparent).Padding(px(t, sp1), px(t, 10)).Label(i18n.T("Sections")).OnChange(func() {
-		a.navigate(a.nav)
+				}).Margin(px(t, 6), 0, 0, 0)
+			}
+		}).Grow(1).MinHeight(0).Background(ui.Transparent).Padding(0, px(t, 10), px(t, sp4)).Label(i18n.T("Sections")).OnChange(func() {
+			a.navigate(a.nav)
+		})
+		ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(px(t, 20)).Gradient(k.Sidebar.Alpha(0), k.Sidebar, 180).PassThrough()
 	})
 	a.saveClosedSections()
-	ui.Column(c).Shrink(0).Padding(px(t, 6), px(t, 10), px(t, 10)).Children(func() {
+	ui.Column(c).Shrink(0).Padding(px(t, 6), px(t, 10), px(t, 8)).BorderWidth(1, 0, 0, 0).BorderColor(k.Line).Children(func() {
 		b := ghostBase(c.Key("nav-settings")).Padding(px(t, 6), px(t, sp2)).Gap(px(t, sp2)).Justify(ui.Start).Label(i18n.T("Settings")).Tooltip(i18n.T("Settings") + " (⌘,)")
 		b.Children(func() {
 			ui.Icon(c, icons.Settings.Get(a.settingsOpen)).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)
