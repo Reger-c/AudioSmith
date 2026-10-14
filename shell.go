@@ -200,6 +200,9 @@ func pageTitle(path string) string {
 	if t, ok := m5PageTitle(path); ok { // M5: api_pages.go (thread #20)
 		return t
 	}
+	if t, ok := wfPageTitle(path); ok { // M6: workflow_pages.go (thread #21)
+		return t
+	}
 	return path
 }
 
@@ -348,6 +351,7 @@ func (a *app) pages(c *ui.Context) {
 		case a.longformRoute(c, r): // M3: /stories, /audiobook, /projects (longform_pages.go, thread #18)
 		case a.dubRoute(c, r): // M4: /dub, /batch (dub_pages.go, thread #19)
 		case a.m5Route(c, r): // M5: /tools, /integrations, /api-reference (api_pages.go, thread #20)
+		case a.wfRoute(c, r): // M6: /workflows (workflow_pages.go, thread #21)
 		case r.Match("/settings/{section...}"):
 			r.Title(i18n.T("Settings"))
 			a.settingsPage(c, r)
@@ -400,6 +404,7 @@ func (a *app) sidebar(c *ui.Context) {
 		a.longformSidebar(c) // M3: Stories, Audiobook, Projects (longform_pages.go, thread #18)
 		a.dubSidebar(c)      // M4: Dub, Batch (dub_pages.go, thread #19)
 		a.m5Sidebar(c)       // M5: Tools, Integrations (api_pages.go, thread #20)
+		a.wfSidebar(c)       // M6: Workflows (workflow_pages.go, thread #21)
 		ui.SidebarSection(c, i18n.T("App"), nil, func() {
 			ui.SidebarItem(c, "/settings", settingsIcon, i18n.T("Settings"))
 		})

@@ -23,7 +23,7 @@ import (
 )
 
 // libCategories are the filters, in order.
-var libCategories = []string{store.LibAll, store.LibDub, store.LibStory, store.LibAudiobook, store.LibVoice, store.LibTranscript, store.LibTake, store.LibExport}
+var libCategories = []string{store.LibAll, store.LibDub, store.LibStory, store.LibAudiobook, store.LibVoice, store.LibTranscript, store.LibTake, store.LibExport, store.LibWorkflow /* M6 */}
 
 // libPageSize is how many items the page reads at a time.
 const libPageSize = 200
@@ -117,6 +117,8 @@ func categoryLabel(cat string) string {
 	switch cat {
 	case store.LibDub:
 		return i18n.T("Dubbing projects")
+	case store.LibWorkflow: // M6 (thread #21)
+		return i18n.T("Workflows")
 	case store.LibStory:
 		return i18n.T("Stories")
 	case store.LibAudiobook:
@@ -138,6 +140,8 @@ func itemKind(it store.LibraryItem) string {
 	switch it.Source {
 	case "dub": // M4 (thread #19)
 		return i18n.T("Dubbing project")
+	case "workflow": // M6 (thread #21)
+		return i18n.T("Workflow")
 	case "render":
 		if it.Category == store.LibAudiobook {
 			return i18n.T("Audiobook render")
@@ -178,6 +182,8 @@ func itemIcon(it store.LibraryItem) *ui.SVG {
 		return renderIcon
 	case "dub": // M4 (thread #19)
 		return dubIcon
+	case "workflow": // M6 (thread #21)
+		return workflowsIcon
 	}
 	if it.Category == store.LibAudiobook {
 		return audiobookIcon
@@ -215,6 +221,8 @@ func (a *app) itemMeta(it store.LibraryItem) string {
 		parts = append(parts, it.Detail)
 	case "dub": // M4: dub_pages.go (thread #19)
 		parts = append(parts, dubItemPhase(it.Detail))
+	case "workflow": // M6: workflow_pages.go (thread #21)
+		parts = append(parts, wfItemState(it.Detail))
 	}
 	parts = append(parts, i18n.DateTime(it.Updated))
 	return strings.Join(parts, " · ")
@@ -284,6 +292,8 @@ func (a *app) openItem(it store.LibraryItem) {
 	switch it.Source {
 	case "dub": // M4: dub.go (thread #19)
 		a.openDub(it.ID)
+	case "workflow": // M6: workflow.go (thread #21)
+		a.wfOpenPage(it.ID)
 	case "project":
 		kind := core.ProjectKind(it.Category)
 		if kind != core.ProjectStory && kind != core.ProjectAudiobook {
@@ -358,6 +368,7 @@ func (a *app) renameItem(it store.LibraryItem, title string) {
 // selected with their error.
 func (a *app) deleteItems(items []store.LibraryItem) {
 	svc := a.lib.svc
+	wfs := a.wfSvc // M6 (thread #21)
 	for _, it := range items {
 		if it.Source == "take" && a.pl.Current() == it.ID {
 			a.pl.Stop()
@@ -380,6 +391,8 @@ func (a *app) deleteItems(items []store.LibraryItem) {
 				err = svc.Takes.Delete(ctx, it.ID)
 			case "export":
 				err = svc.Library.DeleteExport(ctx, it.ID)
+			case "workflow": // M6 (thread #21)
+				err = wfs.Delete(ctx, it.ID)
 			}
 			if err != nil && !errors.Is(err, core.ErrNotFound) {
 				errs[libKey(it)] = err.Error()
