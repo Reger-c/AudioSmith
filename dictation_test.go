@@ -62,7 +62,7 @@ func TestDictationToggle(t *testing.T) {
 		t.Errorf("capture %+v", cp)
 	}
 	// The pill shows the level and Stop.
-	pill := ui.NewTester(a.pillView, pillWidth, pillHeight)
+	pill := ui.NewTester(a.pillView, pillWinWidth, pillWinHeight)
 	pill.Frame()
 	if !pill.HasText("Listening…") || !pill.HasText("Stop") {
 		t.Errorf("pill: %q", pill.Texts())
@@ -186,7 +186,7 @@ func TestDictationCopiesAndCancels(t *testing.T) {
 	if a.dict.phase != dictError || a.dict.need == nil {
 		t.Fatalf("not downloaded: %+v", a.dict)
 	}
-	pill := ui.NewTester(a.pillView, pillWidth, pillHeight)
+	pill := ui.NewTester(a.pillView, pillWinWidth, pillWinHeight)
 	pill.Frame()
 	if !pill.HasText("Dictation failed") || !pill.HasText("Open Models") {
 		t.Errorf("pill %q", pill.Texts())

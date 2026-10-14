@@ -23,6 +23,13 @@ const (
 	pillWidth  = 400
 	pillHeight = 68
 	pillLift   = 96
+	// pillPad is the clear margin round the pill inside its window, for
+	// the pill's own shadow: the window has none (macOS would draw its
+	// rectangle's shadow and outline, with corners unlike the pill's).
+	pillPad = 16
+	// The window: the pill and its margin.
+	pillWinWidth  = pillWidth + 2*pillPad
+	pillWinHeight = pillHeight + 2*pillPad
 )
 
 // pillWindow is the pill's window, made at its first use.
@@ -39,8 +46,8 @@ func (a *app) showPill() {
 	}
 	if a.dictPill.win == nil {
 		a.dictPill.win = mygo.NewWindow(mygo.WindowOptions{
-			Title: "AudioSmith Dictation", Width: pillWidth, Height: pillHeight, UseContentSize: true,
-			Frameless: true, Transparent: true, AlwaysOnTop: true, Hidden: true, SkipTaskbar: true,
+			Title: "AudioSmith Dictation", Width: pillWinWidth, Height: pillWinHeight, UseContentSize: true,
+			Frameless: true, Transparent: true, DisableShadow: true, AlwaysOnTop: true, Hidden: true, SkipTaskbar: true,
 			DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
 			Content: ui.View(a.pillView),
 		})
@@ -49,7 +56,7 @@ func (a *app) showPill() {
 	w := a.dictPill.win
 	d := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint())
 	wa := d.WorkArea
-	w.SetPosition(wa.X+(wa.Width-pillWidth)/2, wa.Y+wa.Height-pillHeight-pillLift)
+	w.SetPosition(wa.X+(wa.Width-pillWinWidth)/2, wa.Y+wa.Height-pillHeight-pillLift-pillPad)
 	w.ShowInactive()
 	w.Invalidate()
 }
@@ -70,7 +77,6 @@ func (a *app) pillView(c *ui.Context) {
 	if a.win == nil {
 		c.DisableAnimations()
 	}
-	t := c.Theme()
 	s := a.dict
 	if s == nil {
 		return
@@ -78,7 +84,16 @@ func (a *app) pillView(c *ui.Context) {
 	if s.phase.live() {
 		c.After(100 * time.Millisecond) // the level, the time
 	}
+	// The pill draws its own shadow in the window's clear margin. No
+	// tooltips here: they could not leave this small window, and were cut.
+	ui.Column(c).Fill().Padding(pillPad).Children(func() { a.pill(c, s) })
+}
+
+// pill is the pill itself, inside its window's margin.
+func (a *app) pill(c *ui.Context, s *dictSession) {
+	t := c.Theme()
 	ui.Row(c.Key("pill")).Fill().Radius(pillHeight/2).Background(ui.RGBA(22, 22, 26, 0.94)).Border(1, ui.RGBA(255, 255, 255, 0.12)).
+		Shadow(0, 6, 16, 0, ui.RGBA(0, 0, 0, 0.32)).
 		Padding(0, 14, 0, 18).Gap(12).AlignItems(ui.Center).DragWindow().Children(func() {
 		a.pillIndicator(c, s)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
@@ -93,7 +108,7 @@ func (a *app) pillView(c *ui.Context) {
 					ui.Meter(c, float64(levelFraction(s.level)), 0, 1, nil).Width(120).Label(i18n.T("Input level"))
 				})
 			} else if sub != "" {
-				ui.Text(c, sub).FontSize(11).TextColor(color).MaxLines(2).Ellipsis("…").Tooltip(sub)
+				ui.Text(c, sub).FontSize(11).TextColor(color).MaxLines(2).Ellipsis("…")
 			}
 		})
 		if s.phase == dictListening || s.phase == dictStarting {
@@ -112,7 +127,7 @@ func (a *app) pillView(c *ui.Context) {
 		if s.phase.live() {
 			closeLabel = i18n.T("Cancel (Esc)")
 		}
-		if ui.ButtonBase(c.Key("pill-close")).Size(28, 28).Center().Radius(14).Label(closeLabel).Tooltip(closeLabel).Children(func() {
+		if ui.ButtonBase(c.Key("pill-close")).Size(28, 28).Center().Radius(14).Label(closeLabel).Children(func() {
 			ui.Icon(c, icons.Close.Linear).Size(16, 16).TextColor(ui.RGBA(235, 235, 245, 0.7))
 		}).Clicked() {
 			if s.phase.live() {

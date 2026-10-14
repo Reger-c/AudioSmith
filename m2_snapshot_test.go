@@ -116,7 +116,7 @@ func TestSnapshotsM2(t *testing.T) {
 		save("settings-permissions")
 
 		// The pill.
-		pill := ui.NewTester(a.pillView, pillWidth, pillHeight)
+		pill := ui.NewTester(a.pillView, pillWinWidth, pillWinHeight)
 		pill.SetScale(2)
 		s := &dictSession{gen: 1, phase: dictListening, started: now.Add(-4 * time.Second), level: -18, target: dictation.Target{Name: "Notes"}}
 		a.dict = s
