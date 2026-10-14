@@ -363,6 +363,29 @@ Types: [`m4.go`](../internal/engine/proto/m4.go) (Go; `internal/dub/engineapi.go
 
 Stays reserved: the app stretches with WSOLA in Go (`internal/dsp/stretch`). `TimePitchParams` (`input`, `output`, `rate`, `pitch?`) is kept in `m4.go` should a listening test prefer AVAudioUnitTimePitch.
 
+## 5.4 The local language model
+
+Types: [`llm.go`](../internal/engine/proto/llm.go) (Go; `internal/llm`'s `GenerateParams`, `GenerateResult` and `TokenNotification` alias them), [`WireLLM.swift`](../engine/Sources/AudioSmithProtocol/WireLLM.swift). Fixture: `llm.jsonl`.
+
+### `llm.generate` (job, gpu) → `llm.token` …
+
+```json
+→ {"id":"01JD…","method":"llm.generate","params":{"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit","modelPath":"/…",
+   "messages":[{"role":"system","content":"You translate subtitles from English to Spanish. Reply with the translation only."},{"role":"user","content":"Good morning, and welcome back to the show."}],
+   "maxTokens":256,"temperature":0.3,"topP":0.8,"seed":7,"stop":["\n\n"],"stream":true}}
+← job.progress {stage:"loading"} … {stage:"generating"}
+← {"method":"llm.token","params":{"job":"01JD…","text":"Buenos días,"}} …
+← {"id":"01JD…","result":{"text":"Buenos días, y bienvenidos de nuevo al programa.","finishReason":"stop","model":"…","promptTokens":41,"completionTokens":12,"seconds":0.31,"tokensPerSecond":58.2}}
+```
+
+- **Models** (catalogue task `llm`, families `qwen3`, `gemma4`): anything mlx-swift-lm's MLXLLM loads, from the snapshot at `modelPath`, with its tokenizer (swift-transformers) and chat template. Hybrid thinking models get `enable_thinking: false`. `models.load` with `task:"llm"` loads one ahead.
+- **Sampling.** `temperature` (default 0.7; 0 = greedy), `topP` (default 0.8), `seed` (reproducible sampling). `maxTokens` caps the reply (0 = 2048, within the context). `finishReason` is `stop` (end of turn or a `stop` string, which is not included) or `length`.
+- **Streaming.** With `stream`, the reply arrives as `llm.token` notifications, in order, about 20 a second; together they are `result.text`. A piece that could start a stop string is held back until it cannot.
+- **JSON.** `json` asks for one JSON value; `schema` (JSON Schema) shapes it. The engine constrains decoding to the schema with xgrammar (mlx-swift-lm's MLXGuidedGeneration; greedy, `temperature` ignored) and sets `constrained`; a schema xgrammar cannot compile is logged and the reply is generated freely. The app validates either way (`internal/llm` repairs).
+- **Context.** The prompt (after the chat template) plus `maxTokens` (at least 256) may use at most the model's `max_position_embeddings`, capped at 16384 tokens (`AUDIOSMITH_LLM_CONTEXT`): the KV cache of a 4B model takes about 150 KB a token. More fails with `context_too_long`, `data:{"limit","actual","unit":"tokens"}`; the app splits the work (translation batches are about 2,500 characters).
+- **Memory.** Before loading a model, the gpu worker unloads idle models, least recently used first, until the model's weights fit in the memory budget (`AUDIOSMITH_MEMORY_BUDGET`, else 60 % of the Mac's memory, as the supervisor assumes): a 2.3 GB language model evicts idle TTS models on a tight Mac without waiting for the supervisor.
+- **In the app,** `llm.EngineBackend` (provider `local`, `local_llm.go`) calls the gpu worker directly; it is first in the automatic writing-help routing once its model is downloaded. A dub's translation stage then runs on the gpu lane, so it queues with renders. `llm.generate` is also a job kind (`engine.ExecutorKinds`): `llm.token` notifications are the job's chunks.
+
 ## 6. Notifications (engine → app)
 
 | Method | Params | Notes |
@@ -371,6 +394,7 @@ Stays reserved: the app stretches with WSOLA in Go (`internal/dsp/stretch`). `Ti
 | `tts.chunk` | `job`, `seq`, `sampleRate`, `channels`, `encoding`, `data`, `final?` | `encoding` is `"pcm16le"` (the only one in M0). `data` is base64 (Go `[]byte`, Swift `Data`). Send chunks of up to about 1 s of audio. The last chunk has `final:true` and may be empty. |
 | `log` | `level`, `message`, `job?` | Structured log line for the Logs panel. `level` is `debug`, `info`, `warning` or `error`. It may name any job. |
 | `capture.level` | `job`, `seconds`, `rms`, `peak`, `clipped?` | The input meter of a `capture.start` job, about 20 per second (§5.2). |
+| `llm.token` | `job`, `text` | The next piece of an `llm.generate` reply with `stream` (§5.4). |
 
 At 24 kHz mono, PCM16 in base64 is about 64 KB/s. If profiling ever shows that to be costly, a binary side channel (an fd 3 pipe) can be added in a later minor change.
 
@@ -395,6 +419,7 @@ At 24 kHz mono, PCM16 in base64 is about 64 KB/s. If profiling ever shows that t
 | `unsupported_media` (M1) | An input exists but cannot be decoded | `{"path"}` | "convert it to WAV, M4A or MP3" |
 | `permission_denied` (M1) | macOS refused a permission | `{"permission":"microphone"}` | point to System Settings → Privacy & Security |
 | `device_unavailable` (M1) | The capture device is unknown, gone or busy | `{"device"}` | refresh the device list |
+| `context_too_long` | `llm.generate`: prompt + reply over the context the engine allows | `{"limit","actual","unit":"tokens"}` | split the work |
 
 The app treats an unknown code as `internal` (so an older app reads the M1 codes as `internal`). `proto.Codes` lists them all; `proto.Retryable(code)` the retryable ones, and the job scheduler uses it. `jobErrorText` (enginelink.go) translates them for the UI.
 
@@ -407,11 +432,11 @@ These names are taken; `proto.Reserved` lists them. An engine that does not impl
 | TTS | `tts.batch` (many segments, one warm model) | gpu | M3 |
 | STT | streaming `stt.stream.open/push/close` → `stt.partial` / `stt.final` | listen | later (feasible: Qwen3-ASR and Nemotron have streaming sessions in the pin; partials would come from VAD-cut windows of a `capture.start` job, without `capture.pcm` round-trips) |
 | Analysis | `lid.detect` | gpu | later |
-| LLM | `llm.generate`, `translate.run` | gpu | M2 / M4 |
+| LLM | `translate.run` | gpu | later |
 | Media | `media.timePitch`, `media.ocr`, `doc.extractText` | media | later |
 | Capture | `capture.pcm` (raw input for streaming ASR) | listen | M2 |
 
-M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2); M3 `media.encode`; M4 `separate.run`, `diarize.run`, `media.mux`, `media.thumbnail` and `media.transcode` (§5.3).
+M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2); M3 `media.encode`; M4 `separate.run`, `diarize.run`, `media.mux`, `media.thumbnail` and `media.transcode` (§5.3); `llm.generate` (§5.4).
 
 ## 9. Versions and compatibility
 
