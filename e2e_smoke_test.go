@@ -170,7 +170,17 @@ func TestModelSmoke(t *testing.T) {
 	}
 	waitReady()
 	call := func(method string, params, result any) error {
-		raw, err := sup.Call(ctx, proto.RoleOf(method), core.NewID(time.Now()), method, params, nil)
+		chunks, firstChunk := 0, time.Duration(0)
+		start := time.Now()
+		raw, err := sup.Call(ctx, proto.RoleOf(method), core.NewID(time.Now()), method, params, func(m proto.Message) {
+			if m.Method == proto.MethodTTSChunk {
+				if chunks == 0 {
+					firstChunk = time.Since(start)
+				}
+				chunks++
+			}
+		})
+		lastChunks, lastFirstChunk = chunks, firstChunk
 		if err != nil {
 			return err
 		}
@@ -373,6 +383,13 @@ func TestModelSmoke(t *testing.T) {
 }
 
 // smokeTTS runs the cases of a TTS model.
+// lastChunks and lastFirstChunk describe the tts.chunk notifications of
+// the last call: how many, and when the first came.
+var (
+	lastChunks     int
+	lastFirstChunk time.Duration
+)
+
 func smokeTTS(t *testing.T, e catalog.Entry, snap, ref string, refSeconds float64, outDir string,
 	call func(string, any, any) error, hear func(string, string) (string, error), add func(smokeRow), peakGB func() float64) {
 	langOf := func(code string) (string, bool) {
@@ -425,7 +442,9 @@ func smokeTTS(t *testing.T, e catalog.Entry, snap, ref string, refSeconds float6
 	if _, ok := langOf("en"); ok {
 		cases = append(cases, tcase{name: "en", text: smokeEN, lang: "en", mod: func(p *proto.SynthesizeParams) {
 			base("en")(p)
-			p.Stream = e.Has(catalog.CapStream)
+			// AUDIOSMITH_SMOKE_STREAM=1 asks every model to stream, to see
+			// which do (the note); only "stream" models must.
+			p.Stream = e.Has(catalog.CapStream) || os.Getenv("AUDIOSMITH_SMOKE_STREAM") != ""
 		}, minSeconds: 1.5})
 	}
 	if _, ok := langOf("zh"); ok {
@@ -577,6 +596,9 @@ func smokeTTS(t *testing.T, e catalog.Entry, snap, ref string, refSeconds float6
 			r.Note = err.Error()
 		case res.AudioSeconds < c.minSeconds || res.AudioSeconds > 30:
 			r.Note = fmt.Sprintf("%.2f s of audio", res.AudioSeconds)
+		case e.Has(catalog.CapStream) && (lastChunks < 2 || lastFirstChunk.Seconds() > 0.7*res.Seconds+0.3):
+			// Streaming means the first audio comes well before the take ends.
+			r.Note = fmt.Sprintf("not streaming: %d chunks, the first after %.2f s of %.2f s", lastChunks, lastFirstChunk.Seconds(), res.Seconds)
 		case c.name == "duration" && math.Abs(res.AudioSeconds-4) > 0.25:
 			r.Note = fmt.Sprintf("duration 4 gave %.2f s", res.AudioSeconds)
 		case dbfs(a.Mono()) < -45 || hasNaN(a.Samples):
@@ -584,6 +606,9 @@ func smokeTTS(t *testing.T, e catalog.Entry, snap, ref string, refSeconds float6
 		default:
 			r.Pass = true
 			r.Note = fmt.Sprintf("%.1f dBFS", dbfs(a.Mono()))
+			if p.Stream {
+				r.Note += fmt.Sprintf(", %d chunks, first after %.2f s", lastChunks, lastFirstChunk.Seconds())
+			}
 		}
 		if r.Pass && c.pitch != 0 {
 			f0 := medianF0(a.Mono(), a.Rate)
