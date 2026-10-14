@@ -66,7 +66,7 @@ Unknown members must be ignored by both sides, so optional fields can be added w
 2. **Two kinds of request.**
    - **Job requests** (`models.load`, `tts.synthesize`, `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.decode`, `capture.start`; `proto.JobMethods`) run long, may send notifications, and can be cancelled.
    - **Control requests** (all others) answer promptly, even while jobs run, and cannot be cancelled.
-3. **Concurrency.** The engine runs at most `hello.result.concurrency` jobs at once (`gpu` 1, `listen` 1, `media` 2, matching the scheduler's lanes). Another job request gets `busy`, which is retryable.
+3. **Concurrency.** The engine runs at most `hello.result.concurrency` jobs at once (`gpu` 1, `listen` 2, `media` 2). Another job request gets `busy`, which is retryable.
    - The Go scheduler is the only queue: it never sends more jobs than the engine can run.
    - The engine does not queue jobs.
 4. **Ordering.**
@@ -107,7 +107,7 @@ Every field is listed in [`methods.go`](../internal/engine/proto/methods.go). Th
 - Roles: every role implements `engine.hello`, `engine.stats`, `engine.flush`, `engine.shutdown` and `job.cancel`. On top of those (`proto.RoleOf`):
   - `gpu`: `models.*`, `tts.synthesize`, `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run` — everything that runs an MLX model;
   - `media`: `media.probe`, `media.decode` — AVFoundation, no MLX; concurrency 2;
-  - `listen`: `capture.devices`, `capture.start`, `capture.stop` — the microphone (M2 adds streaming ASR here).
+  - `listen`: `capture.devices`, `capture.start`, `capture.stop` — the microphone; and, for dictation, `stt.transcribe` and `models.load`/`unload`/`loaded` with **one resident speech-to-text model of its own** (concurrency 2: a recording and a transcription), so dictation never waits behind a gpu render. The app runs those as the job kinds `proto.KindFor(proto.RoleListen, method)` (`"listen:stt.transcribe"`, `"listen:models.load"`) on `jobs.LaneListen`; `services.TranscribeRequest.Role = proto.RoleListen` does it for a transcript.
   A method sent to another role is answered `method_not_found`.
 - **Why capture lives in `listen`.** A recording is long and interactive. In the `listen` process it survives the gpu worker being restarted (OOM, a stuck cancel) or busy with a long render, and M2's dictation, which uses the same microphone, runs in the same process. `media` does batch file work that may run two at a time; mixing a live device into it would make its concurrency mean nothing.
 
@@ -325,7 +325,7 @@ These names are taken; `proto.Reserved` lists them. An engine that does not impl
 | Family | Methods | Role | Milestone |
 |---|---|---|---|
 | TTS | `tts.batch` (many segments, one warm model) | gpu | M3 |
-| STT | streaming `stt.stream.open/push/close` → `stt.partial` / `stt.final` | listen | M2 |
+| STT | streaming `stt.stream.open/push/close` → `stt.partial` / `stt.final` | listen | later (feasible: Qwen3-ASR and Nemotron have streaming sessions in the pin; partials would come from VAD-cut windows of a `capture.start` job, without `capture.pcm` round-trips) |
 | Analysis | `diarize.run`, `lid.detect`, `separate.run` | gpu | M2–M4 |
 | LLM | `llm.generate`, `translate.run` | gpu | M2 / M4 |
 | Media | `media.encode`, `media.mux`, `media.timePitch`, `media.thumbnail`, `media.ocr`, `doc.extractText` | media | M3 / M4 |
