@@ -153,7 +153,7 @@ func (a *app) storyLines(c *ui.Context, p *lfPage, locked bool) {
 	lines := p.doc.Lines
 	if len(lines) == 0 {
 		emptyState(c.Key("st-empty"), icons.Dialog2, i18n.T("New story"), i18n.T("Start your story with dialogue and narration lines, and give each character a voice in the Cast."), func() {
-			if ghostButton(c.Key("st-empty-sample"), i18n.T("Load sample")).Disabled(locked).Clicked() {
+			if ui.Button(c.Key("st-empty-sample"), i18n.T("Load sample")).Disabled(locked).Clicked() {
 				a.loadSampleStory(p)
 			}
 			if secondaryIconButton(c.Key("st-empty-add"), icons.AddCircle, i18n.T("Add first line")).Label(i18n.T("Add first line")).Disabled(locked).Clicked() {

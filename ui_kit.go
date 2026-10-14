@@ -34,7 +34,7 @@ import (
 func primaryButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
 	c.SetTheme(inkTheme(t))
-	b := ui.PrimaryButton(c, label)
+	b := ui.PrimaryButton(c, label).Border(1, ui.Color{}) // as tall as ui.Button, which has a hairline
 	c.SetTheme(t)
 	return b
 }
@@ -43,7 +43,7 @@ func primaryButton(c *ui.Context, label string) ui.Element {
 func primaryIconButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
 	t := c.Theme()
 	c.SetTheme(inkTheme(t))
-	b := ui.PrimaryButton(c, "")
+	b := ui.PrimaryButton(c, "").Border(1, ui.Color{}) // as tall as ui.Button
 	b.Children(func() {
 		ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16))
 		ui.Text(c, label).SingleLine()
@@ -61,7 +61,7 @@ func recordButton(c *ui.Context, label string) ui.Element {
 	rec.Accent, rec.AccentText = k.Record, ui.Hex("#ffffff")
 	rec.AccentHover, rec.AccentPressed = k.Record.Mix(ui.Hex("#000000"), 0.1), k.Record.Mix(ui.Hex("#000000"), 0.2)
 	c.SetTheme(&rec)
-	b := ui.PrimaryButton(c, label)
+	b := ui.PrimaryButton(c, label).Border(1, ui.Color{}) // as tall as ui.Button
 	c.SetTheme(t)
 	return b
 }
@@ -144,7 +144,9 @@ func dropText(c *ui.Context, label string, on bool) ui.Element {
 func ghostBase(c *ui.Context) ui.Element {
 	t := c.Theme()
 	k := tok(t)
-	b := ui.ButtonBase(c).Radius(px(t, radiusControl)).TextColor(k.Text)
+	// A clear hairline: ghost buttons stand as tall as ui.Button (which
+	// has a visible one) and line up beside it.
+	b := ui.ButtonBase(c).Radius(px(t, radiusControl)).TextColor(k.Text).Border(1, ui.Color{})
 	switch {
 	case b.Pressed():
 		b.Background(k.Pressed)
