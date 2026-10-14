@@ -139,6 +139,7 @@ func (a *app) integrationPage(c *ui.Context, slug string) {
 			}
 			if _, ok := promptAgents[in.Slug]; ok { // thread #33: the agent setup prompt, the manual setup folded below it
 				a.agentPromptCard(c, in)
+				a.agentSkillCard(c, in) // thread #34
 				collapsible(c.Key("integ-manual"), i18n.T("Manual setup"), &a.integManual, nil, blocks)
 			} else {
 				blocks()
@@ -196,7 +197,7 @@ func (a *app) agentPromptCard(c *ui.Context, in integration) {
 	card(c.Key("integ-prompt")).Children(func() {
 		ui.Column(c).Gap(px(t, sp1)).Children(func() {
 			sectionHeading(c, i18n.T("Agent setup prompt"))
-			caption(c, i18n.T("Copy this text and paste it into %s: it checks that AudioSmith runs, adds AudioSmith's MCP server to its configuration, tests it and tells you what it changed. Nothing to set up by hand.", name)).Wrap()
+			caption(c, i18n.T("Copy this text and paste it into %s: it checks that AudioSmith runs, adds AudioSmith's MCP server to its configuration, installs AudioSmith's skill, tests it and tells you what it changed. Nothing to set up by hand.", name)).Wrap()
 		})
 		note := func(ic icons.Icon, col ui.Color, s string) {
 			ui.Row(c.Key("integ-prompt-key")).Gap(px(t, 6)).AlignItems(ui.Start).Children(func() {
