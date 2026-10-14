@@ -1,0 +1,36 @@
+{
+  "duration": 3.2,
+  "language": "english",
+  "segments": [
+    {
+      "avg_logprob": 0,
+      "compression_ratio": 0,
+      "end": 1.4,
+      "id": 0,
+      "no_speech_prob": 0,
+      "seek": 0,
+      "start": 0,
+      "temperature": 0,
+      "text": "Hello everyone.",
+      "tokens": []
+    },
+    {
+      "avg_logprob": 0,
+      "compression_ratio": 0,
+      "end": 3.1,
+      "id": 1,
+      "no_speech_prob": 0,
+      "seek": 0,
+      "start": 1.6,
+      "temperature": 0,
+      "text": "All is well.",
+      "tokens": []
+    }
+  ],
+  "task": "translate",
+  "text": "Hello everyone. All is well.",
+  "usage": {
+    "seconds": 4,
+    "type": "duration"
+  }
+}

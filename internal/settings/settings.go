@@ -37,6 +37,8 @@ type Settings struct {
 	Transcribe Transcribe `json:"transcribe"`
 	Dictation  Dictation  `json:"dictation"`
 	Dubbing    Dubbing    `json:"dubbing"` // M4 (thread #19, m4.go)
+	// M5 (thread #20, api.go).
+	API API `json:"api"`
 }
 
 // General: language and app behaviour.
@@ -103,6 +105,7 @@ func Defaults() Settings {
 		Studio:     Studio{Autoplay: true},
 	}
 	defaultsM2(&s)
+	defaultsAPI(&s) // M5: api.go
 	return s
 }
 
