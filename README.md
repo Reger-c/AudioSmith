@@ -15,7 +15,7 @@ Every model runs on the Mac's GPU with [MLX](https://github.com/ml-explore/mlx):
 **Requirements**
 - macOS 15 or later on Apple silicon (M1 or later).
 - 16 GB of memory is recommended. 8 GB works with the light models.
-- About 5–15 GB of disk for models, depending on the pack.
+- About 1.3–15 GB of disk for models, depending on the pack (Fast 1.3 GB, Balanced 4.7, Quality 12.8, Max 14.9).
 
 **Steps**
 1. Download the DMG from [Releases](https://github.com/hehehai/AudioSmith/releases), or [build it](#build-from-source).

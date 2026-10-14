@@ -17,7 +17,7 @@ AudioSmith 是一款运行在 Apple 芯片 Mac 上的本地语音工作室。
 **要求**
 - macOS 15 及以上，Apple 芯片（M1 及以上）。
 - 建议 16 GB 内存；8 GB 可用轻量模型。
-- 模型需要约 5–15 GB 磁盘空间，取决于选择的模型包。
+- 模型需要约 1.3–15 GB 磁盘空间，取决于模型包（快速 1.3 GB、均衡 4.7、高质量 12.8、最强 14.9）。
 
 **步骤**
 1. 从 [Releases](https://github.com/hehehai/AudioSmith/releases) 下载 DMG，或[从源码构建](README.md#build-from-source)。
