@@ -260,6 +260,24 @@ Audio fields describe the first audio track; `bits` is set for PCM only.
 
 `{input, output, sampleRate?, channels?, start?, duration?, track?}` → `{output, sampleRate, channels, frames, audioSeconds, source, seconds}`. Decodes a window (`start`, `duration`; 0 = to the end) of an audio track (`track`, default 0) to WAV at `sampleRate`/`channels` (0 keeps the source's; 1 mixes down, 2 duplicates mono). `source` is the input's `media.probe` result. Progress stage `decoding`.
 
+### `media.encode` (job, media; M3)
+
+```json
+→ {"id":"01JB…","method":"media.encode","params":{"input":"/…/renders/01JB0R/book.wav","output":{"path":"/…/The Night Train.m4b","format":"m4b"},"codec":"aac","bitrate":64000,
+   "chapters":[{"title":"Opening Credits","start":0,"end":12.5},{"title":"Chapter 1","start":12.5,"end":1834.2}],
+   "metadata":{"title":"The Night Train","author":"M. Example","narrator":"Aria (AudioSmith)","year":"2026","genre":"Fiction","description":"A short novel."},
+   "cover":"/…/covers/01JB0C.jpg"}}
+← job.progress {stage:"encoding", fraction} … {stage:"writing"}
+← {"id":"01JB…","result":{"output":"/…/The Night Train.m4b","format":"m4b","bytes":14820311,"duration":1834.2,"bitrate":64000}}
+```
+
+- **Input:** a WAV (RF64 allowed) or anything else AVFoundation reads.
+- **Output:** `format` `m4b` or `m4a` (the same MP4 container); `mp3` answers `unsupported`, `data:{"capability":"mp3"}` (no encoder in this build).
+- **Audio:** AAC-LC through AVAssetWriter, at `sampleRate` (0 = the input's, at most 48 kHz), mono or stereo as the input, `bitrate` in b/s (0 = 64 kb/s mono, 96 kb/s stereo).
+- **Chapters** become a QuickTime chapter track (a text track the audio track refers to with `chap`), which Apple Books, QuickTime and AVFoundation read. Each runs to the next one's start; the last to the end.
+- **Tags** (iTunes atoms): `©nam` and `©alb` = title, `©ART` and `aART` = author, `©wrt` = narrator, `©day`, `©gen`, `desc` and `©cmt` = description, `covr` = the cover (PNG or JPEG).
+- The file is written to a temporary name beside `output.path` and renamed; `job.cancel` removes it.
+
 ### `capture.devices` (control, listen)
 
 Returns `{devices:[{id, name, channels, sampleRate, default?, transport?}]}`, the system default first. `id` is the Core Audio device UID (stable across launches and reconnections); `transport` is `builtin`, `usb`, `bluetooth`, `aggregate`, `virtual` or absent.
@@ -328,7 +346,7 @@ These names are taken; `proto.Reserved` lists them. An engine that does not impl
 | STT | streaming `stt.stream.open/push/close` → `stt.partial` / `stt.final` | listen | later (feasible: Qwen3-ASR and Nemotron have streaming sessions in the pin; partials would come from VAD-cut windows of a `capture.start` job, without `capture.pcm` round-trips) |
 | Analysis | `diarize.run`, `lid.detect`, `separate.run` | gpu | M2–M4 |
 | LLM | `llm.generate`, `translate.run` | gpu | M2 / M4 |
-| Media | `media.encode`, `media.mux`, `media.timePitch`, `media.thumbnail`, `media.ocr`, `doc.extractText` | media | M3 / M4 |
+| Media | `media.mux`, `media.timePitch`, `media.thumbnail`, `media.ocr`, `doc.extractText` | media | M3 / M4 |
 | Capture | `capture.pcm` (raw input for streaming ASR) | listen | M2 |
 
 M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2).
