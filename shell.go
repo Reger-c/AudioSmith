@@ -82,6 +82,9 @@ type shellState struct {
 	modelsState
 	navState        // shell_nav.go (M7a)
 	mediaToolsState // ffmpeg_settings.go (M7a): the optional ffmpeg
+	storageState    // settings_storage.go (M7a)
+	networkState    // settings_network.go (M7a)
+	aboutState      // settings_about.go (M7a)
 	settingsForm
 	licenceDialog
 	menuLocale string // locale the native menu was built in
@@ -140,6 +143,7 @@ func (a *app) openShell(lib *library) {
 // Go log package writes there too), the app's version, the system
 // language and deep links. main calls it before App.Run.
 func (a *app) connectShell(logDir string) {
+	a.logDir = logDir // M7a: Settings → Storage, Diagnostics
 	if logDir != "" {
 		a.logs.Close()
 		a.logs = logs.New(logs.Options{Dir: logDir, Bus: a.bus})

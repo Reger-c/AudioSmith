@@ -27,9 +27,16 @@ func main() {
 		return
 	}
 
-	dataDir, err := mygo.App.Path(mygo.PathUserData)
+	home, err := mygo.App.Path(mygo.PathUserData)
 	if err != nil {
 		log.Fatal(err)
+	}
+	// M7a: the data folder may have moved (Settings → Storage); a move or
+	// an erase asked for finishes here, before the library opens.
+	dataDir, err := resolveDataDir(home) // storage_move.go
+	if err != nil {
+		showFatal(err)
+		return
 	}
 	resources, _ := mygo.App.Path(mygo.PathResources)
 	logDir, _ := mygo.App.Path(mygo.PathLogs)
@@ -42,6 +49,7 @@ func main() {
 	}
 	eng := newEngineProcess(resources, logDir) // enginelink.go
 	a := newApp(eng, lib)                      // app.go
+	a.dataHome = home                          // M7a: settings_storage.go
 	a.connectShell(logDir)                     // shell.go
 	a.connectEngine(eng)                       // enginelink.go
 	a.registerDubMedia()                       // M4: dub_pages.go (the video preview's scheme)

@@ -59,9 +59,15 @@ func settingsSections() []settingsSection {
 		{"dictation", i18n.T("Dictation"), "Dictation"},
 		{"writing", i18n.T("Writing help"), "Writing help"},
 		{"permissions", i18n.T("Permissions"), "Permissions"},
-		dubSettingsSection(),                                         // M4: dub_settings.go (thread #19)
-		{"api", i18n.T("Local API"), "Local API"},                    // M5: api_settings.go (thread #20)
-		{"audio-tools", i18n.T("Audio tools"), "Audio tools ffmpeg"}, // M7a: ffmpeg_settings.go
+		dubSettingsSection(),                      // M4: dub_settings.go (thread #19)
+		{"api", i18n.T("Local API"), "Local API"}, // M5: api_settings.go (thread #20)
+		// M7a (thread #22): settings_*.go, ffmpeg_settings.go.
+		{"audio-tools", i18n.T("Audio tools"), "Audio tools ffmpeg"},
+		{"network", i18n.T("Network"), "Network proxy mirror"},
+		{"privacy", i18n.T("Privacy"), "Privacy history analytics"},
+		{"storage", i18n.T("Storage"), "Storage disk data folder reset"},
+		{"usage", i18n.T("Usage"), "Usage statistics"},
+		{"about", i18n.T("Diagnostics and about"), "Diagnostics about version bug report"},
 	}
 }
 
@@ -146,7 +152,7 @@ func (a *app) applyLocale() {
 func (a *app) applyTheme(c *ui.Context) {
 	ap := a.prefs.Appearance
 	sys := c.Theme()
-	if (ap.Theme == "system" || ap.Theme == "") && (ap.Scale == 1 || ap.Scale == 0) {
+	if (ap.Theme == "system" || ap.Theme == "") && (ap.Scale == 1 || ap.Scale == 0) && ap.Palette == "" {
 		return
 	}
 	th := *sys
@@ -164,6 +170,7 @@ func (a *app) applyTheme(c *ui.Context) {
 		th.FontSize *= s
 		th.Spacing = th.Space(1) * s
 	}
+	applyPalette(&th, ap.Palette) // M7a: settings_appearance.go
 	c.SetTheme(&th)
 }
 
@@ -323,10 +330,7 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 						a.permissionsSettings(c)
 					case a.dubSettingsRoute(c, r): // M4: Settings → Dubbing (dub_pages.go, thread #19)
 					case a.apiSettingsRoute(c, r): // M5: api_settings.go (thread #20)
-					case r.Match("/audio-tools"): // M7a: ffmpeg_settings.go
-						r.Title(i18n.T("Audio tools"))
-						a.lastSettings = "audio-tools"
-						a.audioToolsSettings(c)
+					case a.m7SettingsRoute(c, r): // M7a: settings_pages.go
 					default:
 						ui.Text(c, i18n.T("There is no page at %s.", a.router.Path())).TextColor(t.TextMuted)
 					}
@@ -384,6 +388,8 @@ func (a *app) appearanceSettings(c *ui.Context) {
 			a.updateSettings(func(s *settings.Settings) { s.Appearance.Scale = scale })
 		}
 	})
+	a.paletteRow(c) // M7a: settings_appearance.go
+	a.sidebarRow(c)
 	settingRow(c, "motion", i18n.T("Reduce motion"), i18n.T("Pages and panels change without animating. The system's setting is followed too."), func() {
 		if ui.Switch(c.Key("motion-switch"), &a.reduceMotion).Label(i18n.T("Reduce motion")).Changed() {
 			on := a.reduceMotion
@@ -410,59 +416,11 @@ func (a *app) modelSettings(c *ui.Context) {
 		}
 	})
 
-	sectionTitle(c, i18n.T("Network"))
-	settingRow(c, "source", i18n.T("Download from"), i18n.T("Mirrors never receive your token; gated models always come from huggingface.co."), func() {
-		opts := sourceOptions()
-		if ui.Select(c.Key("source-select"), &a.source, opts).Label(i18n.T("Download from")).Width(px(t, 240)).Changed() {
-			var eps []string
-			switch slices.Index(opts, a.source) {
-			case 1:
-				eps = []string{"https://huggingface.co"}
-			case 2:
-				eps = []string{"https://hf-mirror.com"}
-			case 3:
-				eps = strings.Fields(a.endpoint)
-				if len(eps) == 0 {
-					return // until a URL is typed
-				}
-			}
-			a.updateSettings(func(s *settings.Settings) { s.Models.Endpoints = eps })
+	settingRow(c, "network-link", i18n.T("Download source and proxy"), a.proxyInfo, func() { // M7a: moved to Settings → Network
+		if ui.Button(c.Key("network-open"), i18n.T("Network…")).Clicked() {
+			a.navigate("/settings/network")
 		}
 	})
-	if slices.Index(sourceOptions(), a.source) == 3 {
-		settingRow(c, "endpoint", i18n.T("Endpoint"), i18n.T("One or more URLs, separated by spaces; the fastest answers."), func() {
-			in := ui.TextInput(c.Key("endpoint-input"), &a.endpoint).Placeholder("https://hf-mirror.com").Width(px(t, 280)).Label(i18n.T("Endpoint"))
-			if in.Submitted() {
-				eps := strings.Fields(a.endpoint)
-				a.updateSettings(func(s *settings.Settings) { s.Models.Endpoints = eps })
-			}
-		})
-	}
-	settingRow(c, "proxy", i18n.T("Proxy"), a.proxyInfo, func() {
-		opts := proxyOptions()
-		if ui.Select(c.Key("proxy-select"), &a.proxyMode, opts).Label(i18n.T("Proxy")).Width(px(t, 240)).Changed() {
-			mode := ""
-			switch slices.Index(opts, a.proxyMode) {
-			case 1:
-				mode = hub.ProxyDirect
-			case 2:
-				mode = strings.TrimSpace(a.proxy)
-				if mode == "" {
-					return
-				}
-			}
-			a.updateSettings(func(s *settings.Settings) { s.Models.Proxy = mode })
-		}
-	})
-	if slices.Index(proxyOptions(), a.proxyMode) == 2 {
-		settingRow(c, "proxy-url", i18n.T("Proxy URL"), i18n.T("http://, https:// or socks5://host:port"), func() {
-			in := ui.TextInput(c.Key("proxy-input"), &a.proxy).Placeholder("http://127.0.0.1:7890").Width(px(t, 280)).Label(i18n.T("Proxy URL"))
-			if in.Submitted() {
-				mode := strings.TrimSpace(a.proxy)
-				a.updateSettings(func(s *settings.Settings) { s.Models.Proxy = mode })
-			}
-		})
-	}
 
 	sectionTitle(c, i18n.T("Hugging Face token"))
 	settingRow(c, "token", i18n.T("Access token"), orDash(a.tokenInfo), func() {

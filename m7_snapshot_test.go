@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"image/png"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/ffmpeg"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/settings"
@@ -26,6 +29,14 @@ func TestSnapshotsM7(t *testing.T) {
 	os.MkdirAll(out, 0o755)
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	fake := fakeFFmpeg(t)
+	savedSys, savedReach := readSysInfo, reach
+	t.Cleanup(func() { readSysInfo, reach = savedSys, savedReach })
+	readSysInfo = func() sysInfo {
+		return sysInfo{OS: "macOS 15.4", Chip: "Apple M4", Memory: 16 << 30, Cores: 10, Arch: "arm64"}
+	}
+	reach = func(_ *http.Client, host string) netCheck {
+		return netCheck{host: host, ok: true, latency: 120 * time.Millisecond}
+	}
 	ffmpegFind = func() []string { return []string{"/opt/homebrew/bin/ffmpeg"} }
 	t.Cleanup(func() { ffmpegFind = ffmpeg.FindSystem })
 	for _, run := range []struct {
@@ -73,6 +84,29 @@ func TestSnapshotsM7(t *testing.T) {
 		a.ffPath, a.ffChecking = "/opt/homebrew/bin/ffmpeg", false
 		a.ffTool.Store(tool)
 		shot(tall, "settings-audio-tools")
+
+		// Settings pages.
+		for i, text := range []string{"Hello from AudioSmith.", "你好。", "Bonjour."} {
+			at := time.Date(2026, 10, 10+i, 10, 0, 0, 0, time.Local)
+			addTake(t, a, core.Take{ID: core.NewID(at), CreatedAt: at, Text: text, Model: kokoro, Voice: "af_heart",
+				Language: []string{"en", "zh", "fr"}[i], SampleRate: 24000, AudioSeconds: 40, GenSeconds: 8, Starred: i == 0}, 0.5)
+		}
+		a.navigate("/settings/storage")
+		shot(tall, "settings-storage")
+		a.navigate("/settings/about")
+		a.runSelfCheck()
+		shot(tall, "settings-about")
+		a.navigate("/settings/network")
+		a.testNetwork(nil)
+		shot(tall, "settings-network")
+		a.navigate("/settings/usage")
+		shot(tall, "settings-usage")
+		a.navigate("/settings/privacy")
+		shot(tall, "settings-privacy")
+		a.updateSettings(func(s *settings.Settings) { s.Appearance.Palette = "violet" })
+		a.navigate("/settings/appearance")
+		save("settings-appearance-violet")
+		a.updateSettings(func(s *settings.Settings) { s.Appearance.Palette = "" })
 
 		// The icon rail.
 		a.navigate("/studio")
