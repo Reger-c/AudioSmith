@@ -19,7 +19,7 @@ import (
 const logLines = 500
 
 func (a *app) logsPage(c *ui.Context) {
-	header(c, i18n.T("Logs"), nil)
+	pageHeader(c, i18n.T("Logs"), nil)
 	a.logsView(c, false)
 }
 
