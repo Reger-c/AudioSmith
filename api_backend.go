@@ -166,7 +166,7 @@ func apiRecipe(req api.SpeakRequest, fill func(*core.Take, *core.Voice, catalog.
 	e := req.Model
 	t := core.Take{ID: req.ID, Text: req.Text, Model: e.Repo, Speed: req.Speed, Temperature: req.Temperature, TopP: req.TopP,
 		Seed: req.Seed, Duration: req.Duration, Steps: req.Steps, Guidance: req.Guidance, Exaggeration: req.Exaggeration,
-		RefAudio: req.RefAudio, RefText: req.RefText}
+		RefAudio: req.RefAudio, RefText: req.RefText, Origin: core.TakeAPI, Client: req.Client}
 	master := ""
 	if req.Normalize {
 		master = services.MasterDefault

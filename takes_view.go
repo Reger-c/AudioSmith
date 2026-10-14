@@ -161,7 +161,8 @@ func (a *app) historyPage(c *ui.Context) {
 }
 
 // takeRow is a take in the History list: a flat card with the round play
-// button, the waveform, the script, its meta line, star, Reuse and ⋯.
+// button, the waveform, the script, its meta line, star, Reuse, Export…
+// and ⋯.
 func (a *app) takeRow(c *ui.Context, cl *core.Take) {
 	if cl == nil {
 		return
@@ -187,6 +188,9 @@ func (a *app) takeRow(c *ui.Context, cl *core.Take) {
 			if ghostButton(c.Key("reuse"), i18n.T("Reuse")).Tooltip(i18n.T("Load this take's text and settings into the studio")).Clicked() {
 				a.reuse(cl)
 			}
+			if iconButton(c.Key("export"), icons.Export, i18n.T("Export audio…")).Tooltip(i18n.T("Export the audio: format, quality, loudness")).Clicked() {
+				a.openExport(cl) // export_dialog.go (thread #31)
+			}
 			details := i18n.T("Details")
 			if selected {
 				details = i18n.T("Hide details")
@@ -199,6 +203,9 @@ func (a *app) takeRow(c *ui.Context, cl *core.Take) {
 					} else {
 						a.history.selected = cl.ID
 					}
+				}
+				if m.Item(i18n.T("Export…")).Chosen() {
+					a.openExport(cl)
 				}
 				if m.Item(i18n.T("Show in Finder")).Chosen() {
 					mygo.Shell.ShowItemInFolder(path)

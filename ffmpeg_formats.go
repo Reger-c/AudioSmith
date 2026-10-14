@@ -1,8 +1,9 @@
 package main
 
-// Saving in ffmpeg's formats (M7a): the Studio's Save as… and the books'
-// Save book… and Stems menus offer MP3, FLAC and Opus when ffmpeg is set
-// up (Settings → Audio tools), and say it is needed when it is not.
+// Saving in ffmpeg's formats (M7a): the books' Save book… and Stems menus
+// offer MP3 and Opus when ffmpeg is set up (Settings → Audio tools), and
+// say it is needed when it is not. (Takes export through the Export audio
+// dialog, export_dialog.go.)
 
 import (
 	"context"
@@ -61,27 +62,6 @@ func (a *app) ffmpegMenuItems(m *ui.Menu, formats []string, save func(format str
 		m.Separator()
 		m.Item(i18n.T("MP3, FLAC, Opus: set up ffmpeg in Settings → Audio tools")).Disabled(true)
 	}
-}
-
-// ffmpegSaveItems is the Studio's Save as… for ffmpeg's formats
-// (studio_output.go).
-func (a *app) ffmpegSaveItems(m *ui.Menu, t *core.Take) {
-	tk := *t
-	a.ffmpegMenuItems(m, encodedFormats, func(f string) { a.saveTakeEncoded(&tk, f) })
-}
-
-// saveTakeEncoded asks where to save the take in format, then encodes it.
-func (a *app) saveTakeEncoded(t *core.Take, format string) {
-	id, src := t.ID, a.takeStore.AudioPath(*t)
-	name := strings.TrimSuffix(exportName(t), filepath.Ext(exportName(t))) + "." + formatExt(format)
-	meta := map[string]string{"title": firstWords(t.Text, 8), "artist": "AudioSmith"}
-	a.saveEncodedAs(name, format, func(dst string) error {
-		err := a.encodeFile(context.Background(), ffmpeg.EncodeOptions{Input: src, Output: dst, Format: format, Metadata: meta})
-		if err == nil {
-			a.recordTakeExport(id, dst) // M3: the Projects page's Exports
-		}
-		return err
-	})
 }
 
 // saveEncodedAs asks for a destination (named name) and runs write there,

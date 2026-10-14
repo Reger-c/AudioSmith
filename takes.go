@@ -485,51 +485,46 @@ func (a *app) requestPeaks(t *core.Take) {
 	})
 }
 
-// export asks where to save a copy of the take; the dialog blocks, so it
-// runs on a goroutine of its own, as does the copy.
-func (a *app) export(t *core.Take) {
-	id, name := t.ID, exportName(t)
-	svc := a.lib.svc.Takes
-	go func() {
-		dst, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
-			Parent:      a.win,
-			Title:       i18n.T("Export audio"),
-			DefaultPath: name,
-			Filters:     []mygo.FileFilter{{Name: i18n.T("WAV audio"), Extensions: []string{"wav"}}},
-		})
-		if err != nil || dst == "" {
-			return
-		}
-		err = svc.Export(context.Background(), id, dst)
-		if err == nil {
-			a.recordTakeExport(id, dst) // M3: the Projects page's Exports (projects.go, thread #18)
-		}
-		a.post(func() {
-			if err != nil {
-				a.toast(i18n.T("Export failed: %v", err))
-			} else {
-				a.toast(i18n.T("Exported %s", filepath.Base(dst)))
+// sentenceEnd is the byte index of the mark that ends s's first sentence
+// ("." "!" "?" before a space or the end; "。" "！" "？" "；" anywhere), or
+// -1.
+func sentenceEnd(s string) int {
+	for i, r := range s {
+		switch r {
+		case '。', '！', '？', '；':
+			return i
+		case '.', '!', '?', ';':
+			if rest := s[i+1:]; rest == "" || rest[0] == ' ' {
+				return i
 			}
-		})
-	}()
+		}
+	}
+	return -1
 }
 
+// exportName is the name a take's file is exported under: its script's
+// first words (without markup) up to its first sentence's end, at most 40
+// characters; "AudioSmith.wav" for an empty one.
 func exportName(t *core.Take) string {
-	words := strings.Fields(t.Text)
+	words := strings.Fields(markupRE.ReplaceAllString(t.Text, " "))
 	if len(words) > 6 {
 		words = words[:6]
 	}
-	base := strings.Map(func(r rune) rune {
+	base := strings.Join(words, " ")
+	if i := sentenceEnd(base); i > 0 {
+		base = base[:i] // a script without spaces (Chinese) is one "word"
+	}
+	base = strings.TrimSpace(strings.TrimRight(strings.Map(func(r rune) rune {
 		if strings.ContainsRune(`/\:*?"<>|`, r) {
 			return '-'
 		}
 		return r
-	}, strings.Join(words, " "))
+	}, base), ",，、:：-– "))
+	if len([]rune(base)) > 40 {
+		base = strings.TrimSpace(string([]rune(base)[:40]))
+	}
 	if base == "" {
 		base = "AudioSmith"
-	}
-	if len([]rune(base)) > 40 {
-		base = string([]rune(base)[:40])
 	}
 	return base + ".wav"
 }

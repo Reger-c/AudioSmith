@@ -328,9 +328,9 @@ func (a *app) openItem(it store.LibraryItem) {
 	}
 }
 
-// recordTakeExport records that a take was saved to dst (from any
-// goroutine): the Projects page lists it under Exports.
-func (a *app) recordTakeExport(id, dst string) {
+// recordTakeExport records that a take was saved to dst in format ("wav",
+// "mp3"…), from any goroutine: the Projects page lists it under Exports.
+func (a *app) recordTakeExport(id, dst, format string) {
 	lib := a.lib.svc.Library
 	title := id
 	a.post(func() {
@@ -341,7 +341,7 @@ func (a *app) recordTakeExport(id, dst string) {
 			}
 		}
 		a.background(func() {
-			if _, err := lib.RecordExport(context.Background(), core.Export{Kind: "take", SourceID: id, Title: title, Path: dst, Format: "wav"}); err != nil {
+			if _, err := lib.RecordExport(context.Background(), core.Export{Kind: "take", SourceID: id, Title: title, Path: dst, Format: format}); err != nil {
 				a.post(func() { a.toast(i18n.T("Could not record the export: %v", err)) })
 			}
 		})

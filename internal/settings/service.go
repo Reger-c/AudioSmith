@@ -112,6 +112,7 @@ func clone(s Settings) Settings {
 	s.Models.Endpoints = slices.Clone(s.Models.Endpoints)
 	cloneM2(&s)
 	cloneM7(&s)
+	cloneExport(&s)
 	return s
 }
 
@@ -143,6 +144,7 @@ func normalize(s Settings) Settings {
 	s.Engine.MemoryBudgetGB = max(s.Engine.MemoryBudgetGB, 0)
 	normalizeM2(&s)
 	normalizeM7(&s)
+	normalizeExport(&s)
 	return s
 }
 

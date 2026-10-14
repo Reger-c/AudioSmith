@@ -324,7 +324,7 @@ func TestOutputPanel(t *testing.T) {
 	a.lastClipID = "T1"
 	tt.Frame()
 	for _, want := range []string{"Latest take", "2.5× realtime", "72 KB · 24 kHz · 24-bit · mono",
-		"Chunk 2 is 0.2 s long where its text needs about 2.5 s: words may be missing.", "Check audio", "Save as…"} {
+		"Chunk 2 is 0.2 s long where its text needs about 2.5 s: words may be missing.", "Check audio", "Export audio…"} {
 		if !strings.Contains(strings.Join(tt.Texts(), "|"), want) {
 			t.Errorf("lacks %q: %q", want, tt.Texts())
 		}
@@ -353,14 +353,14 @@ func TestOutputPanel(t *testing.T) {
 	if !a.findTake("T1").Starred {
 		t.Error("not starred")
 	}
-	// Save as… offers the bit depths.
-	if err := tt.Click("Save as…"); err != nil {
+	// Export audio… opens the Export audio dialog (export_dialog.go).
+	if err := tt.Click("Export audio…"); err != nil {
 		t.Fatal(err)
 	}
-	if m := strings.Join(tt.Menu(), "|"); !strings.Contains(m, "WAV, 16-bit") || !strings.Contains(m, "WAV, 32-bit float") {
-		t.Errorf("menu %q", m)
+	tt.Frame()
+	if a.exp == nil || a.exp.take.ID != "T1" || !tt.HasText("32-bit float") {
+		t.Errorf("no dialog: %q", tt.Texts())
 	}
-	tt.CloseMenu()
 }
 
 func TestHistoryStarFilterSearchAndDetails(t *testing.T) {

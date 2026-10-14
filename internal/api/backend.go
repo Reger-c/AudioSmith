@@ -175,6 +175,9 @@ type SpeakRequest struct {
 	// requests unless asked, so streamed audio equals the take.
 	Normalize bool
 	Bits      int // 16 (0), 24, 32 (float)
+	// Client names the agent asking (MCP, X-AudioSmith-Client), "" when
+	// it did not say.
+	Client string
 	// Background queues behind interactive work.
 	Background bool
 }

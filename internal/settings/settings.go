@@ -43,6 +43,8 @@ type Settings struct {
 	Setup Setup `json:"setup"`
 	Media Media `json:"media"`
 	Calls Calls `json:"calls"` // M6b (thread #23, calls.go)
+	// The Export audio dialog's last choices, per kind (export.go).
+	Export Export `json:"export"`
 }
 
 // General: language and app behaviour.

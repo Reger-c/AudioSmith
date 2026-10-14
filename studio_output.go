@@ -3,12 +3,12 @@ package main
 // A take's output panel (the Studio's latest take, the History's details):
 // waveform with click-to-seek and a handle to drag the file out, file
 // details, the render's warnings, Check audio (findings that seek when
-// clicked), Save as… in a bit depth, Show in Finder.
+// clicked), Export… (the Export audio dialog, export_dialog.go), Show in
+// Finder.
 
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -109,50 +109,6 @@ func (a *app) checkTake(t *core.Take) {
 				a.toast(i18n.T("Could not check the audio: %v", err))
 			}
 		})
-	})
-}
-
-// saveAs asks where to save a copy of the take in bits (16, 24, 32 float).
-func (a *app) saveAs(t *core.Take, bits int) {
-	id, name := t.ID, exportName(t)
-	svc := a.lib.svc.Render
-	go func() {
-		dst, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
-			Parent:      a.win,
-			Title:       i18n.T("Save audio as"),
-			DefaultPath: name,
-			Filters:     []mygo.FileFilter{{Name: i18n.T("WAV audio"), Extensions: []string{"wav"}}},
-		})
-		if err != nil || dst == "" {
-			return
-		}
-		if filepath.Ext(dst) == "" {
-			dst += ".wav"
-		}
-		err = svc.ExportAs(context.Background(), id, dst, bits)
-		if err == nil {
-			a.recordTakeExport(id, dst) // M3: the Projects page's Exports (projects.go, thread #18)
-		}
-		a.post(func() {
-			if err != nil {
-				a.toast(i18n.T("Export failed: %v", err))
-			} else {
-				a.toast(i18n.T("Saved %s", filepath.Base(dst)))
-			}
-		})
-	}()
-}
-
-// saveAsMenu is the Save as… button (an icon) with its formats.
-func (a *app) saveAsMenu(c *ui.Context, t *core.Take) {
-	tk := *t
-	iconButton(c.Key("save-as"), icons.Export, i18n.T("Save as…")).Menu(func(m *ui.Menu) {
-		for _, bits := range bitDepths {
-			if m.Item(i18n.T("WAV, %s", bitsLabel(bits))).Chosen() {
-				a.saveAs(&tk, bits)
-			}
-		}
-		a.ffmpegSaveItems(m, &tk) // M7a: MP3, FLAC, Opus with ffmpeg (ffmpeg_formats.go)
 	})
 }
 
@@ -279,7 +235,9 @@ func (a *app) outputPanel(c *ui.Context, t *core.Take, latest bool) {
 					a.checkTake(t)
 				}
 			}
-			a.saveAsMenu(c, t)
+			if iconButton(c.Key("export"), icons.Export, i18n.T("Export audio…")).Tooltip(i18n.T("Export the audio: format, quality, loudness")).Clicked() {
+				a.openExport(t) // export_dialog.go
+			}
 			path := a.takeStore.AudioPath(*t)
 			moreMenu(c.Key("take-more"), "", func(m *ui.Menu) {
 				if m.Item(i18n.T("Show in Finder")).Chosen() {

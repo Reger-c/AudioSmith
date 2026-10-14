@@ -349,6 +349,9 @@ func (a *app) itemActions(c *ui.Context, it store.LibraryItem) {
 		if it.Source == "project" && m.Item(i18n.T("Rename")).Chosen() {
 			s.renaming, s.renameText = key, it.Title
 		}
+		if it.Source == "take" && a.findTake(it.ID) != nil && m.Item(i18n.T("Export…")).Chosen() {
+			a.openExport(a.findTake(it.ID)) // export_dialog.go (thread #31)
+		}
 		if reveal != "" && m.Item(i18n.T("Show in Finder")).Chosen() {
 			mygo.Shell.ShowItemInFolder(reveal)
 		}

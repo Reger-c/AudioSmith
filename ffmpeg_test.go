@@ -244,7 +244,7 @@ func TestMediaSupFallback(t *testing.T) {
 	_ = core.ErrEngine
 }
 
-// The Studio's Save as… writes MP3 with ffmpeg.
+// The Export audio dialog writes MP3 with ffmpeg.
 func TestSaveTakeMP3(t *testing.T) {
 	path := realFFmpeg(t)
 	a, _, tt := newTestApp(t)
@@ -256,12 +256,14 @@ func TestSaveTakeMP3(t *testing.T) {
 	take := core.Take{ID: "01JTAKE0000000000000000001", Text: "Hello there", Model: kokoro, Voice: "af_heart", Speed: 1, SampleRate: 24000}
 	addTake(t, a, take, 1)
 	take = a.takes[0] // with its file
-	ffmpegSaveDir = t.TempDir()
-	t.Cleanup(func() { ffmpegSaveDir = "" })
-	a.saveTakeEncoded(&take, ffmpeg.MP3)
+	exportSaveDir = t.TempDir()
+	t.Cleanup(func() { exportSaveDir = "" })
+	a.openExport(&take) // the Export audio dialog (export_dialog.go)
+	a.exp.format = formatIndex(ffmpeg.MP3)
+	a.exportChoose(a.exp)
 	toasts := a.toasts
 	tt.Frame()
-	ents, _ := os.ReadDir(ffmpegSaveDir)
+	ents, _ := os.ReadDir(exportSaveDir)
 	if len(ents) != 1 || filepath.Ext(ents[0].Name()) != ".mp3" {
 		t.Fatalf("saved %v (toasts %q)", ents, toasts)
 	}
