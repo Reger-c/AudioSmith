@@ -29,6 +29,7 @@ ssh "$HOST" "mkdir -p '$DIR'"
 rsync -a --delete \
   --exclude .git --exclude /build --exclude /.mygo \
   --exclude /engine/.build --exclude /resources/darwin-arm64 \
+  --exclude /AudioSmith \
   "$ROOT/" "$HOST:$DIR/"
 
 [[ $# -eq 0 ]] && exit 0
