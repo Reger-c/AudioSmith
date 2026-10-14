@@ -158,7 +158,7 @@ func TestSupervisorHandshakeAndJobs(t *testing.T) {
 	if !errors.Is(err, &proto.Error{Code: proto.CodeModelLoadFailed}) {
 		t.Errorf("load broken: %v", err)
 	}
-	_, err = s.Call(context.Background(), proto.RoleGPU, "", "diarize.run", nil, nil)
+	_, err = s.Call(context.Background(), proto.RoleGPU, "", "lid.detect", nil, nil)
 	if !errors.Is(err, &proto.Error{Code: proto.CodeMethodNotFound}) {
 		t.Errorf("unknown method: %v", err)
 	}
