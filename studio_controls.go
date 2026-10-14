@@ -333,7 +333,11 @@ func (a *app) qualityPopover(c *ui.Context) {
 		a.composer.qualityOpen = !a.composer.qualityOpen
 	}
 	ui.Popover(c, btn, &a.composer.qualityOpen, func() {
-		ui.Scroll(c.Key("quality-pop-scroll")).MaxHeight(px(t, 300)).Children(func() {
+		popoverWithFooter(c, "quality", func() {
+			if secondaryIconButton(c.Key("quality-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
+				a.bitsIndex, a.steps, a.evenOut, a.normalize = 0, 0, true, true
+			}
+		}, func() {
 			ui.Column(c.Key("quality-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
 				ui.Text(c, i18n.T("WAV precision")).FontWeight(600)
 				segmentedFit(c.Key("bits"), &a.bitsIndex, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float")).Label(i18n.T("WAV precision"))
@@ -363,9 +367,6 @@ func (a *app) qualityPopover(c *ui.Context) {
 				formRow(c, "normalize-row", i18n.T("Read numbers as words"), i18n.T("Numbers, times, dates, money and abbreviations, before the model reads them."), func() {
 					ui.Switch(c.Key("normalize"), &a.normalize).Label(i18n.T("Read numbers as words"))
 				})
-				if ghostIconButton(c.Key("quality-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
-					a.bitsIndex, a.steps, a.evenOut, a.normalize = 0, 0, true, true
-				}
 			})
 		})
 	})
@@ -380,7 +381,13 @@ func (a *app) voicePopover(c *ui.Context) {
 		a.composer.voiceOpen = !a.composer.voiceOpen
 	}
 	ui.Popover(c, btn, &a.composer.voiceOpen, func() {
-		ui.Scroll(c.Key("voice-pop-scroll")).MaxHeight(px(t, 300)).Children(func() {
+		popoverWithFooter(c, "voice", func() {
+			if secondaryIconButton(c.Key("voice-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
+				a.speed, a.duration, a.seedPinned, a.modelDefaults = 1, 0, false, true
+				a.guidance, a.exaggeration = 0, 0
+				a.temperature, a.topP, a.maxTokens = 0.7, 0.9, 1200
+			}
+		}, func() {
 			ui.Column(c.Key("voice-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
 				if p.Has(catalog.CapSpeed) {
 					ui.Field(c, i18n.T("Speed  %.2f×", a.speed), func() {
@@ -442,11 +449,6 @@ func (a *app) voicePopover(c *ui.Context) {
 							numberInput(c.Key("maxtokens"), &a.maxTokens, 50, 8000, 50, numOpts{Label: i18n.T("Max tokens")})
 						})
 					}
-				}
-				if ghostIconButton(c.Key("voice-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
-					a.speed, a.duration, a.seedPinned, a.modelDefaults = 1, 0, false, true
-					a.guidance, a.exaggeration = 0, 0
-					a.temperature, a.topP, a.maxTokens = 0.7, 0.9, 1200
 				}
 			})
 		})

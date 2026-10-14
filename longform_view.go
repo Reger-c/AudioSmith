@@ -275,7 +275,7 @@ func (a *app) lfProduction(c *ui.Context, p *lfPage, locked bool) {
 		}
 	})
 	ui.Row(c).Children(func() {
-		if ghostIconButton(c.Key("lf-prod-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Disabled(locked || *pr == services.DefaultProduction()).Clicked() {
+		if secondaryIconButton(c.Key("lf-prod-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Disabled(locked || *pr == services.DefaultProduction()).Clicked() {
 			*pr = services.DefaultProduction()
 		}
 	})
