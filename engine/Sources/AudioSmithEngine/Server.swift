@@ -136,7 +136,8 @@ final class Server: @unchecked Sendable {
                   Method.sttTranscribe, Method.sttAlign, Method.vadDetect, Method.enhanceRun, Method.separateRun, Method.diarizeRun,
                   Method.llmGenerate]
         case .media:
-            m += [Method.mediaProbe, Method.mediaDecode, Method.mediaEncode, Method.mediaMux, Method.mediaThumbnail, Method.mediaTranscode]
+            m += [Method.mediaProbe, Method.mediaDecode, Method.mediaEncode, Method.mediaMux, Method.mediaThumbnail, Method.mediaTranscode,
+                  Method.watermarkEmbed, Method.watermarkDetect]
         case .listen:
             m += [Method.captureDevices, Method.captureStart, Method.captureStop,
                   Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.sttTranscribe]
@@ -271,6 +272,14 @@ final class Server: @unchecked Sendable {
                 guard let analyzer, role == .gpu else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
                 let offline = self.offline
                 startJob(id) { try await analyzer.generate(p, job: id, offline: offline) }
+            case Method.watermarkEmbed:
+                let p = try msg.decodeParams(WatermarkEmbedParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await media.watermarkEmbed(p, job: id) }
+            case Method.watermarkDetect:
+                let p = try msg.decodeParams(WatermarkDetectParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await media.watermarkDetect(p, job: id) }
             case Method.mediaMux:
                 let p = try msg.decodeParams(MuxParams.self)
                 guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
@@ -351,7 +360,7 @@ final class Server: @unchecked Sendable {
         out.result(id, HelloResult(
             protocol: protocolVersion, version: engineVersion, role: role, pid: Int(getpid()),
             concurrency: concurrency, methods: methods,
-            families: role == .gpu ? Synthesizer.families + Analyzer.families + Analyzer.m4Families + Analyzer.llmFamilies : role == .listen ? Analyzer.listenFamilies : [],
+            families: role == .gpu ? Synthesizer.families + Analyzer.families + Analyzer.m4Families + Analyzer.llmFamilies : role == .listen ? Analyzer.listenFamilies : MediaWorker.watermarkFamilies,
             device: deviceInfo()))
     }
 

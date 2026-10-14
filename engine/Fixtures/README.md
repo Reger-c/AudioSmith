@@ -21,6 +21,7 @@ Golden transcripts of the engine protocol: the contract between the Go app and t
 | `thumbnail.jsonl` | `media.thumbnail` (JPEG and PNG); no video track |
 | `transcode.jsonl` | `media.transcode` to a 720p preview; WebM refused |
 | `llm.jsonl` | `llm.generate` streamed (`llm.token`), JSON with a schema (constrained), `context_too_long`, `models.load` of an LLM |
+| `watermark.jsonl` | a media worker with the watermark: `watermark.embed`, `watermark.detect`, a message over 16 bits (`bad_request`), a missing file |
 | `logs.jsonl` | structured `log` notifications |
 | `legacy_v1.jsonl` | the first line of a protocol-1 engine (detected, refused) |
 

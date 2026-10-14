@@ -386,6 +386,59 @@ Types: [`llm.go`](../internal/engine/proto/llm.go) (Go; `internal/llm`'s `Genera
 - **Memory.** Before loading a model, the gpu worker unloads idle models, least recently used first, until the model's weights fit in the memory budget (`AUDIOSMITH_MEMORY_BUDGET`, else 60 % of the Mac's memory, as the supervisor assumes): a 2.3 GB language model evicts idle TTS models on a tight Mac without waiting for the supervisor.
 - **In the app,** `llm.EngineBackend` (provider `local`, `local_llm.go`) calls the gpu worker directly; it is first in the automatic writing-help routing once its model is downloaded. A dub's translation stage then runs on the gpu lane, so it queues with renders. `llm.generate` is also a job kind (`engine.ExecutorKinds`): `llm.token` notifications are the job's chunks.
 
+## 5.5 The invisible watermark
+
+Types: [`watermark.go`](../internal/engine/proto/watermark.go) (Go), [`WireWatermark.swift`](../engine/Sources/AudioSmithProtocol/WireWatermark.swift). Fixture: `watermark.jsonl`. Both methods are jobs on the **media** worker.
+
+The model is Meta's **AudioSeal** (facebookresearch/audioseal, MIT; weights `facebook/audioseal`, MIT), ported to MLX in [`AudioSeal.swift`](../engine/Sources/AudioSmithEngine/AudioSeal.swift): a SEANet encoder–decoder makes a 16 kHz watermark from a 16-bit message, and a SEANet detector scores every sample and decodes the message. The repo ships PyTorch `.pth` pickles only. The app converts them once, without Python and without unpickling code ([`internal/torchpt`](../internal/torchpt), [`internal/watermark`](../internal/watermark)), into `generator.safetensors` and `detector.safetensors` (weight norm folded) beside the model cache. `modelPath` is that folder.
+
+### `watermark.embed` (job, media)
+
+```json
+→ {"id":"01JE…","method":"watermark.embed","params":{"model":"facebook/audioseal","modelPath":"/…/audiosmith-converted/facebook--audioseal/3c19eba…",
+   "input":"/…/takes/01JE/take.wav","output":{"path":"/…/takes/01JE/take.wm.wav","bits":24},"message":42330,"strength":1}}
+← job.progress {stage:"loading"} … {stage:"watermarking", fraction} … {stage:"writing"}
+← {"id":"01JE…","result":{"output":"/…/take.wm.wav","sampleRate":24000,"channels":1,"frames":297600,"audioSeconds":12.4,"model":"facebook/audioseal","message":42330,"snr":31.2,"seconds":0.21}}
+```
+
+- **Input** is anything the engine reads. The output keeps the input's rate and channels. The watermark is computed on a 16 kHz mono mix (AVFoundation resampling), resampled to the input's rate (AVAudioConverter, best quality) and added to every channel. Samples are clipped to ±1. `output.path` may be the input: the file is read whole first, then written to a temporary name and renamed.
+- **`message`** is 16 bits (0–65535); bit 15 is the model's first bit. Out of range: `bad_request`.
+- **`strength`** scales the watermark (AudioSeal's alpha, default 1).
+- **`snr`** is the audio's power over the watermark's, in dB. AudioSeal's watermark sits at about 25 dB under speech.
+- Long inputs run in 20 s windows; the watermark is crossfaded over 1 s overlaps.
+- **Speed** (MacBook Air M4, Metal): 1.3 s per minute of audio. AUDIOSMITH_WATERMARK_DEVICE=cpu runs it on the CPU (23 s a minute).
+
+### `watermark.detect` (job, media)
+
+```json
+→ {"id":"01JE…","method":"watermark.detect","params":{"model":"facebook/audioseal","modelPath":"/…","input":"/Users/me/Downloads/clip.m4a"}}
+← job.progress {stage:"detecting", fraction} …
+← {"id":"01JE…","result":{"probability":0.998,"detected":true,"message":42330,"bits":[0.99,0.02,…],"confidence":0.94,
+   "frames":[{"start":0,"end":1,"probability":0.997},…],"audioSeconds":3,"model":"facebook/audioseal","seconds":0.05}}
+```
+
+- **`probability`** is the fraction of samples whose watermark probability is over `threshold` (default 0.5), as AudioSeal's `detect_watermark` computes it. `detected` = `probability ≥ 0.5`.
+- **`message`** is decoded even when there is no watermark (it is then random). `bits` are the probabilities of each bit being 1, most significant first; `confidence` is their mean |2p − 1|.
+- **`frames`** give the probability per second, to locate watermarked stretches.
+- **Speed:** 0.65 s per minute of audio. The detector's 320× transposed convolution and its 1×1 head are folded into one matrix.
+
+### AudioSmith's message
+
+`internal/watermark`: the high byte is the marker `0xA5`; the low byte is the install id (1–255, chosen at random once; `settings.Privacy.WatermarkID`). A file is reported as made by AudioSmith when it is detected, the marker matches, and the bits are decoded with confidence ≥ 0.2.
+
+### Robustness
+
+Mac, `TestWatermarkEngine`; Kokoro, Qwen3-TTS CustomVoice and OmniVoice takes, 10–11 s at 24 kHz:
+
+| Check | Result |
+|---|---|
+| Watermarked | p = 1.000, exact message |
+| Clean takes | p = 0.001–0.043 |
+| AAC 64 kb/s | still detected |
+| 24→48 kHz resampling | still detected |
+| Loudness normalisation to −16 LUFS | still detected |
+| ±5 % time-stretch (WSOLA) | **not reliably detected** (p ≈ 0.25); AudioSeal is not trained for speed changes |
+
 ## 6. Notifications (engine → app)
 
 | Method | Params | Notes |
@@ -436,7 +489,7 @@ These names are taken; `proto.Reserved` lists them. An engine that does not impl
 | Media | `media.timePitch`, `media.ocr`, `doc.extractText` | media | later |
 | Capture | `capture.pcm` (raw input for streaming ASR) | listen | M2 |
 
-M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2); M3 `media.encode`; M4 `separate.run`, `diarize.run`, `media.mux`, `media.thumbnail` and `media.transcode` (§5.3); `llm.generate` (§5.4).
+M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2); M3 `media.encode`; M4 `separate.run`, `diarize.run`, `media.mux`, `media.thumbnail` and `media.transcode` (§5.3); `llm.generate` (§5.4); `watermark.embed` and `watermark.detect` (§5.5).
 
 ## 9. Versions and compatibility
 
