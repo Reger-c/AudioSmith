@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"math"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -28,6 +29,8 @@ import (
 	"github.com/hehehai/AudioSmith/internal/api"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp/stretch"
+	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -370,11 +373,12 @@ func (a *app) convertSpeak(ch toolChoice) {
 		return
 	}
 	t := a.toolRecipe(ch, cv.heard)
+	stretchTo := 0.0
 	if cv.match && cv.duration > 0 {
 		if ch.model.Has(catalog.CapDuration) {
 			t.Duration = cv.duration
 		} else {
-			cv.note = i18n.T("%s cannot aim at a length: the take keeps its natural pace. OmniVoice can.", ch.model.Label)
+			stretchTo = cv.duration // after the take, by time-stretching it
 		}
 	}
 	cv.stage = i18n.T("Speaking…")
@@ -402,11 +406,76 @@ func (a *app) convertSpeak(ch toolChoice) {
 				var res services.RenderResult
 				json.Unmarshal(j.Result, &res)
 				done := t
-				done.AudioSeconds, done.SampleRate, done.JobID = res.AudioSeconds, res.SampleRate, j.ID
+				done.File = t.ID + ".wav"
+				done.AudioSeconds, done.SampleRate, done.JobID, done.GenSeconds = res.AudioSeconds, res.SampleRate, j.ID, res.Seconds
+				if res.Seed != 0 {
+					done.Seed = res.Seed
+				}
 				a.cv.take = &done
+				if stretchTo > 0 && res.Output != "" {
+					a.convertStretch(done, res.Output, stretchTo)
+				}
 			})
 		})
 	})
+}
+
+// convertMaxRatio bounds how far Convert stretches a take to match a
+// recording (beyond it speech smears; see dsp/stretch).
+const convertMaxRatio = 2.0
+
+// convertStretch makes a copy of take as long as the recording, by
+// time-stretching it without changing its pitch, and adds it to the
+// History (the natural take stays there too).
+func (a *app) convertStretch(take core.Take, path string, target float64) {
+	file := a.cv.file
+	a.cv.stage = i18n.T("Matching the length…")
+	svc := a.lib.svc.Takes
+	a.async(func() {
+		matched, note, err := stretchTake(context.Background(), svc, take, path, target)
+		a.post(func() {
+			if a.cv.file != file {
+				return
+			}
+			a.cv.stage = ""
+			if err != nil {
+				a.cv.err = i18n.T("Could not match the length: %v", err)
+				return
+			}
+			a.cv.note = note
+			a.cv.take = &matched
+		})
+	})
+}
+
+// stretchTake writes take's audio stretched to target seconds as a new
+// take. note says when the ratio had to be capped.
+func stretchTake(ctx context.Context, svc core.TakeService, take core.Take, path string, target float64) (core.Take, string, error) {
+	buf, _, err := wav.ReadFile(path)
+	if err != nil {
+		return core.Take{}, "", err
+	}
+	if buf.Frames() == 0 || buf.Rate <= 0 {
+		return core.Take{}, "", errors.New("the take has no audio")
+	}
+	have := float64(buf.Frames()) / float64(buf.Rate)
+	ratio, note := target/have, ""
+	if r := min(max(ratio, 1/convertMaxRatio), convertMaxRatio); r != ratio {
+		ratio = r
+		note = i18n.T("The take is %.1f s and the recording %.1f s: stretched as far as speech allows (%.1f s).", have, target, have*ratio)
+	}
+	out := stretch.ToLength(buf, int(math.Round(have*ratio*float64(buf.Rate))), stretch.Options{})
+	m := take
+	m.ID = core.NewID(timeNow())
+	m.File = m.ID + ".wav"
+	m.CreatedAt, m.Starred, m.JobID = time.Time{}, false, ""
+	m.Duration = out.Seconds()
+	m.AudioSeconds, m.SampleRate = out.Seconds(), out.Rate
+	if err := wav.WriteFile(filepath.Join(svc.AudioDir(), m.File), out, wav.PCM16, wav.Options{}); err != nil {
+		return core.Take{}, "", err
+	}
+	saved, err := svc.Add(ctx, m)
+	return saved, note, err
 }
 
 // --- rate fit ----------------------------------------------------------------

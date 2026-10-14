@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -79,14 +80,22 @@ func TestToolsConvert(t *testing.T) {
 	if !strings.HasPrefix(gen.Spec.Owner, "take:") || gen.Text != "Meet me at noon." {
 		t.Fatalf("generate %+v", gen)
 	}
-	// Kokoro cannot aim at a length: a note says so.
-	if a.cv.note == "" {
-		t.Fatal("no note about the length")
+	if gen.Duration != nil {
+		t.Fatal("Kokoro got a target duration")
 	}
-	eng.succeed(gen.ID, services.RenderResult{AudioSeconds: 2.5, SampleRate: 24000})
+	// Kokoro cannot aim at a length: its take is stretched to 3 s.
+	out := filepath.Join(t.TempDir(), "natural.wav")
+	writeTestWAV(t, out, 24000, 2.5)
+	eng.succeed(gen.ID, services.RenderResult{Output: out, AudioSeconds: 2.5, SampleRate: 24000})
 	tt.Frame()
-	if a.cv.take == nil || a.cv.take.AudioSeconds != 2.5 || a.cv.stage != "" {
+	if a.cv.take == nil || a.cv.stage != "" || a.cv.err != "" {
 		t.Fatalf("take %+v", a.cv)
+	}
+	if d := a.cv.take.AudioSeconds; d < 2.99 || d > 3.01 {
+		t.Fatalf("matched take is %.3f s", d)
+	}
+	if _, err := a.lib.svc.Takes.Get(context.Background(), a.cv.take.ID); err != nil {
+		t.Fatalf("the matched take is not in the History: %v", err)
 	}
 }
 

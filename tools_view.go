@@ -125,7 +125,7 @@ func (a *app) convertTool(c *ui.Context) {
 	ui.Field(c, i18n.T("Voice"), func() {
 		ui.Select(c.Key("cv-voice"), &cv.voice, labels).Label(i18n.T("Voice")).Width(px(t, 280))
 	})
-	settingRow(c, "cv-match", i18n.T("Match the recording's length"), i18n.T("Models that aim at a length (OmniVoice) make the take as long as the recording."), func() {
+	settingRow(c, "cv-match", i18n.T("Match the recording's length"), i18n.T("OmniVoice aims at the length as it speaks; other models' takes are time-stretched to it, at the same pitch (up to twice as fast or slow)."), func() {
 		ui.Switch(c.Key("cv-match-switch"), &cv.match).Label(i18n.T("Match the recording's length"))
 	})
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {

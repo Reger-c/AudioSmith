@@ -94,7 +94,7 @@ func TestSnapshotsM5(t *testing.T) {
 		save("tools-ab")
 		a.toolTab = 1
 		a.cv = toolConvert{file: "/tmp/memo.m4a", name: "memo.m4a", duration: 4.2, heard: "Meet me at the station at noon, and bring the tickets.", match: true,
-			note: i18n.T("%s cannot aim at a length: the take keeps its natural pace. OmniVoice can.", "Kokoro 82M"),
+			note: i18n.T("The take is %.1f s and the recording %.1f s: stretched as far as speech allows (%.1f s).", 9.1, 4.2, 4.6),
 			take: &core.Take{ID: "t-conv", AudioSeconds: 3.9}}
 		save("tools-convert")
 		a.toolTab = 2
