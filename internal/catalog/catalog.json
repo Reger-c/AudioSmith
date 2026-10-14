@@ -623,6 +623,7 @@
       ],
       "minMemoryGB": 4,
       "quantization": "4bit",
+      "hidden": true,
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-1.7B", "commercial": true, "verified": true}
     },
     {
