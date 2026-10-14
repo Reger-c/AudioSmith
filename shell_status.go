@@ -272,30 +272,33 @@ func (a *app) quickSwitch(c *ui.Context) {
 		}
 		ui.Divider(c)
 		sectionTitle(c, i18n.T("Speech model"))
-		for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
-			m := a.models[modelKey(e)]
-			chosen := a.preset().Repo == e.Repo
-			row := ui.ButtonBase(c.Key("switch-"+e.ID)).Padding(px(t, 5), px(t, sp2)).Radius(px(t, radiusControl)).Label(e.Label).Checked(chosen)
-			if chosen {
-				row.Background(k.Pressed)
-			} else if row.Hovered() {
-				row.Background(k.Hover)
-			}
-			row.Children(func() {
-				ui.Row(c).Grow(1).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, e.Label).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
-					if m != nil && m.known && m.local.State == hub.Downloaded {
-						ui.Text(c, i18n.T("Downloaded")).FontSize(px(t, fsMicro)).TextColor(k.Text3)
-					}
-					if chosen {
-						ui.Icon(c, icons.Check.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Accent)
-					}
+		_, winH := c.Size()
+		ui.Scroll(c.Key("switch-models")).MaxHeight(max(winH*0.45, px(t, 120))).Children(func() {
+			for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
+				m := a.models[modelKey(e)]
+				chosen := a.preset().Repo == e.Repo
+				row := ui.ButtonBase(c.Key("switch-"+e.ID)).Padding(px(t, 5), px(t, sp2)).Radius(px(t, radiusControl)).Label(e.Label).Checked(chosen)
+				if chosen {
+					row.Background(k.Pressed)
+				} else if row.Hovered() {
+					row.Background(k.Hover)
+				}
+				row.Children(func() {
+					ui.Row(c).Grow(1).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, e.Label).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
+						if m != nil && m.known && m.local.State == hub.Downloaded {
+							ui.Text(c, i18n.T("Downloaded")).FontSize(px(t, fsMicro)).TextColor(k.Text3)
+						}
+						if chosen {
+							ui.Icon(c, icons.Check.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Accent)
+						}
+					})
 				})
-			})
-			if row.Clicked() {
-				a.selectModel(e)
+				if row.Clicked() {
+					a.selectModel(e)
+				}
 			}
-		}
+		})
 		ui.Divider(c)
 		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			if ui.Button(c.Key("switch-preload"), i18n.T("Preload")).Disabled(eng.Busy || eng.State != engineReady).Clicked() {

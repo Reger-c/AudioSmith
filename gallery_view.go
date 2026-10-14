@@ -5,6 +5,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/gallery"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
@@ -200,7 +201,7 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 				Tooltip(i18n.T("Save it to your voices and open it in Design")).Clicked() {
 				a.useArchetype(arch, false)
 			}
-			ui.Button(c.Key("more"), "⋯").Label(i18n.T("More actions")).Menu(func(m *ui.Menu) {
+			iconButton(c.Key("more"), icons.MenuDots, i18n.T("More actions")).Menu(func(m *ui.Menu) {
 				if m.Item(i18n.T("Use in Studio")).Chosen() {
 					a.useArchetype(arch, true)
 				}

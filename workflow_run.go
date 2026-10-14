@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/workflow"
@@ -29,7 +30,7 @@ func (a *app) wfRunPanel(c *ui.Context) {
 	if a.wfErr != "" {
 		ui.Row(c.Key("wf-run-err")).Gap(px(t, 6)).Padding(px(t, 8)).Radius(6).Border(1, t.Danger).Children(func() {
 			ui.Text(c, a.wfErr).FontSize(px(t, 12)).TextColor(t.Danger).Grow(1).MinWidth(0)
-			if ui.Button(c.Key("x"), "×").Label(i18n.T("Dismiss")).Clicked() {
+			if iconButton(c.Key("x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 				a.wfErr = ""
 			}
 		})

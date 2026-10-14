@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
@@ -64,7 +65,7 @@ func (a *app) batchSetup(c *ui.Context) {
 			ff := f
 			ui.Row(c.Key("file-" + f)).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, filepath.Base(ff)).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine()
-				if ui.Button(c.Key("x"), "×").Label(i18n.T("Remove %s", filepath.Base(ff))).Clicked() {
+				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", filepath.Base(ff))).Clicked() {
 					b.files = slices.DeleteFunc(b.files, func(x string) bool { return x == ff })
 				}
 			})
@@ -80,7 +81,7 @@ func (a *app) batchSetup(c *ui.Context) {
 			ll := l
 			ui.Row(c.Key("lang-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 6)).Radius(10).Background(t.Background).Border(1, t.Border).Children(func() {
 				ui.Text(c, dubLangName(ll)).FontSize(px(t, 12))
-				if ui.Button(c.Key("x"), "×").Label(i18n.T("Remove %s", dubLangName(ll))).Clicked() {
+				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Clicked() {
 					a.batchSetSettings(func(s *services.BatchSettings) {
 						s.Targets = slices.DeleteFunc(s.Targets, func(x string) bool { return x == ll })
 					})

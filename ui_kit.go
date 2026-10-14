@@ -28,6 +28,20 @@ func primaryButton(c *ui.Context, label string) ui.Element {
 	return b
 }
 
+// recordButton is a record or destructive action (Record, Stop
+// recording, Erase…): MyGo's primary button in the red-orange.
+func recordButton(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	k := tok(t)
+	rec := *t
+	rec.Accent, rec.AccentText = k.Record, ui.Hex("#ffffff")
+	rec.AccentHover, rec.AccentPressed = k.Record.Mix(ui.Hex("#000000"), 0.1), k.Record.Mix(ui.Hex("#000000"), 0.2)
+	c.SetTheme(&rec)
+	b := ui.PrimaryButton(c, label)
+	c.SetTheme(t)
+	return b
+}
+
 // primaryIconButton is primaryButton with an icon before its label.
 func primaryIconButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
 	t := c.Theme()
@@ -228,14 +242,15 @@ func collapsible(c *ui.Context, title string, open *bool, trailing, fn func()) u
 // none), and its control on the right.
 func formRow(c *ui.Context, key, title, info string, control func()) {
 	t := c.Theme()
-	ui.Row(c.Key(key)).Gap(px(t, sp4)).AlignItems(ui.Center).MinHeight(px(t, 32)).Children(func() {
-		ui.Row(c).Grow(1).MinWidth(0).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+	// The control goes under the name when both do not fit on a line.
+	ui.Row(c.Key(key)).Wrap().GapX(px(t, sp4)).GapY(px(t, 6)).AlignItems(ui.Center).MinHeight(px(t, 32)).Children(func() {
+		ui.Row(c).Grow(1).Basis(px(t, 160)).MinWidth(px(t, 120)).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, title).MinWidth(0)
 			if info != "" {
 				infoTip(c, info)
 			}
 		})
-		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(1).MinWidth(0).Children(control)
+		ui.Row(c).Wrap().Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(1).MinWidth(0).Children(control)
 	})
 }
 

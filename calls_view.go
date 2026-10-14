@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
 	"github.com/hehehai/AudioSmith/internal/telephony"
@@ -107,7 +108,7 @@ func (a *app) callHistory(c *ui.Context) {
 		}
 		ui.Text(c, i18n.T("Recent calls")).Bold().Grow(1)
 		ui.Text(c, i18n.T("%d of %d lines in use", live, max)).FontSize(px(t, 11)).TextColor(t.TextMuted)
-		if ui.Button(c.Key("calls-refresh"), "↻").Label(i18n.T("Refresh")).Tooltip(i18n.T("Refresh")).Clicked() {
+		if iconButton(c.Key("calls-refresh"), icons.Refresh, i18n.T("Refresh")).Tooltip(i18n.T("Refresh")).Clicked() {
 			a.loadCalls()
 		}
 	})

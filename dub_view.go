@@ -168,7 +168,7 @@ func (a *app) dubEmpty(c *ui.Context) {
 							if ui.Button(c.Key("dub-cookies"), label).Clicked() {
 								a.dubChooseCookies()
 							}
-							if a.dubCookies != "" && ui.Button(c.Key("dub-cookies-x"), "×").Label(i18n.T("Remove the cookies")).Clicked() {
+							if a.dubCookies != "" && iconButton(c.Key("dub-cookies-x"), icons.Close, i18n.T("Remove the cookies")).Clicked() {
 								a.dubCookies = ""
 							}
 						})
@@ -359,7 +359,7 @@ func (a *app) dubBanners(c *ui.Context) {
 					a.navigate("/settings/dubbing")
 				}
 			}
-			if ui.Button(c.Key("b-error-x"), "×").Label(i18n.T("Dismiss")).Clicked() {
+			if iconButton(c.Key("b-error-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 				a.dubErr, a.dubErrCode, a.dubNeed = "", "", nil
 			}
 		})
@@ -373,7 +373,7 @@ func (a *app) dubBanners(c *ui.Context) {
 					a.dubStep = dubStepTranslate
 					a.dubTranslate(false)
 				}
-				if ui.Button(c.Key("b-transcript-x"), "×").Label(i18n.T("Dismiss")).Clicked() {
+				if iconButton(c.Key("b-transcript-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 					a.dubDismissed["transcript"] = true
 				}
 			})
@@ -383,7 +383,7 @@ func (a *app) dubBanners(c *ui.Context) {
 					a.dubStep = dubStepGenerate
 					a.dubGenerate()
 				}
-				if ui.Button(c.Key("b-translated-x"), "×").Label(i18n.T("Dismiss")).Clicked() {
+				if iconButton(c.Key("b-translated-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 					a.dubDismissed["translated"] = true
 				}
 			})
@@ -399,7 +399,7 @@ func (a *app) dubBanners(c *ui.Context) {
 			if n > 0 && primaryButton(c.Key("b-regen"), i18n.N(n, "Regenerate %d changed", "Regenerate %d changed", n)).Clicked() {
 				a.dubGenerate()
 			}
-			if ui.Button(c.Key("b-done-x"), "×").Label(i18n.T("Dismiss")).Clicked() {
+			if iconButton(c.Key("b-done-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 				a.dubDismissed["done"] = true
 			}
 		})
@@ -426,7 +426,7 @@ func (a *app) dubBanners(c *ui.Context) {
 						a.dubDismissed["w:all"] = true
 					}
 				}
-				if ui.Button(c.Key("x"), "×").Label(i18n.T("Dismiss")).Clicked() {
+				if iconButton(c.Key("x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 					a.dubDismissed["w:"+ww] = true
 				}
 			})
@@ -904,7 +904,7 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 			ll := l
 			ui.Row(c.Key("chip-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 6)).Radius(10).Background(t.Background).Border(1, t.Border).Children(func() {
 				ui.Text(c, dubLangName(ll)).FontSize(px(t, 12))
-				if ui.Button(c.Key("x"), "×").Label(i18n.T("Remove %s", dubLangName(ll))).Disabled(locked).Clicked() {
+				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Disabled(locked).Clicked() {
 					a.dubSet(func(p *dub.Project) { p.Targets = slices.DeleteFunc(p.Targets, func(x string) bool { return x == ll }) })
 				}
 			})
@@ -1246,7 +1246,7 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 				Disabled(g.extracting || len(p.Segments) == 0 || a.llmRouter == nil).Clicked() {
 				a.dubExtractTerms()
 			}
-			if ui.Button(c.Key("g-close"), "×").Label(i18n.T("Close")).Clicked() {
+			if iconButton(c.Key("g-close"), icons.Close, i18n.T("Close")).Clicked() {
 				g.open = false
 			}
 		})
@@ -1279,7 +1279,7 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 				if ui.Button(c.Key("edit"), i18n.T("Edit")).Clicked() {
 					g.editing, g.eSrc, g.eTgt, g.eNot = ii, term.Source, term.Target, term.Note
 				}
-				if ui.Button(c.Key("del"), "×").Label(i18n.T("Delete %s", term.Source)).Clicked() {
+				if iconButton(c.Key("del"), icons.Close, i18n.T("Delete %s", term.Source)).Clicked() {
 					a.dubDeleteTerm(ii)
 				}
 			})
@@ -1306,7 +1306,7 @@ func (a *app) dubPastePanel(c *ui.Context) {
 			if ui.Button(c.Key("p-file"), i18n.T("Load .srt / .vtt…")).Clicked() {
 				a.dubPasteFile()
 			}
-			if ui.Button(c.Key("p-close"), "×").Label(i18n.T("Close")).Clicked() {
+			if iconButton(c.Key("p-close"), icons.Close, i18n.T("Close")).Clicked() {
 				ps.open = false
 			}
 		})

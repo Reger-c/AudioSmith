@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
 )
@@ -297,7 +298,7 @@ func (a *app) itemActions(c *ui.Context, it store.LibraryItem) {
 			mygo.Shell.ShowItemInFolder(path)
 		}
 	}
-	if ui.Button(c.Key("delete"), "✕").Label(i18n.T("Delete")).Tooltip(i18n.T("Delete")).Clicked() {
+	if iconButton(c.Key("delete"), icons.Close, i18n.T("Delete")).Tooltip(i18n.T("Delete")).Clicked() {
 		clear(s.selected)
 		s.selected[key] = true
 		s.deleteOpen = true

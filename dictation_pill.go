@@ -64,7 +64,9 @@ func (a *app) hidePill() {
 
 // pillView is the pill's content.
 func (a *app) pillView(c *ui.Context) {
-	c.SetTheme(ui.DarkTheme())
+	th := *ui.DarkTheme()
+	styleTheme(&th) // the design's dark tokens (ui_tokens.go)
+	c.SetTheme(&th)
 	if a.win == nil {
 		c.DisableAnimations()
 	}
@@ -95,7 +97,7 @@ func (a *app) pillView(c *ui.Context) {
 			}
 		})
 		if s.phase == dictListening || s.phase == dictStarting {
-			if primaryButton(c.Key("pill-stop"), i18n.T("Stop")).Background(t.Danger).Clicked() {
+			if recordButton(c.Key("pill-stop"), i18n.T("Stop")).Clicked() {
 				a.dictStop()
 			}
 		}
@@ -110,8 +112,8 @@ func (a *app) pillView(c *ui.Context) {
 		if s.phase.live() {
 			closeLabel = i18n.T("Cancel (Esc)")
 		}
-		if ui.ButtonBase(c.Key("pill-close")).Padding(4, 8).Radius(12).Label(closeLabel).Tooltip(closeLabel).Children(func() {
-			ui.Text(c, "×").FontSize(16).TextColor(ui.RGBA(235, 235, 245, 0.7))
+		if ui.ButtonBase(c.Key("pill-close")).Size(28, 28).Center().Radius(14).Label(closeLabel).Tooltip(closeLabel).Children(func() {
+			ui.Icon(c, icons.Close.Linear).Size(16, 16).TextColor(ui.RGBA(235, 235, 245, 0.7))
 		}).Clicked() {
 			if s.phase.live() {
 				a.dictCancel()
@@ -130,15 +132,15 @@ func (a *app) pillIndicator(c *ui.Context, s *dictSession) {
 	t := c.Theme()
 	switch s.phase {
 	case dictListening:
-		ui.Box(c).Width(12).Height(12).Radius(6).Background(ui.RGB(255, 69, 58))
+		ui.Box(c).Width(12).Height(12).Radius(6).Background(tok(t).Record)
 	case dictStarting, dictTranscribing, dictCleaning, dictInserting:
 		ui.Spinner(c)
 	case dictInserted:
-		ui.Text(c, "✓").FontSize(16).Bold().TextColor(t.Success)
+		ui.Icon(c, icons.CheckCircle.Bold).Size(18, 18).TextColor(t.Success)
 	case dictCopied:
 		ui.Icon(c, copyIcon.Linear).TextColor(ui.RGB(245, 245, 247))
 	case dictError:
-		ui.Text(c, "!").FontSize(16).Bold().TextColor(t.Danger)
+		ui.Icon(c, icons.DangerCircle.Bold).Size(18, 18).TextColor(t.Danger)
 	default:
 		ui.Icon(c, micIcon.Linear).TextColor(ui.RGB(245, 245, 247))
 	}

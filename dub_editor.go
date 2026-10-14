@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
@@ -93,7 +94,7 @@ func (a *app) dubToolbar(c *ui.Context) {
 	if a.dubNotice != "" {
 		ui.Row(c.Key("dub-notice")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, a.dubNotice).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
-			if ui.Button(c.Key("dub-notice-x"), "×").Label(i18n.T("Dismiss")).Clicked() {
+			if iconButton(c.Key("dub-notice-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 				a.dubNotice = ""
 			}
 		})

@@ -20,6 +20,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/lang"
 	"github.com/hehehai/AudioSmith/internal/services"
 )
@@ -410,7 +411,7 @@ func (a *app) lfProjectCard(c *ui.Context, p *lfPage, locked bool) {
 					a.openLfProject(pr.ID)
 				}
 			}
-			if ui.Button(c.Key("delete"), "✕").Label(i18n.T("Delete")).Tooltip(i18n.T("Delete")).Disabled(locked && pr.ID == p.project).Clicked() {
+			if iconButton(c.Key("delete"), icons.Close, i18n.T("Delete")).Tooltip(i18n.T("Delete")).Disabled(locked && pr.ID == p.project).Clicked() {
 				p.confirm, p.confirmOpen = "delete:"+pr.ID, true
 			}
 		})

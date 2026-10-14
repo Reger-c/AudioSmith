@@ -32,6 +32,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
@@ -912,7 +913,7 @@ func (a *app) longformVoiceItems(m *ui.Menu, use func(then func(*core.Voice))) {
 // voiceLongformMenu is the voice editor's "More" menu with them.
 func (a *app) voiceLongformMenu(c *ui.Context, v *core.Voice) {
 	id := v.ID
-	ui.Button(c.Key("editor-longform"), "⋯").Label(i18n.T("More actions")).Menu(func(m *ui.Menu) {
+	iconButton(c.Key("editor-longform"), icons.MenuDots, i18n.T("More actions")).Menu(func(m *ui.Menu) {
 		a.longformVoiceItems(m, func(then func(*core.Voice)) {
 			if v := a.findVoice(id); v != nil {
 				then(v)

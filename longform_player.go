@@ -25,6 +25,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/text"
@@ -207,11 +208,11 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 	ui.Divider(c)
 	ui.Row(c.Key("ra-head")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, i18n.T("Follow along")).Bold()
-		if ui.Button(c.Key("ra-prev"), "‹").Label(i18n.T("Previous chapter")).Disabled(ra.chapter == 0).Clicked() {
+		if iconButton(c.Key("ra-prev"), icons.AltArrowLeft, i18n.T("Previous chapter")).Disabled(ra.chapter == 0).Clicked() {
 			ra.chapter--
 		}
 		ui.Text(c, ch.Title).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).TextAlign(ui.Center)
-		if ui.Button(c.Key("ra-next"), "›").Label(i18n.T("Next chapter")).Disabled(ra.chapter >= len(ra.chapters)-1).Clicked() {
+		if iconButton(c.Key("ra-next"), icons.AltArrowRight, i18n.T("Next chapter")).Disabled(ra.chapter >= len(ra.chapters)-1).Clicked() {
 			ra.chapter++
 		}
 		play := i18n.T("Play chapter")

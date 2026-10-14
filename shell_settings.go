@@ -337,7 +337,7 @@ func (a *app) settingsDialog(c *ui.Context) {
 		panel.Width(min(w-2*margin, px(t, 900))).Height(h-2*margin).Radius(px(t, radiusCard)).Background(k.Bg).Clip().
 			Shadow(0, 16, 48, 0, ui.RGBA(0, 0, 0, 0.28)).Label(i18n.T("Settings"))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Width(px(t, 212)).Shrink(0).Background(k.Sidebar).Children(func() {
+			ui.Column(c).Width(min(px(t, 212), (w-2*margin)*0.3)).Shrink(0).Background(k.Sidebar).Children(func() {
 				ui.Row(c).Height(px(t, 52)).Shrink(0).AlignItems(ui.Center).Padding(0, px(t, sp4)).Children(func() {
 					ui.Text(c, i18n.T("Settings")).FontSize(px(t, fsSection)).FontWeight(600).SingleLine()
 				})
@@ -460,14 +460,14 @@ func settingRow(c *ui.Context, key, title, desc string, control func()) {
 // once (a path, what is missing, a version): it shows under the name.
 func settingRowNote(c *ui.Context, key, title, note string, control func()) {
 	t := c.Theme()
-	ui.Row(c.Key(key)).Gap(px(t, sp4)).AlignItems(ui.Center).MinHeight(px(t, 32)).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
+	ui.Row(c.Key(key)).Wrap().GapX(px(t, sp4)).GapY(px(t, 6)).AlignItems(ui.Center).MinHeight(px(t, 32)).Children(func() {
+		ui.Column(c).Grow(1).Basis(px(t, 200)).MinWidth(px(t, 140)).Gap(px(t, 2)).Children(func() {
 			ui.Text(c, title)
 			if note != "" {
 				caption(c, note).Selectable()
 			}
 		})
-		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(1).MinWidth(0).Children(control)
+		ui.Row(c).Wrap().Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(1).MinWidth(0).Children(control)
 	})
 }
 
