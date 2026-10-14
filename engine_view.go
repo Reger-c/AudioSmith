@@ -71,7 +71,7 @@ func (a *app) enginePage(c *ui.Context) {
 func (a *app) workerCard(c *ui.Context, w engine.WorkerStatus) {
 	t := c.Theme()
 	k := tok(t)
-	fillCard(c.Key("worker-"+string(w.Role))).Children(func() {
+	fillCard(c.Key("worker-" + string(w.Role))).Children(func() {
 		color, state := t.Warning, i18n.T("Starting")
 		switch w.State {
 		case engine.WorkerReady:
