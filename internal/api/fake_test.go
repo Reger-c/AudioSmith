@@ -48,6 +48,7 @@ type fakeBackend struct {
 	notReady    map[string]bool // repo → not downloaded
 	licence     map[string]bool // repo → licence needed
 	canEncode   bool
+	formats     map[string]bool // M7a: FormatEncoder (ffmpeg)
 	translator  func(translate.Request) (translate.Result, error)
 	renderGate  chan struct{} // when set, renders wait on it
 	renderRate  int
@@ -332,10 +333,14 @@ func (f *fakeBackend) encode(ctx context.Context, job jobs.Job, report func(jobs
 	if err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(p.Output.Path, append([]byte("M4A:"), data...), 0o644); err != nil {
+	format := p.Output.Format
+	if format == "" {
+		format = "m4a"
+	}
+	if err := os.WriteFile(p.Output.Path, append([]byte(strings.ToUpper(format)+":"), data...), 0o644); err != nil {
 		return nil, err
 	}
-	return json.Marshal(proto.EncodeResult{Output: p.Output.Path, Format: "m4a"})
+	return json.Marshal(proto.EncodeResult{Output: p.Output.Path, Format: format})
 }
 
 func (f *fakeBackend) Transcripts(ctx context.Context, q core.TranscriptQuery) ([]core.Transcript, error) {
@@ -388,6 +393,13 @@ func (f *fakeBackend) Probe(ctx context.Context, path string) (proto.ProbeResult
 		return proto.ProbeResult{}, &proto.Error{Code: proto.CodeFileNotFound, Message: "no such file"}
 	}
 	return proto.ProbeResult{Format: strings.TrimPrefix(filepath.Ext(path), "."), Duration: 1.5, HasAudio: true, SampleRate: 24000, Channels: 1}, nil
+}
+
+// EncodesFormat is FormatEncoder (M7a).
+func (f *fakeBackend) EncodesFormat(format string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.formats[format]
 }
 
 func (f *fakeBackend) CanEncode() bool {

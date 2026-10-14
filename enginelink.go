@@ -189,6 +189,7 @@ func (a *app) connectEngine(h *engineHost) {
 		// scheduler records the interrupted jobs in.
 		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { h.Stop() })
 	}
+	h.sup = withMediaTools(h.sup, a.mediaTool) // M7a: ffmpeg behind the media methods (ffmpeg_engine.go)
 	engine.RegisterExecutors(h.sched, h.sup, engine.ExecutorOptions{
 		ModelPath: a.lib.modelSnapshot,
 		Licences:  a.lib.licences,

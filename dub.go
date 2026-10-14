@@ -1013,7 +1013,7 @@ func dubErrorText(e *jobs.Error) string {
 	case services.DubCodeNeedsEngine:
 		return i18n.T("The engine cannot do this yet. It comes with a later engine update.")
 	case services.DubCodeNeedsFFmpeg:
-		return i18n.T("This needs ffmpeg, which AudioSmith does not provide yet.")
+		return i18n.T("This needs ffmpeg: set it up in Settings → Audio tools.") // M7a
 	case services.DubCodeNotMixed:
 		return i18n.T("That track is not generated yet.")
 	case "dub.no_audio":

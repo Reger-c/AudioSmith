@@ -80,7 +80,8 @@ type shellState struct {
 	logsDirty    atomic.Bool // a redraw for new lines is on its way
 
 	modelsState
-	navState // shell_nav.go (M7a)
+	navState        // shell_nav.go (M7a)
+	mediaToolsState // ffmpeg_settings.go (M7a): the optional ffmpeg
 	settingsForm
 	licenceDialog
 	menuLocale string // locale the native menu was built in
@@ -132,6 +133,7 @@ func (a *app) openShell(lib *library) {
 	})
 	a.applyLocale()
 	a.loadAcceptances()
+	a.loadMediaTool() // M7a: ffmpeg_settings.go
 }
 
 // connectShell adds what only the real app has: log files in logDir (the

@@ -21,6 +21,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/ffmpeg"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -44,6 +45,8 @@ type apiBackend struct {
 	// fill applies a saved voice to a take for a model (voices.go's
 	// fillVoice, which reads only the library).
 	fill func(t *core.Take, v *core.Voice, e catalog.Entry)
+	// ffmpeg is the optional ffmpeg in use (M7a: MP3, Opus, FLAC).
+	ffmpeg func() *ffmpeg.Tool
 }
 
 var _ api.Backend = (*apiBackend)(nil)
@@ -52,7 +55,7 @@ var _ api.Backend = (*apiBackend)(nil)
 // connectEngine and openLLM.
 func (a *app) newAPIBackend(dataDir string) *apiBackend {
 	b := &apiBackend{lib: a.lib, tr: a.trSvc, router: a.llmRouter, version: a.version, data: dataDir,
-		tmp: filepath.Join(dataDir, "api-tmp"), fill: a.fillVoice}
+		tmp: filepath.Join(dataDir, "api-tmp"), fill: a.fillVoice, ffmpeg: a.mediaTool}
 	if a.eng != nil {
 		b.sup = a.eng.sup
 	}
@@ -300,6 +303,12 @@ func (b *apiBackend) Probe(ctx context.Context, path string) (proto.ProbeResult,
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	return engine.Probe(ctx, b.sup, path)
+}
+
+// EncodesFormat is api.FormatEncoder (M7a): MP3, Opus and FLAC through
+// the optional ffmpeg (ffmpeg_engine.go).
+func (b *apiBackend) EncodesFormat(format string) bool {
+	return b.ffmpeg != nil && b.ffmpeg().CanEncode(format)
 }
 
 func (b *apiBackend) CanEncode() bool {

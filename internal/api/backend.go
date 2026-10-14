@@ -103,6 +103,13 @@ type Backend interface {
 	DataDir() string
 }
 
+// FormatEncoder is implemented by backends that also encode MP3, Opus
+// or FLAC (M7a: through the optional ffmpeg, behind media.encode). A
+// Backend without it answers those formats 400 unsupported_format.
+type FormatEncoder interface {
+	EncodesFormat(format string) bool
+}
+
 // Status is the engine's state for the API.
 type Status struct {
 	// State: "ready", "starting", "restarting", "failed", "stopped".

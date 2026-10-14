@@ -70,6 +70,11 @@ func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	if s.b.CanEncode() {
 		speech = append(speech, FormatAAC)
 	}
+	for _, f := range []string{FormatMP3, FormatOpus, FormatFLAC} { // M7a: ffmpeg
+		if s.encodesFormat(f) {
+			speech = append(speech, f)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"schema":      "audiosmith.speech-capabilities",
 		"version":     1,

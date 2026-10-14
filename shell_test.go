@@ -96,7 +96,7 @@ func useFakeHub(t *testing.T, a *app) *fakeHF {
 		s.Models.Endpoints = []string{f.URL}
 	})
 	a.resetHub()
-	if fs, ok := a.eng.sup.(*fakeSup); ok && a.engState == engineStarting {
+	if fs, ok := unwrapSup(a.eng.sup).(*fakeSup); ok && a.engState == engineStarting {
 		fs.f.ready() // the engine restarted for the new model folder
 	}
 	saved := hubToken

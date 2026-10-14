@@ -294,13 +294,21 @@ func TestDubPipelineEndToEnd(t *testing.T) {
 	} else {
 		zr.Close()
 	}
-	if _, err := exp(ExportRequest{Format: dub.ExportMP3, Lang: "es", Output: filepath.Join(out, "x.mp3")}); code(err) != DubCodeNeedsFFmpeg {
-		t.Errorf("mp3 %v", err)
+	// MP3 through media.encode (the app runs it on ffmpeg, M7a); burnt-in
+	// subtitles need a video.
+	if res, err := exp(ExportRequest{Format: dub.ExportMP3, Lang: "es", Output: filepath.Join(out, "x.mp3")}); err != nil || res.Bytes == 0 {
+		t.Errorf("mp3 %v %+v", err, res)
+	}
+	if _, err := exp(ExportRequest{Format: dub.ExportBurn, Lang: "es", Output: filepath.Join(out, "x.mp4")}); code(err) != "dub.no_video" {
+		t.Errorf("burn of audio %v", err)
 	}
 	if _, err := exp(ExportRequest{Format: dub.ExportWAV, Lang: "de", Output: filepath.Join(out, "x.wav")}); code(err) != DubCodeNotMixed {
 		t.Errorf("unmixed %v", err)
 	}
 	e.eng.Missing[dub.MethodEncode] = true
+	if _, err := exp(ExportRequest{Format: dub.ExportMP3, Lang: "es", Output: filepath.Join(out, "y.mp3")}); code(err) != DubCodeNeedsFFmpeg {
+		t.Errorf("mp3 without ffmpeg %v", err)
+	}
 	if _, err := exp(ExportRequest{Format: dub.ExportM4A, Lang: "es", Output: filepath.Join(out, "y.m4a")}); code(err) != DubCodeNeedsEngine {
 		t.Errorf("m4a without the engine %v", err)
 	}

@@ -59,8 +59,9 @@ func settingsSections() []settingsSection {
 		{"dictation", i18n.T("Dictation"), "Dictation"},
 		{"writing", i18n.T("Writing help"), "Writing help"},
 		{"permissions", i18n.T("Permissions"), "Permissions"},
-		dubSettingsSection(),                      // M4: dub_settings.go (thread #19)
-		{"api", i18n.T("Local API"), "Local API"}, // M5: api_settings.go (thread #20)
+		dubSettingsSection(),                                         // M4: dub_settings.go (thread #19)
+		{"api", i18n.T("Local API"), "Local API"},                    // M5: api_settings.go (thread #20)
+		{"audio-tools", i18n.T("Audio tools"), "Audio tools ffmpeg"}, // M7a: ffmpeg_settings.go
 	}
 }
 
@@ -93,7 +94,8 @@ func (a *app) settingsChanged(old, new settings.Settings) {
 		}
 	}
 	a.applyEngineSettings(old, new)
-	a.m2SettingsChanged(old, new) // M2: dictation_settings.go
+	a.m2SettingsChanged(old, new)     // M2: dictation_settings.go
+	a.ffmpegSettingsChanged(old, new) // M7a: ffmpeg_settings.go
 	if old.Studio.Autoplay != new.Studio.Autoplay {
 		a.autoplay = new.Studio.Autoplay
 	}
@@ -321,6 +323,10 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 						a.permissionsSettings(c)
 					case a.dubSettingsRoute(c, r): // M4: Settings → Dubbing (dub_pages.go, thread #19)
 					case a.apiSettingsRoute(c, r): // M5: api_settings.go (thread #20)
+					case r.Match("/audio-tools"): // M7a: ffmpeg_settings.go
+						r.Title(i18n.T("Audio tools"))
+						a.lastSettings = "audio-tools"
+						a.audioToolsSettings(c)
 					default:
 						ui.Text(c, i18n.T("There is no page at %s.", a.router.Path())).TextColor(t.TextMuted)
 					}

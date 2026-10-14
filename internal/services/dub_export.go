@@ -2,9 +2,10 @@ package services
 
 // Exports of a dub: subtitles and ZIPs are written in Go; WAV converted
 // from the mixed track; MP4 (the source's video with the original and
-// dubbed tracks, soft subtitles) and M4A go through the engine's proposed
-// media.mux / media.encode; MP3 and burnt-in subtitles need ffmpeg (not
-// provided yet).
+// dubbed tracks, soft subtitles) and M4A go through the engine's
+// media.mux / media.encode; MP3 (media.encode to "mp3") and burnt-in
+// subtitles (MethodBurn) need the optional ffmpeg, which the app runs
+// behind those methods (M7a).
 
 import (
 	"context"
@@ -21,6 +22,10 @@ import (
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/lang"
 )
+
+// MethodBurn draws subtitles into a video (an app-level method: the app
+// runs it on ffmpeg; params as the app's BurnParams).
+const MethodBurn = "media.burn"
 
 // DubExportOwner prefixes the owners of export jobs ("dubexport:<id>"),
 // apart from the pipeline's so an export does not block a run.
@@ -152,8 +157,47 @@ func (s *Dubs) Export(ctx context.Context, req ExportRequest, progress func(floa
 		if err := sc.call(ctx, dub.MethodEncode, "", ep, nil, &er, nil); err != nil {
 			return ExportResult{}, needsEngine(err, dub.MethodEncode)
 		}
-	case dub.ExportMP3, dub.ExportBurn:
-		return ExportResult{}, &jobs.Error{Code: DubCodeNeedsFFmpeg, Message: "This export needs ffmpeg, which AudioSmith does not provide yet."}
+	case dub.ExportMP3: // M7a: ffmpeg behind media.encode
+		t, err := track(lang)
+		if err != nil {
+			return ExportResult{}, err
+		}
+		ep := dub.EncodeParams{Input: s.Path(p.ID, t.File), Output: proto.Output{Path: req.Output, Format: "mp3"}, Bitrate: 192000,
+			Metadata: proto.EncodeMetadata{Title: p.Title}}
+		var er dub.EncodeResult
+		sc := s.exportCtx(p, "encode")
+		if err := sc.call(ctx, dub.MethodEncode, "", ep, nil, &er, func(pg jobs.Progress) { progress(max(pg.Fraction, 0)) }); err != nil {
+			return ExportResult{}, needsFFmpeg(err)
+		}
+	case dub.ExportBurn: // M7a: ffmpeg draws the subtitles of lang into the video, with lang's track
+		if !p.Source.HasVideo {
+			return ExportResult{}, &jobs.Error{Code: "dub.no_video", Message: "The source has no video: export subtitles instead."}
+		}
+		audio := ""
+		if lang != "" {
+			t, err := track(lang)
+			if err != nil {
+				return ExportResult{}, err
+			}
+			audio = s.Path(p.ID, t.File)
+		}
+		data, err := p.Subtitles(dub.SubtitleOptions{Format: dub.SubSRT, Lang: lang, Split: true})
+		if err != nil {
+			return ExportResult{}, err
+		}
+		tmp := filepath.Join(s.Dir(p.ID), "exports")
+		os.MkdirAll(tmp, 0o755)
+		subs := filepath.Join(tmp, "burn-"+dubFirst(dub.SafeName(lang), "orig")+".srt")
+		if err := writeAtomic(subs, data); err != nil {
+			return ExportResult{}, err
+		}
+		params := map[string]any{"video": p.Source.Path, "audio": audio, "subtitles": subs, "output": proto.Output{Path: req.Output, Format: "mp4"}}
+		sc := s.exportCtx(p, "burn")
+		err = sc.call(ctx, MethodBurn, "", params, nil, nil, func(pg jobs.Progress) { progress(max(pg.Fraction, 0)) })
+		os.RemoveAll(tmp)
+		if err != nil {
+			return ExportResult{}, needsFFmpeg(err)
+		}
 	case dub.ExportStems:
 		t, err := track(lang)
 		if err != nil {
@@ -261,6 +305,29 @@ func needsEngine(err error, method string) error {
 	if code(err) == proto.CodeMethodNotFound {
 		data, _ := json.Marshal(map[string]string{"method": method})
 		return &jobs.Error{Code: DubCodeNeedsEngine, Message: "The engine cannot do this yet (" + method + ").", Data: data}
+	}
+	return err
+}
+
+// needsFFmpeg turns the app's "needs ffmpeg" answer (unsupported,
+// capability "ffmpeg") into DubCodeNeedsFFmpeg.
+func needsFFmpeg(err error) error {
+	var pe *proto.Error
+	var je *jobs.Error
+	var c string
+	var data json.RawMessage
+	switch {
+	case errors.As(err, &pe):
+		c, data = pe.Code, pe.Data
+	case errors.As(err, &je):
+		c, data = je.Code, je.Data
+	}
+	if c == proto.CodeUnsupported || c == proto.CodeMethodNotFound {
+		var d struct{ Capability string }
+		json.Unmarshal(data, &d)
+		if d.Capability == "ffmpeg" || c == proto.CodeMethodNotFound {
+			return &jobs.Error{Code: DubCodeNeedsFFmpeg, Message: "This export needs ffmpeg: set it up in Settings → Audio tools."}
+		}
 	}
 	return err
 }

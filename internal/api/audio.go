@@ -33,6 +33,12 @@ func contentType(format string) string {
 		return "audio/pcm"
 	case FormatAAC, FormatM4A:
 		return "audio/mp4"
+	case FormatMP3: // M7a: through ffmpeg
+		return "audio/mpeg"
+	case FormatOpus:
+		return "audio/ogg; codecs=opus"
+	case FormatFLAC:
+		return "audio/flac"
 	}
 	return "application/octet-stream"
 }
