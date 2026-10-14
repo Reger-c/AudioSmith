@@ -69,7 +69,7 @@ func (a *app) wfRunPanel(c *ui.Context) {
 		}
 		if upToDate {
 			// Every result is made: only a new run makes anything.
-			if ui.PrimaryButton(c.Key("wf-run-again"), i18n.T("Start a new run")).
+			if primaryButton(c.Key("wf-run-again"), i18n.T("Start a new run")).
 				Tooltip(i18n.T("Make every result again, even those that are up to date")).Disabled(rep.Errors() > 0).Clicked() {
 				a.wfStart(true)
 			}
@@ -82,7 +82,7 @@ func (a *app) wfRunPanel(c *ui.Context) {
 		case run != nil && run.State == workflow.RunFailed && !a.wfStale():
 			label = i18n.T("Retry")
 		}
-		if ui.PrimaryButton(c.Key("wf-run-go"), label).Disabled(rep.Errors() > 0).Clicked() {
+		if primaryButton(c.Key("wf-run-go"), label).Disabled(rep.Errors() > 0).Clicked() {
 			a.wfStart(false)
 		}
 		if run != nil && run.Signature != "" && ui.Button(c.Key("wf-run-again"), i18n.T("Start a new run")).

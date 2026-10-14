@@ -367,12 +367,12 @@ func (a *app) obFooter(c *ui.Context) {
 			a.obStep--
 		}
 		if a.obStep < 3 {
-			if ui.PrimaryButton(c.Key("ob-next"), i18n.T("Continue")).Clicked() {
+			if primaryButton(c.Key("ob-next"), i18n.T("Continue")).Clicked() {
 				a.obStep++
 			}
 			return
 		}
-		if ui.PrimaryButton(c.Key("ob-finish"), i18n.T("Start using AudioSmith")).Clicked() {
+		if primaryButton(c.Key("ob-finish"), i18n.T("Start using AudioSmith")).Clicked() {
 			a.finishOnboarding()
 		}
 	})

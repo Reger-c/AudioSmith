@@ -17,6 +17,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 )
 
 // takeBits is the bit depth of a take's file.
@@ -142,10 +143,10 @@ func (a *app) saveAs(t *core.Take, bits int) {
 	}()
 }
 
-// saveAsMenu is the Save as… button with its bit depths.
+// saveAsMenu is the Save as… button (an icon) with its formats.
 func (a *app) saveAsMenu(c *ui.Context, t *core.Take) {
 	tk := *t
-	ui.MenuButton(c.Key("save-as"), i18n.T("Save as…"), func(m *ui.Menu) {
+	iconButton(c.Key("save-as"), icons.Export, i18n.T("Save as…")).Menu(func(m *ui.Menu) {
 		for _, bits := range bitDepths {
 			if m.Item(i18n.T("WAV, %s", bitsLabel(bits))).Chosen() {
 				a.saveAs(&tk, bits)
@@ -159,16 +160,16 @@ func (a *app) saveAsMenu(c *ui.Context, t *core.Take) {
 func (a *app) dragHandle(c *ui.Context, t *core.Take) {
 	th := c.Theme()
 	path := a.takeStore.AudioPath(*t)
-	h := ui.ButtonBase(c.Key("drag-out")).Padding(px(th, 4), px(th, 6)).Radius(5).Label(i18n.T("Drag the file")).
-		Tooltip(i18n.T("Drag to Finder or another app"))
+	h := ui.ButtonBase(c.Key("drag-out")).Size(px(th, 24), px(th, 28)).Center().Radius(px(th, 6)).Label(i18n.T("Drag the file")).
+		Tooltip(i18n.T("Drag to Finder or another app")).Cursor(ui.CursorGrab)
 	h.DragDataFrom(func() transfer.Data {
 		d, _ := transfer.FileData(path)
 		return d
 	})
 	if h.Hovered() {
-		h.Background(th.SurfaceHover)
+		h.Background(tok(th).Hover)
 	}
-	h.Children(func() { ui.Text(c, "⠿").TextColor(th.TextMuted) })
+	h.Children(func() { ui.Text(c, "⠿").TextColor(tok(th).Text3) })
 }
 
 // noticeList shows notices; those with a place in the audio seek there.
@@ -182,11 +183,11 @@ func (a *app) noticeList(c *ui.Context, t *core.Take, key string, notices []core
 			} else if n.Severity == "info" {
 				color = th.TextMuted
 			}
-			row := ui.ButtonBase(c.Key(fmt.Sprintf("%s-%d", key, i))).Padding(px(th, 3), px(th, 6)).Radius(5).Label(noticeText(n))
+			row := ui.ButtonBase(c.Key(fmt.Sprintf("%s-%d", key, i))).Padding(px(th, 3), px(th, 6)).Radius(px(th, 6)).Label(noticeText(n))
 			seek := n.Start > 0 || n.End > 0
 			if seek {
 				if row.Hovered() {
-					row.Background(th.SurfaceHover)
+					row.Background(tok(th).Hover)
 				}
 				if row.Clicked() {
 					a.seekTake(t, n.Start)
@@ -194,11 +195,11 @@ func (a *app) noticeList(c *ui.Context, t *core.Take, key string, notices []core
 				row.Tooltip(i18n.T("Play from here"))
 			}
 			row.Children(func() {
-				ui.Text(c, "●").FontSize(px(th, 9)).TextColor(color)
+				ui.Box(c).Size(px(th, 6), px(th, 6)).Radius(px(th, 3)).Background(color).Shrink(0)
 				if seek {
-					ui.Text(c, noticeTime(n.Start)).FontSize(px(th, 12)).TextColor(th.TextMuted).Width(px(th, 52))
+					ui.Text(c, noticeTime(n.Start)).Font(monoFont).FontSize(px(th, fsMicro)).TextColor(tok(th).Text3).Width(px(th, 52)).Shrink(0)
 				}
-				ui.Text(c, noticeText(n)).FontSize(px(th, 12)).Grow(1).MinWidth(0)
+				ui.Text(c, noticeText(n)).FontSize(px(th, fsCaption)).Grow(1).MinWidth(0)
 			})
 		}
 	})
@@ -209,58 +210,82 @@ func (a *app) checkResults(c *ui.Context, t *core.Take) {
 	th := c.Theme()
 	switch {
 	case a.checking[t.ID]:
-		ui.Text(c, i18n.T("Checking…")).FontSize(px(th, 12)).TextColor(th.TextMuted)
+		caption(c, i18n.T("Checking…"))
 	case t.Render == nil || !t.Render.QCDone:
 	case len(t.Render.Issues) == 0:
-		ui.Text(c, i18n.T("✓ No problems found: no clipping, silences or sudden jumps in loudness.")).FontSize(px(th, 12)).TextColor(th.Success)
+		ui.Row(c).Gap(px(th, 6)).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, icons.CheckCircle.Linear).Size(px(th, 14), px(th, 14)).TextColor(th.Success).Shrink(0)
+			ui.Text(c, i18n.T("No problems found: no clipping, silences or sudden jumps in loudness.")).FontSize(px(th, fsCaption)).TextColor(th.Success)
+		})
 	default:
 		ui.Text(c, i18n.N(len(t.Render.Issues), "Check audio found %d thing to look at:", "Check audio found %d things to look at:", len(t.Render.Issues))).
-			FontSize(px(th, 12)).Bold()
+			FontSize(px(th, fsCaption)).FontWeight(600)
 		a.noticeList(c, t, "qc", t.Render.Issues)
 	}
 }
 
 // outputPanel is a take's panel: the Studio's latest take, or the
-// History's selected one (detailed: the recipe follows).
+// History's selected one (detailed: the recipe follows). A flat card:
+// play, the waveform, what the take is, and its actions as icons.
 func (a *app) outputPanel(c *ui.Context, t *core.Take, latest bool) {
 	th := c.Theme()
-	ui.Column(c.Key("out-"+t.ID)).Gap(px(th, 8)).Padding(px(th, 12)).Radius(10).Border(1, th.Border).Background(th.Surface).Children(func() {
-		ui.Row(c).Gap(px(th, 10)).AlignItems(ui.Center).Children(func() {
-			label := i18n.T("Play")
-			if a.pl.Playing(t.ID) {
-				label = i18n.T("Pause")
+	k := tok(th)
+	card(c.Key("out-"+t.ID)).Padding(px(th, sp3), px(th, sp4)).Gap(px(th, sp2)).Children(func() {
+		ui.Row(c).Gap(px(th, sp3)).AlignItems(ui.Center).Children(func() {
+			playing := a.pl.Playing(t.ID)
+			label, ic := i18n.T("Play"), icons.Play
+			if playing {
+				label, ic = i18n.T("Pause"), icons.Pause
 			}
-			if ui.PrimaryButton(c.Key("play"), label).Width(px(th, 72)).Clicked() {
+			play := ui.ButtonBase(c.Key("play")).Size(px(th, 36), px(th, 36)).Radius(px(th, 18)).Center().Label(label).Tooltip(label)
+			switch {
+			case play.Pressed():
+				play.Background(k.InkPressed)
+			case play.Hovered():
+				play.Background(k.InkHover)
+			default:
+				play.Background(k.Ink)
+			}
+			play.Children(func() {
+				ui.Icon(c, ic.Bold).Size(px(th, 16), px(th, 16)).TextColor(k.OnInk)
+			})
+			if play.Clicked() {
 				a.play(t)
 			}
 			a.waveform(c, t)
 			a.dragHandle(c, t)
 		})
-		ui.Column(c).Gap(px(th, 2)).Children(func() {
-			title := t.Text
-			if latest {
-				title = i18n.T("Latest take")
-			}
-			ui.Text(c, title).FontSize(px(th, 13)).Bold().SingleLine().Ellipsis("…")
-			ui.Text(c, renderedIn(t)+" · "+fileDetails(t)).FontSize(px(th, 11)).TextColor(th.TextMuted).SingleLine().Ellipsis("…")
-			if latest {
-				ui.Text(c, clipMeta(t)).FontSize(px(th, 11)).TextColor(th.TextMuted).SingleLine().Ellipsis("…")
-			}
-		})
-		ui.Row(c).Gap(px(th, 8)).AlignItems(ui.Center).Wrap().Children(func() {
+		ui.Row(c).Gap(px(th, sp2)).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(px(th, 2)).Children(func() {
+				title := t.Text
+				if latest {
+					title = i18n.T("Latest take")
+				}
+				ui.Text(c, title).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0)
+				meta := renderedIn(t) + " · " + fileDetails(t)
+				if latest {
+					meta = clipMeta(t) + " · " + fileDetails(t)
+				}
+				truncText(c, meta).FontSize(px(th, fsCaption)).TextColor(k.Text2)
+			})
 			a.starButton(c, t)
-			check := ui.Button(c.Key("check"), i18n.T("Check audio")).Tooltip(i18n.T("Look for clipping, silences and jumps in loudness"))
+			checked := t.Render != nil && t.Render.QCDone
+			check := iconToggle(c.Key("check"), icons.Pulse2, a.checkOpen[t.ID] && checked, i18n.T("Check audio")).
+				Tooltip(i18n.T("Look for clipping, silences and jumps in loudness"))
 			if check.Clicked() {
-				if t.Render != nil && t.Render.QCDone {
+				if checked {
 					a.checkOpen[t.ID] = !a.checkOpen[t.ID]
 				} else {
 					a.checkTake(t)
 				}
 			}
 			a.saveAsMenu(c, t)
-			if ui.Button(c.Key("reveal"), i18n.T("Show in Finder")).Clicked() {
-				mygo.Shell.ShowItemInFolder(a.takeStore.AudioPath(*t))
-			}
+			path := a.takeStore.AudioPath(*t)
+			moreMenu(c.Key("take-more"), "", func(m *ui.Menu) {
+				if m.Item(i18n.T("Show in Finder")).Chosen() {
+					mygo.Shell.ShowItemInFolder(path)
+				}
+			})
 		})
 		if t.Render != nil && len(t.Render.Warnings) > 0 {
 			a.noticeList(c, t, "warn", t.Render.Warnings)
@@ -273,12 +298,11 @@ func (a *app) outputPanel(c *ui.Context, t *core.Take, latest bool) {
 
 // starButton stars or unstars a take; starred takes are never pruned.
 func (a *app) starButton(c *ui.Context, t *core.Take) {
-	label, tip := "☆", i18n.T("Star: keep this take")
+	tip := i18n.T("Star: keep this take")
 	if t.Starred {
-		label, tip = "★", i18n.T("Unstar")
+		tip = i18n.T("Unstar")
 	}
-	b := ui.Button(c.Key("star"), label).Tooltip(tip).Label(tip)
-	if b.Clicked() {
+	if iconToggle(c.Key("star"), icons.Star, t.Starred, tip).Clicked() {
 		a.setStarred(t, !t.Starred)
 	}
 }

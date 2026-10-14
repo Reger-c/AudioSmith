@@ -85,7 +85,7 @@ func (a *app) reviewBuffer(c *ui.Context, p *lfPage, locked bool) {
 			}
 			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
 				empty := strings.TrimSpace(p.doc.ImportText) == ""
-				if ui.PrimaryButton(c.Key("st-autocast"), i18n.T("Auto-cast")).Tooltip(i18n.T("Find who speaks and give each a voice")).
+				if primaryButton(c.Key("st-autocast"), i18n.T("Auto-cast")).Tooltip(i18n.T("Find who speaks and give each a voice")).
 					Disabled(locked || empty).Clicked() {
 					a.autoCastStory(p)
 				}
@@ -133,7 +133,7 @@ func (a *app) storyLines(c *ui.Context, p *lfPage, locked bool) {
 				if ui.Button(c.Key("st-empty-sample"), i18n.T("Load sample")).Disabled(locked).Clicked() {
 					a.loadSampleStory(p)
 				}
-				if ui.PrimaryButton(c.Key("st-empty-add"), i18n.T("Add first line")).Disabled(locked).Clicked() {
+				if primaryButton(c.Key("st-empty-add"), i18n.T("Add first line")).Disabled(locked).Clicked() {
 					a.addLine(p, false)
 				}
 			})

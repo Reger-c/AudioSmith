@@ -370,7 +370,7 @@ func (a *app) lfProjectCard(c *ui.Context, p *lfPage, locked bool) {
 		ui.TextInput(c.Key("proj-name"), &p.saveName).Placeholder(i18n.T("Project name")).Label(i18n.T("Project name"))
 	})
 	ui.Row(c).Gap(px(t, 6)).Wrap().Children(func() {
-		if ui.PrimaryButton(c.Key("proj-save"), i18n.T("Save")).Disabled(strings.TrimSpace(p.saveName) == "" && strings.TrimSpace(p.doc.Title) == "").Clicked() {
+		if primaryButton(c.Key("proj-save"), i18n.T("Save")).Disabled(strings.TrimSpace(p.saveName) == "" && strings.TrimSpace(p.doc.Title) == "").Clicked() {
 			a.saveLf(p, false)
 		}
 		if p.project != "" && ui.Button(c.Key("proj-copy"), i18n.T("Save a copy")).Clicked() {
@@ -513,7 +513,7 @@ func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 						a.resumeLf(p, r.rec.ID)
 					}
 				}
-				if ui.PrimaryButton(c.Key("lf-generate"), label).Disabled(blocker != "").Clicked() {
+				if primaryButton(c.Key("lf-generate"), label).Disabled(blocker != "").Clicked() {
 					a.startLf(p, "")
 				}
 			}

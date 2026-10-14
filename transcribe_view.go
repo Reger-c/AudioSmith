@@ -266,7 +266,7 @@ func (a *app) transcriptStatus(c *ui.Context) {
 					if m.downloading {
 						label = i18n.T("Downloading…")
 					}
-					if ui.PrimaryButton(c.Key("tr-download"), label).Disabled(m.downloading).Clicked() {
+					if primaryButton(c.Key("tr-download"), label).Disabled(m.downloading).Clicked() {
 						a.download(*e)
 					}
 				}
@@ -418,7 +418,7 @@ func (a *app) transcriptPlayer(c *ui.Context, tr *core.Transcript) {
 		if a.pl.Playing(id) {
 			label = i18n.T("Pause")
 		}
-		if ui.PrimaryButton(c.Key("tr-play"), label).Width(px(t, 72)).Clicked() {
+		if primaryButton(c.Key("tr-play"), label).Width(px(t, 72)).Clicked() {
 			a.toggleTranscriptPlayback()
 		}
 		seek := pos
@@ -551,7 +551,7 @@ func (a *app) transcriptSegments(c *ui.Context, tr *core.Transcript) {
 						a.saveSegmentEdit()
 					}
 					ui.Row(c).Gap(px(t, 6)).Children(func() {
-						if ui.PrimaryButton(c.Key("edit-save"), i18n.T("Save")).Clicked() {
+						if primaryButton(c.Key("edit-save"), i18n.T("Save")).Clicked() {
 							a.saveSegmentEdit()
 						}
 						if ui.Button(c.Key("edit-cancel"), i18n.T("Cancel")).Clicked() {
@@ -614,7 +614,7 @@ func (a *app) trRecorder(c *ui.Context, busy bool) {
 	switch m.phase {
 	case "recording":
 		c.After(100 * time.Millisecond)
-		if ui.PrimaryButton(c.Key("tr-rec-stop"), i18n.T("Stop recording")).Background(t.Danger).Clicked() {
+		if primaryButton(c.Key("tr-rec-stop"), i18n.T("Stop recording")).Background(t.Danger).Clicked() {
 			a.trRecStop()
 		}
 		ui.Text(c, clock(time.Since(m.started).Seconds())).FontSize(px(t, 18)).Bold().Font("monospace")
@@ -634,7 +634,7 @@ func (a *app) trRecorder(c *ui.Context, busy bool) {
 		ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		return
 	}
-	if ui.PrimaryButton(c.Key("tr-rec-start"), i18n.T("Record")).Disabled(busy).Clicked() {
+	if primaryButton(c.Key("tr-rec-start"), i18n.T("Record")).Disabled(busy).Clicked() {
 		a.trRecStart()
 	}
 	ui.Text(c, i18n.T("Record a meeting, a lecture or a voice memo.")).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.Center)

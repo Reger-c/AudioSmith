@@ -428,7 +428,7 @@ func (a *app) libraryDialogs(c *ui.Context) {
 					if len(s.errors) > 0 {
 						label = i18n.T("Retry")
 					}
-					if ui.PrimaryButton(c.Key("del-ok"), label).Background(t.Danger).Clicked() {
+					if primaryButton(c.Key("del-ok"), label).Background(t.Danger).Clicked() {
 						a.deleteItems(items)
 					}
 				})

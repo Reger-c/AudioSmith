@@ -196,7 +196,7 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 				ui.Text(c, i18n.T("Preview failed")).FontSize(px(t, 11)).TextColor(t.Danger).Tooltip(p.err)
 			}
 			ui.Box(c).Grow(1)
-			if ui.PrimaryButton(c.Key("use"), i18n.T("Use voice")).Disabled(g.using).
+			if primaryButton(c.Key("use"), i18n.T("Use voice")).Disabled(g.using).
 				Tooltip(i18n.T("Save it to your voices and open it in Design")).Clicked() {
 				a.useArchetype(arch, false)
 			}

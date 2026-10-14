@@ -148,7 +148,7 @@ func (a *app) dubEmpty(c *ui.Context) {
 				ui.Text(c, i18n.T("Video and audio dubbing")).FontSize(px(t, 17)).Bold()
 				ui.Text(c, "MP4 · MOV · M4V · MKV · WEBM · MP3 · WAV · M4A · FLAC").FontSize(px(t, 12)).TextColor(t.TextMuted)
 				ui.Text(c, i18n.T("Drop a video or audio file here")).TextColor(t.TextMuted)
-				if ui.PrimaryButton(c.Key("dub-choose"), i18n.T("Choose file…")).Clicked() {
+				if primaryButton(c.Key("dub-choose"), i18n.T("Choose file…")).Clicked() {
 					a.chooseDubSource()
 				}
 				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Width(px(t, 480)).Children(func() {
@@ -332,7 +332,7 @@ func (a *app) dubBanners(c *ui.Context) {
 	p := a.dub
 	if a.dubInterrupted() {
 		dubBanner(c, "b-recover", i18n.T("The last run stopped before it finished (the app quit, or a step failed)."), t.Warning, func() {
-			if ui.PrimaryButton(c.Key("b-resume"), i18n.T("Continue the run")).Clicked() {
+			if primaryButton(c.Key("b-resume"), i18n.T("Continue the run")).Clicked() {
 				a.dubResume()
 			}
 			if ui.Button(c.Key("b-forget"), i18n.T("Dismiss")).Clicked() {
@@ -369,7 +369,7 @@ func (a *app) dubBanners(c *ui.Context) {
 		switch {
 		case len(p.Segments) > 0 && len(p.Tracks) == 0 && !dubAnyTranslated(p) && !a.dubDismissed["transcript"]:
 			dubBanner(c, "b-transcript", i18n.T("Transcript ready — fix recognition errors now: every translation starts from it."), t.Accent, func() {
-				if ui.PrimaryButton(c.Key("b-go-translate"), i18n.T("Translate →")).Clicked() {
+				if primaryButton(c.Key("b-go-translate"), i18n.T("Translate →")).Clicked() {
 					a.dubStep = dubStepTranslate
 					a.dubTranslate(false)
 				}
@@ -379,7 +379,7 @@ func (a *app) dubBanners(c *ui.Context) {
 			})
 		case p.AllTranslated() && !p.TracksReady() && !a.dubDismissed["translated"]:
 			dubBanner(c, "b-translated", i18n.T("Translations ready — skim them before generating."), t.Accent, func() {
-				if ui.PrimaryButton(c.Key("b-go-generate"), i18n.T("Generate dub →")).Clicked() {
+				if primaryButton(c.Key("b-go-generate"), i18n.T("Generate dub →")).Clicked() {
 					a.dubStep = dubStepGenerate
 					a.dubGenerate()
 				}
@@ -396,7 +396,7 @@ func (a *app) dubBanners(c *ui.Context) {
 			text = i18n.N(n, "%d line changed since it was generated.", "%d lines changed since they were generated.", n)
 		}
 		dubBanner(c, "b-done", text, t.Success, func() {
-			if n > 0 && ui.PrimaryButton(c.Key("b-regen"), i18n.N(n, "Regenerate %d changed", "Regenerate %d changed", n)).Clicked() {
+			if n > 0 && primaryButton(c.Key("b-regen"), i18n.N(n, "Regenerate %d changed", "Regenerate %d changed", n)).Clicked() {
 				a.dubGenerate()
 			}
 			if ui.Button(c.Key("b-done-x"), "×").Label(i18n.T("Dismiss")).Clicked() {
@@ -452,7 +452,7 @@ func (a *app) dubWorkspace(c *ui.Context) {
 				return
 			}
 			ui.Text(c, i18n.T("The transcript shows here once the source is transcribed.")).TextColor(t.TextMuted)
-			if ui.PrimaryButton(c.Key("dub-start2"), a.dubStartLabel()).Clicked() {
+			if primaryButton(c.Key("dub-start2"), a.dubStartLabel()).Clicked() {
 				a.dubStart()
 			}
 		})
@@ -630,11 +630,11 @@ func (a *app) dubFooter(c *ui.Context) {
 		ui.Spacer(c)
 		switch {
 		case len(p.Segments) == 0:
-			if ui.PrimaryButton(c.Key("dub-start"), a.dubStartLabel()).Disabled(p.Source.Path == "" && p.Source.URL == "").Clicked() {
+			if primaryButton(c.Key("dub-start"), a.dubStartLabel()).Disabled(p.Source.Path == "" && p.Source.URL == "").Clicked() {
 				a.dubStart()
 			}
 		case !p.AllTranslated():
-			if ui.PrimaryButton(c.Key("dub-translate"), dubTranslateLabel(p)).Clicked() {
+			if primaryButton(c.Key("dub-translate"), dubTranslateLabel(p)).Clicked() {
 				a.dubTranslate(false)
 			}
 		default:
@@ -647,7 +647,7 @@ func (a *app) dubFooter(c *ui.Context) {
 				}
 				label = i18n.N(n, "Regenerate %d changed", "Regenerate %d changed", n)
 			}
-			if ui.PrimaryButton(c.Key("dub-generate"), label).Clicked() {
+			if primaryButton(c.Key("dub-generate"), label).Clicked() {
 				a.dubGenerate()
 			}
 		}
@@ -1210,7 +1210,7 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 		})
 	}
 	ui.Row(c).Gap(px(t, 6)).Wrap().Children(func() {
-		if ui.PrimaryButton(c.Key("gen-go"), i18n.N(len(p.Targets), "Generate dub", "Generate %d dubs", len(p.Targets))).Disabled(locked || len(p.Segments) == 0).Clicked() {
+		if primaryButton(c.Key("gen-go"), i18n.N(len(p.Targets), "Generate dub", "Generate %d dubs", len(p.Targets))).Disabled(locked || len(p.Segments) == 0).Clicked() {
 			a.dubGenerate()
 		}
 		if p.Track(a.dubLang).File != "" && ui.Button(c.Key("gen-verify"), i18n.T("Verify")).Disabled(locked).Clicked() {
@@ -1355,7 +1355,7 @@ func (a *app) dubPastePanel(c *ui.Context) {
 		if ps.err != "" {
 			ui.Text(c, ps.err).FontSize(px(t, 11)).TextColor(t.Danger)
 		}
-		if ui.PrimaryButton(c.Key("p-apply"), i18n.N(pv.Matched, "Apply to %d segment", "Apply to %d segments", pv.Matched)).Disabled(pv.Matched == 0 || a.dubLocked()).Clicked() {
+		if primaryButton(c.Key("p-apply"), i18n.N(pv.Matched, "Apply to %d segment", "Apply to %d segments", pv.Matched)).Disabled(pv.Matched == 0 || a.dubLocked()).Clicked() {
 			a.dubApplyPaste()
 		}
 	})

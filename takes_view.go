@@ -168,7 +168,7 @@ func (a *app) takeRow(c *ui.Context, cl *core.Take) {
 			if a.pl.Playing(cl.ID) {
 				label = i18n.T("Pause")
 			}
-			if ui.PrimaryButton(c.Key("play"), label).Width(px(t, 72)).Clicked() {
+			if primaryButton(c.Key("play"), label).Width(px(t, 72)).Clicked() {
 				a.play(cl)
 			}
 			a.waveform(c, cl)
@@ -266,7 +266,7 @@ func (a *app) takeDetails(c *ui.Context, tk *core.Take) {
 		})
 		a.outputPanel(c, tk, false)
 		ui.Row(c).Gap(px(t, 8)).Children(func() {
-			if ui.PrimaryButton(c.Key("details-reuse"), i18n.T("Reuse")).Tooltip(i18n.T("Load the whole recipe into the studio, seed included")).Clicked() {
+			if primaryButton(c.Key("details-reuse"), i18n.T("Reuse")).Tooltip(i18n.T("Load the whole recipe into the studio, seed included")).Clicked() {
 				a.reuse(tk)
 			}
 		})

@@ -95,7 +95,7 @@ func (a *app) pillView(c *ui.Context) {
 			}
 		})
 		if s.phase == dictListening || s.phase == dictStarting {
-			if ui.PrimaryButton(c.Key("pill-stop"), i18n.T("Stop")).Background(t.Danger).Clicked() {
+			if primaryButton(c.Key("pill-stop"), i18n.T("Stop")).Background(t.Danger).Clicked() {
 				a.dictStop()
 			}
 		}

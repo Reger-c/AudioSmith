@@ -72,6 +72,20 @@ func ghostIconButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
 	return b
 }
 
+// dropButton is a ghost button that opens a menu or a popover: its icon,
+// its label and a chevron. Its label names it.
+func dropButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
+	t := c.Theme()
+	k := tok(t)
+	b := ghostBase(c).Padding(t.Space(1.5), t.Space(2)).Gap(t.Space(1.5)).Label(label).MinWidth(0).Shrink(1)
+	b.Children(func() {
+		ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)
+		ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0)
+		ui.Icon(c, icons.AltArrowDown.Linear).Size(px(t, 12), px(t, 12)).TextColor(k.Text3)
+	})
+	return b
+}
+
 // ghostBase is the face of ghost and icon buttons.
 func ghostBase(c *ui.Context) ui.Element {
 	t := c.Theme()

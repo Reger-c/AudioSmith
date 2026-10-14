@@ -153,7 +153,7 @@ func (a *app) batchSetup(c *ui.Context) {
 	n, m := len(b.files), len(s.Targets)
 	ui.Text(c, i18n.N(n, "%d video", "%d videos", n)+" × "+i18n.N(m, "%d language", "%d languages", m)+" = "+i18n.N(n*m, "%d dub", "%d dubs", n*m)).
 		FontSize(px(t, 12)).TextColor(t.TextMuted)
-	if ui.PrimaryButton(c.Key("batch-queue"), i18n.T("Add to queue")).Disabled(n == 0 || m == 0).Clicked() {
+	if primaryButton(c.Key("batch-queue"), i18n.T("Add to queue")).Disabled(n == 0 || m == 0).Clicked() {
 		a.batchEnqueue()
 	}
 	for _, e := range b.errs {

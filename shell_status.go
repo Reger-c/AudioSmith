@@ -22,13 +22,15 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
 func (a *app) statusBar(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	eng := a.engineSummary()
-	ui.Row(c).Height(px(t, statusBarHeight)).Shrink(0).Padding(0, px(t, 8)).Gap(px(t, 6)).AlignItems(ui.Center).Background(t.Surface).Children(func() {
+	ui.Row(c).Height(px(t, statusBarHeight)).Shrink(0).Padding(0, px(t, sp2)).Gap(px(t, sp1)).AlignItems(ui.Center).Background(k.Sidebar).TextColor(k.Text2).Children(func() {
 		// The engine.
 		color, label := t.Warning, i18n.T("Engine starting…")
 		switch eng.State {
@@ -42,9 +44,9 @@ func (a *app) statusBar(c *ui.Context) {
 			model = catalog.Builtin().DisplayName(eng.Loaded[0])
 		}
 		engBtn := statusButton(c, "status-engine", i18n.T("Engine quick switch (⌘E)"), func() {
-			ui.Box(c).Size(px(t, 8), px(t, 8)).Radius(px(t, 4)).Background(color)
-			ui.Text(c, label).FontSize(px(t, 12))
-			ui.Text(c, "· "+model).FontSize(px(t, 12)).TextColor(t.TextMuted).SingleLine().Ellipsis("…").MaxWidth(px(t, 220))
+			ui.Box(c).Size(px(t, 6), px(t, 6)).Radius(px(t, 3)).Background(color)
+			ui.Text(c, label).FontSize(px(t, fsCaption)).SingleLine()
+			ui.Text(c, "· "+model).FontSize(px(t, fsCaption)).TextColor(k.Text3).SingleLine().Ellipsis("…").MaxWidth(px(t, 200)).MinWidth(0)
 		})
 		if engBtn.Clicked() {
 			a.switchOpen = !a.switchOpen
@@ -64,16 +66,16 @@ func (a *app) statusBar(c *ui.Context) {
 				label += " · " + i18n.N(len(active)-running, "%d waiting", "%d waiting", len(active)-running)
 			}
 			jobsBtn := statusButton(c, "status-jobs", i18n.T("Jobs"), func() {
-				ui.Spinner(c).Size(px(t, 12), px(t, 12))
-				ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				ui.Spinner(c).Size(px(t, 11), px(t, 11))
+				ui.Text(c, label).FontSize(px(t, fsCaption)).SingleLine()
 			})
 			if jobsBtn.Clicked() {
 				a.jobsOpen = !a.jobsOpen
 			}
 			ui.Popover(c, jobsBtn, &a.jobsOpen, func() { a.jobsPanel(c) })
 		} else if eng.Busy {
-			ui.Spinner(c).Size(px(t, 12), px(t, 12))
-			ui.Text(c, i18n.T("Working…")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			ui.Spinner(c).Size(px(t, 11), px(t, 11))
+			ui.Text(c, i18n.T("Working…")).FontSize(px(t, fsCaption)).SingleLine()
 		}
 
 		// Downloads.
@@ -84,7 +86,8 @@ func (a *app) statusBar(c *ui.Context) {
 				text = i18n.T("Downloading %s · %d%%", e.Label, int(100*m.progress.Bytes/m.progress.TotalBytes))
 			}
 			if statusButton(c, "status-dl-"+modelKey(e), i18n.T("Show the models"), func() {
-				ui.Text(c, text).FontSize(px(t, 12)).TextColor(t.TextMuted).SingleLine()
+				ui.Icon(c, icons.DownloadMinimalistic.Linear).Size(px(t, 13), px(t, 13))
+				ui.Text(c, text).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").MaxWidth(px(t, 240)).MinWidth(0)
 			}).Clicked() {
 				a.navigate("/models")
 			}
@@ -99,9 +102,9 @@ func (a *app) statusBar(c *ui.Context) {
 			}
 		}
 		bell := statusButton(c, "status-bell", i18n.T("Notifications"), func() {
-			ui.Icon(c, bellIcon.Linear).Size(px(t, 14), px(t, 14))
+			ui.Icon(c, bellIcon.Get(unread > 0)).Size(px(t, 14), px(t, 14))
 			if unread > 0 {
-				ui.Text(c, itoa(unread)).FontSize(px(t, 11)).Bold().TextColor(t.Accent)
+				ui.Text(c, itoa(unread)).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Accent)
 			}
 		})
 		if bell.Clicked() {
@@ -109,15 +112,13 @@ func (a *app) statusBar(c *ui.Context) {
 		}
 		ui.Popover(c, bell, &a.noticesOpen, func() { a.noticeCentre(c) })
 
-		logsLabel := i18n.T("Logs")
 		if statusButton(c, "status-logs", i18n.T("Show or hide the logs panel (⇧⌘L)"), func() {
-			ui.Icon(c, logsIcon.Linear).Size(px(t, 14), px(t, 14))
-			ui.Text(c, logsLabel).FontSize(px(t, 12))
+			ui.Icon(c, logsIcon.Get(a.logsPanel)).Size(px(t, 14), px(t, 14))
 		}).Clicked() {
 			a.logsPanel = !a.logsPanel
 		}
 		if a.version != "" {
-			ui.Text(c, "v"+a.version).FontSize(px(t, 11)).TextColor(t.TextMuted)
+			ui.Text(c, "v"+a.version).FontSize(px(t, fsMicro)).TextColor(k.Text3).Margin(0, px(t, sp1))
 		}
 	})
 }
@@ -170,8 +171,8 @@ func (a *app) activeJobs() []jobs.Job {
 // jobsPanel lists the unfinished jobs, each with its progress and Cancel.
 func (a *app) jobsPanel(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c).Width(px(t, 360)).Gap(px(t, 8)).Padding(px(t, 4)).Children(func() {
-		ui.Text(c, i18n.T("Jobs")).Bold()
+	ui.Column(c).Width(px(t, 360)).Gap(px(t, sp2)).Padding(px(t, sp1)).Children(func() {
+		sectionHeading(c, i18n.T("Jobs"))
 		active := a.activeJobs()
 		if len(active) == 0 {
 			ui.Text(c, i18n.T("Nothing is running.")).TextColor(t.TextMuted)
@@ -197,7 +198,7 @@ func (a *app) jobsPanel(c *ui.Context) {
 					}
 					ui.Text(c, state).FontSize(px(t, 11)).TextColor(t.TextMuted)
 				})
-				if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
+				if iconButton(c.Key("cancel"), icons.CloseCircle, i18n.T("Cancel")).Clicked() {
 					a.cancelJobByID(j)
 				}
 			})
@@ -224,12 +225,12 @@ func (a *app) cancelJobByID(j jobs.Job) {
 // statusButton is a flat button of the status bar.
 func statusButton(c *ui.Context, key, label string, content func()) ui.Element {
 	t := c.Theme()
-	b := ui.ButtonBase(c.Key(key)).Padding(px(t, 2), px(t, 6)).Radius(4).Label(label).Tooltip(label)
+	b := ui.ButtonBase(c.Key(key)).Padding(px(t, 2), px(t, 6)).Radius(px(t, 6)).Label(label).Tooltip(label).MinWidth(0).Shrink(1)
 	if b.Hovered() {
-		b.Background(t.SurfaceHover)
+		b.Background(tok(t).Hover)
 	}
 	return b.Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(content)
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).MinWidth(0).Children(content)
 	})
 }
 
@@ -238,8 +239,9 @@ func statusButton(c *ui.Context, key, label string, content func()) ui.Element {
 func (a *app) quickSwitch(c *ui.Context) {
 	t := c.Theme()
 	eng := a.engineSummary()
-	ui.Column(c).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 4)).Children(func() {
-		ui.Text(c, i18n.T("Speech engine")).Bold()
+	k := tok(t)
+	ui.Column(c).Width(px(t, 320)).Gap(px(t, sp2)).Padding(px(t, sp1)).Children(func() {
+		sectionHeading(c, i18n.T("Speech engine"))
 		state := map[engineState]string{engineStarting: i18n.T("Starting"), engineReady: i18n.T("Ready"), engineFailed: i18n.T("Stopped")}[eng.State]
 		info := state
 		if eng.Version != "" {
@@ -248,42 +250,45 @@ func (a *app) quickSwitch(c *ui.Context) {
 		if eng.PID != 0 {
 			info += " · PID " + itoa(eng.PID)
 		}
-		ui.Text(c, info).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, info)
 		if eng.Err != "" {
 			ui.Text(c, eng.Err).FontSize(px(t, 12)).TextColor(t.Danger).MaxLines(3).Ellipsis("…")
 		}
 		if mem := a.gpuMemory(); mem != "" {
-			ui.Text(c, mem).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, mem)
 		}
 		ui.Divider(c)
-		ui.Text(c, i18n.T("In memory")).FontSize(px(t, 12)).Bold().TextColor(t.TextMuted)
+		sectionTitle(c, i18n.T("In memory"))
 		if len(eng.Loaded) == 0 {
 			ui.Text(c, i18n.T("No model loaded")).FontSize(px(t, 12))
 		}
 		for _, repo := range eng.Loaded {
 			ui.Row(c.Key("loaded-" + repo)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, catalog.Builtin().DisplayName(repo)).Grow(1).SingleLine().Ellipsis("…")
-				if ui.Button(c.Key("unload"), i18n.T("Unload")).Disabled(eng.Busy).Clicked() {
+				if ghostButton(c.Key("unload"), i18n.T("Unload")).Disabled(eng.Busy).Clicked() {
 					a.unload()
 				}
 			})
 		}
 		ui.Divider(c)
-		ui.Text(c, i18n.T("Speech model")).FontSize(px(t, 12)).Bold().TextColor(t.TextMuted)
+		sectionTitle(c, i18n.T("Speech model"))
 		for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
 			m := a.models[modelKey(e)]
 			chosen := a.preset().Repo == e.Repo
-			row := ui.ButtonBase(c.Key("switch-"+e.ID)).Padding(px(t, 5), px(t, 8)).Radius(6).Label(e.Label)
+			row := ui.ButtonBase(c.Key("switch-"+e.ID)).Padding(px(t, 5), px(t, sp2)).Radius(px(t, radiusControl)).Label(e.Label).Checked(chosen)
 			if chosen {
-				row.Background(t.Accent.Alpha(0.15))
+				row.Background(k.Pressed)
 			} else if row.Hovered() {
-				row.Background(t.SurfaceHover)
+				row.Background(k.Hover)
 			}
 			row.Children(func() {
 				ui.Row(c).Grow(1).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, e.Label).Grow(1).SingleLine()
+					ui.Text(c, e.Label).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
 					if m != nil && m.known && m.local.State == hub.Downloaded {
-						ui.Text(c, i18n.T("Downloaded")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+						ui.Text(c, i18n.T("Downloaded")).FontSize(px(t, fsMicro)).TextColor(k.Text3)
+					}
+					if chosen {
+						ui.Icon(c, icons.Check.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Accent)
 					}
 				})
 			})
@@ -291,22 +296,24 @@ func (a *app) quickSwitch(c *ui.Context) {
 				a.selectModel(e)
 			}
 		}
-		ui.Row(c).Gap(px(t, 8)).Children(func() {
+		ui.Divider(c)
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			if ui.Button(c.Key("switch-preload"), i18n.T("Preload")).Disabled(eng.Busy || eng.State != engineReady).Clicked() {
 				a.preload()
 			}
-			if ui.Button(c.Key("switch-flush"), i18n.T("Clear cache")).Disabled(eng.State != engineReady).
-				Tooltip(i18n.T("Free the memory MLX keeps for reuse")).Clicked() {
-				a.flushEngine()
-			}
-			if ui.Button(c.Key("switch-restart"), i18n.T("Restart engine")).Clicked() {
+			if iconButton(c.Key("switch-restart"), icons.Restart, i18n.T("Restart engine")).Clicked() {
 				a.restartEngine()
 			}
 			ui.Spacer(c)
-			if ui.Button(c.Key("switch-engine"), i18n.T("Details")).Clicked() {
-				a.switchOpen = false
-				a.navigate("/engine")
-			}
+			moreMenu(c.Key("switch-more"), "", func(m *ui.Menu) {
+				if m.Item(i18n.T("Clear cache")).Disabled(eng.State != engineReady).Chosen() {
+					a.flushEngine()
+				}
+				if m.Item(i18n.T("Details")).Chosen() {
+					a.switchOpen = false
+					a.navigate("/engine")
+				}
+			})
 		})
 	})
 }
@@ -346,17 +353,17 @@ func (a *app) notify(sev core.Severity, title, body, link string) {
 // noticeCentre lists the notifications, newest first.
 func (a *app) noticeCentre(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c).Width(px(t, 360)).Gap(px(t, 8)).Padding(px(t, 4)).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Notifications")).Bold().Grow(1)
-			if ui.Button(c.Key("notices-read"), i18n.T("Mark all read")).Disabled(len(a.notices) == 0).Clicked() {
+	ui.Column(c).Width(px(t, 360)).Gap(px(t, sp2)).Padding(px(t, sp1)).Children(func() {
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+			sectionHeading(c, i18n.T("Notifications")).Grow(1)
+			if ghostButton(c.Key("notices-read"), i18n.T("Mark all read")).Disabled(len(a.notices) == 0).Clicked() {
 				for i := range a.notices {
 					a.notices[i].Read = true
 				}
 				notes := a.notes
 				a.async(func() { notes.MarkRead(context.Background(), "") })
 			}
-			if ui.Button(c.Key("notices-clear"), i18n.T("Clear")).Disabled(len(a.notices) == 0).Clicked() {
+			if ghostButton(c.Key("notices-clear"), i18n.T("Clear")).Disabled(len(a.notices) == 0).Clicked() {
 				a.notices = nil
 				notes := a.notes
 				a.async(func() { notes.Clear(context.Background()) })
@@ -387,21 +394,22 @@ func (a *app) noticeRow(c *ui.Context, n core.Notification) {
 	case core.SeveritySuccess:
 		color = t.Success
 	}
-	bg := t.Surface
+	k := tok(t)
+	row := ui.Row(c.Key("notice-" + n.ID)).Gap(px(t, sp2)).Padding(px(t, sp2)).Radius(px(t, radiusControl)).AlignItems(ui.Start)
 	if !n.Read {
-		bg = t.Accent.Alpha(0.08)
+		row.Background(k.Subtle)
 	}
-	ui.Row(c.Key("notice-" + n.ID)).Gap(px(t, 8)).Padding(px(t, 8)).Radius(8).Background(bg).AlignItems(ui.Start).Children(func() {
-		ui.Box(c).Size(px(t, 8), px(t, 8)).Radius(px(t, 4)).Background(color).Margin(px(t, 5), 0, 0, 0)
+	row.Children(func() {
+		ui.Box(c).Size(px(t, 6), px(t, 6)).Radius(px(t, 3)).Background(color).Margin(px(t, 6), 0, 0, 0)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
-			ui.Text(c, n.Title).FontSize(px(t, 13)).Bold().MaxLines(2).Ellipsis("…")
+			ui.Text(c, n.Title).FontSize(px(t, fsBody)).FontWeight(600).MaxLines(2).Ellipsis("…")
 			if n.Body != "" {
-				ui.Text(c, n.Body).FontSize(px(t, 12)).MaxLines(4).Ellipsis("…").Selectable()
+				ui.Text(c, n.Body).FontSize(px(t, fsCaption)).TextColor(k.Text2).MaxLines(4).Ellipsis("…").Selectable()
 			}
-			ui.Text(c, timeAgo(n.Time)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+			ui.Text(c, timeAgo(n.Time)).FontSize(px(t, fsMicro)).TextColor(k.Text3)
 		})
 		if n.Link != "" {
-			if ui.Button(c.Key("open"), i18n.T("Open")).Clicked() {
+			if ghostButton(c.Key("open"), i18n.T("Open")).Clicked() {
 				a.noticesOpen = false
 				a.openURL(n.Link)
 			}

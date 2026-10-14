@@ -94,7 +94,7 @@ func (a *app) abTool(c *ui.Context) {
 	})
 	busy := a.ab.runs[0] != nil && a.ab.runs[0].busy || a.ab.runs[1] != nil && a.ab.runs[1].busy
 	ui.Row(c).Children(func() {
-		if ui.PrimaryButton(c.Key("ab-run"), i18n.T("Compare")).Disabled(busy || strings.TrimSpace(a.ab.text) == "").Clicked() {
+		if primaryButton(c.Key("ab-run"), i18n.T("Compare")).Disabled(busy || strings.TrimSpace(a.ab.text) == "").Clicked() {
 			a.runAB()
 		}
 	})
@@ -131,7 +131,7 @@ func (a *app) convertTool(c *ui.Context) {
 		ui.Switch(c.Key("cv-match-switch"), &cv.match).Label(i18n.T("Match the recording's length"))
 	})
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if ui.PrimaryButton(c.Key("cv-run"), i18n.T("Convert")).Disabled(cv.file == "" || cv.stage != "").Clicked() {
+		if primaryButton(c.Key("cv-run"), i18n.T("Convert")).Disabled(cv.file == "" || cv.stage != "").Clicked() {
 			a.runConvert()
 		}
 		if cv.stage != "" {
@@ -197,7 +197,7 @@ func (a *app) rateFitTool(c *ui.Context) {
 		ui.Switch(c.Key("rf-rewrite-switch"), &rf.rewrite).Disabled(!canRewrite).Label(i18n.T("Suggest a shorter version"))
 	})
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if ui.PrimaryButton(c.Key("rf-run"), i18n.T("Check")).Disabled(rf.busy || strings.TrimSpace(rf.text) == "" || rf.slot <= 0).Clicked() {
+		if primaryButton(c.Key("rf-run"), i18n.T("Check")).Disabled(rf.busy || strings.TrimSpace(rf.text) == "" || rf.slot <= 0).Clicked() {
 			a.runRateFit()
 		}
 		if rf.busy {
@@ -243,7 +243,7 @@ func (a *app) directionTool(c *ui.Context) {
 		ui.TextInput(c.Key("dir-note"), &d.note).Placeholder(i18n.T("warm and slow, like a bedtime story")).Label(i18n.T("Note"))
 	})
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if ui.PrimaryButton(c.Key("dir-run"), i18n.T("Read the note")).Disabled(d.busy || strings.TrimSpace(d.note) == "").Clicked() {
+		if primaryButton(c.Key("dir-run"), i18n.T("Read the note")).Disabled(d.busy || strings.TrimSpace(d.note) == "").Clicked() {
 			a.runDirection()
 		}
 		if d.busy {

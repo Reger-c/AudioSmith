@@ -204,7 +204,7 @@ func (a *app) callView(c *ui.Context) {
 		a.callBadge(c, call.Phase, call.Outcome)
 		ui.Spacer(c)
 		if call.Live() {
-			if ui.PrimaryButton(c.Key("cv-hangup"), i18n.T("Hang up")).Background(t.Danger).Clicked() {
+			if primaryButton(c.Key("cv-hangup"), i18n.T("Hang up")).Background(t.Danger).Clicked() {
 				a.hangupCall(call.ID)
 			}
 		}
@@ -291,7 +291,7 @@ func (a *app) callLiveControls(c *ui.Context, call *services.Call) {
 		if call.Takeover {
 			ui.Row(c.Key("cv-say")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 				in := ui.TextInput(c.Key("cv-say-text"), &a.callSay).Placeholder(i18n.T("What to say next")).Label(i18n.T("What to say next")).Grow(1).AutoFocus()
-				if in.Submitted() || ui.PrimaryButton(c.Key("cv-say-go"), i18n.T("Say")).Disabled(strings.TrimSpace(a.callSay) == "").Clicked() {
+				if in.Submitted() || primaryButton(c.Key("cv-say-go"), i18n.T("Say")).Disabled(strings.TrimSpace(a.callSay) == "").Clicked() {
 					a.sayInCall(call.ID)
 				}
 			})
@@ -561,7 +561,7 @@ func (a *app) newCallForm(c *ui.Context) {
 		label = i18n.T("Starting call…")
 	}
 	ui.Row(c.Key("nc-go")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if ui.PrimaryButton(c.Key("nc-call"), label).Disabled(!ready || problem != "" || a.callBusy).Clicked() {
+		if primaryButton(c.Key("nc-call"), label).Disabled(!ready || problem != "" || a.callBusy).Clicked() {
 			a.callAsk = true
 		}
 		if a.callBusy {
@@ -607,7 +607,7 @@ func (a *app) callDialogs(c *ui.Context) {
 					if ui.Button(c.Key("cc-cancel"), i18n.T("Cancel")).AutoFocus().Clicked() {
 						a.callAsk = false
 					}
-					if ui.PrimaryButton(c.Key("cc-call"), i18n.T("Call")).Clicked() {
+					if primaryButton(c.Key("cc-call"), i18n.T("Call")).Clicked() {
 						a.placeCall()
 					}
 				})
@@ -639,7 +639,7 @@ func (a *app) callDialogs(c *ui.Context) {
 					if ui.Button(c.Key("ci-cancel"), i18n.T("Cancel")).Clicked() {
 						a.callInOpen = false
 					}
-					if ui.PrimaryButton(c.Key("ci-save"), i18n.T("Save")).Clicked() {
+					if primaryButton(c.Key("ci-save"), i18n.T("Save")).Clicked() {
 						a.saveInbound()
 					}
 				})

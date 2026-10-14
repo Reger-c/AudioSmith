@@ -79,7 +79,7 @@ func (a *app) wfHeaderActions(c *ui.Context) {
 	if a.wfResumable() {
 		label = i18n.T("Resume")
 	}
-	if ui.PrimaryButton(c.Key("wf-run"), label).Tooltip(i18n.T("Run every item through the steps")).Clicked() {
+	if primaryButton(c.Key("wf-run"), label).Tooltip(i18n.T("Run every item through the steps")).Clicked() {
 		a.wfStart(false)
 	}
 }
@@ -112,7 +112,7 @@ func (a *app) wfEmpty(c *ui.Context) {
 			return
 		}
 		ui.Row(c).Gap(px(t, 8)).Wrap().Justify(ui.Center).MaxWidth(px(t, 640)).Children(func() {
-			if ui.PrimaryButton(c.Key("wf-empty-new"), i18n.T("New workflow")).Clicked() {
+			if primaryButton(c.Key("wf-empty-new"), i18n.T("New workflow")).Clicked() {
 				a.wfNew("")
 			}
 			for _, tp := range workflow.Templates {

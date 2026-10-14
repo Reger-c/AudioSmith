@@ -483,7 +483,7 @@ func (a *app) shortcutRow(c *ui.Context) {
 			ui.Text(c, label)
 		})
 		if f.recording {
-			if ui.PrimaryButton(c.Key("dict-record-save"), i18n.T("Save")).Disabled(f.pending == "").Clicked() {
+			if primaryButton(c.Key("dict-record-save"), i18n.T("Save")).Disabled(f.pending == "").Clicked() {
 				a.saveShortcut(f.pending)
 			}
 			if ui.Button(c.Key("dict-record-cancel"), i18n.T("Cancel")).Clicked() {

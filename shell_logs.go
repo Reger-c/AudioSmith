@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/logs"
 )
 
@@ -58,17 +59,18 @@ func (a *app) visibleLogs() []core.LogEntry {
 // logsView shows the log; panel is the compact form under a page.
 func (a *app) logsView(c *ui.Context, panel bool) {
 	t := c.Theme()
+	k := tok(t)
 	lines := a.visibleLogs()
-	ui.Row(c).Padding(px(t, 6), px(t, 12)).Gap(px(t, 6)).AlignItems(ui.Center).Shrink(0).Children(func() {
+	ui.Row(c).Padding(px(t, 6), px(t, sp3), px(t, 6), px(t, sp6)).Gap(px(t, 6)).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if panel {
-			ui.Text(c, i18n.T("Logs")).Bold().FontSize(px(t, 12))
+			ui.Text(c, i18n.T("Logs")).FontWeight(600).FontSize(px(t, fsCaption)).SingleLine()
 		}
 		var labels []string
 		for _, s := range logSources {
 			labels = append(labels, logSourceLabel(s))
 		}
 		chosen := logSourceLabel(a.logsSource)
-		sel := ui.Select(c.Key("logs-source"), &chosen, labels).Label(i18n.T("Source"))
+		sel := ui.Select(c.Key("logs-source"), &chosen, labels).Label(i18n.T("Source")).MinWidth(px(t, 110)).Shrink(1)
 		if sel.Changed() {
 			for _, s := range logSources {
 				if logSourceLabel(s) == chosen {
@@ -76,10 +78,10 @@ func (a *app) logsView(c *ui.Context, panel bool) {
 				}
 			}
 		}
-		ui.TextInput(c.Key("logs-search"), &a.logsQuery).Placeholder(i18n.T("Filter")).Width(px(t, 200)).Label(i18n.T("Filter the logs"))
+		ui.TextInput(c.Key("logs-search"), &a.logsQuery).Placeholder(i18n.T("Filter")).Width(px(t, 200)).Shrink(1).MinWidth(px(t, 80)).Label(i18n.T("Filter the logs"))
 		ui.Spacer(c)
-		ui.Text(c, i18n.N(len(lines), "%d line", "%d lines", len(lines))).FontSize(px(t, 11)).TextColor(t.TextMuted)
-		if ui.Button(c.Key("logs-copy"), i18n.T("Copy")).Disabled(len(lines) == 0).Tooltip(i18n.T("Copy the lines shown")).Clicked() {
+		ui.Text(c, i18n.N(len(lines), "%d line", "%d lines", len(lines))).FontSize(px(t, fsMicro)).TextColor(k.Text3).SingleLine()
+		if iconButton(c.Key("logs-copy"), icons.Copy, i18n.T("Copy")).Disabled(len(lines) == 0).Tooltip(i18n.T("Copy the lines shown")).Clicked() {
 			var b strings.Builder
 			for _, e := range lines {
 				b.WriteString(logs.Format(e) + "\n")
@@ -88,12 +90,12 @@ func (a *app) logsView(c *ui.Context, panel bool) {
 			a.toast(i18n.T("Copied %d lines", len(lines)))
 		}
 		if path := a.logs.Path(); path != "" {
-			if ui.Button(c.Key("logs-open"), i18n.T("Open log file")).Clicked() {
+			if iconButton(c.Key("logs-open"), icons.FolderOpen, i18n.T("Open log file")).Clicked() {
 				mygo.Shell.OpenPath(path)
 			}
 		}
 		if panel {
-			if ui.Button(c.Key("logs-close"), i18n.T("Close")).Clicked() {
+			if iconButton(c.Key("logs-close"), icons.Close, i18n.T("Close")).Clicked() {
 				a.logsPanel = false
 			}
 		}
@@ -106,7 +108,7 @@ func (a *app) logsView(c *ui.Context, panel bool) {
 		return
 	}
 	ui.Scroll(c.Key("logs-scroll")).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Padding(px(t, 6), px(t, 12)).Gap(px(t, 1)).Children(func() {
+		ui.Column(c).Padding(px(t, 6), px(t, sp3), px(t, 6), px(t, sp6)).Gap(px(t, 1)).Children(func() {
 			for i, e := range lines {
 				color := t.Text
 				switch e.Level {
@@ -115,11 +117,11 @@ func (a *app) logsView(c *ui.Context, panel bool) {
 				case core.SeverityWarning:
 					color = t.Warning
 				case core.SeverityDebug:
-					color = t.TextMuted
+					color = k.Text3
 				}
 				ui.Row(c.Key(i)).Gap(px(t, 8)).Children(func() {
-					ui.Text(c, e.Time.Format("15:04:05")).Font("monospace").FontSize(px(t, 11)).TextColor(t.TextMuted).Shrink(0)
-					ui.Text(c, e.Source).Font("monospace").FontSize(px(t, 11)).TextColor(t.TextMuted).Width(px(t, 80)).Shrink(0).SingleLine().Ellipsis("…")
+					ui.Text(c, e.Time.Format("15:04:05")).Font("monospace").FontSize(px(t, fsMicro)).TextColor(k.Text3).Shrink(0)
+					ui.Text(c, e.Source).Font("monospace").FontSize(px(t, fsMicro)).TextColor(k.Text2).Width(px(t, 80)).Shrink(0).SingleLine().Ellipsis("…")
 					ui.Text(c, e.Message).Font("monospace").FontSize(px(t, 11)).TextColor(color).Grow(1).MinWidth(0).Selectable()
 				})
 			}

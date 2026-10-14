@@ -35,7 +35,7 @@ func (a *app) twilioPage(c *ui.Context) {
 			if ui.Button(c.Key("tw-off"), i18n.T("Turn off calls")).Clicked() {
 				a.setCallsOn(false)
 			}
-		} else if ui.PrimaryButton(c.Key("tw-on"), i18n.T("Turn on calls")).Disabled(a.prefs.Calls.AccountSID == "" || !a.callHasTok).Clicked() {
+		} else if primaryButton(c.Key("tw-on"), i18n.T("Turn on calls")).Disabled(a.prefs.Calls.AccountSID == "" || !a.callHasTok).Clicked() {
 			a.setCallsOn(true)
 		}
 		if ui.Button(c.Key("tw-calls"), i18n.T("Open Calls")).Clicked() {
@@ -144,7 +144,7 @@ func (a *app) twStepAccount(c *ui.Context) {
 			})
 			ui.Text(c, i18n.T("The token is kept in your Mac's Keychain. It is never shown again or exported.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
 			ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-				if ui.PrimaryButton(c.Key("tw-save"), i18n.T("Save and check")).Disabled(w.checking || strings.TrimSpace(w.sid) == "").Clicked() {
+				if primaryButton(c.Key("tw-save"), i18n.T("Save and check")).Disabled(w.checking || strings.TrimSpace(w.sid) == "").Clicked() {
 					a.saveTwilioAccount()
 				}
 				if w.replacing && ui.Button(c.Key("tw-cancel"), i18n.T("Cancel")).Clicked() {
@@ -191,7 +191,7 @@ func (a *app) twStepTunnel(c *ui.Context) {
 			})
 		})
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			if ui.PrimaryButton(c.Key("tw-url-save"), i18n.T("Save")).Clicked() {
+			if primaryButton(c.Key("tw-url-save"), i18n.T("Save")).Clicked() {
 				a.saveTunnel()
 			}
 			if ui.Button(c.Key("tw-url-check"), i18n.T("Check")).Disabled(w.tunnel == "checking").Clicked() {
@@ -250,7 +250,7 @@ func (a *app) twStepNumber(c *ui.Context) {
 					}
 				}
 				ui.Select(c.Key("tw-numbers"), &w.numberSel, labels).Label(i18n.T("Your Twilio number")).Width(px(t, 300))
-				if ui.PrimaryButton(c.Key("tw-use"), i18n.T("Use this number")).Disabled(w.hooking).Clicked() {
+				if primaryButton(c.Key("tw-use"), i18n.T("Use this number")).Disabled(w.hooking).Clicked() {
 					a.useTwilioNumber()
 				}
 			}
@@ -338,7 +338,7 @@ func (a *app) twStepBehaviour(c *ui.Context) {
 		ui.Text(c, i18n.T("You are responsible for following the laws on automated calls, AI disclosure and recording where you and the people you call are.")).
 			FontSize(px(t, 11)).TextColor(t.TextMuted).Wrap()
 		ui.Row(c).Children(func() {
-			if ui.PrimaryButton(c.Key("tw-behaviour-save"), i18n.T("Save")).Clicked() {
+			if primaryButton(c.Key("tw-behaviour-save"), i18n.T("Save")).Clicked() {
 				a.saveTwilioBehaviour()
 			}
 		})

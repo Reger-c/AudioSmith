@@ -222,7 +222,7 @@ func (a *app) voiceEditor(c *ui.Context) {
 			if ui.Button(c.Key("editor-studio"), i18n.T("Use in Studio")).Clicked() {
 				a.useVoiceInStudio(v)
 			}
-			if ui.PrimaryButton(c.Key("editor-save"), i18n.T("Save")).Disabled(!e.dirty() || e.saving).Clicked() {
+			if primaryButton(c.Key("editor-save"), i18n.T("Save")).Disabled(!e.dirty() || e.saving).Clicked() {
 				a.saveVoiceEdit()
 			}
 		})
@@ -335,7 +335,7 @@ func (a *app) editorTry(c *ui.Context, v *core.Voice) {
 			ui.Select(c.Key("try-model"), &e.tryModel, labels).Label(i18n.T("Model"))
 			ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Justify(ui.End).Children(func() {
 				j := a.voiceJob("try", v.ID)
-				if ui.PrimaryButton(c.Key("try-go"), i18n.T("Generate preview")).Disabled(j.running() || strings.TrimSpace(e.tryText) == "").Clicked() {
+				if primaryButton(c.Key("try-go"), i18n.T("Generate preview")).Disabled(j.running() || strings.TrimSpace(e.tryText) == "").Clicked() {
 					a.tryVoice(v.ID)
 				}
 			})

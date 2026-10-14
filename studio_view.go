@@ -2,18 +2,34 @@ package main
 
 import (
 	"math"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 func (a *app) studioPage(c *ui.Context) {
 	t := c.Theme()
-	header(c, i18n.T("Studio"), nil)
+	k := tok(t)
+	inline, shown := a.studioInspectorShown(c)
+	pageHeader(c, i18n.T("Studio"), func() {
+		tip := i18n.T("Show the inspector")
+		if shown {
+			tip = i18n.T("Hide the inspector")
+		}
+		b := iconButton(c.Key("inspector-toggle"), icons.PanelRight, tip).Checked(shown)
+		if shown {
+			b.Background(k.Pressed)
+		}
+		if b.Clicked() {
+			a.composer.panel, a.composer.panelSet = !shown, true
+		}
+	})
 	if c.Shortcut(ui.Alt, ui.KeySlash) { // wherever the focus is, the script editor's too
 		a.composer.insertOpen = !a.composer.insertOpen
 	}
@@ -21,38 +37,103 @@ func (a *app) studioPage(c *ui.Context) {
 		a.composer.undoToast = ""
 		c.ToastAction(msg, i18n.T("Undo"), a.undoScript)
 	}
+	_, winH := c.Size()
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, 14), px(t, 20)).Gap(px(t, 10)).Children(func() {
-			a.composerToolbar(c)
-			a.scriptView(c)
-			a.statsLine(c)
-			a.generateBar(c)
-			if a.job != nil {
-				a.jobStatus(c)
-			} else if a.jobError != "" {
-				a.jobProblem(c)
-			}
-			if cl := a.lastClip(); cl != nil {
-				a.outputPanel(c, cl, true)
-			}
-		})
-		ui.Box(c).Width(1).Background(t.Border)
-		ui.Scroll(c).Width(px(t, inspectorWidth)).Shrink(0).Background(t.Surface).Children(func() {
-			ui.Column(c).Padding(px(t, 16)).Gap(px(t, 14)).Children(func() {
-				a.inspector(c)
+		ui.Scroll(c.Key("composer-scroll")).Grow(1).MinWidth(0).Children(func() {
+			// As tall as the page at least, so the script fills it; the
+			// page scrolls when the window is too short for all of it.
+			ui.Column(c).MinHeight(winH-titleBarHeight-px(t, statusBarHeight)-2).Padding(px(t, sp1), px(t, sp6), px(t, sp5)).Gap(px(t, sp3)).Children(func() {
+				a.composerToolbar(c)
+				a.scriptView(c)
+				a.statsLine(c)
+				a.generateBar(c)
+				if a.job != nil {
+					a.jobStatus(c)
+				} else if a.jobError != "" {
+					a.jobProblem(c)
+				}
+				if cl := a.lastClip(); cl != nil {
+					a.outputPanel(c, cl, true)
+				}
 			})
-		})
+		}).ClipX()
+		if shown && inline {
+			ui.Box(c).Width(1).Background(k.Line)
+			ui.Scroll(c.Key("inspector")).Width(px(t, inspectorWidth)).Shrink(0).Children(func() {
+				ui.Column(c).Padding(px(t, sp2), px(t, sp5), px(t, sp5)).Gap(px(t, sp4)).Children(func() {
+					a.inspector(c)
+				})
+			})
+		}
 	})
+	if shown && !inline {
+		// Too narrow for both: the inspector slides over the composer.
+		ui.Overlay(c, func() {
+			_, h := c.Size()
+			panel := ui.Scroll(c.Key("inspector-drawer")).Absolute().Right(0).Top(titleBarHeight).Width(px(t, inspectorWidth)).
+				Height(h-titleBarHeight-px(t, statusBarHeight)-1).Background(k.Bg).BorderWidth(0, 0, 0, 1).BorderColor(k.Line).
+				Shadow(-8, 0, 24, 0, ui.RGBA(0, 0, 0, 0.12)).Label(i18n.T("Inspector"))
+			panel.Children(func() {
+				ui.Column(c).Padding(px(t, sp4), px(t, sp5), px(t, sp5)).Gap(px(t, sp4)).Children(func() {
+					a.inspector(c)
+				})
+			})
+			if panel.PressedOutside() || panel.OverlayShortcut(0, ui.KeyEscape) {
+				a.composer.panel, a.composer.panelSet = false, true
+			}
+		})
+	}
 	// After the inputs above applied this frame's edits.
 	a.autosaveStudio()
+}
+
+// studioInspectorShown says whether the Studio's inspector shows, and
+// whether beside the composer (inline) or over it: beside when the page
+// leaves the composer room, which the toggle can change.
+func (a *app) studioInspectorShown(c *ui.Context) (inline, shown bool) {
+	t := c.Theme()
+	w, _ := c.Size()
+	side := a.sideW
+	if a.railMode() {
+		side = px(t, railWidth)
+	}
+	inline = w-side-px(t, inspectorWidth) >= px(t, 480)
+	shown = inline
+	if a.composer.panelSet {
+		shown = a.composer.panel
+	}
+	return inline, shown
+}
+
+// studioNarrow is true when the composer is narrow: its bars show icons
+// without their labels.
+func (a *app) studioNarrow(c *ui.Context) bool {
+	t := c.Theme()
+	w, _ := c.Size()
+	side := a.sideW
+	if a.railMode() {
+		side = px(t, railWidth)
+	}
+	inline, shown := a.studioInspectorShown(c)
+	if shown && inline {
+		w -= px(t, inspectorWidth)
+	}
+	return w-side < px(t, 500)
 }
 
 // composerToolbar: insert menu, import, and the script's language.
 func (a *app) composerToolbar(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 		a.insertMenu(c)
-		if ui.Button(c.Key("import"), i18n.T("Import script…")).Tooltip(i18n.T("TXT, Markdown, DOCX, EPUB, SRT or VTT, inserted at the caret")).Clicked() {
+		imp := i18n.T("Import script…")
+		var b ui.Element
+		if a.studioNarrow(c) {
+			b = iconButton(c.Key("import"), icons.Import, imp)
+		} else {
+			b = ghostIconButton(c.Key("import"), icons.Import, imp).Label(imp)
+		}
+		if b.Tooltip(i18n.T("TXT, Markdown, DOCX, EPUB, SRT or VTT, inserted at the caret")).Clicked() {
 			a.importScript()
 		}
 		ui.Spacer(c)
@@ -104,7 +185,7 @@ func (a *app) statsLine(c *ui.Context) {
 	if a.preset().Has(catalog.CapDuration) && a.duration > 0 {
 		seconds = a.duration
 	}
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 		parts := i18n.T("%d characters", st.chars)
 		if st.chunks > 0 {
 			parts += " · " + i18n.T("≈ %s of audio", formatDuration(seconds))
@@ -112,25 +193,21 @@ func (a *app) statsLine(c *ui.Context) {
 		if st.chunks > 1 {
 			parts += " · " + i18n.N(st.chunks, "%d chunk", "%d chunks", st.chunks)
 		}
-		ui.Text(c, parts).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		ui.Text(c, parts).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).SingleLine().Ellipsis("…").MinWidth(0)
 		if n := len(st.diags); n > 0 {
-			msg := diagText(st.diags[0])
-			if n > 1 {
-				msg = i18n.N(n, "%d note about the markup", "%d notes about the markup", n) + ": " + msg
-			}
-			ui.Text(c, "⚠ "+msg).FontSize(px(t, 12)).TextColor(t.Warning).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+			a.markupNotes(c, st)
 		}
 	})
 	if msg, warn := a.readiness(st); msg != "" {
-		color := t.TextMuted
+		color := tok(t).Text2
 		if warn {
 			color = t.Warning
 		}
-		ui.Row(c.Key("readiness")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, msg).FontSize(px(t, 12)).TextColor(color).Grow(1).MinWidth(0)
+		ui.Row(c.Key("readiness")).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, msg).FontSize(px(t, fsCaption)).TextColor(color).Grow(1).MinWidth(0)
 			e := a.preset()
 			if m := a.model(e); e.ID != "custom" && m.known && m.local.State != hub.Downloaded && !m.downloading && a.needDownload == nil {
-				if ui.Button(c.Key("ready-download"), i18n.T("Download")).Tooltip(e.Repo).Clicked() {
+				if secondaryIconButton(c.Key("ready-download"), icons.DownloadMinimalistic, i18n.T("Download")).Label(i18n.T("Download")).Tooltip(e.Repo).Clicked() {
 					a.download(e)
 				}
 			}
@@ -139,7 +216,7 @@ func (a *app) statsLine(c *ui.Context) {
 	}
 	if rtf := typicalRTF(a.preset().Family); seconds/rtf > 90 {
 		ui.Text(c.Key("slow"), i18n.T("A long render: about %s of audio may take %s or more. It plays from the first chunk while the rest renders.",
-			formatDuration(seconds), formatDuration(seconds/rtf))).FontSize(px(t, 12)).TextColor(t.Warning)
+			formatDuration(seconds), formatDuration(seconds/rtf))).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2)
 	}
 }
 
@@ -170,11 +247,11 @@ func (a *app) readiness(st scriptStats) (msg string, warn bool) {
 
 func (a *app) generateBar(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 		a.voicePopover(c)
 		a.qualityPopover(c)
-		if s := a.voiceControlsSummary(); s != "" {
-			ui.Text(c, s).FontSize(px(t, 12)).TextColor(t.TextMuted).SingleLine().Ellipsis("…").MinWidth(0)
+		if s := a.voiceControlsSummary(); s != "" && !a.studioNarrow(c) {
+			caption(c, s).SingleLine().Ellipsis("…").MinWidth(0).Margin(0, 0, 0, px(t, sp1))
 		}
 		ui.Spacer(c)
 		if a.job != nil {
@@ -186,7 +263,7 @@ func (a *app) generateBar(c *ui.Context) {
 		if a.job != nil && a.job.kind == "synthesize" {
 			label = i18n.T("Generating…")
 		}
-		if ui.PrimaryButton(c.Key("generate"), label).
+		if primaryButton(c.Key("generate"), label).
 			Disabled(!a.canGenerate()).
 			Tooltip(i18n.T("Generate speech (⌘↩)")).
 			Clicked() {
@@ -199,8 +276,9 @@ func (a *app) generateBar(c *ui.Context) {
 // Download button when the model is missing.
 func (a *app) jobProblem(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, a.jobError).TextColor(t.Danger).FontSize(px(t, 12)).Selectable().Grow(1).MinWidth(0)
+	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, icons.DangerCircle.Linear).Size(px(t, 14), px(t, 14)).TextColor(t.Danger).Shrink(0)
+		ui.Text(c, a.jobError).TextColor(t.Danger).FontSize(px(t, fsCaption)).Selectable().Grow(1).MinWidth(0)
 		e := a.needDownload
 		if e == nil {
 			return
@@ -212,12 +290,12 @@ func (a *app) jobProblem(c *ui.Context) {
 			if m.progress.TotalBytes > 0 {
 				text = i18n.T("Downloading %s · %d%%", e.Label, int(100*m.progress.Bytes/m.progress.TotalBytes))
 			}
-			ui.Text(c, text).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, text)
 			if ui.Button(c.Key("dl-cancel"), i18n.T("Cancel")).Clicked() {
 				a.cancelDownload(*e)
 			}
 		default:
-			if ui.Button(c.Key("dl-model"), i18n.T("Download")).Tooltip(e.Repo).Clicked() {
+			if secondaryIconButton(c.Key("dl-model"), icons.DownloadMinimalistic, i18n.T("Download")).Label(i18n.T("Download")).Tooltip(e.Repo).Clicked() {
 				a.download(*e)
 			}
 		}
@@ -229,7 +307,7 @@ func (a *app) jobStatus(c *ui.Context) {
 	j := a.job
 	ui.Column(c).Gap(px(t, 6)).Children(func() {
 		ui.Progress(c, j.fraction).Label(j.status)
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 			status := j.status
 			if j.kind == "synthesize" && a.renderTake == j.takeID && a.renderChunks > 1 && a.renderChunk > 0 && !j.cancelling {
 				status += " · " + i18n.T("chunk %d of %d", a.renderChunk, a.renderChunks)
@@ -237,18 +315,18 @@ func (a *app) jobStatus(c *ui.Context) {
 					status += " · " + i18n.N(a.renderCached, "%d from the cache", "%d from the cache", a.renderCached)
 				}
 			}
-			ui.Text(c, status).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			ui.Text(c, status).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			info := i18n.T("%.0f s", time.Since(j.started).Seconds())
 			if j.audioSeconds > 0 {
 				info = i18n.T("%.1f s of audio · ", j.audioSeconds) + info
 			}
-			ui.Text(c, info).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, info).SingleLine()
 			if a.previewAvailable() {
-				label := i18n.T("Play preview")
+				label, ic := i18n.T("Play preview"), icons.Play
 				if a.pl.Playing(a.previewID) {
-					label = i18n.T("Pause preview")
+					label, ic = i18n.T("Pause preview"), icons.Pause
 				}
-				if ui.Button(c.Key("preview"), label).Tooltip(i18n.T("Listen to what is rendered so far")).Clicked() {
+				if iconButton(c.Key("preview"), ic, label).Tooltip(i18n.T("Listen to what is rendered so far")).Clicked() {
 					switch {
 					case a.pl.Playing(a.previewID):
 						a.pl.Stop()
@@ -263,60 +341,84 @@ func (a *app) jobStatus(c *ui.Context) {
 
 func (a *app) inspector(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	p := a.preset()
 	custom := a.modelLabel == catalog.CustomLabel
 
-	ui.Field(c, i18n.T("Model"), func() {
-		if ui.Select(c.Key("model"), &a.modelLabel, catalog.Builtin().Labels(catalog.TaskTTS)).Label(i18n.T("Model")).Changed() {
-			a.modelChanged()
-		}
-	})
-	if custom {
-		ui.Field(c, i18n.T("Repo"), func() {
-			ui.TextInput(c.Key("repo"), &a.customRepo).Placeholder("owner/model-name")
-		})
-	}
 	about := i18n.T(p.About)
 	if size := catalog.HumanSize(p.Size); size != "" {
 		about += i18n.T(" Download %s.", size)
 	}
-	ui.Text(c, about).FontSize(px(t, 12)).TextColor(t.TextMuted)
-	if !p.Licence.Commercial {
-		ui.Text(c, p.Licence.Name+" · "+i18n.T("non-commercial use only")).FontSize(px(t, 12)).TextColor(t.Warning)
-	}
-
-	ui.Row(c).Gap(px(t, 8)).Children(func() {
-		loaded := p.Repo != "" && p.Repo == a.loadedModel
-		label := i18n.T("Preload")
-		if loaded {
-			label = i18n.T("Loaded")
+	ui.Column(c).Gap(px(t, 6)).Children(func() {
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, i18n.T("Model")).FontWeight(600).Grow(1)
+			infoTip(c.Key("model-about"), about)
+		})
+		if ui.Select(c.Key("model"), &a.modelLabel, catalog.Builtin().Labels(catalog.TaskTTS)).Label(i18n.T("Model")).FillWidth().Changed() {
+			a.modelChanged()
 		}
-		if ui.Button(c.Key("preload"), label).
-			Disabled(loaded || a.job != nil || a.engState != engineReady || p.Repo == "").
-			Tooltip(i18n.T("Load the model now, so the first take starts at once")).
-			Clicked() {
-			a.preload()
+		if custom {
+			ui.TextInput(c.Key("repo"), &a.customRepo).Placeholder("owner/model-name").Label(i18n.T("Repo"))
 		}
-		if ui.Button(c.Key("unload"), i18n.T("Unload")).
-			Disabled(a.loadedModel == "" || a.job != nil).
-			Tooltip(i18n.T("Free the memory the loaded model takes")).
-			Clicked() {
-			a.unload()
+		if !p.Licence.Commercial {
+			ui.Text(c, p.Licence.Name+" · "+i18n.T("non-commercial use only")).FontSize(px(t, fsCaption)).TextColor(t.Warning)
 		}
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+			loaded := p.Repo != "" && p.Repo == a.loadedModel
+			dot := k.G[5]
+			state := i18n.T("Not loaded")
+			if loaded {
+				dot, state = t.Success, i18n.T("Loaded")
+			}
+			ui.Box(c).Size(px(t, 6), px(t, 6)).Radius(px(t, 3)).Background(dot)
+			caption(c, state).Grow(1).SingleLine()
+			if ghostButton(c.Key("preload"), i18n.T("Preload")).
+				Disabled(loaded || a.job != nil || a.engState != engineReady || p.Repo == "").
+				Tooltip(i18n.T("Load the model now, so the first take starts at once")).
+				Clicked() {
+				a.preload()
+			}
+			if ghostButton(c.Key("unload"), i18n.T("Unload")).
+				Disabled(a.loadedModel == "" || a.job != nil).
+				Tooltip(i18n.T("Free the memory the loaded model takes")).
+				Clicked() {
+				a.unload()
+			}
+		})
 	})
 
 	ui.Divider(c)
-	a.voicePicker(c, p) // the voice library's picker (voices.go)
-	if !a.studioUsesSavedVoice(p) {
-		a.studioVoiceSection(c, p)
-	}
+	ui.Column(c).Gap(px(t, sp3)).Children(func() {
+		a.voicePicker(c, p) // the voice library's picker (voices.go)
+		if !a.studioUsesSavedVoice(p) {
+			a.studioVoiceSection(c, p)
+		}
+	})
 	ui.Divider(c)
-	if ui.Checkbox(c.Key("autoplay"), &a.autoplay, i18n.T("Play each take when it is ready")).Changed() {
-		on := a.autoplay
-		a.updateSettings(func(s *settings.Settings) { s.Studio.Autoplay = on })
+	formRow(c, "autoplay-row", i18n.T("Play each take when it is ready"), i18n.T("Long scripts play from the first chunk while the rest renders."), func() {
+		if ui.Switch(c.Key("autoplay"), &a.autoplay).Label(i18n.T("Play each take when it is ready")).Changed() {
+			on := a.autoplay
+			a.updateSettings(func(s *settings.Settings) { s.Studio.Autoplay = on })
+		}
+	})
+}
+
+// markupNotes is what the markup checks found, as a short warning whose
+// tooltip lists the notes; a click shows them as a toast.
+func (a *app) markupNotes(c *ui.Context, st scriptStats) {
+	t := c.Theme()
+	var msgs []string
+	for _, d := range st.diags {
+		msgs = append(msgs, diagText(d))
 	}
-	if !a.autoplay {
-		return
+	n := len(msgs)
+	label := i18n.N(n, "%d note about the markup", "%d notes about the markup", n)
+	b := ghostBase(c.Key("markup-notes")).Padding(px(t, 2), px(t, 6)).Gap(px(t, sp1)).Label(label).Tooltip(strings.Join(msgs, "\n")).MinWidth(0).Shrink(1)
+	b.Children(func() {
+		ui.Icon(c, icons.DangerTriangle.Linear).Size(px(t, 13), px(t, 13)).TextColor(t.Warning)
+		ui.Text(c, label).FontSize(px(t, fsCaption)).TextColor(t.Warning).SingleLine().Ellipsis("…").MinWidth(0)
+	})
+	if b.Clicked() {
+		a.toast(label + ": " + strings.Join(msgs, " · "))
 	}
-	ui.Text(c, i18n.T("Long scripts play from the first chunk while the rest renders.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
 }
