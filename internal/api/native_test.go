@@ -523,7 +523,13 @@ func TestAllJobEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	go do(t, ts, "POST", "/api/generate", map[string]any{"text": "Events."}, nil)
+	go func() {
+		req, _ := http.NewRequest("POST", ts.URL+"/api/generate", strings.NewReader(`{"text":"Events."}`))
+		req.Header.Set(HeaderCSRF, "1")
+		if r, err := http.DefaultClient.Do(req); err == nil {
+			r.Body.Close()
+		}
+	}()
 	sc := bufio.NewScanner(resp.Body)
 	for sc.Scan() {
 		if line, ok := strings.CutPrefix(sc.Text(), "data: "); ok {

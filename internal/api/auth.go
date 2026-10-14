@@ -24,7 +24,18 @@ const (
 	HeaderPIN = "X-AudioSmith-Pin"
 	// HeaderClient names the client (agent) for per-agent voices.
 	HeaderClient = "X-AudioSmith-Client"
-	pinCookie    = "audiosmith_pin"
+	// HeaderVia is set by the server (never by clients) on requests it
+	// passes on: ViaLoopback, ViaLAN (PIN) or ViaLANKey. The MCP server
+	// reads it to decide whether a tool may read files by path.
+	HeaderVia = "X-AudioSmith-Via"
+	pinCookie = "audiosmith_pin"
+)
+
+// Values of HeaderVia.
+const (
+	ViaLoopback = "loopback"
+	ViaLAN      = "lan"
+	ViaLANKey   = "lan-key"
 )
 
 // loopbackHosts are the names the loopback listener answers to.
@@ -73,6 +84,14 @@ func (s *Server) guard(lan bool, port int) http.Handler {
 				return
 			}
 		}
+		via := ViaLoopback
+		if lan {
+			via = ViaLAN
+			if s.hasKey(r) {
+				via = ViaLANKey
+			}
+		}
+		r.Header.Set(HeaderVia, via)
 		if isStateChanging(r.Method) && strings.HasPrefix(r.URL.Path, "/api/") && r.Header.Get(HeaderCSRF) == "" && !s.hasKey(r) {
 			writeError(w, &Error{Status: http.StatusForbidden, Code: CodeCSRF,
 				Message: "Send the header " + HeaderCSRF + ": 1 with requests that change something (or an API key)."})
