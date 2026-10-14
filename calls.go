@@ -71,6 +71,7 @@ type callsState struct {
 	callSel    string // the call shown
 	callTab    int    // narrow windows: 0 new call, 1 the call
 	callPageH  ui.Handle
+	callHistOn bool // narrow windows: the recent calls' drawer open
 	twPageH    ui.Handle
 	callForm   callForm
 	callBusy   bool // placing a call

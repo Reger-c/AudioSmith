@@ -93,3 +93,5 @@ square-arrow-right-up   # open externally
 upload-minimalistic     # drop or choose a file
 code                    # code snippets
 panel-left              # the workflow rail toggle
+arrow-right-up          # an outgoing call
+arrow-left-down         # an incoming call
