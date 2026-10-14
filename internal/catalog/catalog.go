@@ -264,6 +264,10 @@ const (
 	DefaultAlign   = "qwen3-forcedaligner-0.6b-4bit"
 	DefaultVAD     = "silero-vad"
 	DefaultEnhance = "deepfilternet-v3"
+	// DefaultDictation is the speech-to-text model dictation starts with:
+	// on a MacBook Air M4 it transcribes 5 s of speech in 0.2–0.33 s warm
+	// (Whisper turbo: 1.2–1.3 s) and Chinese exactly (TestDictationLatency).
+	DefaultDictation = "qwen3-asr-0.6b-4bit"
 )
 
 // TextLength measures text against Entry.MaxChars: one per character,

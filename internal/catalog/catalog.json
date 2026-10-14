@@ -440,7 +440,7 @@
       "repo": "mlx-community/Qwen3-ASR-0.6B-4bit",
       "revision": "313d850181767edf09f00a9c289becca70e58cd0",
       "tasks": ["stt"],
-      "about": "Accurate transcription of Chinese (with dialects), English and about 30 other languages.",
+      "about": "Fast, accurate transcription of Chinese (with dialects), English and about 30 other languages. The default for dictation.",
       "capabilities": ["language"],
       "sampleRate": 16000,
       "rtf": 14,
@@ -485,9 +485,9 @@
         {"code": "uk"}
       ],
       "sampleRate": 16000,
+      "rtf": 27,
       "size": 2509044141,
       "minMemoryGB": 4,
-      "hidden": true,
       "licence": {"id": "cc-by-4.0", "name": "CC BY 4.0", "url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", "commercial": true, "verified": true}
     },
     {
