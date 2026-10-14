@@ -31,6 +31,11 @@ import (
 
 // ---- Buttons by rank ----
 
+// labelIcon is the size of an icon beside a button's label: no taller than
+// the label's line (13 pt is a 15.3 DIP line on the Mac), so a button with
+// an icon stands as tall as one without.
+func labelIcon(t *ui.Theme) float32 { return t.FontSize * 1.15 }
+
 // primaryButton is the view's one core action (Generate, Export, Start):
 // MyGo's primary button in ink, near-black (near-white in the dark).
 //
@@ -49,7 +54,7 @@ func primaryIconButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
 	c.SetTheme(inkTheme(t))
 	b := ui.PrimaryButton(c, "").Border(1, ui.Color{}) // as tall as ui.Button
 	b.Children(func() {
-		ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16))
+		ui.Icon(c, ic.Linear).Size(labelIcon(t), labelIcon(t))
 		ui.Text(c, label).SingleLine()
 	})
 	c.SetTheme(t)
@@ -76,7 +81,7 @@ func secondaryIconButton(c *ui.Context, ic icons.Icon, label string) ui.Element 
 	t := c.Theme()
 	b := ui.Button(c, "")
 	b.Children(func() {
-		ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16))
+		ui.Icon(c, ic.Linear).Size(labelIcon(t), labelIcon(t))
 		ui.Text(c, label).SingleLine()
 	})
 	return b
@@ -95,7 +100,7 @@ func ghostIconButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
 	t := c.Theme()
 	b := ghostBase(c).Padding(t.Space(1.5), t.Space(2.5)).Gap(t.Space(1.5))
 	b.Children(func() {
-		ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16)).TextColor(tok(t).Text2)
+		ui.Icon(c, ic.Linear).Size(labelIcon(t), labelIcon(t)).TextColor(tok(t).Text2)
 		ui.Text(c, label).SingleLine()
 	})
 	return b
@@ -117,7 +122,7 @@ func dropButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
 	k := tok(t)
 	b := ghostBase(c).Padding(t.Space(1.5), t.Space(2)).Gap(t.Space(1.5)).Label(label).MinWidth(0).Shrink(1)
 	b.Children(func() {
-		ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)
+		ui.Icon(c, ic.Linear).Size(labelIcon(t), labelIcon(t)).TextColor(k.Text2)
 		ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0)
 		ui.Icon(c, icons.AltArrowDown.Linear).Size(px(t, 12), px(t, 12)).TextColor(k.Text3)
 	})
