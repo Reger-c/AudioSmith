@@ -90,7 +90,10 @@ func (a *app) voicesToolbar(c *ui.Context) {
 		searchField(c, "voices-search", &a.voiceQuery, i18n.T("Search voices"), px(t, 320))
 		ui.Segmented(c.Key("voices-kind"), &a.voiceKind, i18n.T("All"), i18n.T("Cloned"), i18n.T("Designed")).Label(i18n.T("Kind")).Shrink(0)
 		ui.Spacer(c)
-		caption(c, i18n.N(len(a.voices), "%d voice", "%d voices", len(a.voices))).SingleLine().Shrink(0)
+		// The count goes when the editor or the window leaves the search little room.
+		if a.edit == nil && a.pageWidth(c) >= px(t, 600) {
+			caption(c, i18n.N(len(a.voices), "%d voice", "%d voices", len(a.voices))).SingleLine().Shrink(0)
+		}
 	})
 }
 
