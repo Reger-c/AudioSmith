@@ -52,17 +52,26 @@ func (a *app) wfRunPanel(c *ui.Context) {
 				a.wfSel, a.wfSelEdge, a.wfPanel = node, "", wfPanelStep
 			}
 		}
-	} else {
+	} else if run == nil || a.wfStale() {
 		ui.Text(c, i18n.N(rep.Items, "%d item to run", "%d items to run", rep.Items)).Bold()
 	}
 	if a.wfStale() && !busy {
 		ui.Text(c, i18n.T("Settings changed since the last run. Running again makes only what changed.")).FontSize(px(t, 12)).TextColor(t.Warning)
 	}
 	// Controls.
+	upToDate := run != nil && run.State == workflow.RunDone && !a.wfStale()
 	ui.Row(c.Key("wf-run-buttons")).Gap(px(t, 6)).Wrap().Children(func() {
 		if busy {
 			if ui.Button(c.Key("wf-run-cancel"), i18n.T("Cancel")).Clicked() {
 				a.wfCancel()
+			}
+			return
+		}
+		if upToDate {
+			// Every result is made: only a new run makes anything.
+			if ui.PrimaryButton(c.Key("wf-run-again"), i18n.T("Start a new run")).
+				Tooltip(i18n.T("Make every result again, even those that are up to date")).Disabled(rep.Errors() > 0).Clicked() {
+				a.wfStart(true)
 			}
 			return
 		}

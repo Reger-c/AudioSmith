@@ -149,7 +149,7 @@ func (a *app) wfRail(c *ui.Context) {
 		}
 	})
 	ui.Divider(c)
-	ui.Text(c, i18n.T("Steps")).Bold()
+	ui.Text(c, i18n.X("workflow", "Steps")).Bold()
 	ui.Text(c, i18n.T("Click to add after the selected step, or drag onto the canvas.")).FontSize(px(t, 11.5)).TextColor(t.TextMuted)
 	locked := a.wfLocked()
 	ui.Column(c.Key("wf-palette")).Gap(4).Children(func() {
@@ -205,7 +205,7 @@ func (a *app) wfListRow(c *ui.Context, r store.WorkflowRecord) {
 				ui.Text(c, s).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine()
 			}
 		})
-		ui.MenuButton(c.Key("wf-row-menu-"+id), "⋯", func(m *ui.Menu) {
+		ui.Button(c.Key("wf-row-menu-"+id), "⋯").Menu(func(m *ui.Menu) {
 			if m.Item(i18n.T("Rename")).Chosen() {
 				a.wfRenaming, a.wfRenameTx = id, r.Name
 			}

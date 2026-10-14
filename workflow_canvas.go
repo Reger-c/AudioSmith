@@ -38,6 +38,7 @@ const (
 // wfCanvasState is the canvas's gesture in progress.
 type wfCanvasState struct {
 	w, h    float32 // the canvas's size at the last build
+	fit     bool    // show every card once the canvas's size is known
 	gesture int
 	node    string  // the step being moved
 	offX    float64 // where in it the pointer holds it
@@ -231,9 +232,20 @@ func (a *app) wfZoomAt(f float64, x, y float32) {
 // wfZoom zooms around the canvas's middle (toolbar, keys).
 func (a *app) wfZoom(f float64) { a.wfZoomAt(f, a.wfCanvas.w/2, a.wfCanvas.h/2) }
 
-// wfFit shows every card.
+// wfAllShown reports whether the view shows every card.
+func (a *app) wfAllShown() bool {
+	v := a.wf.View
+	x0, y0, x1, y1 := wfBounds(a.wf)
+	return x0 >= v.X && y0 >= v.Y && x1 <= v.X+float64(a.wfCanvas.w)/v.Zoom && y1 <= v.Y+float64(a.wfCanvas.h)/v.Zoom
+}
+
+// wfFit shows every card (once the canvas is laid out).
 func (a *app) wfFit() {
-	if a.wf == nil || a.wfCanvas.w == 0 {
+	if a.wf == nil {
+		return
+	}
+	if a.wfCanvas.w == 0 {
+		a.wfCanvas.fit = true
 		return
 	}
 	x0, y0, x1, y1 := wfBounds(a.wf)
@@ -429,6 +441,12 @@ func (a *app) wfCanvasView(c *ui.Context) {
 	rep := a.wfReport()
 	if b := a.wfCanvasH.Bounds(c); b.W > 0 {
 		a.wfCanvas.w, a.wfCanvas.h = b.W, b.H
+		if a.wfCanvas.fit {
+			a.wfCanvas.fit = false
+			if !a.wfAllShown() {
+				a.wfFit()
+			}
+		}
 	}
 	v := w.View
 	z := float32(v.Zoom)

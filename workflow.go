@@ -169,7 +169,7 @@ func (a *app) wfShow(w *workflow.Workflow, run *workflow.Run, active []jobs.Job)
 		a.wfJobs[j.ID] = j
 	}
 	a.wfSel, a.wfSelEdge, a.wfErr = "", "", ""
-	a.wfCanvas = wfCanvasState{}
+	a.wfCanvas = wfCanvasState{w: a.wfCanvas.w, h: a.wfCanvas.h, fit: true}
 	a.wfVer++
 	if a.wfBusy() {
 		a.wfPanel = wfPanelRun
