@@ -23,8 +23,8 @@ AudioSmith 是一款运行在 Apple 芯片 Mac 上的本地语音工作室。
 1. 从 [Releases](https://github.com/hehehai/AudioSmith/releases) 下载 DMG，或[从源码构建](README.md#build-from-source)。
 2. 把 **AudioSmith** 拖进“应用程序”。
 3. 目前是 ad-hoc 签名，首次打开会被 macOS 拦截。任选一种方式放行：
-   - 在 Finder 里右键点应用 → **打开**；
-   - 或在终端执行 `xattr -dr com.apple.quarantine /Applications/AudioSmith.app`。
+   - 在终端执行 `xattr -dr com.apple.quarantine /Applications/AudioSmith.app`；
+   - 或先尝试打开一次，再到 **系统设置 → 隐私与安全性** 点 **仍要打开**（macOS 15 起，右键 → 打开已不能绕过拦截）。
 4. 首次运行会进入设置向导：
    - **检查这台 Mac**：系统版本、芯片、内存、磁盘、网络、权限。
    - **推荐模型包**：根据内存推荐“快速 / 均衡 / 高质量 / 最强”之一，也可以跳过，之后在“模型”页下载。

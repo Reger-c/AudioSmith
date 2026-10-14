@@ -21,8 +21,8 @@ Every model runs on the Mac's GPU with [MLX](https://github.com/ml-explore/mlx):
 1. Download the DMG from [Releases](https://github.com/hehehai/AudioSmith/releases), or [build it](#build-from-source).
 2. Drag **AudioSmith** to Applications.
 3. Builds are ad-hoc signed for now, so macOS blocks the first launch. Do one of:
-   - right-click the app → **Open**, or
-   - run `xattr -dr com.apple.quarantine /Applications/AudioSmith.app`.
+   - run `xattr -dr com.apple.quarantine /Applications/AudioSmith.app`, or
+   - try to open it once, then click **Open Anyway** in **System Settings → Privacy & Security**. macOS 15 removed the right-click → Open shortcut.
 4. The first run opens a setup wizard:
    - It checks this Mac: macOS, chip, memory, disk, network, permissions.
    - It suggests a **model pack** for your memory: Fast, Balanced, Quality or Max. You can skip it and download models later in **Models**.
