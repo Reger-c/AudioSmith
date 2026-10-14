@@ -71,6 +71,8 @@ type TakeRender struct {
 	// check ran (no issues then means none were found).
 	Issues []TakeNotice `json:"issues,omitempty"`
 	QCDone bool         `json:"qcDone,omitempty"`
+	// Watermarked: the file carries the invisible watermark (AudioSeal).
+	Watermarked bool `json:"watermarked,omitempty"`
 }
 
 // TakeChunk is one engine call of a render.

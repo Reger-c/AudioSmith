@@ -93,6 +93,12 @@ type Privacy struct {
 	// LocalOnlyLLM keeps text on this Mac: only local language models
 	// (Ollama, LM Studio, the engine) are used (M2).
 	LocalOnlyLLM bool `json:"localOnlyLLM,omitempty"`
+	// NoWatermark turns off the invisible watermark (AudioSeal) that is
+	// added to generated audio by default.
+	NoWatermark bool `json:"noWatermark,omitempty"`
+	// WatermarkID is this install's id in the watermark's message
+	// (1–255, chosen at random on first use; internal/watermark).
+	WatermarkID int `json:"watermarkID,omitempty"`
 }
 
 // Defaults returns the settings of a fresh install. They match the MVP's
