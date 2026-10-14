@@ -118,12 +118,14 @@ final class Server: @unchecked Sendable {
     init(role: Role, out: Writer) {
         self.role = role
         self.out = out
-        store = role == .gpu ? ModelStore(out: out) : nil
-        synth = store.map { Synthesizer(out: out, store: $0) }
+        // The listen worker keeps one small speech-to-text model of its own
+        // (dictation), beside recordings: concurrency 2.
+        store = role == .gpu ? ModelStore(out: out) : role == .listen ? ModelStore(out: out, maxResident: 1) : nil
+        synth = role == .gpu ? store.map { Synthesizer(out: out, store: $0) } : nil
         analyzer = store.map { Analyzer(out: out, store: $0) }
         media = role == .media ? MediaWorker(out: out) : nil
         recorder = role == .listen ? Recorder(out: out) : nil
-        concurrency = role == .media ? 2 : 1
+        concurrency = role == .gpu ? 1 : 2
     }
 
     var methods: [String] {
@@ -135,7 +137,8 @@ final class Server: @unchecked Sendable {
         case .media:
             m += [Method.mediaProbe, Method.mediaDecode]
         case .listen:
-            m += [Method.captureDevices, Method.captureStart, Method.captureStop]
+            m += [Method.captureDevices, Method.captureStart, Method.captureStop,
+                  Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.sttTranscribe]
         }
         return m + [Method.jobCancel]
     }
@@ -202,9 +205,14 @@ final class Server: @unchecked Sendable {
             case Method.modelsLoad:
                 let p = try msg.decodeParams(LoadParams.self)
                 guard !p.model.isEmpty else { throw EngineError.badRequest("Missing model") }
-                guard let synth else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
                 let offline = self.offline
-                startJob(id) { try await synth.load(p, job: id, offline: offline) }
+                if let analyzer, ["stt", "align", "vad", "enhance"].contains(p.task ?? "tts") {
+                    if role == .listen, p.task != "stt" { throw EngineError.badRequest("The listen worker loads speech-to-text models only") }
+                    startJob(id) { try await analyzer.load(p, job: id, offline: offline) }
+                } else {
+                    guard let synth else { throw EngineError.badRequest("The \(role.rawValue) worker loads speech-to-text models only (task \"stt\")") }
+                    startJob(id) { try await synth.load(p, job: id, offline: offline) }
+                }
             case Method.ttsSynthesize:
                 let p = try msg.decodeParams(SynthesizeParams.self)
                 guard let synth else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
@@ -310,7 +318,8 @@ final class Server: @unchecked Sendable {
         }
         out.result(id, HelloResult(
             protocol: protocolVersion, version: engineVersion, role: role, pid: Int(getpid()),
-            concurrency: concurrency, methods: methods, families: role == .gpu ? Synthesizer.families + Analyzer.families : [],
+            concurrency: concurrency, methods: methods,
+            families: role == .gpu ? Synthesizer.families + Analyzer.families : role == .listen ? Analyzer.listenFamilies : [],
             device: deviceInfo()))
     }
 

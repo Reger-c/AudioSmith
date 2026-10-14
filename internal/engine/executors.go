@@ -37,7 +37,9 @@ type ExecutorOptions struct {
 // ExecutorKinds are the job kinds RegisterExecutors registers: every job
 // method of the protocol except capture.start, which is interactive and
 // runs outside the queue (StartCapture). Submit them on the lane of their
-// role: jobs.Lane(proto.RoleOf(kind)).
+// role: jobs.Lane(proto.RoleOf(kind)). Dictation runs stt.transcribe and
+// models.load on the listen worker too, as the kinds
+// proto.KindFor(proto.RoleListen, method) on jobs.LaneListen.
 var ExecutorKinds = []string{
 	proto.MethodModelsLoad, proto.MethodTTSSynthesize, proto.MethodTTSEncodeVoice,
 	proto.MethodSTTTranscribe, proto.MethodSTTAlign, proto.MethodVADDetect, proto.MethodEnhanceRun,
@@ -56,6 +58,18 @@ func RegisterExecutors(sched jobs.Scheduler, sup Supervisor, opts ...ExecutorOpt
 	for _, m := range ExecutorKinds {
 		sched.Register(m, executor(sup, proto.RoleOf(m), m, o))
 	}
+	// The listen worker's own speech-to-text (dictation): "listen:stt.transcribe"…
+	for _, m := range []string{proto.MethodSTTTranscribe, proto.MethodModelsLoad} {
+		sched.Register(proto.KindFor(proto.RoleListen, m), executor(sup, proto.RoleListen, m, o))
+	}
+}
+
+// KindExecutor runs jobs of kind (a method, or "role:method" from
+// proto.KindFor) on the worker its kind names, as RegisterExecutors's
+// executors do without the options.
+func KindExecutor(sup Supervisor, kind string) jobs.Executor {
+	role, method := proto.SplitKind(kind)
+	return executor(sup, role, method, ExecutorOptions{})
 }
 
 // Executor runs jobs of kind method as requests to the worker of role,

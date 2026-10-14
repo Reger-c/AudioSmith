@@ -23,9 +23,10 @@ final class ModelStore: @unchecked Sendable {
     private var resident: [String: Resident] = [:]
     private let maxResident: Int
 
-    init(out: Writer) {
+    /// maxResident overrides AUDIOSMITH_MAX_MODELS (the listen worker keeps one).
+    init(out: Writer, maxResident: Int? = nil) {
         self.out = out
-        maxResident = Int(ProcessInfo.processInfo.environment["AUDIOSMITH_MAX_MODELS"] ?? "") ?? 3
+        self.maxResident = maxResident ?? Int(ProcessInfo.processInfo.environment["AUDIOSMITH_MAX_MODELS"] ?? "") ?? 3
         // Keep MLX's buffer cache small: this process lives as long as the
         // app, and an uncapped cache grows to gigabytes (spike: OmniVoice 6–8 GB → 4.9 GB).
         MLX.Memory.cacheLimit = 256 * 1024 * 1024

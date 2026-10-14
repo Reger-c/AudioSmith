@@ -388,8 +388,8 @@ func smokeTTS(t *testing.T, e catalog.Entry, snap, ref string, refSeconds float6
 	}
 	type tcase struct {
 		name, text, lang string
-		mod             func(*proto.SynthesizeParams)
-		minSeconds      float64
+		mod              func(*proto.SynthesizeParams)
+		minSeconds       float64
 		// pitch checks the median F0 of the take: > 0 at least, < 0 at most.
 		pitch float64
 		// minScore is the Whisper similarity a pass needs (default 0.6).
@@ -706,7 +706,9 @@ func ordered(ws []proto.Word) bool {
 
 func hasNaN(s []float64) bool { return slices.ContainsFunc(s, math.IsNaN) }
 
-func hasHan(s string) bool { return strings.IndexFunc(s, func(r rune) bool { return unicode.Is(unicode.Han, r) }) >= 0 }
+func hasHan(s string) bool {
+	return strings.IndexFunc(s, func(r rune) bool { return unicode.Is(unicode.Han, r) }) >= 0
+}
 
 func dbfs(s []float64) float64 {
 	if len(s) == 0 {
@@ -827,4 +829,3 @@ func writeSmokeReport(t *testing.T, path string, rows []smokeRow) {
 		t.Logf("report: %s", path)
 	}
 }
-

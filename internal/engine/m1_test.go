@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -308,5 +309,45 @@ func TestCapture(t *testing.T) {
 	w2.until(t, "ready", ready)
 	if _, err := StartCapture(ctx, denied, "", proto.CaptureParams{Output: proto.Output{Path: out2}}, nil); !errors.As(err, &je) || je.Code != proto.CodePermissionDenied {
 		t.Errorf("denied: %v", err)
+	}
+}
+
+// Dictation's speech-to-text runs on the listen worker, beside a
+// recording, through the "listen:" kinds.
+func TestListenTranscribes(t *testing.T) {
+	sup, w := newTestSup(t, "level-ms=10", allRoles)
+	w.until(t, "ready", ready)
+	ctx := context.Background()
+	dir := t.TempDir()
+	wav := speechWAV(t, dir)
+	if proto.KindFor(proto.RoleListen, proto.MethodSTTTranscribe) != "listen:stt.transcribe" ||
+		proto.KindFor(proto.RoleListen, proto.MethodSTTAlign) != proto.MethodSTTAlign || proto.KindFor(proto.RoleGPU, proto.MethodSTTTranscribe) != proto.MethodSTTTranscribe {
+		t.Fatal("KindFor")
+	}
+	// A recording runs meanwhile: the listen worker takes both.
+	rec, err := StartCapture(ctx, sup, "", proto.CaptureParams{Output: proto.Output{Path: filepath.Join(dir, "r.wav")}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rec.Cancel()
+	model := "mlx-community/whisper-large-v3-turbo-4bit"
+	raw, _ := json.Marshal(proto.LoadParams{Model: model, Task: "stt"})
+	if _, err := KindExecutor(sup, "listen:models.load").Run(ctx, jobs.Job{ID: "L1", Spec: jobs.Spec{Params: raw}}, func(jobs.Progress) {}, nil); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = json.Marshal(proto.TranscribeParams{Model: model, Audio: wav})
+	res, err := KindExecutor(sup, "listen:stt.transcribe").Run(ctx, jobs.Job{ID: "L2", Spec: jobs.Spec{Params: raw}}, func(jobs.Progress) {}, nil)
+	var tr proto.TranscribeResult
+	if err != nil || json.Unmarshal(res, &tr) != nil || tr.Text != enginetest.FakeTranscript {
+		t.Fatalf("transcribe on listen: %s %v", res, err)
+	}
+	raw, err = sup.Call(ctx, proto.RoleListen, "", proto.MethodModelsLoaded, nil, nil)
+	if err != nil || !strings.Contains(string(raw), model) {
+		t.Errorf("listen models: %s %v", raw, err)
+	}
+	// The gpu worker did not load it.
+	raw, _ = sup.Call(ctx, proto.RoleGPU, "", proto.MethodModelsLoaded, nil, nil)
+	if strings.Contains(string(raw), model) {
+		t.Errorf("gpu loaded it: %s", raw)
 	}
 }

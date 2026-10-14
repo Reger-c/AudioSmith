@@ -13,7 +13,9 @@ final class Analyzer: @unchecked Sendable {
     let store: ModelStore
 
     /// Model families this build loads for analysis (catalog.Entry.Family).
-    static let families = ["whisper", "qwen3_asr", "qwen3_forced_aligner", "silero_vad", "deepfilternet"]
+    static let families = ["whisper", "qwen3_asr", "parakeet", "qwen3_forced_aligner", "silero_vad", "deepfilternet"]
+    /// The ones the listen worker loads (speech-to-text only).
+    static let listenFamilies = ["whisper", "qwen3_asr", "parakeet"]
 
     init(out: Writer, store: ModelStore) {
         self.out = out
@@ -30,14 +32,7 @@ final class Analyzer: @unchecked Sendable {
         if task == "translate", !lower.contains("whisper") {
             throw EngineError.unsupported("\(shortName(p.model)) cannot translate", capability: "translate")
         }
-        let dir = try modelDirectory(p.model, path: p.modelPath, offline: offline)
-        let (model, _) = try await store.acquire(p.model, task: "stt", job: job, as: (any STTGenerationModel).self,
-                                                 sampleRate: { _ in 16000 }) {
-            if lower.contains("whisper"), let dir {
-                return try await WhisperModel.fromDirectory(dir)
-            }
-            return try await STT.loadModel(modelRepo: p.model)
-        }
+        let model = try await sttModel(p.model, path: p.modelPath, job: job, offline: offline)
         defer { store.release(p.model) }
 
         let samples = try await decodeMono(p.audio, sampleRate: 16000)
@@ -85,6 +80,57 @@ final class Analyzer: @unchecked Sendable {
         }
         return TranscribeResult(model: p.model, text: text, language: code, segments: segments,
                                 audioSeconds: audioSeconds, seconds: seconds, rtf: seconds > 0 ? audioSeconds / seconds : 0)
+    }
+
+    /// The speech-to-text model, loaded when not resident (release it after).
+    private func sttModel(_ model: String, path: String?, job: String, offline: Bool) async throws -> any STTGenerationModel {
+        let dir = try modelDirectory(model, path: path, offline: offline)
+        let (m, _) = try await store.acquire(model, task: "stt", job: job, as: (any STTGenerationModel).self,
+                                             sampleRate: { _ in 16000 }) {
+            if model.lowercased().contains("whisper"), let dir {
+                return try await WhisperModel.fromDirectory(dir)
+            }
+            return try await STT.loadModel(modelRepo: model)
+        }
+        return m
+    }
+
+    /// models.load of an analysis model (task stt, align, vad or enhance).
+    func load(_ p: LoadParams, job: String, offline: Bool) async throws -> LoadResult {
+        guard !p.model.isEmpty else { throw EngineError.badRequest("Missing model") }
+        let started = Date()
+        let task = p.task ?? "stt"
+        var rate = 16000
+        switch task {
+        case "stt":
+            _ = try await sttModel(p.model, path: p.path, job: job, offline: offline)
+        case "align":
+            if offline, (p.path ?? "").isEmpty, let missing = missingFromCache(p.model) {
+                throw EngineError.notDownloaded(model: p.model, missing: missing)
+            }
+            _ = try await store.acquire(p.model, task: "align", job: job, as: Qwen3ForcedAlignerModel.self, sampleRate: { _ in 16000 }) {
+                try await Qwen3ForcedAlignerModel.fromPretrained(p.model)
+            }
+        case "vad":
+            let dir = try modelDirectory(p.model, path: p.path, offline: offline)
+            _ = try await store.acquire(p.model, task: "vad", job: job, as: SileroVAD.self, sampleRate: { _ in 16000 }) {
+                if let dir { return try SileroVAD.fromModelDirectory(dir) }
+                return try await SileroVAD.fromPretrained(p.model)
+            }
+        case "enhance":
+            let dir = try modelDirectory(p.model, path: p.path, offline: offline)
+            let (m, _) = try await store.acquire(p.model, task: "enhance", job: job, as: DeepFilterNetModel.self, sampleRate: { $0.sampleRate }) {
+                if let dir { return try DeepFilterNetModel.fromLocal(dir, subfolder: DeepFilterNetModel.defaultSubfolder) }
+                return try await DeepFilterNetModel.fromPretrained(p.model)
+            }
+            rate = m.sampleRate
+        default:
+            throw EngineError.badRequest("Unknown task \(task)")
+        }
+        store.release(p.model)
+        let bytes = store.loaded().first { $0.model == p.model }?.bytes
+        return LoadResult(model: p.model, task: task, sampleRate: rate, seconds: Date().timeIntervalSince(started),
+                          bytes: (bytes ?? 0) > 0 ? bytes : nil)
     }
 
     /// The model's language parameter for a BCP-47 code: the code for

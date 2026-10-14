@@ -1,5 +1,7 @@
 package proto
 
+import "strings"
+
 // Role is what an engine process is for; one Swift binary runs as any of
 // them (audiosmith-engine --role gpu|listen|media).
 type Role string
@@ -62,6 +64,36 @@ var Reserved = []string{
 	"llm.generate", "translate.run",
 	"media.encode", "media.mux", "media.timePitch", "media.thumbnail", "media.ocr", "doc.extractText",
 	"capture.pcm",
+}
+
+// ListenServes reports whether the listen worker also serves method: it
+// keeps one small speech-to-text model of its own, so dictation does not
+// wait behind the gpu worker's renders.
+func ListenServes(method string) bool {
+	switch method {
+	case MethodSTTTranscribe, MethodModelsLoad, MethodModelsUnload, MethodModelsLoaded:
+		return true
+	}
+	return false
+}
+
+// KindFor is the job kind (and executor) that runs method on the worker of
+// role: the method itself on its usual worker (RoleOf), else "role:method"
+// ("listen:stt.transcribe"). A role that does not serve method gets the
+// usual worker's kind.
+func KindFor(role Role, method string) string {
+	if role == "" || role == RoleOf(method) || role == RoleListen && !ListenServes(method) {
+		return method
+	}
+	return string(role) + ":" + method
+}
+
+// SplitKind is the inverse of KindFor: the role and method of a job kind.
+func SplitKind(kind string) (Role, string) {
+	if r, m, ok := strings.Cut(kind, ":"); ok {
+		return Role(r), m
+	}
+	return RoleOf(kind), kind
 }
 
 // RoleOf is the role whose worker serves method: the app sends it there,
