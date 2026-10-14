@@ -526,6 +526,53 @@
       "licence": {"id": "mit", "name": "MIT", "url": "https://github.com/snakers4/silero-vad", "commercial": true, "verified": true}
     },
     {
+      "id": "htdemucs",
+      "label": "HTDemucs",
+      "family": "htdemucs",
+      "repo": "iky1e/demucs-mlx",
+      "revision": "3ff2e582c1456c6a03a077b6e47254e0ba41bdcf",
+      "tasks": ["separate"],
+      "about": "Separates voices from music and effects, fast. The default for dubbing.",
+      "sampleRate": 44100,
+      "size": 168007757,
+      "files": [
+        {"path": "htdemucs.safetensors", "size": 168005865},
+        {"path": "htdemucs_config.json", "size": 1892}
+      ],
+      "minMemoryGB": 3,
+      "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/iky1e/demucs-mlx", "commercial": true, "verified": true}
+    },
+    {
+      "id": "mel-roformer-kim-vocal-2",
+      "label": "Mel-RoFormer (Kim vocal 2)",
+      "family": "mel_roformer",
+      "repo": "mlx-community/mel-roformer-kim-vocal-2-mlx",
+      "revision": "64cbfcb004e39430e5f584552c05949440ec39ce",
+      "tasks": ["separate"],
+      "about": "Separates voices from music and effects with the best quality; about as slow as real time.",
+      "sampleRate": 44100,
+      "size": 456484296,
+      "files": [
+        {"path": "config.json", "size": 833},
+        {"path": "model.safetensors", "size": 456483463}
+      ],
+      "minMemoryGB": 4,
+      "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/mlx-community/mel-roformer-kim-vocal-2-mlx", "commercial": true, "verified": true}
+    },
+    {
+      "id": "sortformer-4spk-v2.1",
+      "label": "Sortformer (up to 4 speakers)",
+      "family": "sortformer",
+      "repo": "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16",
+      "revision": "e23e6404bd9859e93edbf94a740eb1c7fc58f12e",
+      "tasks": ["diarize"],
+      "about": "Finds who speaks when, for up to four speakers.",
+      "sampleRate": 16000,
+      "size": 236114032,
+      "minMemoryGB": 1,
+      "licence": {"id": "nvidia-open-model", "name": "NVIDIA Open Model License", "url": "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/", "commercial": true, "verified": true}
+    },
+    {
       "id": "deepfilternet-v3",
       "label": "DeepFilterNet 3",
       "family": "deepfilternet",
