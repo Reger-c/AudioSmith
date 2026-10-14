@@ -29,8 +29,7 @@ func (a *app) storiesPage(c *ui.Context) {
 			a.storyToolbar(c, p, locked)
 			a.reviewBuffer(c, p, locked)
 			a.storyLines(c, p, locked)
-			a.lfRenderBar(c, p)
-			a.lfOutputs(c, p)
+			a.lfRenderPanel(c, p)
 		})
 		ui.Box(c).Width(1).Background(t.Border)
 		ui.Scroll(c.Key("st-inspector")).Width(px(t, inspectorWidth+20)).Shrink(0).Background(t.Surface).Children(func() {

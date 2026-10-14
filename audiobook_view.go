@@ -32,8 +32,7 @@ func (a *app) audiobookPage(c *ui.Context) {
 			a.manuscriptView(c, p, locked)
 			a.manuscriptStats(c, p)
 			a.manuscriptWarnings(c, p)
-			a.lfRenderBar(c, p)
-			a.lfOutputs(c, p)
+			a.lfRenderPanel(c, p)
 		})
 		ui.Box(c).Width(1).Background(t.Border)
 		ui.Scroll(c.Key("ab-inspector")).Width(px(t, inspectorWidth+20)).Shrink(0).Background(t.Surface).Children(func() {

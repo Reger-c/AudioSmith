@@ -467,6 +467,18 @@ func (a *app) clearLf(p *lfPage) {
 
 // --- the render bar --------------------------------------------------------
 
+// lfRenderPanel is the render bar and the outputs, scrolling when they
+// would take more than half the page.
+func (a *app) lfRenderPanel(c *ui.Context, p *lfPage) {
+	t := c.Theme()
+	ui.Scroll(c.Key("lf-panel")).MaxHeightPercent(55).Shrink(0).Children(func() {
+		ui.Column(c).Gap(px(t, 10)).Children(func() {
+			a.lfRenderBar(c, p)
+			a.lfOutputs(c, p)
+		})
+	})
+}
+
 // lfRenderBar is Generate / Stop, the reason it can't, and the progress.
 func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 	t := c.Theme()

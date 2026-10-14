@@ -111,6 +111,9 @@ func TestSnapshotsLongform(t *testing.T) {
 		tt.Frame()
 		tt.Frame()
 		save("audiobook-ready")
+		tt.SetSize(1100, 1500) // the whole panel, with the read-along
+		save("audiobook-ready-tall")
+		tt.SetSize(1100, 720)
 
 		// Projects: the list, a render's details, cards, a delete.
 		a.navigate("/projects")
