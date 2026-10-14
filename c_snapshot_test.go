@@ -42,11 +42,6 @@ func TestSnapshotsC(t *testing.T) {
 			Model: kokoro, Voice: "af_heart", SampleRate: 24000, AudioSeconds: 4}, 1)
 		a.lastClipID = "T1"
 
-		a.navigate("/studio")
-		a.toasts = nil
-		a.toast(i18n.T("Diagnostics copied"))
-		s.save(tt, "c-studio-toast")
-
 		a.navigate("/audiobook")
 		b := a.lfBook
 		a.loadSample(b)
@@ -54,10 +49,6 @@ func TestSnapshotsC(t *testing.T) {
 		playLongform(t, a, eng)
 		b.open["book"], b.open["cast"], b.open["setup"] = false, false, false
 		a.toasts = nil
-		a.toastUndo(i18n.T("Diagnostics copied"), func() {})
-		s.save(tt, "c-audiobook-toast")
-		a.toasts = nil
-		tt.Frame()
 		s.save(tt, "c-audiobook-ready")
 
 		a.checks = []selfCheck{
@@ -71,9 +62,25 @@ func TestSnapshotsC(t *testing.T) {
 			{host: "https://hf-mirror.com", err: "timeout"}}
 		a.navigate("/settings/network")
 		s.save(tt, "c-settings-network")
-		a.navigate("/studio")
 
 		a.navigate("/nowhere")
 		s.save(tt, "c-not-found")
+
+		// Toasts last: they outlive a frame.
+		a.navigate("/audiobook")
+		a.toastUndo(i18n.T("Diagnostics copied"), func() {})
+		s.save(tt, "c-audiobook-toast")
+
+		i18n.SetLocale("en")
+		a2, _, tt2 := newTestApp(t)
+		s.setup(a2, tt2)
+		addTake(t, a2, core.Take{ID: "T1", CreatedAt: at, Text: i18n.T("The last ferry left the harbour at eleven. [pause 500ms] Fog had settled on the water like wool."),
+			Model: kokoro, Voice: "af_heart", SampleRate: 24000, AudioSeconds: 4}, 1)
+		a2.lastClipID = "T1"
+		a2.navigate("/studio")
+		a2.toasts = nil
+		tt2.Frame()
+		a2.toast(i18n.T("Diagnostics copied"))
+		s.save(tt2, "c-studio-toast")
 	}
 }
