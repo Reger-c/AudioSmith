@@ -18,6 +18,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/ffmpeg"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
@@ -95,8 +96,12 @@ func (a *app) dubEngineHas(method string) bool {
 // dubExportBlocked says why a format cannot be exported now ("" = it can).
 func (a *app) dubExportBlocked(f string) string {
 	switch services.ExportNeeds(f) {
-	case "ffmpeg":
-		return i18n.T("Needs ffmpeg (coming later)")
+	case "ffmpeg": // M7a: the optional ffmpeg (ffmpeg_settings.go)
+		tool := a.mediaTool()
+		if f == dub.ExportMP3 && tool.CanEncode(ffmpeg.MP3) || f == dub.ExportBurn && tool.CanBurn() {
+			return ""
+		}
+		return i18n.T("Needs ffmpeg (Settings → Audio tools)")
 	case "engine:" + dub.MethodMux:
 		if !a.dubEngineHas(dub.MethodMux) {
 			return i18n.T("Needs an engine update")
@@ -186,13 +191,13 @@ func (a *app) dubExportPanel(c *ui.Context) {
 			})
 		}
 		ui.Checkbox(c.Key("dx-subs"), &ex.subs, i18n.T("Subtitle tracks (soft)"))
-	case ex.format != dub.ExportBurn:
+	default:
 		langs := slices.Clone(p.Targets)
 		names := make([]string, 0, len(langs)+1)
 		for _, l := range langs {
 			names = append(names, dubLangName(l))
 		}
-		if subtitle {
+		if subtitle || ex.format == dub.ExportBurn { // M7a: burn the original's subtitles too
 			langs = append(langs, dub.OrigTrack)
 			names = append(names, i18n.T("Original (%s)", dubLangName(p.SourceLanguage())))
 		}
@@ -274,6 +279,13 @@ func (a *app) dubExportReady() string {
 			return i18n.T("Generate the %s track first.", dubLangName(ex.lang))
 		}
 		return ""
+	case dub.ExportBurn: // M7a: the original's subtitles need only the transcript
+		if len(p.Segments) == 0 {
+			return i18n.T("There is no transcript yet.")
+		}
+		if ex.lang == dub.OrigTrack {
+			return ""
+		}
 	}
 	if p.Track(ex.lang).File == "" {
 		return i18n.T("Generate the %s track first.", dubLangName(ex.lang))

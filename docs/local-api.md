@@ -21,10 +21,10 @@ Point any OpenAI SDK at `base_url="http://127.0.0.1:3901/v1"` with any `api_key`
 
 | `response_format` | Answer |
 |---|---|
-| `wav` (the default here: OpenAI's default, mp3, needs an encoder AudioSmith lacks) | 16-bit WAV at the model's rate; **streamed as the take is made** (a sentence or so at a time; the header says "length unknown") |
+| `wav` (the default here: OpenAI's default, mp3, needs the optional ffmpeg) | 16-bit WAV at the model's rate; **streamed as the take is made** (a sentence or so at a time; the header says "length unknown") |
 | `pcm` | 24 kHz 16-bit mono little-endian, streamed the same way (resampled when the model's rate differs) |
 | `aac` / `m4a` | AAC-LC in an M4A container through the engine's `media.encode`, once the take is made |
-| `mp3`, `opus`, `flac` | 400 `unsupported_format` |
+| `mp3`, `opus`, `flac` | with ffmpeg set up (Settings → Audio tools): MP3 192 kb/s, Ogg Opus 96 kb/s, FLAC, once the take is made; without it 400 `unsupported_format` |
 
 `stream_format: "sse"` sends `speech.audio.delta` events (base64 of the format's bytes) and `speech.audio.done` with `usage`. `normalize: true` (Even out volume) needs the whole take, so it is sent when done. Response headers: `X-AudioSmith-Take-Id`, `-Job-Id`, `-Model`, `-Voice`, `-Ignored`, `-Seed` (not on live streams). Streamed audio equals the saved take: API takes are not mastered unless `normalize` is on.
 

@@ -80,6 +80,12 @@ type shellState struct {
 	logsDirty    atomic.Bool // a redraw for new lines is on its way
 
 	modelsState
+	navState        // shell_nav.go (M7a)
+	mediaToolsState // ffmpeg_settings.go (M7a): the optional ffmpeg
+	storageState    // settings_storage.go (M7a)
+	networkState    // settings_network.go (M7a)
+	aboutState      // settings_about.go (M7a)
+	onboardingState // onboarding.go (M7a): the first-run wizard
 	settingsForm
 	licenceDialog
 	menuLocale string // locale the native menu was built in
@@ -131,12 +137,14 @@ func (a *app) openShell(lib *library) {
 	})
 	a.applyLocale()
 	a.loadAcceptances()
+	a.loadMediaTool() // M7a: ffmpeg_settings.go
 }
 
 // connectShell adds what only the real app has: log files in logDir (the
 // Go log package writes there too), the app's version, the system
 // language and deep links. main calls it before App.Run.
 func (a *app) connectShell(logDir string) {
+	a.logDir = logDir // M7a: Settings → Storage, Diagnostics
 	if logDir != "" {
 		a.logs.Close()
 		a.logs = logs.New(logs.Options{Dir: logDir, Bus: a.bus})
@@ -153,21 +161,117 @@ func (a *app) closeShell() {
 	a.logs.Close()
 }
 
-// pages are the sidebar's pages, in the order ⌘1… choose them.
-var pages = []struct {
-	path, title string // title: English, translated where shown
+// navPage is a page of the sidebar.
+type navPage struct {
+	path, title string // title: English, translated where shown (pageTitle)
 	icon        *ui.SVG
-}{
-	{"/studio", "Studio", studioIcon},
-	// Voice pages (voices.go, thread V).
-	{"/voices", "Voices", voicesIcon},
-	{"/design", "Design", designIcon},
-	{"/gallery", "Gallery", galleryIcon},
-	{"/transcripts", "Transcribe", transcribeIcon}, // M2: transcribe*.go
-	{"/history", "History", historyIcon},
-	{"/models", "Models", modelsIcon},
-	{"/engine", "Engine", engineIcon},
-	{"/logs", "Logs", logsIcon},
+}
+
+// navGroup is a section of the sidebar.
+type navGroup struct {
+	id    string // English title, translated by groupTitle
+	pages []navPage
+}
+
+// navGroups are the sidebar's sections and pages, in order (M7a). Each
+// area keeps its page's view, route and badge in its own file.
+var navGroups = []navGroup{
+	{"Create", []navPage{
+		{"/studio", "Studio", studioIcon},
+		{"/stories", "Stories", storiesIcon},       // M3: longform_pages.go
+		{"/audiobook", "Audiobook", audiobookIcon}, // M3
+		{"/dub", "Dub", dubIcon},                   // M4: dub_pages.go
+	}},
+	{"Voices", []navPage{ // voices.go (thread V)
+		{"/voices", "Voices", voicesIcon},
+		{"/design", "Design", designIcon},
+		{"/gallery", "Gallery", galleryIcon},
+	}},
+	{"Library", []navPage{
+		{"/projects", "Projects", projectsIcon}, // M3
+		{"/history", "History", historyIcon},
+		{"/transcripts", "Transcribe", transcribeIcon}, // M2: transcribe*.go
+	}},
+	{"Automate", []navPage{
+		{"/workflows", "Workflows", workflowsIcon}, // M6: workflow_pages.go
+		{"/batch", "Batch", batchIcon},             // M4
+	}},
+	{"Utilities", []navPage{ // M5: api_pages.go
+		{"/tools", "Tools", toolsIcon},
+		{"/integrations", "Integrations", integrationsIcon},
+	}},
+	{"System", []navPage{
+		{"/models", "Models", modelsIcon},
+		{"/engine", "Engine", engineIcon},
+		{"/logs", "Logs", logsIcon},
+	}},
+}
+
+// shortcutPages are the pages ⌘1…⌘9 open, in that order: the ones used
+// most. The others are a click or the palette (⌘K) away.
+var shortcutPages = []string{"/studio", "/stories", "/audiobook", "/dub", "/voices", "/design", "/gallery", "/projects", "/transcripts"}
+
+// pages are every page of the sidebar, in its order.
+var pages = func() []navPage {
+	var out []navPage
+	for _, g := range navGroups {
+		out = append(out, g.pages...)
+	}
+	return out
+}()
+
+// pageKeys is the shortcut of a page ("⌘1"), "" when it has none.
+func pageKeys(path string) string {
+	for i, p := range shortcutPages {
+		if p == path {
+			return "⌘" + itoa(i+1)
+		}
+	}
+	return ""
+}
+
+// groupTitle translates a sidebar section's title.
+func groupTitle(id string) string {
+	switch id {
+	case "Create":
+		return i18n.T("Create")
+	case "Voices":
+		return i18n.T("Voices")
+	case "Library":
+		return i18n.T("Library")
+	case "Automate":
+		return i18n.T("Automate")
+	case "Utilities":
+		return i18n.T("Utilities")
+	case "System":
+		return i18n.T("System")
+	}
+	return id
+}
+
+// navBadge is what a page's sidebar item shows after its title: a count
+// or progress, "" for nothing. Areas answer for their pages.
+func (a *app) navBadge(path string) string {
+	switch path {
+	case "/history":
+		if n := len(a.takes); n > 0 {
+			return itoa(n)
+		}
+	case "/models":
+		if n := a.downloadsRunning(); n > 0 {
+			return itoa(n)
+		}
+	}
+	if b, ok := a.longformBadge(path); ok { // M3: longform_pages.go
+		return b
+	}
+	if b, ok := a.dubBadge(path); ok { // M4: dub_pages.go
+		return b
+	}
+	if b, ok := a.wfBadge(path); ok { // M6: workflow_pages.go
+		return b
+	}
+	return ""
 }
 
 // pageTitle translates a page's title (literal calls, for the key scan).
@@ -260,6 +364,7 @@ func (a *app) openWindow() {
 		Content:        ui.View(a.view),
 	})
 	a.refreshModels()
+	a.maybeOnboard() // M7a: a fresh install opens the setup (onboarding.go)
 }
 
 func icon(shapes string) *ui.SVG {
@@ -301,26 +406,21 @@ func (a *app) view(c *ui.Context) {
 	a.syncNav()
 
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Width(px(t, sidebarWidth)).Shrink(0).Background(t.Surface).Children(func() {
-				a.sidebar(c)
-			})
-			ui.Box(c).Width(1).Background(t.Border)
-			ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
-				a.pages(c)
-				if a.logsPanel && section(a.router.Path()) != "/logs" {
-					ui.Divider(c)
-					ui.Column(c.Key("logs-panel")).Height(px(t, a.logsHeight)).Shrink(0).Children(func() {
-						a.logsView(c, true)
-					})
-				}
-			})
+		a.sidebarFrame(c, func() { // shell_nav.go: the sidebar or the icon rail
+			a.pages(c)
+			if a.logsPanel && section(a.router.Path()) != "/logs" {
+				ui.Divider(c)
+				ui.Column(c.Key("logs-panel")).Height(px(t, a.logsHeight)).Shrink(0).Children(func() {
+					a.logsView(c, true)
+				})
+			}
 		})
 		ui.Divider(c)
 		a.statusBar(c)
 	})
 	a.palette(c)
 	a.shortcutSheet(c)
+	a.onboarding(c) // M7a: the first-run wizard, under the licence dialog
 	a.licenceModal(c)
 	a.modelsAlerts(c)
 }
@@ -382,35 +482,31 @@ func (a *app) syncNav() {
 }
 
 func (a *app) sidebar(c *ui.Context) {
-	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
+	t := c.Theme()
+	ui.Row(c).Height(titleBarHeight).Shrink(0).DragWindow().AlignItems(ui.End).Justify(ui.End).Padding(0, px(t, 8), px(t, 4), 0).Children(func() {
+		if railButton(c, "rail-on", "‹", i18n.T("Show icons only"), false).Clicked() {
+			a.setRail(true)
+		}
+	})
 	ui.Sidebar(c, &a.nav, func() {
-		ui.SidebarSection(c, "AudioSmith", nil, func() {
-			for _, p := range pages {
-				item := ui.SidebarItem(c, p.path, p.icon, pageTitle(p.path))
-				switch p.path {
-				case "/history":
-					item.Children(func() {
-						if n := len(a.takes); n > 0 {
-							ui.Badge(c, itoa(n))
-						}
-					})
-				case "/models":
-					if n := a.downloadsRunning(); n > 0 {
-						item.Children(func() { ui.Badge(c, itoa(n)) })
+		for _, g := range navGroups {
+			open := a.sectionOpen(g.id)
+			ui.SidebarSection(c.Key("nav-"+g.id), groupTitle(g.id), open, func() {
+				for _, p := range g.pages {
+					item := ui.SidebarItem(c, p.path, p.icon, pageTitle(p.path))
+					if b := a.navBadge(p.path); b != "" {
+						item.Children(func() { ui.Badge(c, b) })
 					}
 				}
-			}
-		})
-		a.longformSidebar(c) // M3: Stories, Audiobook, Projects (longform_pages.go, thread #18)
-		a.dubSidebar(c)      // M4: Dub, Batch (dub_pages.go, thread #19)
-		a.m5Sidebar(c)       // M5: Tools, Integrations (api_pages.go, thread #20)
-		a.wfSidebar(c)       // M6: Workflows (workflow_pages.go, thread #21)
-		ui.SidebarSection(c, i18n.T("App"), nil, func() {
+			})
+		}
+		ui.SidebarSection(c.Key("nav-App"), i18n.T("App"), nil, func() {
 			ui.SidebarItem(c, "/settings", settingsIcon, i18n.T("Settings"))
 		})
 	}).Grow(1).Background(ui.Transparent).Label(i18n.T("Sections")).OnChange(func() {
 		a.navigate(a.nav)
 	})
+	a.saveClosedSections()
 }
 
 // header is a page's title bar, which drags the window.

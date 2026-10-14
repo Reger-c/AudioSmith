@@ -62,7 +62,8 @@ func mcpStdioOptions(args []string, getenv func(string) string) (mcpsrv.ProxyOpt
 	if dir, err := os.UserConfigDir(); err == nil {
 		// The app's data folder: mygo's PathUserData for "AudioSmith"
 		// (dev builds share it, see main).
-		o.PortFile = filepath.Join(dir, "AudioSmith", api.PortFileName)
+		// M7a: or where Settings → Storage moved it (storage_move.go).
+		o.PortFile = filepath.Join(dataFolder(filepath.Join(dir, "AudioSmith")), api.PortFileName)
 	}
 	return o, nil
 }

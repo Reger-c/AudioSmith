@@ -191,8 +191,8 @@ func (a *app) watermarkEntry() (catalog.Entry, *modelState) {
 	return e, a.model(e)
 }
 
-// privacySettings is Settings → Privacy.
-func (a *app) privacySettings(c *ui.Context) {
+// watermarkSettings is the watermark section of Settings → Privacy.
+func (a *app) watermarkSettings(c *ui.Context) { // M7a: a section of Settings → Privacy (settings_privacy.go)
 	t := c.Theme()
 	a.wmOn = !a.prefs.Privacy.NoWatermark
 	e, m := a.watermarkEntry()

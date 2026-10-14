@@ -1,33 +1,41 @@
 # AudioSmith
 
-A TTS workbench for macOS on Apple silicon. Write a script, pick a model and a voice, generate takes locally on the GPU, then listen to them, compare them and export them.
+A local speech workbench for macOS on Apple silicon: text to speech with saved, cloned and designed voices, stories and audiobooks, video dubbing, transcription and system-wide dictation, a local OpenAI-compatible API and MCP server, and workflows. Every model runs on the Mac's GPU with MLX; nothing leaves the Mac unless you ask.
 
 - **UI**: [MyGo](https://mygo.egoist.dev/) native UI, written in Go (`*.go`).
-- **Speech**: `audiosmith-engine`, a Swift helper on [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) (the [hehehai fork](https://github.com/hehehai/mlx-audio-swift) Voxt uses) in `engine/`, which runs the models with MLX.
+- **Speech**: `audiosmith-engine`, a Swift helper on [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) in `engine/`, which runs the models with MLX.
 
 ## Features
 
 | Area | What it does |
 |---|---|
-| Studio | Script editor; model / voice / language / speed / sampling / duration controls that change with the model; voice cloning from a reference clip; Generate (⌘↩) and Cancel; live progress; the latest take with its waveform (click to seek), plus Play, Reveal and Export. The form autosaves and comes back at the next start. A model that is not downloaded, or whose licence is not accepted yet, is offered for download or review right there |
-| Models | Kokoro 82M (54 voices, 9 languages including Chinese), Qwen3-TTS 0.6B CustomVoice / Base (clone), Marvis 250M, Soprano 80M, OmniVoice (non-commercial licence, gated), or any Hugging Face repo mlx-audio-swift loads. Downloads from huggingface.co or hf-mirror.com (the fastest wins), through the system proxy, resumable and cancellable, checked by hash; Verify, Reveal, Delete. Every model is pinned to a commit |
-| History | Every take is stored with the settings that made it (model, voice, speed, seed, RTF…). Play, Reuse (loads them back into the Studio), Reveal, Export, Delete |
-| Engine | One worker per role (M0: the speech worker): state, version, device, memory, loaded models, running jobs, the last stderr lines after a crash, Restart |
-| Shell | Sidebar (⌘1–8: Studio, Voices, Design, Gallery, History, Models, Engine, Logs), command palette (⌘K), shortcut sheet (?), status bar with the engine, the job queue (cancel any job) and downloads, ⌘E quick switch (models in memory, Unload, Clear cache, Preload), notification centre, logs page and panel (⇧⌘L), `audiosmith://` deep links |
-| Settings | Language (English, 简体中文, or the system's), theme and interface size (90–125 %), reduce motion; Studio default model and autoplay; model folder, download source, proxy, Hugging Face token (Keychain), accepted licences; engine memory budget and idle unload |
+| Studio | Script editor with markup (pauses, emphasis, `[voice:…]`, non-verbal tags) and document import; model / voice / language / speed / sampling / duration controls that follow the model; long scripts in chunks with a streaming preview and a chunk cache; mastering (loudness, “Even out volume”), pronunciation dictionary, audio check (clipping, clicks, silences); Generate (⌘↩) and Cancel; the output panel (waveform, Play, Save as WAV 16/24/32-bit — and MP3, FLAC, Opus with ffmpeg — drag out, Show in Finder) |
+| Voices, Design, Gallery | A voice library: clone from a recording or a file (with a consent statement), design a voice from a description (Qwen3-TTS VoiceDesign, OmniVoice tags), ~1,100 gallery archetypes with previews; portraits, tags, favourites; `.asvoice` files (and VoiceStudio `.ovsvoice` import) |
+| Stories, Audiobook, Projects | Multi-voice scripts with a cast; audiobooks from TXT/MD/EPUB/DOCX with chapters, per-chapter loudness, read-along, M4B with chapters and cover (MP3/Opus with chapters with ffmpeg), stems; the Projects library of everything made and exported |
+| Dub, Batch | Video and audio dubbing: transcribe, translate (local or cloud language models, DeepL, Google, Microsoft), speaker separation and diarization, voice-cloned lines fitted to the timing (WSOLA, or OmniVoice's target duration), a timeline editor, A/B mixer, video preview; exports WAV, M4A, MP4 with dubbed tracks and soft subtitles, SRT/VTT/ASS, stems — MP3 and burnt-in subtitles with ffmpeg; batches and a watch folder; links via yt-dlp (opt-in) |
+| Transcribe, Dictation | Transcripts with word times and speakers (Whisper, Qwen3-ASR, Parakeet), exports SRT/VTT/TXT/DOCX; writing help with a language model; system-wide dictation (⌘⇧Space, toggle or hold) that types into any app, with a pill, the menu bar icon and close-to-tray |
+| Local API, MCP, Integrations, Tools | An OpenAI-compatible `/v1` (speech in wav/pcm/aac — mp3/opus/flac with ffmpeg —, transcriptions, translations, models, voices), a native `/api` with job events and WebSocket streaming, MCP over HTTP and stdio, setup pages for Claude Code, Cursor, Codex, n8n, the OpenAI SDKs; tools (A/B, convert, direction, watermark detection, file probe) |
+| Workflows | A canvas of steps (sources, TTS, transcription, translation, effects, exports) run as resumable jobs, with templates |
+| Models | A pinned catalogue (TTS, speech recognition, alignment, VAD, separation, diarization, enhancement, local language models, watermark) downloaded from huggingface.co or hf-mirror.com (the fastest wins), through the proxy, resumable, checked; licences reviewed before gated ones; any Hugging Face repo mlx-audio-swift loads |
+| Shell | Sidebar in sections — Create, Voices, Library, Automate, Utilities, System — resizable, collapsible to an icon rail; ⌘1–9: Studio, Stories, Audiobook, Dub, Voices, Design, Gallery, Projects, Transcribe; command palette (⌘K) with every page; shortcut sheet (?); status bar with the engine, the job queue and downloads; ⌘E quick switch; notifications; logs page and panel (⇧⌘L); `audiosmith://` deep links |
+| First run | A setup wizard: a check of this Mac (macOS, chip, memory, disk, network or mirror, engine, ffmpeg, permissions), a model pack chosen by memory (Fast, Balanced, Quality, Max), privacy, dictation; then the Studio says hello with Kokoro. Settings → General runs it again |
+| Settings | General, appearance (theme, accent colour, size 90–125 %, sidebar, reduce motion), models and downloads, Studio, engine (memory budget, idle unload), pronunciation, dictation, writing help, permissions, dubbing, Local API, audio tools (ffmpeg), network (mirror, proxy, connection test), privacy (no analytics; local-only language models; watermark; history cap), storage (what takes room, clear caches, move the data folder, reset or erase), usage (statistics computed on the Mac), diagnostics and about (self-check, diagnostic bundle, bug report) |
 
-All long work runs as jobs in one persistent queue: generation, preloads and downloads. A job the app quit in the middle of continues at the next start (downloads resume where they stopped). The engine never touches the network: it loads the snapshots the app downloaded.
+All long work runs as jobs in one persistent queue: generation, renders, dubs, transcripts, workflows, downloads. A job the app quit in the middle of continues at the next start. The engine never touches the network: it loads the snapshots the app downloaded.
+
+**ffmpeg is optional.** macOS's AVFoundation reads and writes WAV, AIFF, M4A/AAC, MP3 (read), MOV and MP4. With an ffmpeg (Homebrew's, or a file chosen in Settings → Audio tools), AudioSmith also exports MP3, Opus and FLAC, reads WebM, MKV, VP9 and AV1, and burns subtitles into videos; it runs ffmpeg as a separate program. Without it, those options say what they need.
 
 ## Data
 
 | What | Where |
 |---|---|
-| Library: takes, settings, licences, jobs, drafts, notifications | `~/Library/Application Support/AudioSmith/audiosmith.db` (SQLite; the MVP's `history.json` is imported once and kept) |
-| Take audio | `~/Library/Application Support/AudioSmith/clips/*.wav` |
-| Waveform cache | `~/Library/Caches/AudioSmith/peaks/` |
-| Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app) and `engine-gpu.log` (engine) |
-| Models | the Hugging Face cache, `~/.cache/huggingface/hub`, shared with the Python tools (`HF_HUB_CACHE` / `HF_HOME`, or Settings → Models) |
-| Hugging Face token | the login Keychain (or `$HF_TOKEN`, or `huggingface-cli login`'s file) |
+| Library: takes, voices, projects, renders, dubs, transcripts, workflows, settings, licences, jobs, drafts, notifications | `~/Library/Application Support/AudioSmith/audiosmith.db` (SQLite) |
+| Files of the library | `…/AudioSmith/` `clips/` (takes), `voices/`, `references/`, `renders/` and `covers/` (stories, audiobooks), `dubs/`, `transcripts/`, `dictation/`, `workflows/`, `tools/` (yt-dlp, ffmpeg) |
+| Data folder elsewhere | Settings → Storage → Move… copies the folder, checks the copy, and switches at the next start; `…/AudioSmith/location.json` then points to it |
+| Caches | `~/Library/Caches/AudioSmith/` (waveforms, rendered chunks, voice previews; Settings → Storage → Clear) |
+| Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app) and `engine-*.log` (engine workers) |
+| Models | the Hugging Face cache, `~/.cache/huggingface/hub`, shared with the Python tools (`HF_HUB_CACHE` / `HF_HOME`, or Settings → Models and downloads) |
+| Secrets | the login Keychain, service "AudioSmith": Hugging Face token (or `$HF_TOKEN`, or `huggingface-cli login`'s file), API key, language-model and translation keys |
 
 ## Architecture
 
@@ -54,7 +62,7 @@ Why a helper process: MyGo is pure Go without cgo, and MLX is Swift/C++/Metal. A
 
 ## Build and run
 
-Needs macOS 14+ on Apple silicon, Xcode 26 (Swift 6.2+), and Go 1.27.1 (`GOTOOLCHAIN=auto` downloads it).
+Runs on macOS 15 or later on Apple silicon (M1 or later; 16 GB of memory recommended for the larger models). Building needs Xcode 26 (Swift 6.2+) and Go 1.27.1 (`GOTOOLCHAIN=auto` downloads it).
 
 ```sh
 scripts/build-engine.sh         # xcodebuild → resources/darwin-arm64/engine/  (about 4 min the first time)
@@ -130,7 +138,7 @@ CI (`.github/workflows/ci.yml`) runs the Linux rows on every push and pull reque
 
 ## Next steps
 
-The plan to full parity with VoiceStudio's open-source edition runs in milestones: M1 the complete Studio (long scripts in chunks, streaming preview, normalization, pronunciation, voice library and design), M2 transcription and global dictation, M3 stories and audiobooks, M4 video dubbing and batch, M5 the local API and MCP, M6 workflows, M7 polish and release.
+M0–M6 of the plan to parity with VoiceStudio's open-source edition are in (Studio, voices, dictation, longform, dubbing, local API and MCP, workflows) and M7's first part (first run, settings, media formats). Left for M7: more UI languages, accessibility, signing, notarization and updates.
 
 ## License
 

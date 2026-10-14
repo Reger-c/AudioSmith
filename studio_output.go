@@ -151,6 +151,7 @@ func (a *app) saveAsMenu(c *ui.Context, t *core.Take) {
 				a.saveAs(&tk, bits)
 			}
 		}
+		a.ffmpegSaveItems(m, &tk) // M7a: MP3, FLAC, Opus with ffmpeg (ffmpeg_formats.go)
 	})
 }
 

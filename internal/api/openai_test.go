@@ -177,6 +177,23 @@ func TestSpeechFormats(t *testing.T) {
 	if resp.StatusCode != 400 || e.Error.Code != CodeUnsupportedFormat {
 		t.Fatalf("aac without encoder: %d %+v", resp.StatusCode, e)
 	}
+	// M7a: mp3, opus and flac when the backend encodes them (ffmpeg).
+	for _, format := range []string{"mp3", "opus", "flac"} {
+		resp = sdkSpeech(t, ts, `{"model":"tts-1","input":"x","voice":"alloy","response_format":"`+format+`"}`)
+		e = apiErr{}
+		json.NewDecoder(resp.Body).Decode(&e)
+		if resp.StatusCode != 400 || e.Error.Code != CodeUnsupportedFormat || !strings.Contains(e.Error.Message, "ffmpeg") {
+			t.Fatalf("%s without ffmpeg: %d %+v", format, resp.StatusCode, e)
+		}
+	}
+	f.update(func(f *fakeBackend) { f.formats = map[string]bool{"mp3": true, "opus": true, "flac": true} })
+	for format, ct := range map[string]string{"mp3": "audio/mpeg", "opus": "audio/ogg; codecs=opus", "flac": "audio/flac"} {
+		resp = sdkSpeech(t, ts, `{"model":"tts-1","input":"`+text+`","voice":"alloy","response_format":"`+format+`"}`)
+		body, _ = io.ReadAll(resp.Body)
+		if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != ct || !bytes.HasPrefix(body, []byte(strings.ToUpper(format)+":RIFF")) {
+			t.Fatalf("%s %d %s %q", format, resp.StatusCode, resp.Header.Get("Content-Type"), body[:min(len(body), 8)])
+		}
+	}
 }
 
 func TestSpeechSSE(t *testing.T) {

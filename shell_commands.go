@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -35,13 +36,13 @@ func (a *app) commands() []command {
 	add := func(id, group, title, en, keys string, enabled bool, run func()) {
 		cmds = append(cmds, command{id: id, group: group, title: title, en: en, keys: keys, run: run, enabled: enabled})
 	}
-	for i, p := range pages {
-		add("go"+p.path, nav, pageTitle(p.path), p.title, "⌘"+itoa(i+1), true, func() { a.navigate(p.path) })
+	for _, p := range pages { // every sidebar page (shell.go navGroups)
+		add("go"+p.path, nav, pageTitle(p.path), p.title, pageKeys(p.path), true, func() { a.navigate(p.path) })
 	}
-	a.longformCommands(nav, add) // M3: Stories, Audiobook, Projects (longform_pages.go, thread #18)
-	a.dubCommands(nav, add)      // M4: Dub, Batch (dub_pages.go, thread #19)
-	a.m5Commands(nav, add)       // M5: Tools, Integrations, API reference (api_pages.go, thread #20)
-	a.wfCommands(nav, add)       // M6: Workflows (workflow_pages.go, thread #21)
+	a.longformCommands(nav, add) // M3: the book's commands (longform_pages.go, thread #18)
+	a.dubCommands(nav, add)      // M4: the dub's commands (dub_pages.go, thread #19)
+	a.m5Commands(nav, add)       // M5: API reference (api_pages.go, thread #20)
+	a.wfCommands(nav, add)       // M6: the workflow's commands (workflow_pages.go, thread #21)
 	add("go/settings", nav, i18n.T("Settings"), "Settings", "⌘,", true, func() { a.navigate("/settings") })
 	for _, s := range settingsSections() {
 		add("go/settings/"+s.id, i18n.T("Settings"), s.title, s.en, "", true, func() { a.navigate("/settings/" + s.id) })
@@ -72,6 +73,7 @@ func (a *app) commands() []command {
 	add("logs-panel", view, i18n.T("Show or hide the logs panel"), "Show or hide the logs panel", "⇧⌘L", true, func() { a.logsPanel = !a.logsPanel })
 	add("notifications", view, i18n.T("Notifications"), "Notifications", "", true, func() { a.noticesOpen = true })
 	add("shortcuts", view, i18n.T("Keyboard shortcuts"), "Keyboard shortcuts", "?", true, func() { a.sheetOpen = true })
+	add("setup", view, i18n.T("Run the setup again"), "Run the setup again first run wizard welcome", "", !a.obOpen, a.openOnboarding) // M7a
 
 	look := i18n.T("Appearance")
 	for _, th := range []struct{ id, title, en string }{
@@ -145,9 +147,9 @@ func (a *app) shortcuts(c *ui.Context) {
 	if c.Shortcut(ui.Cmd, ui.KeyComma) {
 		a.navigate("/settings")
 	}
-	for i, p := range pages {
+	for i, path := range shortcutPages {
 		if c.Shortcut(ui.Cmd, ui.Key1+ui.Key(i)) {
-			a.navigate(p.path)
+			a.navigate(path)
 		}
 	}
 	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyL) {
@@ -226,7 +228,9 @@ func (a *app) shortcutSheet(c *ui.Context) {
 		}{
 			{i18n.T("Navigation"), [][2]string{
 				{"⌘K", i18n.T("Command palette")},
-				{"⌘1 … ⌘5", i18n.T("Studio, History, Models, Engine, Logs")},
+				{"⌘1 … ⌘4", i18n.T("Studio, Stories, Audiobook, Dub")},
+				{"⌘5 … ⌘7", i18n.T("Voices, Design, Gallery")},
+				{"⌘8  ⌘9", i18n.T("Projects, Transcribe")},
 				{"⌘,", i18n.T("Settings")},
 				{"⌘[  ⌘]", i18n.T("Back, forward")},
 				{"⌘E", i18n.T("Engine quick switch")},
@@ -269,8 +273,17 @@ func (a *app) buildMenu() {
 		return func(*mygo.MenuItem, *mygo.Window) { a.post(fn) }
 	}
 	goItems := []*mygo.MenuItem{}
-	for i, p := range pages {
-		goItems = append(goItems, &mygo.MenuItem{Label: pageTitle(p.path), Accelerator: "CmdOrCtrl+" + itoa(i+1), Click: act(func() { a.navigate(p.path) })})
+	for gi, g := range navGroups {
+		if gi > 0 {
+			goItems = append(goItems, mygo.Separator())
+		}
+		for _, p := range g.pages {
+			acc := ""
+			if k := pageKeys(p.path); k != "" {
+				acc = "CmdOrCtrl+" + k[len("⌘"):]
+			}
+			goItems = append(goItems, &mygo.MenuItem{Label: pageTitle(p.path), Accelerator: acc, Click: act(func() { a.navigate(p.path) })})
+		}
 	}
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Label: "AudioSmith", Submenu: []*mygo.MenuItem{
@@ -334,10 +347,10 @@ func (a *app) openURL(raw string) {
 		path = "/" + u.Host + u.Path
 	}
 	path = "/" + strings.Trim(path, "/")
-	switch section(path) {
-	case "/studio", "/history", "/models", "/engine", "/logs", "/transcripts": // M2: /transcripts
-		a.navigate(section(path))
-	case "/settings":
+	switch sec := section(path); {
+	case slices.ContainsFunc(pages, func(p navPage) bool { return p.path == sec }): // every sidebar page
+		a.navigate(sec)
+	case sec == "/settings":
 		if path == "/settings" {
 			path = "/settings/" + a.lastSettings
 		}

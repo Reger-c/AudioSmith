@@ -96,7 +96,7 @@ func useFakeHub(t *testing.T, a *app) *fakeHF {
 		s.Models.Endpoints = []string{f.URL}
 	})
 	a.resetHub()
-	if fs, ok := a.eng.sup.(*fakeSup); ok && a.engState == engineStarting {
+	if fs, ok := unwrapSup(a.eng.sup).(*fakeSup); ok && a.engState == engineStarting {
 		fs.f.ready() // the engine restarted for the new model folder
 	}
 	saved := hubToken
@@ -117,7 +117,7 @@ func entry(t *testing.T, id string) catalog.Entry {
 func TestNavigation(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	tt.Frame()
-	for i, want := range []string{"studio", "voices", "design", "gallery", "transcripts", "history", "models", "engine", "logs"} {
+	for i, want := range []string{"studio", "stories", "audiobook", "dub", "voices", "design", "gallery", "projects", "transcripts"} {
 		tt.Key(ui.Cmd, ui.Key1+ui.Key(i))
 		if a.currentPage() != want {
 			t.Errorf("⌘%d: %s", i+1, a.currentPage())
@@ -166,6 +166,8 @@ func TestDeepLinks(t *testing.T) {
 		"/settings/engine":             "/settings/engine",
 		"audiosmith://logs?source=app": "/logs",
 		"AudioSmith://engine":          "/engine",
+		"audiosmith://workflows":       "/workflows", // M7a: every sidebar page
+		"audiosmith://dub":             "/dub",
 	} {
 		a.openURL(link)
 		if a.router.Path() != want {

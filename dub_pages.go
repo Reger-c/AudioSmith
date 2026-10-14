@@ -12,15 +12,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/services"
 )
 
-// dubPages are the sidebar's "Dubbing" section.
-var dubPages = []struct {
-	path, title string
-	icon        *ui.SVG
-}{
-	{"/dub", "Dub", dubIcon},
-	{"/batch", "Batch", batchIcon},
-}
-
 // dubPageTitle translates the M4 pages' titles.
 func dubPageTitle(path string) (string, bool) {
 	switch path {
@@ -32,27 +23,24 @@ func dubPageTitle(path string) (string, bool) {
 	return "", false
 }
 
-// dubSidebar is the sidebar's section of the M4 pages; running dubs
-// show as badges.
-func (a *app) dubSidebar(c *ui.Context) {
-	ui.SidebarSection(c, i18n.T("Dubbing"), nil, func() {
-		for _, p := range dubPages {
-			title, _ := dubPageTitle(p.path)
-			item := ui.SidebarItem(c, p.path, p.icon, title)
-			n := 0
-			switch p.path {
-			case "/dub":
-				if a.dubBusy() {
-					n = 1
-				}
-			case "/batch":
-				n = len(a.batch.jobs)
-			}
-			if n > 0 {
-				item.Children(func() { ui.Badge(c, itoa(n)) })
-			}
+// dubBadge is the sidebar badge of an M4 page (M7a: the shell places
+// the pages, shell.go navGroups): a running dub, the batch's videos.
+func (a *app) dubBadge(path string) (string, bool) {
+	n := 0
+	switch path {
+	case "/dub":
+		if a.dubBusy() {
+			n = 1
 		}
-	})
+	case "/batch":
+		n = len(a.batch.jobs)
+	default:
+		return "", false
+	}
+	if n > 0 {
+		return itoa(n), true
+	}
+	return "", true
 }
 
 // dubRoute builds the M4 pages.
@@ -72,10 +60,7 @@ func (a *app) dubRoute(c *ui.Context, r *ui.Route) bool {
 
 // dubCommands adds the palette's entries of the M4 pages.
 func (a *app) dubCommands(nav string, add func(id, group, title, en, keys string, enabled bool, run func())) {
-	for _, p := range dubPages {
-		title, _ := dubPageTitle(p.path)
-		add("go"+p.path, nav, title, p.title, "", true, func() { a.navigate(p.path) })
-	}
+	// The "Go to" entries come from the shell's page list (M7a).
 	dubbing := i18n.T("Dubbing")
 	add("dub-new", dubbing, i18n.T("Dub a video or audio file…"), "Dub a video or audio file…", "", true, func() {
 		a.navigate("/dub")

@@ -114,8 +114,11 @@ func (s *Server) checkFormat(format string) error {
 		return &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedFormat, Param: "response_format",
 			Message: "This engine cannot encode AAC: use wav or pcm."}
 	case FormatMP3, FormatOpus, FormatFLAC:
+		if s.encodesFormat(format) { // M7a: ffmpeg (Settings → Audio tools)
+			return nil
+		}
 		return &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedFormat, Param: "response_format",
-			Message: fmt.Sprintf("AudioSmith cannot encode %s yet: use wav, pcm or aac.", format)}
+			Message: fmt.Sprintf("%s needs ffmpeg (AudioSmith → Settings → Audio tools): use wav, pcm or aac.", format)}
 	}
 	return &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedFormat, Param: "response_format",
 		Message: fmt.Sprintf("Unknown response_format %q: use wav, pcm or aac.", format)}
@@ -226,6 +229,14 @@ func (s *Server) answerSpeech(w http.ResponseWriter, r *http.Request, sp *Speech
 	case FormatAAC, FormatM4A:
 		out := filepath.Join(s.b.TempDir(), "encoded", res.Take.ID+".m4a")
 		if err := s.encode(ctx, path, out); err != nil {
+			writeError(w, err)
+			return
+		}
+		defer os.Remove(out)
+		path = out
+	case FormatMP3, FormatOpus, FormatFLAC: // M7a: ffmpeg behind media.encode
+		out := filepath.Join(s.b.TempDir(), "encoded", res.Take.ID+"."+format)
+		if err := s.encodeAs(ctx, path, out, format); err != nil {
 			writeError(w, err)
 			return
 		}
@@ -363,6 +374,22 @@ func (s *Server) encode(ctx context.Context, in, out string) error {
 		return err
 	}
 	params := proto.EncodeParams{Input: in, Output: proto.Output{Path: out, Format: "m4a"}, Codec: "aac"}
+	return s.runEngineJob(ctx, proto.MethodMediaEncode, params, "Encode audio for the API", nil)
+}
+
+// encodesFormat reports whether the backend writes MP3, Opus or FLAC.
+func (s *Server) encodesFormat(format string) bool {
+	fe, ok := s.b.(FormatEncoder)
+	return ok && fe.EncodesFormat(format)
+}
+
+// encodeAs makes an MP3, Ogg Opus or FLAC of a WAV through media.encode
+// (which the app runs on ffmpeg).
+func (s *Server) encodeAs(ctx context.Context, in, out, format string) error {
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		return err
+	}
+	params := proto.EncodeParams{Input: in, Output: proto.Output{Path: out, Format: format}}
 	return s.runEngineJob(ctx, proto.MethodMediaEncode, params, "Encode audio for the API", nil)
 }
 

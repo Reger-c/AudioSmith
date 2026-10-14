@@ -39,6 +39,9 @@ type Settings struct {
 	Dubbing    Dubbing    `json:"dubbing"` // M4 (thread #19, m4.go)
 	// M5 (thread #20, api.go).
 	API API `json:"api"`
+	// M7a (thread #22, m7.go): the first-run setup and the media tools.
+	Setup Setup `json:"setup"`
+	Media Media `json:"media"`
 }
 
 // General: language and app behaviour.
@@ -57,6 +60,13 @@ type Appearance struct {
 	Theme        string  `json:"theme"`        // "system" | "light" | "dark"
 	Scale        float64 `json:"scale"`        // UI scale, 0.9–1.25 (1 = 100 %)
 	ReduceMotion bool    `json:"reduceMotion"` // in addition to the system setting
+	// M7a (m7.go): the accent palette (Palettes; "" = the system's
+	// accent), the sidebar as icons only, its width in DIPs at 100 %
+	// (0 = the default) and the sidebar sections the user closed.
+	Palette        string   `json:"palette,omitempty"`
+	Rail           bool     `json:"rail,omitempty"`
+	SidebarWidth   float64  `json:"sidebarWidth,omitempty"`
+	ClosedSections []string `json:"closedSections,omitempty"`
 }
 
 // Studio: defaults of the TTS form.
@@ -125,6 +135,7 @@ func Migrate(data []byte) (Settings, error) {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return Defaults(), err
 	}
+	migrateM7(data, &s)
 	// Version 1 is the first; later versions add their steps here.
 	if s.Appearance.Scale == 0 {
 		s.Appearance.Scale = 1

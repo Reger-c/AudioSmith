@@ -112,7 +112,7 @@ func appShortcuts() map[string]string {
 		"CmdOrCtrl+K": "Command palette", "CmdOrCtrl+E": "Engine quick switch", "CmdOrCtrl+,": "Settings",
 		"CmdOrCtrl+Enter": "Generate", "CmdOrCtrl+Shift+L": "Show or hide the logs panel",
 	}
-	for i := range pages {
+	for i := range shortcutPages {
 		m["CmdOrCtrl+"+itoa(i+1)] = "Go to a page"
 	}
 	return m

@@ -736,6 +736,7 @@ func (a *app) lfOutputs(c *ui.Context, p *lfPage) {
 						a.saveOutput(r, "book", out.Book, "wav", bits)
 					}
 				}
+				a.ffmpegBookItems(m, r) // M7a: MP3/Opus with chapters (ffmpeg_formats.go)
 			})
 			if ui.Button(c.Key("out-chapters"), i18n.T("Save chapters…")).Tooltip(i18n.T("One WAV per chapter, into a folder")).Clicked() {
 				a.saveChapters(r)
@@ -753,6 +754,7 @@ func (a *app) lfOutputs(c *ui.Context, p *lfPage) {
 						if m.Item(name).Chosen() {
 							a.saveOutput(r, "stem", s.File, "wav", 0)
 						}
+						a.ffmpegStemItems(m, r, s, name) // M7a: ffmpeg_formats.go
 					}
 				})
 			}

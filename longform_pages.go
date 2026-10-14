@@ -12,16 +12,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
-// longformPages are the sidebar's "Create" section.
-var longformPages = []struct {
-	path, title string
-	icon        *ui.SVG
-}{
-	{"/stories", "Stories", storiesIcon},
-	{"/audiobook", "Audiobook", audiobookIcon},
-	{"/projects", "Projects", projectsIcon},
-}
-
 // longformPageTitle translates the M3 pages' titles.
 func longformPageTitle(path string) (string, bool) {
 	switch path {
@@ -35,18 +25,16 @@ func longformPageTitle(path string) (string, bool) {
 	return "", false
 }
 
-// longformSidebar is the sidebar's section of the M3 pages; a running
-// render shows as a badge.
-func (a *app) longformSidebar(c *ui.Context) {
-	ui.SidebarSection(c, i18n.T("Create"), nil, func() {
-		for _, p := range longformPages {
-			title, _ := longformPageTitle(p.path)
-			item := ui.SidebarItem(c, p.path, p.icon, title)
-			if r := a.activeRender(); r != nil && p.path == "/"+lfRoute(r.rec.Kind) {
-				item.Children(func() { ui.Badge(c, itoa(r.body.Done())+"/"+itoa(len(r.body.Chapters))) })
-			}
-		}
-	})
+// longformBadge is the sidebar badge of an M3 page (M7a: the shell
+// places the pages, shell.go navGroups): a running render's chapters.
+func (a *app) longformBadge(path string) (string, bool) {
+	if _, ok := longformPageTitle(path); !ok {
+		return "", false
+	}
+	if r := a.activeRender(); r != nil && path == "/"+lfRoute(r.rec.Kind) {
+		return itoa(r.body.Done()) + "/" + itoa(len(r.body.Chapters)), true
+	}
+	return "", true
 }
 
 // longformRoute builds the M3 pages.
@@ -69,10 +57,7 @@ func (a *app) longformRoute(c *ui.Context, r *ui.Route) bool {
 
 // longformCommands adds the palette's entries of the M3 pages.
 func (a *app) longformCommands(nav string, add func(id, group, title, en, keys string, enabled bool, run func())) {
-	for _, p := range longformPages {
-		title, _ := longformPageTitle(p.path)
-		add("go"+p.path, nav, title, p.title, "", true, func() { a.navigate(p.path) })
-	}
+	// The "Go to" entries come from the shell's page list (M7a).
 	busy := a.activeRender() != nil
 	book := i18n.T("Audiobook")
 	add("lf-stop", book, i18n.T("Stop the book being rendered"), "Stop the book being rendered", "", busy, func() {

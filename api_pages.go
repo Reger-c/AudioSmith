@@ -15,15 +15,6 @@ var (
 	integrationsIcon = icon(`<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/><path d="M7 4.5h2.5a2 2 0 0 1 2 2V9M9 11.5H6.5a2 2 0 0 1-2-2V7"/>`)
 )
 
-// m5Pages are the sidebar's M5 pages.
-var m5Pages = []struct {
-	path, title string
-	icon        *ui.SVG
-}{
-	{"/tools", "Tools", toolsIcon},
-	{"/integrations", "Integrations", integrationsIcon},
-}
-
 // m5PageTitle translates the M5 pages' titles.
 func m5PageTitle(path string) (string, bool) {
 	switch path {
@@ -35,16 +26,6 @@ func m5PageTitle(path string) (string, bool) {
 		return i18n.T("API reference"), true
 	}
 	return "", false
-}
-
-// m5Sidebar is the sidebar's section of the M5 pages.
-func (a *app) m5Sidebar(c *ui.Context) {
-	ui.SidebarSection(c, i18n.T("Utilities"), nil, func() {
-		for _, p := range m5Pages {
-			title, _ := m5PageTitle(p.path)
-			ui.SidebarItem(c, p.path, p.icon, title)
-		}
-	})
 }
 
 // m5Route builds the M5 pages.
@@ -70,10 +51,7 @@ func (a *app) m5Route(c *ui.Context, r *ui.Route) bool {
 
 // m5Commands adds the palette's entries.
 func (a *app) m5Commands(nav string, add func(id, group, title, en, keys string, enabled bool, run func())) {
-	for _, p := range m5Pages {
-		title, _ := m5PageTitle(p.path)
-		add("go"+p.path, nav, title, p.title, "", true, func() { a.navigate(p.path) })
-	}
+	// Tools and Integrations come from the shell's page list (M7a).
 	add("go/api-reference", nav, i18n.T("API reference"), "API reference OpenAPI docs", "", a.apiPort != 0, func() { a.navigate("/api-reference") })
 }
 
