@@ -67,7 +67,9 @@ func TestSnapshotsM7(t *testing.T) {
 		save("settings-audio-tools-none")
 		tool, _ := ffmpeg.Inspect(context.Background(), fake)
 		tool.FFmpeg = "/opt/homebrew/bin/ffmpeg"
-		a.updateSettings(func(s *settings.Settings) { s.Media.FFmpeg, s.Media.Origin = "/opt/homebrew/bin/ffmpeg", settings.MediaSystem })
+		a.updateSettings(func(s *settings.Settings) {
+			s.Media.FFmpeg, s.Media.Origin = "/opt/homebrew/bin/ffmpeg", settings.MediaSystem
+		})
 		a.ffPath, a.ffChecking = "/opt/homebrew/bin/ffmpeg", false
 		a.ffTool.Store(tool)
 		shot(tall, "settings-audio-tools")
