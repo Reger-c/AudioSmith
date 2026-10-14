@@ -12,11 +12,12 @@ import (
 	"github.com/hehehai/AudioSmith/internal/icons"
 )
 
-// clonePage is /voices/new: a voice from a clip.
+// clonePage is /clone (the sidebar's Clone, also /voices/new): a voice
+// from a clip.
 func (a *app) clonePage(c *ui.Context) {
 	t := c.Theme()
 	s := &a.clone
-	title := i18n.T("New voice from a clip")
+	title := i18n.T("Clone a voice")
 	if v := a.findVoice(s.replaceFor); v != nil {
 		title = i18n.T("Replace the reference of “%s”", v.Name)
 	}

@@ -106,3 +106,6 @@ smile-circle            # reactions
 # Number inputs (numberInput).
 minus                   # decrease
 add                     # increase
+
+# The Clone page in the sidebar.
+user-plus-rounded       # Clone

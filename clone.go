@@ -84,7 +84,7 @@ func (a *app) startClone(replaceFor string) {
 	if v := a.findVoice(replaceFor); v != nil {
 		a.clone.name, a.clone.style, a.clone.language = v.Name, v.Style, v.Language
 	}
-	a.navigate("/voices/new")
+	a.navigate("/clone")
 	a.loadDevices()
 }
 

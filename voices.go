@@ -220,14 +220,14 @@ func voiceKindText(k core.VoiceKind) string {
 // --- the area's pages in the router (shell.go) ---------------------------
 
 // voicesRoute builds the voice area's page for r and reports whether it
-// was one: /voices, /voices/new, /design, /gallery.
+// was one: /voices, /clone (or /voices/new), /design, /gallery.
 func (a *app) voicesRoute(c *ui.Context, r *ui.Route) bool {
 	switch {
 	case r.Match("/voices"):
 		r.Title(i18n.T("My voices"))
 		a.voicesPage(c)
-	case r.Match("/voices/new"):
-		r.Title(i18n.T("New voice"))
+	case r.Match("/clone"), r.Match("/voices/new"): // the sidebar's Clone; /voices/new as before
+		r.Title(i18n.T("Clone a voice"))
 		a.clonePage(c)
 	case r.Match("/design"):
 		r.Title(i18n.T("Design"))
@@ -250,6 +250,8 @@ func voicePageTitle(path string) (string, bool) {
 		return i18n.T("Design"), true
 	case "/gallery":
 		return i18n.T("Discover voices"), true
+	case "/clone":
+		return i18n.T("Clone"), true
 	}
 	return "", false
 }
@@ -258,6 +260,7 @@ var (
 	voicesIcon  = icons.UserSpeakRounded
 	designIcon  = icons.MagicStick3
 	galleryIcon = icons.Widget
+	cloneIcon   = icons.UserPlusRounded
 )
 
 // --- takes the voice pages generate -------------------------------------

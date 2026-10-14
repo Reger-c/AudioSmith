@@ -142,7 +142,7 @@ func TestCloneFlowUpload(t *testing.T) {
 	tt.Frame()
 	tt.Click("New voice from a clip")
 	tt.Frame()
-	if a.router.Path() != "/voices/new" || !tt.HasText("Drop a clip here, or click to choose") || !tt.HasText("Record") {
+	if a.router.Path() != "/clone" || !tt.HasText("Drop a clip here, or click to choose") || !tt.HasText("Record") {
 		t.Fatalf("clone page: %s %q", a.router.Path(), tt.Texts())
 	}
 	// A 30 s clip: by energy, its best 15 s start at 12 s, at once.
@@ -701,7 +701,7 @@ func TestVoiceFilesUI(t *testing.T) {
 	clip := filepath.Join(t.TempDir(), "drop.wav")
 	writeSpeech(clip, 6, []span{{0.2, 5.8}})
 	a.voicesDropped([]string{clip})
-	if a.router.Path() != "/voices/new" || !a.clone.hasClip() {
+	if a.router.Path() != "/clone" || !a.clone.hasClip() {
 		t.Errorf("drop clip: %s", a.router.Path())
 	}
 	// A broken file.

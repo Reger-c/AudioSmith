@@ -11,7 +11,7 @@ func TestSidebarGroups(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	tt.Frame()
 	for _, title := range []string{"Create", "Voices", "Library", "Automate", "Utilities", "System",
-		"Studio", "Stories", "Audiobook", "Dub", "Design", "Discover voices", "My voices", "Projects", "History", "Transcribe",
+		"Studio", "Stories", "Audiobook", "Dub", "Design", "Clone", "Discover voices", "My voices", "Projects", "History", "Transcribe",
 		"Workflows", "Batch", "Tools", "Integrations", "Models", "Engine", "Logs", "Settings"} {
 		if !tt.HasText(title) {
 			t.Errorf("sidebar lacks %q", title)

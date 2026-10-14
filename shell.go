@@ -192,6 +192,7 @@ var navGroups = []navGroup{
 		{"/gallery", "Discover voices", galleryIcon},
 		{"/voices", "My voices", voicesIcon},
 		{"/design", "Design", designIcon},
+		{"/clone", "Clone", cloneIcon},
 	}},
 	{"Library", []navPage{
 		{"/projects", "Projects", projectsIcon}, // M3
