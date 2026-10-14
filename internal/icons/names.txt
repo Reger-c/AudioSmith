@@ -92,3 +92,4 @@ end-call-rounded        # hang up
 square-arrow-right-up   # open externally
 upload-minimalistic     # drop or choose a file
 code                    # code snippets
+panel-left              # the workflow rail toggle

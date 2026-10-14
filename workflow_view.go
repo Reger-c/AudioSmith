@@ -17,50 +17,132 @@ import (
 
 var workflowsIcon = icons.Structure
 
-// wfRailWidth is the library rail's width.
-const wfRailWidth = 220
+// wfRailWidth is the library rail's width; wfPanelWidth the step/run
+// panel's.
+const (
+	wfRailWidth  = 220
+	wfPanelWidth = inspectorWidth + 40
+)
+
+// wfLayout says where the rail and the step/run panel go: beside the
+// canvas (inline) when it keeps 480 DIPs, else in drawers over it.
+func (a *app) wfLayout(c *ui.Context) (railInline, panelInline bool) {
+	t := c.Theme()
+	w := a.pageWidth(c)
+	rail, panel := px(t, wfRailWidth), px(t, wfPanelWidth)
+	railInline = w-rail >= px(t, 560)
+	if railInline && !a.wfRailHide {
+		w -= rail
+	}
+	panelInline = w-panel >= px(t, 480)
+	return railInline, panelInline
+}
 
 // workflowsPage is /workflows.
 func (a *app) workflowsPage(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	title := i18n.T("Workflows")
 	if a.wf != nil && a.wf.Name != "" {
 		title += " · " + a.wf.Name
 	}
-	header(c, title, func() { a.wfHeaderActions(c) })
-	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Scroll(c.Key("wf-rail")).Width(px(t, wfRailWidth)).Shrink(0).Background(t.Surface).Children(func() {
-			ui.Column(c).Padding(px(t, 12)).Gap(px(t, 10)).Children(func() { a.wfRail(c) })
+	railInline, panelInline := a.wfLayout(c)
+	railShown := (railInline && !a.wfRailHide) || (!railInline && a.wfRailOpen)
+	// In a drawer, the panel opens when a step is chosen or a run starts.
+	if !panelInline && a.wf != nil {
+		if a.wfSel != "" && a.wfSel != a.wfPanelFor {
+			a.wfPanelOpen = true
+		}
+		if a.wfPanel != a.wfPanelSeen && a.wfPanel == wfPanelRun {
+			a.wfPanelOpen = true
+		}
+	}
+	a.wfPanelFor, a.wfPanelSeen = a.wfSel, a.wfPanel
+	panelShown := a.wf != nil && (panelInline || a.wfPanelOpen)
+	pageHeader(c, title, func() {
+		tip := i18n.T("Show workflows and steps")
+		if railShown {
+			tip = i18n.T("Hide workflows and steps")
+		}
+		if iconToggle(c.Key("wf-rail-toggle"), icons.PanelLeft, railShown, tip).Clicked() {
+			if railInline {
+				a.wfRailHide = !a.wfRailHide
+			} else {
+				a.wfRailOpen = !a.wfRailOpen
+			}
+		}
+		if a.wf != nil && !panelInline {
+			tip := i18n.T("Show the step and the run")
+			if panelShown {
+				tip = i18n.T("Hide the step and the run")
+			}
+			if iconToggle(c.Key("wf-panel-toggle"), icons.PanelRight, panelShown, tip).Clicked() {
+				a.wfPanelOpen = !panelShown
+			}
+		}
+		a.wfHeaderActions(c)
+	})
+	rail := func() {
+		ui.Column(c).Padding(px(t, sp2), px(t, sp3), px(t, sp4)).Gap(px(t, sp2)).Children(func() { a.wfRail(c) })
+	}
+	panel := func() {
+		ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+			ui.Row(c).Padding(px(t, sp2), px(t, sp3)).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+				ui.Segmented(c.Key("wf-panel-tabs"), &a.wfPanel, i18n.T("Step"), i18n.T("Run")).Label(i18n.T("Panel")).Grow(1)
+				if !panelInline && iconButton(c.Key("wf-panel-close"), icons.Close, i18n.T("Close")).Clicked() {
+					a.wfPanelOpen = false
+				}
+			})
+			ui.Box(c).Height(1).Background(k.Line)
+			ui.Scroll(c.Key("wf-panel-scroll")).Grow(1).MinHeight(0).Children(func() {
+				ui.Column(c).Padding(px(t, sp3), px(t, sp4), px(t, sp4)).Gap(px(t, sp3)).Children(func() {
+					if a.wfPanel == wfPanelRun {
+						a.wfRunPanel(c)
+					} else {
+						a.wfInspector(c)
+					}
+				})
+			})
 		})
-		ui.Box(c).Width(1).Background(t.Border)
+	}
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).BorderWidth(1, 0, 0, 0).BorderColor(k.Line).Children(func() {
+		if railShown && railInline {
+			ui.Scroll(c.Key("wf-rail")).Width(px(t, wfRailWidth)).Shrink(0).Background(k.Subtle).Children(rail)
+			ui.Box(c).Width(1).Background(k.Line)
+		}
 		ui.Column(c.Key("wf-middle")).Grow(1).MinWidth(0).Children(func() {
 			if a.wf == nil {
 				a.wfEmpty(c)
 				return
 			}
 			a.wfToolbar(c)
-			ui.Divider(c)
+			ui.Box(c).Height(1).Background(k.Line)
 			a.wfCanvasView(c)
 		})
-		if a.wf != nil {
-			ui.Box(c).Width(1).Background(t.Border)
-			ui.Column(c.Key("wf-panel")).Width(px(t, inspectorWidth+40)).Shrink(0).Background(t.Surface).Children(func() {
-				ui.Row(c).Padding(px(t, 8), px(t, 12)).Children(func() {
-					ui.Segmented(c.Key("wf-panel-tabs"), &a.wfPanel, i18n.T("Step"), i18n.T("Run")).Label(i18n.T("Panel")).Grow(1)
-				})
-				ui.Divider(c)
-				ui.Scroll(c.Key("wf-panel-scroll")).Grow(1).MinHeight(0).Children(func() {
-					ui.Column(c).Padding(px(t, 14)).Gap(px(t, 10)).Children(func() {
-						if a.wfPanel == wfPanelRun {
-							a.wfRunPanel(c)
-						} else {
-							a.wfInspector(c)
-						}
-					})
-				})
-			})
+		if panelShown && panelInline {
+			ui.Box(c).Width(1).Background(k.Line)
+			ui.Column(c.Key("wf-panel")).Width(px(t, wfPanelWidth)).Shrink(0).Children(panel)
 		}
 	})
+	if railShown && !railInline {
+		// A drawer from the left edge of the page.
+		ui.Overlay(c, func() {
+			w, h := c.Size()
+			left := w - a.pageWidth(c)
+			d := ui.Scroll(c.Key("wf-rail-drawer")).Absolute().Left(left).Top(titleBarHeight).Width(px(t, wfRailWidth+20)).
+				Height(h-titleBarHeight-px(t, statusBarHeight)-1).Background(k.Bg).BorderWidth(0, 1, 0, 0).BorderColor(k.Line).
+				Shadow(8, 0, 24, 0, ui.RGBA(0, 0, 0, 0.12)).Label(i18n.T("Workflows and steps"))
+			d.Children(rail)
+			if d.PressedOutside() || d.OverlayShortcut(0, ui.KeyEscape) {
+				a.wfRailOpen = false
+			}
+		})
+	}
+	if panelShown && !panelInline {
+		sidePanel(c, "wf-panel", px(t, wfPanelWidth), false, i18n.T("Step and run"), func() { a.wfPanelOpen = false }, func() {
+			ui.Column(c).Height(func() float32 { _, h := c.Size(); return h - titleBarHeight - px(t, statusBarHeight) - 1 }()).Children(panel)
+		})
+	}
 	a.wfConfirmDialog(c)
 }
 
@@ -103,15 +185,15 @@ func (a *app) wfResumable() bool {
 // wfEmpty is the page without a workflow: the templates.
 func (a *app) wfEmpty(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c.Key("wf-empty-page")).Grow(1).Center().Gap(px(t, 12)).Padding(px(t, 24)).Children(func() {
-		ui.Icon(c, workflowsIcon.Linear).Size(px(t, 40), px(t, 40)).TextColor(t.TextMuted)
-		ui.Text(c, i18n.T("Design a voice workflow")).FontSize(px(t, 18)).Bold()
+	ui.Column(c.Key("wf-empty-page")).Grow(1).Center().Gap(px(t, sp3)).Padding(px(t, sp6)).Children(func() {
+		ui.Icon(c, workflowsIcon.Linear).Size(px(t, 40), px(t, 40)).TextColor(tok(t).Text3)
+		ui.Text(c, i18n.T("Design a voice workflow")).FontSize(px(t, fsSection)).FontWeight(600)
 		ui.Text(c, i18n.T("Chain steps — speak, transcribe, translate, convert, normalize, export — and run up to 50 scripts or clips through them. Steps save as you go; a run you stop resumes where it stopped.")).
-			TextColor(t.TextMuted).MaxWidth(px(t, 520)).TextAlign(ui.Center)
+			TextColor(tok(t).Text2).MaxWidth(px(t, 520)).TextAlign(ui.Center)
 		if !a.wfLoaded {
 			return
 		}
-		ui.Row(c).Gap(px(t, 8)).Wrap().Justify(ui.Center).MaxWidth(px(t, 640)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).Wrap().Justify(ui.Center).MaxWidth(px(t, 640)).Children(func() {
 			if primaryButton(c.Key("wf-empty-new"), i18n.T("New workflow")).Clicked() {
 				a.wfNew("")
 			}
@@ -127,9 +209,10 @@ func (a *app) wfEmpty(c *ui.Context) {
 // wfRail is the library, the templates and the step palette.
 func (a *app) wfRail(c *ui.Context) {
 	t := c.Theme()
+	kt := tok(t)
 	ui.Row(c).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, i18n.T("Workflows")).Bold().Grow(1)
-		ui.MenuButton(c.Key("wf-add"), "+", func(m *ui.Menu) {
+		ui.Text(c, i18n.T("Workflows")).FontSize(px(t, fsCaption)).FontWeight(600).TextColor(kt.Text2).Grow(1)
+		iconButton(c.Key("wf-add"), icons.AddCircle, i18n.T("New workflow")).Menu(func(m *ui.Menu) {
 			if m.Item(i18n.T("New workflow")).Chosen() {
 				a.wfNew("")
 			}
@@ -139,27 +222,29 @@ func (a *app) wfRail(c *ui.Context) {
 					a.wfNew(tp.ID)
 				}
 			}
-		}).Label(i18n.T("New workflow"))
+		})
 	})
 	if a.wfLoaded && len(a.wfList) == 0 {
-		ui.Text(c, i18n.T("No workflows yet.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, i18n.T("No workflows yet."))
 	}
 	ui.Column(c.Key("wf-list")).Gap(2).Children(func() {
 		for _, r := range a.wfList {
 			a.wfListRow(c, r)
 		}
 	})
-	ui.Divider(c)
-	ui.Text(c, i18n.X("workflow", "Steps")).Bold()
-	ui.Text(c, i18n.T("Click to add after the selected step, or drag onto the canvas.")).FontSize(px(t, 11.5)).TextColor(t.TextMuted)
+	ui.Box(c).Height(1).Background(kt.Line).Margin(px(t, sp1), 0)
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, i18n.X("workflow", "Steps")).FontSize(px(t, fsCaption)).FontWeight(600).TextColor(kt.Text2).Grow(1)
+		infoTip(c.Key("wf-steps-info"), i18n.T("Click to add after the selected step, or drag onto the canvas."))
+	})
 	locked := a.wfLocked()
 	ui.Column(c.Key("wf-palette")).Gap(4).Children(func() {
 		for _, k := range workflow.Kinds {
 			kk := k
 			b := ui.ButtonBase(c.Key("wf-pal-" + string(k))).Label(i18n.T("Add %s", k.Label())).Tooltip(k.About()).Disabled(locked)
-			b.Padding(px(t, 5), px(t, 8)).Radius(8).Gap(px(t, 8)).AlignItems(ui.Center)
+			b.Padding(px(t, 5), px(t, 8)).Radius(px(t, radiusControl)).Gap(px(t, sp2)).AlignItems(ui.Center)
 			if b.Hovered() && !locked {
-				b.Background(t.SurfaceHover)
+				b.Background(kt.Hover)
 			}
 			if !locked {
 				b.Drag(kk)
@@ -192,21 +277,26 @@ func (a *app) wfListRow(c *ui.Context, r store.WorkflowRecord) {
 		}
 		return
 	}
-	row := ui.ButtonBase(c.Key("wf-row-"+id)).Label(r.Name).Padding(px(t, 6), px(t, 8)).Radius(8).Gap(px(t, 6)).AlignItems(ui.Center)
+	k := tok(t)
+	row := ui.ButtonBase(c.Key("wf-row-"+id)).Label(r.Name).Padding(px(t, 4), px(t, 4), px(t, 4), px(t, 8)).Radius(px(t, radiusControl)).Gap(px(t, 6)).AlignItems(ui.Center)
+	hovered := row.Hovered()
 	switch {
 	case open:
-		row.Background(t.Selection)
-	case row.Hovered():
-		row.Background(t.SurfaceHover)
+		row.Background(k.Pressed)
+	case hovered:
+		row.Background(k.Hover)
 	}
 	row.Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, firstOf(r.Name, i18n.T("Untitled workflow"))).FontSize(px(t, 13)).SingleLine().Ellipsis("…")
+			name := ui.Text(c, firstOf(r.Name, i18n.T("Untitled workflow"))).SingleLine().Ellipsis("…").MinWidth(0)
+			if open {
+				name.FontWeight(600)
+			}
 			if s := wfRecordState(r); s != "" {
-				ui.Text(c, s).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine()
+				ui.Text(c, s).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine()
 			}
 		})
-		ui.Button(c.Key("wf-row-menu-"+id), "⋯").Menu(func(m *ui.Menu) {
+		moreMenu(c.Key("wf-row-menu-"+id), "", func(m *ui.Menu) {
 			if m.Item(i18n.T("Rename")).Chosen() {
 				a.wfRenaming, a.wfRenameTx = id, r.Name
 			}
@@ -220,7 +310,7 @@ func (a *app) wfListRow(c *ui.Context, r store.WorkflowRecord) {
 			if m.Item(i18n.T("Delete")).Chosen() {
 				a.wfConfirm, a.wfAsk = id, true
 			}
-		}).Label(i18n.T("More actions"))
+		})
 	})
 	if row.Clicked() && !open {
 		a.wfOpen(id)
@@ -266,33 +356,42 @@ func wfRecordState(r store.WorkflowRecord) string {
 func (a *app) wfToolbar(c *ui.Context) {
 	t := c.Theme()
 	rep := a.wfReport()
-	ui.Row(c.Key("wf-toolbar")).Padding(px(t, 6), px(t, 12)).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("wf-toolbar")).Padding(px(t, sp1), px(t, sp3)).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 		if n := rep.Errors(); n > 0 {
-			if ui.Button(c.Key("wf-errors"), i18n.N(n, "%d problem", "%d problems", n)).TextColor(t.Danger).Clicked() {
+			label := i18n.N(n, "%d problem", "%d problems", n)
+			b := ghostBase(c.Key("wf-errors")).Padding(px(t, 4), px(t, 8)).Gap(px(t, sp1)).AlignItems(ui.Center).Label(label).Shrink(1).MinWidth(0)
+			b.Children(func() {
+				ui.Icon(c, icons.DangerCircle.Linear).Size(px(t, 14), px(t, 14)).TextColor(t.Danger)
+				ui.Text(c, label).FontSize(px(t, fsCaption)).TextColor(t.Danger).SingleLine().Ellipsis("…").MinWidth(0)
+			})
+			if b.Clicked() {
 				a.wfPanel = wfPanelRun
 			}
 		} else if a.wf != nil && len(a.wf.Nodes) > 0 {
-			ui.Text(c, i18n.N(rep.Items, "Ready · %d item", "Ready · %d items", rep.Items)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.N(rep.Items, "Ready · %d item", "Ready · %d items", rep.Items)).SingleLine().Ellipsis("…").MinWidth(0).Margin(0, 0, 0, px(t, sp1))
 		}
 		if a.wfLocked() && a.wfBusy() {
-			ui.Text(c, i18n.T("Locked while it runs")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			iconMark(c, icons.LockKeyhole, tok(t).Text2, i18n.T("Locked while it runs"))
 		}
 		ui.Box(c).Grow(1)
 		del := a.wfSel != "" || a.wfSelEdge != ""
-		if del && ui.Button(c.Key("wf-remove"), i18n.T("Remove")).Disabled(a.wfLocked()).
+		if del && iconButton(c.Key("wf-remove"), icons.TrashBinMinimalistic, i18n.T("Remove")).Disabled(a.wfLocked()).
 			Tooltip(i18n.T("Remove the selected step or link (Delete)")).Clicked() {
 			a.wfRemoveSelected()
 		}
-		if ui.Button(c.Key("wf-zoom-out"), "−").Label(i18n.T("Zoom out")).Tooltip(i18n.T("Zoom out (⌘−)")).Clicked() {
+		if iconButton(c.Key("wf-zoom-out"), icons.MagnifierZoomOut, i18n.T("Zoom out")).Tooltip(i18n.T("Zoom out (⌘−)")).Clicked() {
 			a.wfZoom(1 / 1.2)
 		}
-		if ui.Button(c.Key("wf-zoom-reset"), itoa(int(a.wf.View.Zoom*100+0.5))+"%").Label(i18n.T("Actual size")).Tooltip(i18n.T("Actual size (⌘0)")).Clicked() {
+		zoom := itoa(int(a.wf.View.Zoom*100+0.5)) + "%"
+		zb := ghostBase(c.Key("wf-zoom-reset")).Padding(px(t, 4), px(t, 6)).Label(i18n.T("Actual size")).Tooltip(i18n.T("Actual size (⌘0)"))
+		zb.Children(func() { ui.Text(c, zoom).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).SingleLine() })
+		if zb.Clicked() {
 			a.wfResetZoom()
 		}
-		if ui.Button(c.Key("wf-zoom-in"), "+").Label(i18n.T("Zoom in")).Tooltip(i18n.T("Zoom in (⌘=)")).Clicked() {
+		if iconButton(c.Key("wf-zoom-in"), icons.MagnifierZoomIn, i18n.T("Zoom in")).Tooltip(i18n.T("Zoom in (⌘=)")).Clicked() {
 			a.wfZoom(1.2)
 		}
-		if ui.Button(c.Key("wf-fit"), i18n.T("Fit")).Tooltip(i18n.T("Show every step")).Clicked() {
+		if iconButton(c.Key("wf-fit"), icons.FullScreenSquare, i18n.T("Fit")).Tooltip(i18n.T("Show every step")).Clicked() {
 			a.wfFit()
 		}
 	})

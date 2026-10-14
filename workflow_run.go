@@ -27,17 +27,19 @@ func (a *app) wfRunPanel(c *ui.Context) {
 	rep := a.wfReport()
 	run := a.wfRun
 	busy := a.wfBusy()
+	k := tok(t)
 	if a.wfErr != "" {
-		ui.Row(c.Key("wf-run-err")).Gap(px(t, 6)).Padding(px(t, 8)).Radius(6).Border(1, t.Danger).Children(func() {
-			ui.Text(c, a.wfErr).FontSize(px(t, 12)).TextColor(t.Danger).Grow(1).MinWidth(0)
-			if iconButton(c.Key("x"), icons.Close, i18n.T("Dismiss")).Clicked() {
-				a.wfErr = ""
-			}
+		ui.Column(c.Key("wf-run-err")).Children(func() {
+			banner(c, icons.DangerCircle, t.Danger, a.wfErr, func() {
+				if iconButton(c.Key("x"), icons.Close, i18n.T("Dismiss")).Clicked() {
+					a.wfErr = ""
+				}
+			})
 		})
 	}
 	// What stops a run.
 	if errs := rep.Errors(); errs > 0 {
-		ui.Text(c, i18n.N(errs, "%d problem to fix before running", "%d problems to fix before running", errs)).Bold().TextColor(t.Danger)
+		statusMark(c, icons.DangerCircle, t.Danger, i18n.N(errs, "%d problem to fix before running", "%d problems to fix before running", errs)).FontWeight(600)
 		for i, d := range rep.Diags {
 			if d.Severity != workflow.Error {
 				continue
@@ -47,17 +49,22 @@ func (a *app) wfRunPanel(c *ui.Context) {
 				label = n.StepName(n.Kind.Label()) + ": " + label
 			}
 			node := d.Node
-			if ui.ButtonBase(c.Key(fmt.Sprintf("wf-run-diag-%d", i))).Label(label).Children(func() {
-				ui.Text(c, "• "+label).FontSize(px(t, 12)).TextColor(t.Danger)
+			row := ui.ButtonBase(c.Key(fmt.Sprintf("wf-run-diag-%d", i))).Label(label).Padding(px(t, 3), px(t, 6)).Radius(px(t, 6)).Gap(px(t, sp2)).AlignItems(ui.Center)
+			if row.Hovered() {
+				row.Background(k.Hover)
+			}
+			if row.Children(func() {
+				statusDot(c, t.Danger)
+				ui.Text(c, label).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0)
 			}).Clicked() && node != "" {
 				a.wfSel, a.wfSelEdge, a.wfPanel = node, "", wfPanelStep
 			}
 		}
 	} else if run == nil || a.wfStale() {
-		ui.Text(c, i18n.N(rep.Items, "%d item to run", "%d items to run", rep.Items)).Bold()
+		ui.Text(c, i18n.N(rep.Items, "%d item to run", "%d items to run", rep.Items)).FontWeight(600)
 	}
 	if a.wfStale() && !busy {
-		ui.Text(c, i18n.T("Settings changed since the last run. Running again makes only what changed.")).FontSize(px(t, 12)).TextColor(t.Warning)
+		banner(c, icons.InfoCircle, k.Text2, i18n.T("Settings changed since the last run. Running again makes only what changed."), nil)
 	}
 	// Controls.
 	upToDate := run != nil && run.State == workflow.RunDone && !a.wfStale()
@@ -70,7 +77,7 @@ func (a *app) wfRunPanel(c *ui.Context) {
 		}
 		if upToDate {
 			// Every result is made: only a new run makes anything.
-			if primaryButton(c.Key("wf-run-again"), i18n.T("Start a new run")).
+			if ui.Button(c.Key("wf-run-again"), i18n.T("Start a new run")).
 				Tooltip(i18n.T("Make every result again, even those that are up to date")).Disabled(rep.Errors() > 0).Clicked() {
 				a.wfStart(true)
 			}
@@ -83,25 +90,24 @@ func (a *app) wfRunPanel(c *ui.Context) {
 		case run != nil && run.State == workflow.RunFailed && !a.wfStale():
 			label = i18n.T("Retry")
 		}
-		if primaryButton(c.Key("wf-run-go"), label).Disabled(rep.Errors() > 0).Clicked() {
+		if ui.Button(c.Key("wf-run-go"), label).Disabled(rep.Errors() > 0).Clicked() {
 			a.wfStart(false)
 		}
-		if run != nil && run.Signature != "" && ui.Button(c.Key("wf-run-again"), i18n.T("Start a new run")).
+		if run != nil && run.Signature != "" && ghostButton(c.Key("wf-run-again"), i18n.T("Start a new run")).
 			Tooltip(i18n.T("Make every result again, even those that are up to date")).Disabled(rep.Errors() > 0).Clicked() {
 			a.wfStart(true)
 		}
 	})
 	if run == nil || len(run.Items) == 0 {
-		ui.Text(c, i18n.T("Results show here as each item is made. A run you cancel, or that stops when AudioSmith quits, resumes where it stopped.")).
-			FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Results show here as each item is made. A run you cancel, or that stops when AudioSmith quits, resumes where it stopped."))
 		return
 	}
 	// Progress.
 	done, failed, total := run.Counts()
-	ui.Divider(c)
-	ui.Row(c).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, i18n.T("%d / %d items ready", done, total)).Bold().Grow(1)
-		ui.Text(c, wfRunStateText(run, busy)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	ui.Box(c).Height(1).Background(k.Line)
+	ui.Row(c).AlignItems(ui.Center).Gap(px(t, sp2)).Children(func() {
+		ui.Text(c, i18n.T("%d / %d items ready", done, total)).FontWeight(600).Grow(1).MinWidth(0)
+		caption(c, wfRunStateText(run, busy)).SingleLine()
 	})
 	ui.Progress(c, float64(done)/float64(max(total, 1))).Label(i18n.T("%d / %d items ready", done, total))
 	if j, ok := a.wfRunningJob(); ok {
@@ -110,20 +116,24 @@ func (a *app) wfRunPanel(c *ui.Context) {
 			if j.Progress.Message != "" {
 				msg += " · " + j.Progress.Message
 			}
-			ui.Text(c, msg).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, msg)
 		}
 	}
 	if failed > 0 {
-		ui.Text(c, i18n.N(failed, "%d item failed: fix it, then Retry.", "%d items failed: fix them, then Retry.", failed)).FontSize(px(t, 12)).TextColor(t.Danger)
+		ui.Text(c, i18n.N(failed, "%d item failed: fix it, then Retry.", "%d items failed: fix them, then Retry.", failed)).FontSize(px(t, fsCaption)).TextColor(t.Danger)
 	}
 	if run.Code != "" && !busy {
-		ui.Text(c, wfErrorText(run.Code, run.Err)).FontSize(px(t, 12)).TextColor(t.Danger)
+		ui.Text(c, wfErrorText(run.Code, run.Err)).FontSize(px(t, fsCaption)).TextColor(t.Danger)
 	}
 	outs := services.Outputs(w, run)
-	if len(outs) > 0 && ui.Button(c.Key("wf-export-all"), i18n.T("Export all…")).Tooltip(i18n.T("Copy every result into a folder")).Clicked() {
-		a.wfExportAll()
+	if len(outs) > 0 {
+		ui.Row(c).Children(func() {
+			if secondaryIconButton(c.Key("wf-export-all"), icons.Export, i18n.T("Export all…")).Label(i18n.T("Export all…")).Tooltip(i18n.T("Copy every result into a folder")).Clicked() {
+				a.wfExportAll()
+			}
+		})
 	}
-	ui.Divider(c)
+	ui.Box(c).Height(1).Background(k.Line)
 	for i := range run.Items {
 		a.wfItemRow(c, i, &run.Items[i], outs)
 	}
@@ -175,32 +185,38 @@ func (a *app) wfItemRow(c *ui.Context, i int, it *workflow.RunItem, outs []servi
 	key := it.Key
 	st := it.State()
 	open := a.wfExpanded[key]
-	ui.Column(c.Key("wf-item-"+key)).Gap(px(t, 4)).Padding(px(t, 6), 0).Children(func() {
-		head := ui.ButtonBase(c.Key("head")).Label(it.Name).Gap(px(t, 6)).AlignItems(ui.Center)
+	k := tok(t)
+	ui.Column(c.Key("wf-item-"+key)).Gap(px(t, sp1)).Padding(px(t, 2), 0).Children(func() {
+		head := ui.ButtonBase(c.Key("head")).Label(it.Name).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, 4), px(t, 6)).Radius(px(t, 6))
+		if head.Hovered() {
+			head.Background(k.Hover)
+		}
 		head.Children(func() {
-			mark, col := "○", t.TextMuted
-			switch st {
-			case workflow.StepDone:
-				mark, col = "✓", t.Success
-			case workflow.StepFailed:
-				mark, col = "✕", t.Danger
-			case workflow.StepRunning:
-				mark, col = "◐", t.Accent
-			}
-			ui.Text(c, mark).TextColor(col).Width(px(t, 14))
-			ui.Text(c, fmt.Sprintf("%02d", i+1)).FontSize(px(t, 11)).TextColor(t.TextMuted)
-			ui.Text(c, firstOf(it.Name, i18n.T("Item %d", i+1))).FontSize(px(t, 12.5)).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+			ui.Column(c).Size(px(t, 14), px(t, 14)).Center().Shrink(0).Children(func() {
+				switch st {
+				case workflow.StepDone:
+					iconMark(c, icons.CheckCircle, t.Success, i18n.T("Made"))
+				case workflow.StepFailed:
+					iconMark(c, icons.CloseCircle, t.Danger, i18n.T("Failed"))
+				case workflow.StepRunning:
+					ui.Spinner(c).Size(px(t, 12), px(t, 12)).Label(i18n.T("Running"))
+				default:
+					statusDot(c, k.G[5])
+				}
+			})
+			ui.Text(c, fmt.Sprintf("%02d", i+1)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.Text3)
+			ui.Text(c, firstOf(it.Name, i18n.T("Item %d", i+1))).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
 			if st == workflow.StepRunning {
 				for _, id := range a.wfOrder() {
 					if s := it.Steps[id]; s != nil && s.Status == workflow.StepRunning {
 						if n := w.Node(id); n != nil {
-							ui.Text(c, n.StepName(n.Kind.Label())).FontSize(px(t, 11)).TextColor(t.Accent).SingleLine()
+							ui.Text(c, n.StepName(n.Kind.Label())).FontSize(px(t, fsMicro)).TextColor(k.AccentInk).SingleLine()
 						}
 						break
 					}
 				}
 			}
-			ui.Text(c, map[bool]string{true: "▾", false: "▸"}[open]).TextColor(t.TextMuted)
+			ui.Icon(c, map[bool]icons.Icon{true: icons.AltArrowDown, false: icons.AltArrowRight}[open].Linear).Size(px(t, 12), px(t, 12)).TextColor(k.Text3)
 		})
 		if head.Clicked() {
 			a.wfExpanded[key] = !open
@@ -212,7 +228,7 @@ func (a *app) wfItemRow(c *ui.Context, i int, it *workflow.RunItem, outs []servi
 			if s == nil || n == nil || s.Status != workflow.StepFailed {
 				continue
 			}
-			ui.Text(c, n.StepName(n.Kind.Label())+": "+wfErrorText(s.Code, s.Err)).FontSize(px(t, 11.5)).TextColor(t.Danger).MaxLines(3)
+			ui.Text(c, n.StepName(n.Kind.Label())+": "+wfErrorText(s.Code, s.Err)).FontSize(px(t, fsMicro)).TextColor(t.Danger).MaxLines(3).Margin(0, 0, 0, px(t, 28))
 		}
 		if !open && st != workflow.StepDone {
 			return
@@ -231,10 +247,10 @@ func (a *app) wfItemRow(c *ui.Context, i int, it *workflow.RunItem, outs []servi
 					continue
 				}
 				for _, wcode := range s.Warnings {
-					ui.Text(c, n.StepName(n.Kind.Label())+": "+wfWarningText(wcode)).FontSize(px(t, 11)).TextColor(t.Warning)
+					ui.Text(c, n.StepName(n.Kind.Label())+": "+wfWarningText(wcode)).FontSize(px(t, fsMicro)).TextColor(t.Warning).Margin(0, 0, 0, px(t, 28))
 				}
 				if s.Status == workflow.StepSkipped && s.Code == workflow.SkipBranch {
-					ui.Text(c, i18n.T("%s: not on this item's branch", n.StepName(n.Kind.Label()))).FontSize(px(t, 11)).TextColor(t.TextMuted)
+					ui.Text(c, i18n.T("%s: not on this item's branch", n.StepName(n.Kind.Label()))).FontSize(px(t, fsMicro)).TextColor(k.Text2).Margin(0, 0, 0, px(t, 28))
 				}
 			}
 		}
@@ -253,8 +269,9 @@ func (a *app) wfOutputRow(c *ui.Context, j int, o services.WorkflowOutput) {
 		return
 	}
 	path := a.wfSvc.Path(w.ID, o.Value.File)
-	ui.Column(c.Key(fmt.Sprintf("wf-out-%d", j))).Gap(px(t, 3)).Padding(px(t, 6), px(t, 8)).Radius(6).Background(t.Background).Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+	ui.Column(c.Key(fmt.Sprintf("wf-out-%d", j))).Gap(px(t, 2)).Padding(px(t, 4), px(t, 4), px(t, 4), px(t, 10)).Radius(px(t, radiusControl)).
+		Background(tok(t).Subtle).Margin(0, 0, 0, px(t, 22)).Children(func() {
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			label := n.StepName(n.Kind.Label())
 			switch o.Value.Type {
 			case workflow.TypeAudio:
@@ -262,14 +279,14 @@ func (a *app) wfOutputRow(c *ui.Context, j int, o services.WorkflowOutput) {
 			default:
 				label += " · " + i18n.N(o.Value.Chars, "%d character", "%d characters", o.Value.Chars)
 			}
-			ui.Text(c, label).FontSize(px(t, 11.5)).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine()
+			ui.Text(c, label).FontSize(px(t, fsMicro)).TextColor(tok(t).Text2).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			if o.Value.Type == workflow.TypeAudio {
 				id := "wf:" + o.Item + ":" + o.Node
-				play := "▶"
+				tip, ic := i18n.T("Play"), icons.Play
 				if a.pl.Playing(id) {
-					play = "❚❚"
+					tip, ic = i18n.T("Pause"), icons.Pause
 				}
-				if ui.Button(c.Key("play"), play).Label(i18n.T("Play")).Tooltip(i18n.T("Play")).Clicked() {
+				if iconButton(c.Key("play"), ic, tip).Clicked() {
 					src := path
 					if strings.HasSuffix(strings.ToLower(path), ".m4a") {
 						// The player reads WAV: play what was encoded.
@@ -282,12 +299,12 @@ func (a *app) wfOutputRow(c *ui.Context, j int, o services.WorkflowOutput) {
 					}
 				}
 			}
-			if a.win != nil && ui.Button(c.Key("reveal"), i18n.T("Show in Finder")).Clicked() {
+			if a.win != nil && iconButton(c.Key("reveal"), icons.FolderOpen, i18n.T("Show in Finder")).Clicked() {
 				mygo.Shell.ShowItemInFolder(path)
 			}
 		})
 		if o.Value.Type != workflow.TypeAudio && o.Value.Text != "" {
-			ui.Text(c, o.Value.Text).FontSize(px(t, 12)).MaxLines(4).Ellipsis("…").Selectable()
+			ui.Text(c, o.Value.Text).FontSize(px(t, fsCaption)).MaxLines(4).Ellipsis("…").Selectable()
 		}
 	})
 }
