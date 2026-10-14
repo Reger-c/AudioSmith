@@ -74,6 +74,9 @@ func (a *app) pillView(c *ui.Context) {
 	th := *ui.DarkTheme()
 	styleTheme(&th) // the design's dark tokens (ui_tokens.go)
 	c.SetTheme(&th)
+	// The root draws the theme's background unless told not to: in this
+	// transparent window only the pill may show (MyGo docs/ui/windows.md).
+	c.Root().Background(ui.Transparent)
 	if a.win == nil {
 		c.DisableAnimations()
 	}
