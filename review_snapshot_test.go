@@ -122,3 +122,47 @@ func TestSnapshotsReview(t *testing.T) {
 	}
 	_ = ui.Cmd
 }
+
+// TestSnapshotsAccents renders the Studio while it renders (progress, the
+// playing take, a switch on, the focus) with each candidate accent, light
+// and dark, for the design review to pick one.
+func TestSnapshotsAccents(t *testing.T) {
+	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
+	if out == "" {
+		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
+	}
+	os.MkdirAll(out, 0o755)
+	t.Cleanup(func() { setAccent("blue") })
+	for _, name := range []string{"blue", "indigo", "teal"} {
+		for _, dark := range []bool{false, true} {
+			setAccent(name)
+			a, eng, tt := newTestApp(t)
+			tt.SetDark(dark)
+			tt.SetScale(2)
+			at := time.Date(2026, 10, 13, 21, 50, 0, 0, time.Local)
+			tk := core.Take{ID: "T1", CreatedAt: at, Text: "Hello", Model: kokoro, Voice: "af_heart", Speed: 1, SampleRate: 24000,
+				AudioSeconds: 2.4, GenSeconds: 0.6, Render: &core.TakeRender{Bits: 24, Channels: 1, Bytes: 172844, Master: services.MasterDefault}}
+			addTake(t, a, tk, 2.4)
+			a.lastClipID = "T1"
+			a.text = "Welcome back to the show.[pause 500ms] Today we talk about 3 things."
+			a.autoplay = true
+			a.generate()
+			req := eng.last(t)
+			eng.progress(req.ID, "generating", 0.62, 9.6)
+			a.toasts = nil
+			suffix := "light"
+			if dark {
+				suffix = "dark"
+			}
+			tt.Frame()
+			tt.Frame()
+			f, err := os.Create(filepath.Join(out, "accent-"+name+"-"+suffix+".png"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			png.Encode(f, tt.Image())
+			f.Close()
+			eng.cancelled(req.ID)
+		}
+	}
+}

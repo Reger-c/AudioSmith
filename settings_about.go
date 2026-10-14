@@ -25,6 +25,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/store/sqlitestore"
 )
@@ -354,6 +355,11 @@ func (a *app) aboutSettings(c *ui.Context) {
 	})
 	ui.Text(c, i18n.T("AudioSmith runs every model on this Mac. Each model keeps its own licence: see Settings → Models and downloads.")).
 		FontSize(px(t, 12)).TextColor(t.TextMuted)
+	// 0.3: the icons' attribution (CC BY 4.0; NOTICE has it too).
+	ui.Row(c.Key("about-icons")).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
+		caption(c, i18n.T("Icons: Solar by 480 Design, under CC BY 4.0 (@iconify-json/solar %s).", icons.SolarVersion))
+		ui.Link(c, i18n.T("Licence"), "https://creativecommons.org/licenses/by/4.0/").FontSize(px(t, fsCaption))
+	})
 
 	sectionTitle(c, i18n.T("Self-check"))
 	settingRow(c, "about-check", i18n.T("Check AudioSmith"), i18n.T("The library, the engine, the folders, the network, the Keychain, ffmpeg and the permissions."), func() {
