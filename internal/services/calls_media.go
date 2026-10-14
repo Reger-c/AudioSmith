@@ -206,7 +206,7 @@ func (s *Calls) speak(ctx context.Context, callID string, recipe core.Take, out 
 	info := s.cfg.Takes.model(t.Model)
 	output := filepath.Join(dir, t.File)
 	defer os.Remove(output)
-	params, err := json.Marshal(RenderParams{Take: t, Lang: info.Lang(t.Language, t.Voice), Output: output, Stream: true})
+	params, err := json.Marshal(RenderParams{Take: t, Lang: info.Lang(t.Language, t.Voice), Output: output, Stream: true, NoWatermark: true})
 	if err != nil {
 		return err
 	}
