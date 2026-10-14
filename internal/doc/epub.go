@@ -69,7 +69,7 @@ func extractEPUB(ctx context.Context, r io.ReaderAt, size int64, lim Limits) (*D
 		return nil, err
 	}
 	var pkg opfPackage
-	if err := newXMLDecoder(raw).Decode(&pkg); err != nil {
+	if err := newXMLDataDecoder(raw).Decode(&pkg); err != nil {
 		return nil, fmt.Errorf("%w: package document: %v", ErrCorrupt, err)
 	}
 	doc := &Document{Format: EPUB}
@@ -209,7 +209,7 @@ func epubRootfile(z *zipBox) (string, error) {
 			MediaType string `xml:"media-type,attr"`
 		} `xml:"rootfiles>rootfile"`
 	}
-	if err := newXMLDecoder(b).Decode(&c); err != nil || len(c.Rootfiles) == 0 {
+	if err := newXMLDataDecoder(b).Decode(&c); err != nil || len(c.Rootfiles) == 0 {
 		return "", fmt.Errorf("%w: bad container.xml", ErrCorrupt)
 	}
 	for _, rf := range c.Rootfiles {
@@ -279,7 +279,7 @@ func parseNav(b []byte, navFile string) ([]tocEntry, map[string]string) {
 // parseNCX reads an EPUB 2 NCX navMap in document order.
 func parseNCX(b []byte, ncxFile string) []tocEntry {
 	var toc []tocEntry
-	d := newXMLDecoder(b)
+	d := newXMLDataDecoder(b)
 	type point struct {
 		label string
 		src   string

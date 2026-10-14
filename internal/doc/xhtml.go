@@ -29,6 +29,16 @@ func newXMLDecoder(b []byte) *xml.Decoder {
 	return d
 }
 
+// newXMLDataDecoder is newXMLDecoder for XML that is not HTML: an EPUB's
+// package document, container and NCX. HTML's void elements must not
+// apply there: EPUB 3 requires <meta property="dcterms:modified">…</meta>,
+// which HTML's auto-closing <meta> turns into a syntax error.
+func newXMLDataDecoder(b []byte) *xml.Decoder {
+	d := newXMLDecoder(b)
+	d.AutoClose = nil
+	return d
+}
+
 // htmlText is the text of an XHTML content document as paragraphs, plus
 // its headings.
 type htmlText struct {

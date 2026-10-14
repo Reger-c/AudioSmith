@@ -82,7 +82,7 @@ Measured on a MacBook Air M4 (24 GB):
 
 | What | Result |
 |---|---|
-| Kokoro | renders 5–10× real time; 10,000 Chinese characters → 33 min of audio in 17 s |
+| Kokoro | renders about 5–6× real time: 10,000 Chinese characters → about 33 min of audio in under 6 min; re-rendering unchanged text is near-instant (chunk cache) |
 | Qwen3-ASR dictation | 0.2–0.33 s for 5 s of speech |
 | Qwen3 4B | 40 tokens/s |
 | HTDemucs | 10× real time |

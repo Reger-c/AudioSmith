@@ -145,7 +145,8 @@ func xhtml(title, body string) string {
 
 func TestEPUB3(t *testing.T) {
 	opf := `<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-<dc:title>The Lighthouse</dc:title><dc:creator>A. Writer</dc:creator><dc:language>en</dc:language></metadata>
+<dc:title>The Lighthouse</dc:title><dc:creator>A. Writer</dc:creator><dc:language>en</dc:language>
+<meta property="dcterms:modified">2026-10-14T00:00:00Z</meta><meta name="cover" content="cover-image"/></metadata>
 <manifest><item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
 <item id="copy" href="text/copyright.xhtml" media-type="application/xhtml+xml"/>
