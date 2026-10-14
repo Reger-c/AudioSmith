@@ -612,8 +612,9 @@ func smokeTTS(t *testing.T, e catalog.Entry, snap, ref string, refSeconds float6
 			r.Note = err.Error()
 		case res.AudioSeconds < c.minSeconds || res.AudioSeconds > 30:
 			r.Note = fmt.Sprintf("%.2f s of audio", res.AudioSeconds)
-		case e.Has(catalog.CapStream) && (lastChunks < 2 || lastFirstChunk.Seconds() > 0.7*res.Seconds+0.3):
-			// Streaming means the first audio comes well before the take ends.
+		case p.Stream && e.Has(catalog.CapStream) && (lastChunks < 2 || lastFirstChunk.Seconds() > 0.7*res.Seconds+0.3):
+			// Streaming means the first audio comes well before the take
+			// ends. Only the cases that ask for it (en) are held to it.
 			r.Note = fmt.Sprintf("not streaming: %d chunks, the first after %.2f s of %.2f s", lastChunks, lastFirstChunk.Seconds(), res.Seconds)
 		case c.name == "duration" && math.Abs(res.AudioSeconds-4) > 0.25:
 			r.Note = fmt.Sprintf("duration 4 gave %.2f s", res.AudioSeconds)
