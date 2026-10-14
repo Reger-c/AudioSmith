@@ -236,7 +236,6 @@ func (a *app) galleryJobDone(j jobs.Job) {
 // useArchetype saves an archetype as a designed voice (once: a second use
 // finds the voice it saved) and opens it in Design, or the Studio.
 func (a *app) useArchetype(arch gallery.Archetype, inStudio bool) {
-	g := &a.gallery
 	done := func(v *core.Voice) {
 		if inStudio {
 			a.useVoiceInStudio(v)
@@ -244,6 +243,13 @@ func (a *app) useArchetype(arch gallery.Archetype, inStudio bool) {
 			a.openDesignFor(v)
 		}
 	}
+	a.useArchetypeThen(arch, done)
+}
+
+// useArchetypeThen saves an archetype as a designed voice (once) and hands
+// it to done (M3: Use in Stories, Narrate an audiobook).
+func (a *app) useArchetypeThen(arch gallery.Archetype, done func(*core.Voice)) {
+	g := &a.gallery
 	origin := "gallery:" + arch.ID
 	for i := range a.voices {
 		if a.voices[i].Origin == origin {

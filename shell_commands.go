@@ -38,6 +38,7 @@ func (a *app) commands() []command {
 	for i, p := range pages {
 		add("go"+p.path, nav, pageTitle(p.path), p.title, "⌘"+itoa(i+1), true, func() { a.navigate(p.path) })
 	}
+	a.longformCommands(nav, add) // M3: Stories, Audiobook, Projects (longform_pages.go, thread #18)
 	add("go/settings", nav, i18n.T("Settings"), "Settings", "⌘,", true, func() { a.navigate("/settings") })
 	for _, s := range settingsSections() {
 		add("go/settings/"+s.id, i18n.T("Settings"), s.title, s.en, "", true, func() { a.navigate("/settings/" + s.id) })

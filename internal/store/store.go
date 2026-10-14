@@ -22,6 +22,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -39,6 +40,11 @@ type Store interface {
 	// settings.Settings document) and "draft:<page>" (core.DraftService).
 	Documents() Documents
 	Favorites() Favorites
+	// Renders and Exports are the longform renders and the export
+	// records (M3); Library searches every kind of record at once.
+	Renders() Renders
+	Exports() Exports
+	Library() Library
 	Jobs() jobs.Store
 	Close() error
 }
@@ -86,6 +92,90 @@ type Projects interface {
 	Get(ctx context.Context, id string) (core.Project, error)
 	List(ctx context.Context, kind core.ProjectKind, search string) ([]core.Project, error)
 	Delete(ctx context.Context, id string) error
+	// PutSummary stores what the library shows of a project without
+	// reading its body (JSON: lines, words, voices…), and its segments:
+	// they replace the project's segments, so "where this voice has been
+	// used" counts them. A segment's voice that no longer exists is kept
+	// as none.
+	PutSummary(ctx context.Context, id string, summary []byte, segs []Segment) error
+}
+
+// Segment is a row of a project's segments (story lines, audiobook
+// chapters, dub cues): what it says and with which voice.
+type Segment struct {
+	ID      string
+	Ord     float64
+	Text    string
+	Speaker string
+	VoiceID string
+}
+
+// RenderQuery selects renders: the zero value is every render but
+// auditions, newest first.
+type RenderQuery struct {
+	ProjectID string
+	States    []core.RenderState
+	Auditions bool // include auditions
+	Limit     int
+}
+
+// Renders stores longform renders (core.Render).
+type Renders interface {
+	Put(ctx context.Context, r core.Render) error
+	Get(ctx context.Context, id string) (core.Render, error)
+	List(ctx context.Context, q RenderQuery) ([]core.Render, error)
+	Delete(ctx context.Context, id string) error
+}
+
+// Exports stores export records (core.Export).
+type Exports interface {
+	Put(ctx context.Context, e core.Export) error
+	Get(ctx context.Context, id string) (core.Export, error)
+	// List returns the records whose title or path matches search ("" =
+	// all), newest first; limit 0 = no limit.
+	List(ctx context.Context, search string, limit int) ([]core.Export, error)
+	Delete(ctx context.Context, id string) error
+}
+
+// Library categories: the filters of the Projects page.
+const (
+	LibAll        = ""
+	LibDub        = "dub"
+	LibStory      = "story"
+	LibAudiobook  = "audiobook"
+	LibVoice      = "voice"
+	LibTranscript = "transcript"
+	LibTake       = "take"
+	LibExport     = "export"
+)
+
+// LibraryQuery selects library items.
+type LibraryQuery struct {
+	Category string // a Lib* category; "" = all
+	Search   string // full text over titles, scripts, names, paths
+	Limit    int    // 0 = no limit
+	Offset   int
+}
+
+// LibraryItem is one row of the library: a project, a finished render, a
+// voice, a take or an export record.
+type LibraryItem struct {
+	Source   string // "project", "render", "voice", "take", "export"
+	ID       string
+	Category string // the Lib* category it is listed under
+	Title    string
+	// Detail is a second line chosen by source: a project's summary JSON,
+	// a render's state, a voice's kind, a take's model, an export's path.
+	Detail  string
+	Updated time.Time
+}
+
+// Library searches across the stores.
+type Library interface {
+	Search(ctx context.Context, q LibraryQuery) ([]LibraryItem, error)
+	// Counts returns how many items each category has for search (the
+	// key "" is the total).
+	Counts(ctx context.Context, search string) (map[string]int, error)
 }
 
 // Licences stores licence acceptances.
