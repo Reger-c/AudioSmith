@@ -30,46 +30,33 @@ command                 # palette
 keyboard                # shortcuts
 programming             # API reference
 
-# Actions.
+# Actions. (Add the icons a page needs here; see research/ui-design-spec.md §5.)
 menu-dots               # overflow "⋯"
 close-circle            # dismiss
 close                   # close, remove
 add-circle              # insert, add
-add
 info-circle             # ⓘ info tooltip
-question-circle
 danger-triangle         # warning
 danger-circle           # error
 check-circle            # success
 play
 pause
-stop
-record-circle           # record
 star
 export                  # save as, export
 import                  # import
 download-minimalistic   # download
-upload-minimalistic
 folder-open             # show in Finder
 copy
-pen                     # edit
-trash-bin-minimalistic  # delete
 restart                 # restart, retry
 refresh
 alt-arrow-down          # chevrons
 alt-arrow-left
 alt-arrow-right
 alt-arrow-up
-double-alt-arrow-left
-double-alt-arrow-right
 check
 tuning-2                # voice controls
 tuning-square-2         # audio quality
-sidebar-code            # inspector toggle
 panel-right             # inspector toggle
-eye
-link
-paperclip
 
 # Workflow step kinds and media.
 file-text               # start (script)
@@ -79,7 +66,6 @@ transfer-horizontal     # convert
 volume-loud             # speak
 branching-paths-up      # condition
 pulse-2                 # normalize
-headphones-round-sound
 
 # Settings sections.
 pallete-2               # appearance
