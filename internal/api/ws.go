@@ -382,4 +382,3 @@ func (s *Server) wsSpeak(ctx context.Context, c *wsConn, req wsRequest, client s
 	return c.writeJSON(map[string]any{"type": "done", "take_id": res.Take.ID, "job_id": sp.JobID, "audio_seconds": res.Take.AudioSeconds,
 		"gen_seconds": round2(wall), "ttfa_ms": ttfa.Milliseconds(), "rtf": rtf, "seed": res.Take.Seed}) == nil
 }
-

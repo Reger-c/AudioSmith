@@ -369,7 +369,9 @@ func (s *Server) encode(ctx context.Context, in, out string) error {
 // --- transcriptions and translations -------------------------------------
 
 // v1Transcriptions is POST /v1/audio/transcriptions.
-func (s *Server) v1Transcriptions(w http.ResponseWriter, r *http.Request) { s.v1Transcribe(w, r, false) }
+func (s *Server) v1Transcriptions(w http.ResponseWriter, r *http.Request) {
+	s.v1Transcribe(w, r, false)
+}
 
 // v1Translations is POST /v1/audio/translations: speech in any language
 // to English text.

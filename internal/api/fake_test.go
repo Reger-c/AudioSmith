@@ -269,7 +269,9 @@ func (f *fakeBackend) Take(ctx context.Context, id string) (core.Take, error) {
 	return t, nil
 }
 
-func (f *fakeBackend) TakeAudio(t core.Take) string { return filepath.Join(f.dir, "clips", t.ID+".wav") }
+func (f *fakeBackend) TakeAudio(t core.Take) string {
+	return filepath.Join(f.dir, "clips", t.ID+".wav")
+}
 
 func (f *fakeBackend) DeleteTake(ctx context.Context, id string) error {
 	f.mu.Lock()

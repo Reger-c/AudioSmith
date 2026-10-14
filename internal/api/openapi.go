@@ -3,11 +3,11 @@ package api
 import (
 	"bytes"
 	"cmp"
-	"slices"
 	_ "embed"
 	"encoding/json"
 	"net/http"
 	"path"
+	"slices"
 	"strings"
 	"time"
 )
