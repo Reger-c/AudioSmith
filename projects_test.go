@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
@@ -169,5 +170,38 @@ func TestVoiceUsageLinksToProjects(t *testing.T) {
 	a.useVoiceInStories(&v)
 	if n := len(a.lfStories.doc.Cast); n != 1 || a.lfStories.doc.Cast[0].Voice != v.ID {
 		t.Errorf("cast %+v", a.lfStories.doc.Cast)
+	}
+}
+
+// The gallery's "Use in Stories" saves the archetype and casts it.
+func TestGalleryUseInStories(t *testing.T) {
+	a, _ := newVoiceTestApp(t)
+	acceptLicences(t, a)
+	tt := ui.NewTester(a.view, 1200, 1800)
+	a.navigate("/gallery")
+	tt.Frame()
+	tt.Click("More actions")
+	if err := tt.ChooseMenuItem("Use in Stories"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(a.voices) != 1 || a.router.Path() != "/stories" {
+		t.Fatalf("%d voices, %s", len(a.voices), a.router.Path())
+	}
+	p := a.lfStories
+	if len(p.doc.Cast) != 1 || p.doc.Cast[0].Voice != a.voices[0].ID || p.doc.Model != omni {
+		t.Errorf("cast %+v, model %s", p.doc.Cast, p.doc.Model)
+	}
+	// Narrate an audiobook, from the voice editor's menu.
+	a.openVoiceEditor(a.voices[0].ID)
+	tt.Frame()
+	if err := tt.Click("More actions"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Narrate an audiobook"); err != nil {
+		t.Fatal(err)
+	}
+	if a.lfBook.doc.Voice != a.voices[0].ID || a.router.Path() != "/audiobook" {
+		t.Errorf("narrator %q on %s", a.lfBook.doc.Voice, a.router.Path())
 	}
 }

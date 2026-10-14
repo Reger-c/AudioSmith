@@ -29,7 +29,10 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/engine"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
 )
@@ -122,9 +125,15 @@ func (a *app) openLongform(lib *library) {
 	a.lfBook.ed = newManuscriptEditor()
 	a.lfRenders = map[string]*lfRender{}
 	a.lfAuditions = map[string]lfAudition{}
+	host := a.eng
+	lib.useEncoder(func() jobs.Executor {
+		if host == nil || host.sup == nil || !slices.Contains(engine.ExecutorKinds, services.KindEncode) {
+			return nil
+		}
+		return engine.Executor(host.sup, proto.RoleMedia, services.KindEncode)
+	})
 	if a.lfEncode == nil {
-		svc := lib.svc.Longform
-		a.lfEncode = svc.EncodeSupported
+		a.lfEncode = a.engineEncodes
 	}
 	core.On(lib.bus, func(ev core.RenderChanged) { a.post(func() { a.renderChanged(ev) }) })
 	core.On(lib.bus, func(ev core.ProjectChanged) { a.post(func() { a.projectChanged(ev) }) })
@@ -241,6 +250,41 @@ func (a *app) compileLf(p *lfPage) {
 	} else {
 		p.stats = services.StatsOf(services.StoryScript(d.Lines), d.Speed)
 	}
+}
+
+// --- the encoder -------------------------------------------------------------
+
+// useEncoder gives books the engine's media.encode executor (nil while
+// the engine has none).
+func (l *library) useEncoder(fn func() jobs.Executor) {
+	l.synthMu.Lock()
+	l.encode = fn
+	l.synthMu.Unlock()
+}
+
+func (l *library) encodeExecutor() jobs.Executor {
+	l.synthMu.Lock()
+	fn := l.encode
+	l.synthMu.Unlock()
+	if fn == nil {
+		return nil
+	}
+	return fn()
+}
+
+// engineEncodes reports whether the engine side runs media.encode: the
+// Go executors know the method and, once the media worker said hello,
+// it lists it. (Thread #14 adds it; until then books are WAV.)
+func (a *app) engineEncodes() bool {
+	if !slices.Contains(engine.ExecutorKinds, services.KindEncode) {
+		return false
+	}
+	for _, w := range a.workers {
+		if w.Role == proto.RoleMedia && w.Hello != nil && !slices.Contains(w.Hello.Methods, services.KindEncode) {
+			return false
+		}
+	}
+	return true
 }
 
 // --- voices ----------------------------------------------------------------
@@ -848,6 +892,29 @@ func (a *app) lfFitModel(p *lfPage, v *core.Voice) {
 			return
 		}
 	}
+}
+
+// longformVoiceItems adds Use in Stories and Narrate an audiobook to a
+// voice menu; use hands the voice (saved first, for an archetype) on.
+func (a *app) longformVoiceItems(m *ui.Menu, use func(then func(*core.Voice))) {
+	if m.Item(i18n.T("Use in Stories")).Chosen() {
+		use(a.useVoiceInStories)
+	}
+	if m.Item(i18n.T("Narrate an audiobook")).Chosen() {
+		use(a.useVoiceInAudiobook)
+	}
+}
+
+// voiceLongformMenu is the voice editor's "More" menu with them.
+func (a *app) voiceLongformMenu(c *ui.Context, v *core.Voice) {
+	id := v.ID
+	ui.Button(c.Key("editor-longform"), "⋯").Label(i18n.T("More actions")).Menu(func(m *ui.Menu) {
+		a.longformVoiceItems(m, func(then func(*core.Voice)) {
+			if v := a.findVoice(id); v != nil {
+				then(v)
+			}
+		})
+	})
 }
 
 // projectUsageLink is a project in a voice's "Where this voice has been

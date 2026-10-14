@@ -218,6 +218,7 @@ func (a *app) voiceEditor(c *ui.Context) {
 				a.askDeleteVoice(v.ID)
 			}
 			ui.Box(c).Grow(1)
+			a.voiceLongformMenu(c, v) // M3: Use in Stories, Narrate an audiobook (longform.go, thread #18)
 			if ui.Button(c.Key("editor-studio"), i18n.T("Use in Studio")).Clicked() {
 				a.useVoiceInStudio(v)
 			}

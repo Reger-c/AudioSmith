@@ -57,6 +57,7 @@ type library struct {
 
 	synthMu sync.Mutex
 	synth   func() jobs.Executor // the engine's tts.synthesize, for renders (useEngine)
+	encode  func() jobs.Executor // M3: the engine's media.encode, for M4B books (useEncoder, longform.go)
 }
 
 // libraryOptions adjust openLibrary for tests.
@@ -125,6 +126,7 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 		Models:    modelInfo,
 		CacheDir:  cacheDir,
 		KeepTakes: func() int { return l.settings.Get().Studio.KeepTakes },
+		Encode:    l.encodeExecutor, // M3: longform.go
 	})
 	async := o.Async
 	if async == nil {
