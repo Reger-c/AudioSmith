@@ -40,6 +40,7 @@ func (a *app) commands() []command {
 	}
 	a.longformCommands(nav, add) // M3: Stories, Audiobook, Projects (longform_pages.go, thread #18)
 	a.dubCommands(nav, add)      // M4: Dub, Batch (dub_pages.go, thread #19)
+	a.wfCommands(nav, add)       // M6: Workflows (workflow_pages.go, thread #21)
 	add("go/settings", nav, i18n.T("Settings"), "Settings", "⌘,", true, func() { a.navigate("/settings") })
 	for _, s := range settingsSections() {
 		add("go/settings/"+s.id, i18n.T("Settings"), s.title, s.en, "", true, func() { a.navigate("/settings/" + s.id) })
