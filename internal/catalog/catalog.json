@@ -400,9 +400,14 @@
       "sampleRate": 24000,
       "maxChars": 500,
       "rtf": 3.3,
-      "size": 240322540,
+      "size": 624967440,
       "minMemoryGB": 1,
-      "licence": {"id": "cc-by-4.0", "name": "CC BY 4.0", "url": "https://huggingface.co/kyutai/pocket-tts", "commercial": true, "gated": false, "verified": true}
+      "licence": {"id": "cc-by-4.0", "name": "CC BY 4.0", "url": "https://huggingface.co/kyutai/pocket-tts", "commercial": true, "gated": false, "verified": true},
+      "aux": [
+        {"repo": "kyutai/moshiko-pytorch-bf16", "revision": "2bfc9ae6e89079a5cc7ed2a68436010d91a3d289", "licence": "cc-by-4.0", "files": [
+          {"path": "tokenizer-e351c8d8-checkpoint125.safetensors", "size": 384644900}
+        ]}
+      ]
     },
     {
       "id": "whisper-large-v3-turbo-4bit",
