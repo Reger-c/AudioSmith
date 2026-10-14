@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -88,7 +89,7 @@ func (a *app) galleryPage(c *ui.Context) {
 	}
 	items := page.Items
 	g.moreAsked = false
-	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), px(t, 176), func(i int) {
+	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), px(t, 158), func(i int) {
 		if i == len(items) {
 			// The grid builds only the rows in view: this cell is built
 			// when the end scrolls into view, so the next page loads then
@@ -188,14 +189,14 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 	k := tok(t)
 	g := &a.gallery
 	loc := i18n.Locale()
-	card(c.Key("arch-" + arch.ID)).Grow(1).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
+	card(c.Key("arch-"+arch.ID)).Grow(1).Gap(px(t, sp2)).Padding(px(t, sp3), px(t, sp3), px(t, sp2)).Children(func() {
 		name := arch.Name.In(loc)
 		desc := arch.Description.In(loc)
 		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Start).Children(func() {
 			ui.Avatar(c, name, nil)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 				ui.Text(c, name).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Tooltip(name)
-				ui.Text(c, desc).FontSize(px(t, fsCaption)).TextColor(k.Text2).MaxLines(2).Ellipsis("…").MinWidth(0).Tooltip(desc)
+				ui.Text(c, desc).FontSize(px(t, fsCaption)).TextColor(k.Text2).SingleLine().Ellipsis("…").MinWidth(0).Tooltip(desc)
 			})
 			fav := g.favs.Has(arch.ID)
 			tip := i18n.T("Add to favorites")
@@ -208,14 +209,29 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 		})
 		// The voice's details as tags, all of them: its language first,
 		// then gender, age, pitch and the rest; they wrap.
-		ui.Row(c.Key("meta")).Gap(px(t, 4)).Wrap().AlignContent(ui.Start).Grow(1).MinHeight(0).Children(func() {
-			if len(arch.Languages) > 0 {
-				tagChip(c, dubLangName(arch.Languages[0]))
-			}
-			for _, l := range archetypeAttrLabels(arch.Attrs, loc) {
-				tagChip(c, l)
+		// At most two rows (the card has a fixed height): the rest are
+		// cut, and the tooltip lists them all.
+		var tags []string
+		if len(arch.Languages) > 0 {
+			tags = append(tags, dubLangName(arch.Languages[0]))
+		}
+		tags = append(tags, archetypeAttrLabels(arch.Attrs, loc)...)
+		// Two rows' height comes from a tag as last laid out (its font and
+		// size vary: Chinese runs taller than English).
+		meta := ui.Row(c.Key("meta")).Gap(px(t, 4)).Wrap().AlignContent(ui.Start).Shrink(0).Tooltip(strings.Join(tags, " · "))
+		if g.tagH > 0 {
+			meta.MaxHeight(2*g.tagH + px(t, 4)).ClipY()
+		}
+		meta.Children(func() {
+			for i, l := range tags {
+				chip := tagChip(c, l)
+				if h := chip.Bounds().H; i == 0 && h > 0 && h != g.tagH {
+					g.tagH = h
+					c.Invalidate() // lay the cards out again with this height
+				}
 			}
 		})
+		ui.Spacer(c)
 		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			p := g.previews[arch.ID]
 			switch {

@@ -36,7 +36,8 @@ type galleryState struct {
 	filters   map[gallery.Facet]string
 	favOnly   bool
 	limit     int
-	moreAsked bool // the next page was asked for in this frame (infinite scroll)
+	moreAsked bool    // the next page was asked for in this frame (infinite scroll)
+	tagH      float32 // a card's tag, as last laid out: its tags show two rows
 
 	page    gallery.Page
 	pageFor string // the query page answers
