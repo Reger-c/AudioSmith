@@ -47,10 +47,16 @@ func TestRealEngineConformance(t *testing.T) {
 	if m.Error == nil || m.Error.Code != proto.CodeProtocolMismatch || string(m.Error.Data) != `{"supported":[2]}` {
 		t.Fatalf("hello 3: %+v", m)
 	}
-	// A model folder linked to the real one: loading Kokoro by repo id
-	// makes mlx-audio-swift copy it into <cache>/mlx-audio, which must
-	// not be the user's cache.
-	m = e.ask(t, "c3", proto.MethodHello, proto.HelloParams{Protocol: 2, App: "test", Role: proto.RoleGPU, CacheDir: linkedCache(t, kokoro)})
+	// A model folder linked to the real one, and Kokoro by its snapshot
+	// path as the app sends it: loading by repo id would make
+	// mlx-audio-swift copy the model into <cache>/mlx-audio.
+	cache := linkedCache(t, kokoro)
+	snaps, _ := filepath.Glob(filepath.Join(cache, "models--mlx-community--Kokoro-82M-bf16", "snapshots", "*", "config.json"))
+	if len(snaps) == 0 {
+		t.Skip("Kokoro is not downloaded")
+	}
+	kokoroPath := filepath.Dir(snaps[0])
+	m = e.ask(t, "c3", proto.MethodHello, proto.HelloParams{Protocol: 2, App: "test", Role: proto.RoleGPU, CacheDir: cache})
 	var hello proto.HelloResult
 	if err := m.DecodeResult(&hello); err != nil || hello.Protocol != 2 || hello.Role != proto.RoleGPU || hello.Concurrency != 1 {
 		t.Fatalf("hello: %+v %v", m, err)
@@ -71,10 +77,10 @@ func TestRealEngineConformance(t *testing.T) {
 	}{
 		"unknown":   {"lid.detect", map[string]string{"audio": "/tmp/a.wav"}, proto.CodeMethodNotFound},
 		"no model":  {proto.MethodTTSSynthesize, proto.SynthesizeParams{Text: "Hi", Output: proto.Output{Path: dir + "/x.wav"}}, proto.CodeBadRequest},
-		"relative":  {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Hi", Output: proto.Output{Path: "x.wav"}}, proto.CodeBadRequest},
-		"clone":     {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Hi", RefAudio: "/tmp/ref.wav", Output: proto.Output{Path: dir + "/c.wav"}}, proto.CodeUnsupported},
+		"relative":  {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, ModelPath: kokoroPath, Text: "Hi", Output: proto.Output{Path: "x.wav"}}, proto.CodeBadRequest},
+		"clone":     {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, ModelPath: kokoroPath, Text: "Hi", RefAudio: "/tmp/ref.wav", Output: proto.Output{Path: dir + "/c.wav"}}, proto.CodeUnsupported},
 		"bad model": {proto.MethodModelsLoad, proto.LoadParams{Model: "someone/not-a-model-type", Path: badModel}, proto.CodeModelLoadFailed},
-		"unwritable": {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Hi", Voice: "af_heart",
+		"unwritable": {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, ModelPath: kokoroPath, Text: "Hi", Voice: "af_heart",
 			Output: proto.Output{Path: "/nonexistent-root-dir/x.wav"}}, proto.CodeInternal},
 	}
 	for name, c := range codes {
@@ -87,7 +93,7 @@ func TestRealEngineConformance(t *testing.T) {
 	// A streamed take: progress and gapless chunks, all before the result.
 	seed := int64(42)
 	speed := 1.1
-	e.send(t, "j1", proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Streaming test.", Voice: "af_heart",
+	e.send(t, "j1", proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, ModelPath: kokoroPath, Text: "Streaming test.", Voice: "af_heart",
 		Speed: &speed, Seed: &seed, Stream: true, Output: proto.Output{Path: dir + "/j1.wav", Bits: 24}})
 	var chunks []proto.ChunkParams
 	var stages []string
@@ -142,8 +148,8 @@ func TestRealEngineConformance(t *testing.T) {
 	// Kokoro takes at most ~510 phonemes at once.
 	long := strings.Repeat("This sentence makes the take long enough to cancel it. ", 7)
 	j2At := time.Now()
-	e.send(t, "j2", proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: long, Voice: "af_heart", Output: proto.Output{Path: dir + "/j2.wav"}})
-	e.send(t, "j3", proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Second", Output: proto.Output{Path: dir + "/j3.wav"}})
+	e.send(t, "j2", proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, ModelPath: kokoroPath, Text: long, Voice: "af_heart", Output: proto.Output{Path: dir + "/j2.wav"}})
+	e.send(t, "j3", proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, ModelPath: kokoroPath, Text: "Second", Output: proto.Output{Path: dir + "/j3.wav"}})
 	if m := e.until(t, "j3"); m.Error == nil || m.Error.Code != proto.CodeBusy {
 		t.Fatalf("j3: %+v", m)
 	}
