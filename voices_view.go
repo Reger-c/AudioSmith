@@ -131,7 +131,7 @@ func (a *app) voicesGrid(c *ui.Context) {
 	ui.GridView(c.Key("voices-grid"), &a.voiceGrid, len(vs), px(t, 240), px(t, 68), func(i int) {
 		v := vs[i]
 		a.voiceCard(c, &v)
-	}).Grow(1).Padding(0, px(t, sp6), px(t, sp4)).Gap(px(t, sp2))
+	}).Grow(1).Padding(0, px(t, sp6), px(t, sp4))
 }
 
 // voiceCard is one saved voice: a click opens its editor; Preview and

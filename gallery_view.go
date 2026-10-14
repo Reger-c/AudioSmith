@@ -57,32 +57,26 @@ func (a *app) galleryPage(c *ui.Context) {
 		}
 	})
 	ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Gap(px(t, sp2)).Children(func() {
-		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
 			if searchField(c, "gallery-search", &g.text, i18n.T("Search: narrator, 东北, whisper…"), px(t, 360)).
 				Label(i18n.T("Search the gallery")).Changed() {
 				g.limit = galleryPageSize
 			}
+			a.galleryCategorySelect(c, page, narrow)
 			if iconToggle(c.Key("gallery-favs"), icons.Star, g.favOnly, i18n.T("Favorites")).Tooltip(i18n.T("Show only your favorites")).Clicked() {
 				g.favOnly = !g.favOnly
 				g.limit = galleryPageSize
 			}
-			ui.Spacer(c)
+		})
+		ui.Row(c.Key("gallery-facets")).Gap(px(t, sp1)).Wrap().Children(func() {
+			for _, f := range galleryFacets {
+				a.facetMenu(c, f, page.Facets[f])
+			}
 			if len(g.filters) > 0 || g.text != "" || g.tab != 0 || g.favOnly {
 				if ghostIconButton(c.Key("gallery-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
 					g.text, g.tab, g.favOnly, g.limit = "", 0, false, galleryPageSize
 					clear(g.filters)
 				}
-			}
-		})
-		if !narrow {
-			a.galleryTabs(c, page)
-		}
-		ui.Row(c.Key("gallery-facets")).Gap(px(t, sp1)).Wrap().Children(func() {
-			if narrow {
-				a.galleryCategoryMenu(c, page)
-			}
-			for _, f := range galleryFacets {
-				a.facetMenu(c, f, page.Facets[f])
 			}
 		})
 	})
@@ -101,7 +95,7 @@ func (a *app) galleryPage(c *ui.Context) {
 			return
 		}
 		a.archetypeCard(c, items[i])
-	}).Grow(1).Padding(0, px(t, sp6), px(t, sp4)).Gap(px(t, sp3))
+	}).Grow(1).Padding(0, px(t, sp6), px(t, sp4))
 }
 
 func boolInt(b bool) int {
@@ -121,46 +115,34 @@ func galleryCounts(page gallery.Page) (counts map[string]int, total int) {
 	return counts, total
 }
 
-// galleryTabs are the categories, with counts, as filter chips.
-func (a *app) galleryTabs(c *ui.Context, page gallery.Page) {
+// galleryCategorySelect is the categories, with their counts, as a
+// select beside the search field.
+func (a *app) galleryCategorySelect(c *ui.Context, page gallery.Page, narrow bool) {
 	t := c.Theme()
 	g := &a.gallery
 	loc := i18n.Locale()
 	counts, total := galleryCounts(page)
-	ui.Row(c.Key("gallery-tabs")).Gap(px(t, sp1)).Wrap().Children(func() {
-		tab := func(i int, label string, n int) {
-			if chip(c.Key("tab-"+itoa(i)), label, itoa(n), g.tab == i).Clicked() {
+	cats := gallery.Categories()
+	options := make([]string, 0, len(cats)+1)
+	options = append(options, i18n.T("All categories")+"  "+itoa(total))
+	for _, cat := range cats {
+		options = append(options, cat.Name.In(loc)+"  "+itoa(counts[cat.ID]))
+	}
+	if g.tab < 0 || g.tab >= len(options) {
+		g.tab = 0
+	}
+	cur := options[g.tab]
+	w := px(t, 220)
+	if narrow {
+		w = px(t, 170)
+	}
+	if ui.Select(c.Key("gallery-category"), &cur, options).Label(i18n.T("Category")).Tooltip(i18n.T("Category")).Width(w).Shrink(1).MinWidth(px(t, 120)).Changed() {
+		for i, o := range options {
+			if o == cur {
 				g.tab, g.limit = i, galleryPageSize
 			}
 		}
-		tab(0, i18n.T("All"), total)
-		for i, cat := range gallery.Categories() {
-			tab(i+1, cat.Name.In(loc), counts[cat.ID])
-		}
-	})
-}
-
-// galleryCategoryMenu is the categories as a menu, when the page is too
-// narrow for the chips.
-func (a *app) galleryCategoryMenu(c *ui.Context, page gallery.Page) {
-	g := &a.gallery
-	loc := i18n.Locale()
-	counts, total := galleryCounts(page)
-	cats := gallery.Categories()
-	label := i18n.T("Category")
-	if g.tab > 0 && g.tab <= len(cats) {
-		label += ": " + cats[g.tab-1].Name.In(loc)
 	}
-	dropText(c.Key("gallery-category"), label, g.tab != 0).Label(i18n.T("Category")).Menu(func(m *ui.Menu) {
-		if m.Item(i18n.T("All") + "  " + itoa(total)).Checked(g.tab == 0).Chosen() {
-			g.tab, g.limit = 0, galleryPageSize
-		}
-		for i, cat := range cats {
-			if m.Item(cat.Name.In(loc) + "  " + itoa(counts[cat.ID])).Checked(g.tab == i+1).Chosen() {
-				g.tab, g.limit = i+1, galleryPageSize
-			}
-		}
-	})
 }
 
 // facetMenu is one facet as a menu button of its values with counts.

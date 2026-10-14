@@ -35,8 +35,13 @@ func TestGalleryPage(t *testing.T) {
 	g.text = ""
 	tt.Frame()
 	games := gallery.Default().Search(gallery.Query{Category: "games"}).Total
-	if err := tt.Click("Games " + itoa(games)); err != nil {
+	// The categories are a select beside the search field.
+	if err := tt.Click("Category"); err != nil {
 		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("Games  " + itoa(games)); err != nil {
+		t.Fatalf("%v: %q", err, tt.Texts())
 	}
 	tt.Frame()
 	if g.page.Total != games || g.tab == 0 {
