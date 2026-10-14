@@ -64,7 +64,7 @@ func TestDictationLatency(t *testing.T) {
 		{name: "zh2", lang: "zh", text: "提醒我星期五下午给牙医打电话，改一下预约时间。"},
 	}
 	for i, u := range us {
-		voice := ""
+		voice := "Samantha" // not the system voice: it may be a Chinese one
 		if u.lang == "zh" {
 			voice = "Tingting"
 		}
