@@ -59,7 +59,7 @@ func settingsSections() []settingsSection {
 		{"dictation", i18n.T("Dictation"), "Dictation"},
 		{"writing", i18n.T("Writing help"), "Writing help"},
 		{"permissions", i18n.T("Permissions"), "Permissions"},
-		dubSettingsSection(), // M4: dub_settings.go (thread #19)
+		dubSettingsSection(),                      // M4: dub_settings.go (thread #19)
 		{"api", i18n.T("Local API"), "Local API"}, // M5: api_settings.go (thread #20)
 	}
 }
