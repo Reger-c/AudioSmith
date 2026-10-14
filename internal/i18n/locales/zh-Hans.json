@@ -320,7 +320,6 @@
   "Automatic (system proxy)": "自动（系统代理）",
   "Automatic uses a downloaded model that clones voices.": "“自动”会使用一个已下载、能克隆音色的模型。",
   "Automatic: AudioSmith's model, else Ollama on this Mac": "自动：优先使用 AudioSmith 的模型，否则使用本机的 Ollama",
-  "Automatic: Ollama on this Mac when it runs": "自动：本机运行 Ollama 时使用它",
   "Automation": "自动化",
   "Back, forward": "后退、前进",
   "Balanced": "均衡",
