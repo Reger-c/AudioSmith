@@ -9,7 +9,8 @@
   "macos": {
     "minimumSystemVersion": "15.0",
     "infoPlist": {
-      "LSApplicationCategoryType": "public.app-category.music"
+      "LSApplicationCategoryType": "public.app-category.music",
+      "NSMicrophoneUsageDescription": "AudioSmith records your voice for voice cloning, transcription and dictation. Audio stays on this Mac."
     }
   },
   "fileAssociations": [
