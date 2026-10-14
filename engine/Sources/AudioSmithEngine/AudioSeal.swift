@@ -113,8 +113,8 @@ final class AudioSeal: @unchecked Sendable {
             let whhT = p("\(prefix).weight_hh_l\(layer)").T
             let pre = matmul(seq, wih.T) + p("\(prefix).bias_ih_l\(layer)") + p("\(prefix).bias_hh_l\(layer)")
             let hidden = whhT.dim(0)
-            var h = MLXArray.zeros([1, hidden])
-            var c = MLXArray.zeros([1, hidden])
+            var h = MLXArray.zeros([x.dim(0), hidden])
+            var c = MLXArray.zeros([x.dim(0), hidden])
             var outs: [MLXArray] = []
             outs.reserveCapacity(steps)
             for t in 0 ..< steps {
@@ -156,30 +156,44 @@ final class AudioSeal: @unchecked Sendable {
         (0 ..< bits).map { (message >> (bits - 1 - $0)) & 1 }
     }
 
-    /// The watermark of 16 kHz mono x for message (same length as x).
-    func watermark(_ x: [Float], message: Int) -> [Float] {
-        let input = MLXArray(x).reshaped([1, x.count, 1])
-        var hidden = encoder(input, "encoder.model")
+    /// Windows of equal length as one batch [B, L, 1].
+    private func batch(_ xs: [[Float]]) -> MLXArray {
+        let length = xs[0].count
+        return MLXArray(xs.flatMap { $0 }).reshaped([xs.count, length, 1])
+    }
+
+    /// The watermarks of windows of 16 kHz mono audio, all of the same
+    /// length, for message (one batch: the LSTMs step through the
+    /// windows together).
+    func watermark(_ xs: [[Float]], message: Int) -> [[Float]] {
+        let length = xs[0].count
+        var hidden = encoder(batch(xs), "encoder.model")
         let indices = MLXArray(Self.bits(of: message).enumerated().map { Int32(2 * $0.offset + $0.element) })
         let embedding = p("msg_processor.msg_processor.weight")[indices].sum(axis: 0)
         hidden = hidden + embedding
-        let y = decoder(hidden)[0, 0 ..< x.count, 0]
+        let y = decoder(hidden)[0..., 0 ..< length, 0]
         eval(y)
-        return y.asArray(Float.self)
+        let flat = y.asArray(Float.self)
+        return (0 ..< xs.count).map { Array(flat[$0 * length ..< ($0 + 1) * length]) }
     }
 
-    /// The detector on 16 kHz mono x: the probability of each sample
-    /// being watermarked, and the message logits summed over the samples.
-    func detect(_ x: [Float]) -> (probabilities: [Float], logitSums: [Float]) {
-        let input = MLXArray(x).reshaped([1, x.count, 1])
-        let enc = encoder(input, "detector.0.model") // [1, F, 128]
-        let frames = enc.dim(1)
+    /// The detector on windows of 16 kHz mono audio of equal length (the
+    /// first valid[i] samples of window i are audio, the rest padding):
+    /// per window, the probability of each sample being watermarked and the
+    /// message logits summed over its valid samples.
+    func detect(_ xs: [[Float]], valid: [Int]) -> [(probabilities: [Float], logitSums: [Float])] {
+        let length = xs[0].count
+        let enc = encoder(batch(xs), "detector.0.model") // [B, F, 128]
+        let (b, frames) = (enc.dim(0), enc.dim(1))
         let out = headBias.dim(0)
-        var z = matmul(enc[0], head).reshaped([1, frames * Self.hop, out]) + headBias // [1, F·320, 2 + 16]
-        z = z[0..., 0 ..< x.count, 0...]
-        let prob = softmax(z[0, 0..., 0 ..< 2], axis: -1)[0..., 1]
-        let sums = z[0, 0..., 2...].sum(axis: 0)
+        var z = matmul(enc, head).reshaped([b, frames * Self.hop, out]) + headBias // [B, F·320, 2 + 16]
+        z = z[0..., 0 ..< length, 0...]
+        let prob = softmax(z[0..., 0..., 0 ..< 2], axis: -1)[0..., 0..., 1]
+        let positions = MLXArray(Int32(0) ..< Int32(length)).reshaped([1, length, 1])
+        let mask = (positions .< MLXArray(valid.map(Int32.init)).reshaped([b, 1, 1])).asType(.float32)
+        let sums = (z[0..., 0..., 2...] * mask).sum(axis: 1)
         eval(prob, sums)
-        return (prob.asArray(Float.self), sums.asArray(Float.self))
+        let pf = prob.asArray(Float.self), sf = sums.asArray(Float.self)
+        return (0 ..< b).map { (Array(pf[$0 * length ..< ($0 + 1) * length]), Array(sf[$0 * Self.bits ..< ($0 + 1) * Self.bits])) }
     }
 }

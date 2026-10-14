@@ -6,8 +6,8 @@ import Foundation
 // watermark.embed / watermark.detect (docs/protocol-v2.md §5.5) on the
 // media worker: AudioSeal at 16 kHz mono; the watermark is computed on a
 // 16 kHz mix of the input, resampled to the input's rate and added to each
-// channel. Long inputs go through in 20 s windows (1 s crossfaded
-// overlaps). MLX runs on the GPU unless AUDIOSMITH_WATERMARK_DEVICE=cpu;
+// channel. Long inputs go through in 10 s windows (1 s crossfaded
+// overlaps), up to 8 at a time as one batch. MLX runs on the GPU unless AUDIOSMITH_WATERMARK_DEVICE=cpu;
 // one watermark computation at a time.
 
 private let sealLock = NSLock()
@@ -24,6 +24,20 @@ private func audioSeal(_ directory: URL, out: Writer, job: String) throws -> Aud
 
 private var sealDevice: MLX.Device {
     ProcessInfo.processInfo.environment["AUDIOSMITH_WATERMARK_DEVICE"] == "cpu" ? .cpu : .gpu
+}
+
+/// Batches of windows: the windows of a signal (10 s, 1 s overlaps), each
+/// padded with zeros to the window's length, in groups of at most 8 that
+/// the model runs as one batch.
+private func batches(_ x: [Float], size: Int, overlap: Int) -> [[(start: Int, end: Int, samples: [Float])]] {
+    let wins = windows(x.count, size: size, overlap: overlap)
+    let length = min(size, x.count)
+    let all = wins.map { (s, e) -> (start: Int, end: Int, samples: [Float]) in
+        var w = Array(x[s ..< e])
+        if w.count < length { w.append(contentsOf: [Float](repeating: 0, count: length - w.count)) }
+        return (s, e, w)
+    }
+    return stride(from: 0, to: all.count, by: 8).map { Array(all[$0 ..< min($0 + 8, all.count)]) }
 }
 
 /// Windows of a long signal: (start, end) with overlap samples shared.
@@ -106,28 +120,31 @@ extension MediaWorker {
         progress.audioSeconds = Double(frames) / Double(rate)
         let started = Date()
 
-        // The watermark at 16 kHz, window by window.
-        let size = 20 * AudioSeal.sampleRate, overlap = AudioSeal.sampleRate
-        let wins = windows(x16.count, size: size, overlap: overlap)
+        // The watermark at 16 kHz, window by window (in batches).
+        let size = 10 * AudioSeal.sampleRate, overlap = AudioSeal.sampleRate
         var wm16 = [Float](repeating: 0, count: x16.count)
         sealLock.lock()
         defer { sealLock.unlock() }
         let model = try audioSeal(dir, out: out, job: job)
         try using(device: sealDevice) {
-            for (i, (s, e)) in wins.enumerated() {
+            var first = true
+            for group in batches(x16, size: size, overlap: overlap) {
                 try Task.checkCancellation()
-                let part = model.watermark(Array(x16[s ..< e]), message: p.message)
-                for j in 0 ..< part.count {
-                    let k = s + j
-                    // Crossfade the overlap with the previous window.
-                    if i > 0, j < overlap {
-                        let t = Float(j) / Float(overlap)
-                        wm16[k] = wm16[k] * (1 - t) + part[j] * t
-                    } else {
-                        wm16[k] = part[j]
+                let parts = model.watermark(group.map(\.samples), message: p.message)
+                for (w, part) in zip(group, parts) {
+                    for j in 0 ..< (w.end - w.start) {
+                        let k = w.start + j
+                        // Crossfade the overlap with the previous window.
+                        if !first, j < overlap {
+                            let t = Float(j) / Float(overlap)
+                            wm16[k] = wm16[k] * (1 - t) + part[j] * t
+                        } else {
+                            wm16[k] = part[j]
+                        }
                     }
+                    first = false
+                    progress.fraction = Double(w.end) / Double(x16.count)
                 }
-                progress.fraction = Double(e) / Double(x16.count)
                 progress.send("watermarking")
             }
         }
@@ -169,8 +186,7 @@ extension MediaWorker {
         let progress = JobProgress(out: out, job: job)
         progress.audioSeconds = Double(x.count) / Double(AudioSeal.sampleRate)
         let started = Date()
-        let size = 20 * AudioSeal.sampleRate, overlap = AudioSeal.sampleRate
-        let wins = windows(x.count, size: size, overlap: overlap)
+        let size = 10 * AudioSeal.sampleRate, overlap = AudioSeal.sampleRate
         var prob = [Float](repeating: 0, count: x.count)
         var sums = [Double](repeating: 0, count: AudioSeal.bits)
         var counted = 0
@@ -178,15 +194,20 @@ extension MediaWorker {
         defer { sealLock.unlock() }
         let model = try audioSeal(dir, out: out, job: job)
         try using(device: sealDevice) {
-            for (i, (s, e)) in wins.enumerated() {
+            var first = true
+            for group in batches(x, size: size, overlap: overlap) {
                 try Task.checkCancellation()
-                let (pr, ls) = model.detect(Array(x[s ..< e]))
-                // Each window owns its samples after the overlap's middle.
-                let from = i == 0 ? 0 : overlap / 2
-                for j in from ..< pr.count { prob[s + j] = pr[j] }
-                for b in 0 ..< AudioSeal.bits { sums[b] += Double(ls[b]) }
-                counted += pr.count
-                progress.fraction = Double(e) / Double(x.count)
+                let results = model.detect(group.map(\.samples), valid: group.map { $0.end - $0.start })
+                for (w, r) in zip(group, results) {
+                    let n = w.end - w.start
+                    // Each window owns its samples after the overlap's middle.
+                    let from = first ? 0 : overlap / 2
+                    for j in from ..< n { prob[w.start + j] = r.probabilities[j] }
+                    for b in 0 ..< AudioSeal.bits { sums[b] += Double(r.logitSums[b]) }
+                    counted += n
+                    first = false
+                    progress.fraction = Double(w.end) / Double(x.count)
+                }
                 progress.send("detecting")
             }
         }

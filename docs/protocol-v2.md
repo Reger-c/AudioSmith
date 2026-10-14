@@ -405,8 +405,8 @@ The model is Meta's **AudioSeal** (facebookresearch/audioseal, MIT; weights `fac
 - **`message`** is 16 bits (0–65535); bit 15 is the model's first bit. Out of range: `bad_request`.
 - **`strength`** scales the watermark (AudioSeal's alpha, default 1).
 - **`snr`** is the audio's power over the watermark's, in dB. AudioSeal's watermark sits at about 25 dB under speech.
-- Long inputs run in 20 s windows; the watermark is crossfaded over 1 s overlaps.
-- **Speed** (MacBook Air M4, Metal): 1.3 s per minute of audio. AUDIOSMITH_WATERMARK_DEVICE=cpu runs it on the CPU (23 s a minute).
+- Long inputs run in 10 s windows, up to 8 at a time as one batch; the watermark is crossfaded over 1 s overlaps.
+- **Speed** (MacBook Air M4, Metal): about 1 s per minute of audio (0.2 s for a 10 s take). AUDIOSMITH_WATERMARK_DEVICE=cpu runs it on the CPU (23 s a minute).
 
 ### `watermark.detect` (job, media)
 
@@ -420,7 +420,7 @@ The model is Meta's **AudioSeal** (facebookresearch/audioseal, MIT; weights `fac
 - **`probability`** is the fraction of samples whose watermark probability is over `threshold` (default 0.5), as AudioSeal's `detect_watermark` computes it. `detected` = `probability ≥ 0.5`.
 - **`message`** is decoded even when there is no watermark (it is then random). `bits` are the probabilities of each bit being 1, most significant first; `confidence` is their mean |2p − 1|.
 - **`frames`** give the probability per second, to locate watermarked stretches.
-- **Speed:** 0.65 s per minute of audio. The detector's 320× transposed convolution and its 1×1 head are folded into one matrix.
+- **Speed:** 0.4 s per minute of audio. The detector's 320× transposed convolution and its 1×1 head are folded into one matrix.
 
 ### AudioSmith's message
 
@@ -437,7 +437,9 @@ Mac, `TestWatermarkEngine`; Kokoro, Qwen3-TTS CustomVoice and OmniVoice takes, 1
 | AAC 64 kb/s | still detected |
 | 24→48 kHz resampling | still detected |
 | Loudness normalisation to −16 LUFS | still detected |
-| ±5 % time-stretch (WSOLA) | **not reliably detected** (p ≈ 0.25); AudioSeal is not trained for speed changes |
+| ±5 % time-stretch (WSOLA) | **not reliably detected** (p ≈ 0.25–0.3); AudioSeal is not trained for speed changes |
+
+The port matches the PyTorch reference: on the same 16 kHz input and message, the two watermarks correlate at 1.00000 with a relative difference under 10⁻⁵, at the same SNR (24.9 dB). Each side's detector finds the other's mark, with the exact message.
 
 ## 6. Notifications (engine → app)
 

@@ -688,7 +688,6 @@
         {"path": "generator_base.pth", "size": 58805980}
       ],
       "minMemoryGB": 1,
-      "hidden": true,
       "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/facebook/audioseal", "commercial": true, "verified": true}
     },
     {
