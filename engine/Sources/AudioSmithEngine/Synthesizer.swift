@@ -108,9 +108,9 @@ final class Synthesizer: @unchecked Sendable {
                 refText = nil
             } catch {
                 guard refPath != nil else {
-                    throw EngineError.badRequest("Voice prompt \(prompt) is not usable: \(error.localizedDescription)")
+                    throw EngineError.badRequest("Voice prompt \(prompt) is not usable: \(errorMessage(error))")
                 }
-                out.logLine("warning", "Voice prompt not usable, using the reference audio: \(error.localizedDescription)", job: job)
+                out.logLine("warning", "Voice prompt not usable, using the reference audio: \(errorMessage(error))", job: job)
             }
         }
         if let kokoro = model as? KokoroModel {
@@ -131,6 +131,11 @@ final class Synthesizer: @unchecked Sendable {
         let seed = p.seed ?? Int64.random(in: 0 ... Int64(Int32.max))
         MLXRandom.seed(UInt64(bitPattern: seed))
 
+        // MOSS-TTS-Nano only clones: without a reference it fails inside
+        // the model; refuse the request before loading anything else.
+        if model is MossTTSNanoModel, refPath == nil {
+            throw EngineError.badRequest("\(shortName(p.model)) only clones voices: give it a reference clip (refAudio)")
+        }
         var refAudio: MLXArray?
         if let refPath {
             refAudio = MLXArray(try await decodeMono(refPath, sampleRate: model.sampleRate))
@@ -247,6 +252,9 @@ final class Synthesizer: @unchecked Sendable {
                     language: nonEmpty(p.language), generationParameters: params, streamingInterval: 1.0))
             }
         } catch AudioGenerationError.invalidInput(let message) {
+            if let tooLong = inputTooLong(message) { throw tooLong }
+            throw EngineError.badRequest(message)
+        } catch MossTTSNanoError.invalidInput(let message) {
             if let tooLong = inputTooLong(message) { throw tooLong }
             throw EngineError.badRequest(message)
         }

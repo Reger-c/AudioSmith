@@ -93,7 +93,7 @@ func rpcError(_ error: Error) -> RPCError {
     if let e = error as? RPCError { return e }
     if let e = error as? EngineError { return e.rpc }
     if error is CancellationError { return RPCError(Code.cancelled, "Cancelled") }
-    return RPCError(Code.internal, error.localizedDescription)
+    return RPCError(Code.internal, errorMessage(error))
 }
 
 /// The session: answers requests from stdin, runs jobs by id.

@@ -83,7 +83,7 @@ final class ModelStore: @unchecked Sendable {
             throw error
         } catch {
             if Task.isCancelled { throw CancellationError() }
-            throw EngineError.loadFailed("\(shortName(model)): \(error.localizedDescription)")
+            throw EngineError.loadFailed("\(shortName(model)): \(errorMessage(error))")
         }
         try Task.checkCancellation()
         let r = Resident(model: loaded, task: task, sampleRate: sampleRate(loaded),
