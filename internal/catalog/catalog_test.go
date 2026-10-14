@@ -29,7 +29,8 @@ func TestBuiltin(t *testing.T) {
 		{"Soprano 80M", "mlx-community/Soprano-80M-bf16", "≈ 221 MB", nil, nil, false, true, false, false},
 	}
 	labels := c.Labels(TaskTTS)
-	if len(labels) != len(want)+2 || labels[len(want)] != "OmniVoice" || labels[len(labels)-1] != CustomLabel {
+	// The MVP presets, then OmniVoice (M0), then what M1 added, then Custom.
+	if len(labels) < len(want)+2 || labels[len(want)] != "OmniVoice" || labels[len(labels)-1] != CustomLabel {
 		t.Fatalf("labels %q", labels)
 	}
 	for i, w := range want {

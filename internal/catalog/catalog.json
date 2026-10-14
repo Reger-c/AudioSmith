@@ -51,6 +51,7 @@
       "maxChars": 300,
       "deterministic": true,
       "sampleRate": 24000,
+      "rtf": 5,
       "size": 481172807,
       "minMemoryGB": 2,
       "quantization": "bf16",
@@ -91,6 +92,8 @@
       ],
       "capabilities": ["sampling", "voiceStyle", "language"],
       "sampleRate": 24000,
+      "maxChars": 600,
+      "rtf": 2,
       "size": 1973575388,
       "minMemoryGB": 4,
       "quantization": "8bit",
@@ -118,6 +121,8 @@
       ],
       "capabilities": ["sampling", "clone", "language", "voicePrompt", "seed"],
       "sampleRate": 24000,
+      "maxChars": 600,
+      "rtf": 1.2,
       "size": 1991299138,
       "minMemoryGB": 4,
       "quantization": "8bit",
@@ -140,6 +145,8 @@
       ],
       "capabilities": ["sampling"],
       "sampleRate": 24000,
+      "maxChars": 400,
+      "rtf": 1,
       "size": 672148432,
       "minMemoryGB": 2,
       "quantization": "8bit",
@@ -157,6 +164,8 @@
         {"code": "en"}
       ],
       "capabilities": ["sampling"],
+      "maxChars": 500,
+      "rtf": 2.8,
       "size": 220645307,
       "minMemoryGB": 1,
       "quantization": "bf16",
@@ -173,6 +182,8 @@
       "capabilities": ["clone", "design", "voiceStyle", "language", "duration", "speed", "steps", "guidance", "nonVerbal"],
       "nonVerbal": ["[laughter]", "[sigh]", "[confirmation-en]", "[question-en]", "[question-ah]", "[question-oh]", "[question-ei]", "[question-yi]", "[surprise-ah]", "[surprise-oh]", "[surprise-wa]", "[surprise-yo]", "[dissatisfaction-hnn]"],
       "sampleRate": 24000,
+      "maxChars": 600,
+      "rtf": 1,
       "size": 1639492513,
       "minMemoryGB": 8,
       "quantization": "bf16",
@@ -200,10 +211,11 @@
       ],
       "capabilities": ["sampling", "design", "voiceStyle", "language"],
       "sampleRate": 24000,
+      "maxChars": 600,
+      "rtf": 1.8,
       "size": 2312058795,
       "minMemoryGB": 6,
       "quantization": "4bit",
-      "hidden": true,
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign", "commercial": true, "verified": true}
     },
     {
@@ -228,10 +240,11 @@
       ],
       "capabilities": ["sampling", "clone", "language", "voicePrompt", "seed"],
       "sampleRate": 24000,
+      "maxChars": 600,
+      "rtf": 1,
       "size": 3104158788,
       "minMemoryGB": 6,
       "quantization": "8bit",
-      "hidden": true,
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base", "commercial": true, "verified": true}
     },
     {
@@ -269,6 +282,8 @@
       ],
       "capabilities": ["sampling", "clone", "language", "guidance", "exaggeration", "seed"],
       "sampleRate": 24000,
+      "maxChars": 400,
+      "rtf": 1.5,
       "size": 1425486273,
       "files": [
         {"path": "Cangjie5_TC.json", "size": 1920163},
@@ -280,7 +295,6 @@
       ],
       "minMemoryGB": 4,
       "quantization": "8bit",
-      "hidden": true,
       "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/ResembleAI/chatterbox", "commercial": true, "verified": true},
       "aux": [
         {"repo": "mlx-community/S3TokenizerV2", "revision": "e0c9886f0e1c35ae85b1f27277416fb19fc72bec", "licence": "apache-2.0"}
@@ -299,10 +313,11 @@
       ],
       "capabilities": ["sampling", "clone", "seed"],
       "sampleRate": 24000,
+      "maxChars": 400,
+      "rtf": 1.5,
       "size": 1202987769,
       "minMemoryGB": 3,
       "quantization": "8bit",
-      "hidden": true,
       "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/ResembleAI/chatterbox-turbo", "commercial": true, "verified": true},
       "aux": [
         {"repo": "mlx-community/S3TokenizerV2", "revision": "e0c9886f0e1c35ae85b1f27277416fb19fc72bec", "licence": "apache-2.0"}
@@ -318,9 +333,10 @@
       "about": "A very small voice-cloning model (needs a reference clip), 48 kHz.",
       "capabilities": ["sampling", "clone", "seed"],
       "sampleRate": 48000,
+      "maxChars": 400,
+      "rtf": 1.5,
       "size": 329463572,
       "minMemoryGB": 2,
-      "hidden": true,
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Nano-100M", "commercial": true, "verified": true},
       "aux": [
         {"repo": "mlx-community/MOSS-Audio-Tokenizer-Nano", "revision": "edccdfd96d5c21f1c078338a98d738b9a6bf6917", "licence": "apache-2.0"}
@@ -350,9 +366,10 @@
       "capabilities": ["speed"],
       "deterministic": true,
       "sampleRate": 24000,
+      "maxChars": 300,
+      "rtf": 1.2,
       "size": 292427770,
       "minMemoryGB": 1,
-      "hidden": true,
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8", "commercial": true, "verified": true},
       "aux": [
         {"repo": "beshkenadze/kitten-tts-g2p", "revision": "9c692b92682d959d9013a9cfe6a49541997add18", "licence": "mit"}
@@ -381,9 +398,10 @@
       ],
       "capabilities": ["sampling", "clone", "seed"],
       "sampleRate": 24000,
+      "maxChars": 500,
+      "rtf": 3.3,
       "size": 240322540,
       "minMemoryGB": 1,
-      "hidden": true,
       "licence": {"id": "cc-by-4.0", "name": "CC BY 4.0", "url": "https://huggingface.co/kyutai/pocket-tts", "commercial": true, "gated": false, "verified": true}
     },
     {
@@ -396,10 +414,10 @@
       "about": "Transcribes 99 languages and detects which one is spoken.",
       "capabilities": ["language"],
       "sampleRate": 16000,
+      "rtf": 5,
       "size": 468669937,
       "minMemoryGB": 2,
       "quantization": "4bit",
-      "hidden": true,
       "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/openai/whisper-large-v3-turbo", "commercial": true, "verified": true},
       "aux": [
         {"repo": "openai/whisper-large-v3", "revision": "06f233fe06e710322aca913c1bc4249a0d71fce1", "licence": "apache-2.0", "files": [
@@ -425,10 +443,10 @@
       "about": "Accurate transcription of Chinese (with dialects), English and about 30 other languages.",
       "capabilities": ["language"],
       "sampleRate": 16000,
+      "rtf": 14,
       "size": 712781279,
       "minMemoryGB": 2,
       "quantization": "4bit",
-      "hidden": true,
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B", "commercial": true, "verified": true}
     },
     {
@@ -482,10 +500,10 @@
       "about": "Times every word of a known transcript against its audio, for subtitles and editing.",
       "capabilities": ["language", "wordTimes"],
       "sampleRate": 16000,
+      "rtf": 5,
       "size": 975857419,
       "minMemoryGB": 2,
       "quantization": "4bit",
-      "hidden": true,
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B", "commercial": true, "verified": true}
     },
     {
@@ -497,9 +515,9 @@
       "tasks": ["vad"],
       "about": "Finds where people speak in a recording. Tiny and fast.",
       "sampleRate": 16000,
+      "rtf": 24,
       "size": 2182124,
       "minMemoryGB": 1,
-      "hidden": true,
       "licence": {"id": "mit", "name": "MIT", "url": "https://github.com/snakers4/silero-vad", "commercial": true, "verified": true}
     },
     {
@@ -511,13 +529,13 @@
       "tasks": ["enhance"],
       "about": "Removes background noise from speech, e.g. to clean a reference recording.",
       "sampleRate": 48000,
+      "rtf": 7.6,
       "size": 8683568,
       "files": [
         {"path": "v3/config.json", "size": 859},
         {"path": "v3/model.safetensors", "size": 8682709}
       ],
       "minMemoryGB": 1,
-      "hidden": true,
       "licence": {"id": "mit", "name": "MIT / Apache 2.0", "url": "https://github.com/Rikorose/DeepFilterNet", "commercial": true, "verified": true}
     }
   ]
