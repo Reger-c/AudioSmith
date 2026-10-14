@@ -39,6 +39,8 @@ type Settings struct {
 	Dubbing    Dubbing    `json:"dubbing"` // M4 (thread #19, m4.go)
 	// M5 (thread #20, api.go).
 	API API `json:"api"`
+
+	Calls Calls `json:"calls"` // M6b (thread #23, calls.go)
 }
 
 // General: language and app behaviour.

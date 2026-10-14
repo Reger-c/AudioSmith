@@ -95,7 +95,7 @@ const (
 	RejectToken     = "invalid_stream_token"
 	RejectAccount   = "wrong_account"
 	RejectLimit     = "rate_limited"
-	RejectBusy      = "busy"
+	RejectBusy      = "busy" // reported by the app's hooks, not the gateway
 )
 
 // Hooks are the app's side of the gateway. They run on request
@@ -386,7 +386,6 @@ func (g *Gateway) webhook(w http.ResponseWriter, r *http.Request) {
 		tok := g.IssueToken(ans.CallID)
 		io.WriteString(w, StreamTwiML(StreamURL(cfg.PublicURL), map[string]string{"token": tok}))
 	case ans.Reject != "":
-		g.hooks.Rejected(RejectBusy, callSID)
 		io.WriteString(w, RejectTwiML(ans.Reject))
 	default:
 		io.WriteString(w, HangupTwiML())

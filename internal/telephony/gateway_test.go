@@ -175,7 +175,7 @@ func TestGatewaySecurity(t *testing.T) {
 	if r, _ := http.Get(base + telephony.PathPing + nonce); r.StatusCode != http.StatusNoContent || !g.Pinged(nonce) {
 		t.Errorf("ping %d", r.StatusCode)
 	}
-	if got := h.rejections(); strings.Join(got, ",") != "busy,invalid_signature,invalid_signature,wrong_account" {
+	if got := h.rejections(); strings.Join(got, ",") != "invalid_signature,invalid_signature,wrong_account" {
 		t.Errorf("rejections %v", got)
 	}
 	if h.signed != 2 {
