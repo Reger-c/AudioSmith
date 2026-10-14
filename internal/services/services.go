@@ -67,6 +67,13 @@ type Config struct {
 	// the oldest takes neither starred nor in a project are deleted. nil or
 	// 0 keeps every take.
 	KeepTakes func() int
+
+	// M3 (longform.go). DataDir holds longform renders (<DataDir>/renders);
+	// "" means the parent of the store's audio directory. Encode returns
+	// the engine's media.encode executor, or nil while the engine has
+	// none: books are then WAV only.
+	DataDir string
+	Encode  func() jobs.Executor
 }
 
 // Services is the set of services over one store, as core.Services for
@@ -78,8 +85,12 @@ type Services struct {
 	// Render is the take service's render pipeline and history tools
 	// beyond core.TakeService (previews, Check audio, pruning).
 	Render *Takes
-	takes  *Takes
-	drafts *Drafts
+	// Longform renders Stories and Audiobook projects; Library saves them
+	// and searches everything the Projects page lists (M3).
+	Longform *Longform
+	Library  *Library
+	takes    *Takes
+	drafts   *Drafts
 }
 
 // New builds the services. Close releases them.
@@ -106,19 +117,23 @@ func New(cfg Config) *Services {
 		drafts:        newDrafts(cfg),
 	}
 	s.Render = s.takes
+	projects := &Projects{store: cfg.Store.Projects(), bus: cfg.Bus, now: cfg.Now}
 	s.Services = core.Services{
 		Bus:      cfg.Bus,
 		Takes:    s.takes,
 		Voices:   newVoices(cfg), // voices.go
-		Projects: &Projects{store: cfg.Store.Projects(), bus: cfg.Bus, now: cfg.Now},
+		Projects: projects,
 		Licences: cfg.Licences,
 		Drafts:   s.drafts,
 	}
+	s.Longform = newLongform(cfg, s.takes) // M3: longform.go
+	s.Library = newLibrary(cfg, projects)
 	return s
 }
 
 // Close writes pending drafts, stops listening to the bus and waits for
 // takes being saved. The store stays open: its owner closes it after.
 func (s *Services) Close(ctx context.Context) error {
+	s.Longform.Close()
 	return errors.Join(s.drafts.Close(ctx), s.takes.Close())
 }

@@ -958,16 +958,39 @@ func (s *Sched) outbox() {
 	}
 }
 
-// newULID makes a ULID (as core.NewID, which jobs cannot import).
+// The last ULID newULID made.
+var (
+	ulidMu   sync.Mutex
+	ulidMS   uint64
+	ulidLast [16]byte
+	ulidUsed bool
+)
+
+// newULID makes a ULID (as core.NewID, which jobs cannot import),
+// monotonic within a millisecond so the jobs of a graph sort, and so run,
+// in the order they were made.
 func newULID(t time.Time) string {
 	const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-	var b [16]byte
 	ms := uint64(t.UnixMilli())
-	for i := 5; i >= 0; i-- {
-		b[i] = byte(ms)
-		ms >>= 8
+	ulidMu.Lock()
+	var b [16]byte
+	if ulidUsed && ms == ulidMS {
+		b = ulidLast
+		for i := 15; i >= 6; i-- {
+			b[i]++
+			if b[i] != 0 {
+				break
+			}
+		}
+	} else {
+		for i := 5; i >= 0; i-- {
+			b[i] = byte(ms >> (8 * (5 - i)))
+		}
+		rand.Read(b[6:])
+		b[6] &= 0x7f
 	}
-	rand.Read(b[6:])
+	ulidMS, ulidLast, ulidUsed = ms, b, true
+	ulidMu.Unlock()
 	var out [26]byte
 	var acc uint64
 	bits, j := 0, 25

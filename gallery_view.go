@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/gallery"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
@@ -203,6 +204,7 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 				if m.Item(i18n.T("Use in Studio")).Chosen() {
 					a.useArchetype(arch, true)
 				}
+				a.longformVoiceItems(m, func(then func(*core.Voice)) { a.useArchetypeThen(arch, then) }) // M3 (thread #18)
 				if m.Item(i18n.T("Open in Design without saving")).Chosen() {
 					a.designFromArchetype(arch)
 				}

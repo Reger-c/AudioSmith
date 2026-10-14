@@ -25,17 +25,17 @@ import (
 type settingsForm struct {
 	systemLocale string // mygo.App.Locale(), read when the window opens
 
-	language     string // label
-	theme        int
-	scale        int
-	reduceMotion bool
-	source       string // label
-	endpoint     string // custom endpoint
-	proxyMode    string // label
-	proxy        string // custom proxy
-	cacheDir     string
-	memoryGB     float64
-	autoUnload   float64
+	language        string // label
+	theme           int
+	scale           int
+	reduceMotion    bool
+	source          string // label
+	endpoint        string // custom endpoint
+	proxyMode       string // label
+	proxy           string // custom proxy
+	cacheDir        string
+	memoryGB        float64
+	autoUnload      float64
 	defaultModel    string // label
 	autoplaySetting bool
 

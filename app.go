@@ -35,6 +35,7 @@ type app struct {
 	transcribeState
 	dictationState
 	llmState
+	longformState // M3 (thread #18): longform.go — Stories, Audiobook, Projects
 }
 
 func newApp(eng *engineHost, lib *library) *app {
@@ -50,6 +51,7 @@ func newApp(eng *engineHost, lib *library) *app {
 	a.openTranscripts(lib) // transcribe.go
 	a.openLLM()            // transcribe_llm.go
 	a.openDictation()      // dictation.go
+	a.openLongform(lib)    // M3: longform.go (thread #18)
 	return a
 }
 

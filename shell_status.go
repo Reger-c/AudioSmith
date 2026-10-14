@@ -178,7 +178,7 @@ func (a *app) jobsPanel(c *ui.Context) {
 			return
 		}
 		for _, j := range active {
-			ui.Row(c.Key("job-"+j.ID)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("job-" + j.ID)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 4)).Children(func() {
 					title := j.Title
 					if title == "" {
