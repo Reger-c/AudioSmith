@@ -145,7 +145,7 @@ func TestPhoneNumbers(t *testing.T) {
 	if got := MaskNumber("+442079460958"); got != "+44••••••0958" {
 		t.Errorf("mask %q", got)
 	}
-	if !ValidAccountSID("AC" + "0123456789abcdef0123456789abcdef") || ValidAccountSID("AC123") || ValidAccountSID("SK" + "0123456789abcdef0123456789abcdef") {
+	if !ValidAccountSID("AC"+"0123456789abcdef0123456789abcdef") || ValidAccountSID("AC123") || ValidAccountSID("SK"+"0123456789abcdef0123456789abcdef") {
 		t.Error("account sid")
 	}
 }
