@@ -54,6 +54,14 @@ func (a *app) commands() []command {
 	add("unload", studio, i18n.T("Unload the model"), "Unload the model", "", !eng.Busy && len(eng.Loaded) > 0, a.unload)
 	add("restart", studio, i18n.T("Restart engine"), "Restart engine", "", true, a.restartEngine)
 
+	// M2 (thread #17).
+	speech := i18n.T("Speech to text")
+	add("dictate", speech, i18n.T("Start or stop dictation"), "Start or stop dictation dictate", dictationGlyphs(a.dictShortcut), true, a.dictToggle)
+	add("transcribe-file", speech, i18n.T("Transcribe a file…"), "Transcribe a file", "", a.trJob == nil, func() {
+		a.navigate("/transcripts")
+		a.chooseTranscribeFile()
+	})
+
 	view := i18n.T("View")
 	add("palette", view, i18n.T("Command palette"), "Command palette", "⌘K", true, a.openPalette)
 	add("switch", view, i18n.T("Engine quick switch"), "Engine quick switch", "⌘E", true, func() { a.switchOpen = true })
@@ -323,7 +331,7 @@ func (a *app) openURL(raw string) {
 	}
 	path = "/" + strings.Trim(path, "/")
 	switch section(path) {
-	case "/studio", "/history", "/models", "/engine", "/logs":
+	case "/studio", "/history", "/models", "/engine", "/logs", "/transcripts": // M2: /transcripts
 		a.navigate(section(path))
 	case "/settings":
 		if path == "/settings" {

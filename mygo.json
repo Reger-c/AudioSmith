@@ -10,7 +10,7 @@
     "minimumSystemVersion": "15.0",
     "infoPlist": {
       "LSApplicationCategoryType": "public.app-category.music",
-      "NSMicrophoneUsageDescription": "AudioSmith records from the microphone when you record a voice reference or a consent statement."
+      "NSMicrophoneUsageDescription": "AudioSmith records your voice for voice cloning, transcription and dictation. Audio stays on this Mac."
     },
     "helperEntitlements": {
       "engine/audiosmith-engine": "engine/Support/engine.entitlements"

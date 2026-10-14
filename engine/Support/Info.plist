@@ -11,6 +11,6 @@
 	<key>CFBundleName</key>
 	<string>audiosmith-engine</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>AudioSmith records from the microphone when you record a voice reference or a consent statement.</string>
+	<string>AudioSmith records your voice for voice cloning, transcription and dictation. Audio stays on this Mac.</string>
 </dict>
 </plist>
