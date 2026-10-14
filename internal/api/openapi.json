@@ -1,0 +1,3233 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AudioSmith Local API",
+    "version": "0",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    },
+    "description": "AudioSmith's local API: OpenAI's audio API under /v1 (point an OpenAI SDK's base_url at http://127.0.0.1:3901/v1, any api_key), AudioSmith's own under /api, streaming speech over a WebSocket, job events as Server-Sent Events, and an MCP server at /mcp.\n\n**Security.** The server listens on 127.0.0.1 only and needs no key there unless Settings → Local API → Require an API key is on (then send Authorization: Bearer <key>). Host and Origin are checked: browsers may call it only from its own origin or the origins listed in the settings. Requests to /api that change something need the header X-AudioSmith-Request: 1 (or the key). With LAN sharing on, other devices reach a second port with the 6-digit PIN (X-AudioSmith-Pin header, or ?pin=) for speech, transcription and reading voices, or with the key for everything.\n\n**Work.** Every request runs in the app's job queue at interactive priority, as the Studio's do. A request waiting longer than the queue limit (120 s) answers 503 queue_timeout; while the engine is down, 503 engine_unavailable with Retry-After. Models whose licence is not accepted answer 403 licence_required; models not downloaded 409 model_not_downloaded."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:3901",
+      "description": "This Mac (the port is in Settings → Local API)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "OpenAI",
+      "description": "OpenAI's audio API."
+    },
+    {
+      "name": "Generation"
+    },
+    {
+      "name": "Voices"
+    },
+    {
+      "name": "Takes"
+    },
+    {
+      "name": "Transcripts"
+    },
+    {
+      "name": "Jobs"
+    },
+    {
+      "name": "Models"
+    },
+    {
+      "name": "Tools"
+    },
+    {
+      "name": "Streaming"
+    },
+    {
+      "name": "MCP"
+    },
+    {
+      "name": "System"
+    }
+  ],
+  "security": [
+    {},
+    {
+      "bearer": []
+    },
+    {
+      "pin": []
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Server info",
+        "operationId": "root",
+        "description": "Names, version and where things are.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health",
+        "operationId": "health",
+        "description": "200 when requests can run; 503 with Retry-After while the engine starts or is down.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/.well-known/audiosmith-speech": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Capabilities",
+        "operationId": "capabilities",
+        "description": "Endpoints, formats, features, limits and auth of this server, for discovery.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "This document",
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/docs": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "API reference viewer",
+        "operationId": "docs",
+        "description": "RapiDoc, bundled; works offline.",
+        "responses": {
+          "200": {
+            "description": "HTML",
+            "content": {
+              "text/html": {}
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/audio/speech": {
+      "post": {
+        "tags": [
+          "OpenAI"
+        ],
+        "summary": "Create speech",
+        "operationId": "createSpeech",
+        "description": "OpenAI's text to speech. The take is made by the engine's queue (interactive priority) and kept in the History.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeechRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Audio (or SSE when stream_format is sse).",
+            "headers": {
+              "X-AudioSmith-Take-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The take in the history."
+              },
+              "X-AudioSmith-Job-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-AudioSmith-Model": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Catalogue id of the model used."
+              },
+              "X-AudioSmith-Voice": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-AudioSmith-Ignored": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Parameters the model does not honour."
+              },
+              "X-AudioSmith-Seed": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "The seed used (not on live streams)."
+              }
+            },
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/pcm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/audio/transcriptions": {
+      "post": {
+        "tags": [
+          "OpenAI"
+        ],
+        "summary": "Create transcription",
+        "operationId": "createTranscription",
+        "description": "OpenAI's speech to text. The transcript is kept in Transcribe's history.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Any audio or video AVFoundation reads, up to 1 GiB."
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "whisper-1 / gpt-4o-transcribe (Transcribe's Accurate model), gpt-4o-mini-transcribe (its Fast model), or a catalogue model."
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "response_format": {
+                    "type": "string",
+                    "enum": [
+                      "json",
+                      "text",
+                      "verbose_json",
+                      "srt",
+                      "vtt"
+                    ]
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "description": "Ignored."
+                  },
+                  "timestamp_granularities[]": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "word",
+                        "segment"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The transcript.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Transcription"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TranscriptionVerbose"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {},
+              "text/vtt": {},
+              "application/x-subrip": {}
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/audio/translations": {
+      "post": {
+        "tags": [
+          "OpenAI"
+        ],
+        "summary": "Create translation",
+        "operationId": "createTranslation",
+        "description": "Speech in any language to English text: the transcript is translated by the language model of Settings → Writing help (501 translation_unavailable without one). English speech is returned as transcribed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "response_format": {
+                    "type": "string",
+                    "enum": [
+                      "json",
+                      "text",
+                      "verbose_json",
+                      "srt",
+                      "vtt"
+                    ]
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "English text.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Transcription"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TranscriptionVerbose"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {}
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "tags": [
+          "OpenAI"
+        ],
+        "summary": "List models",
+        "operationId": "listModels",
+        "description": "OpenAI's aliases, then the catalogue's speech and speech-to-text models.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIModelList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models/{id}": {
+      "get": {
+        "tags": [
+          "OpenAI"
+        ],
+        "summary": "Get a model",
+        "operationId": "getModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/audio/voices": {
+      "get": {
+        "tags": [
+          "OpenAI"
+        ],
+        "summary": "List voices",
+        "operationId": "listVoiceOptions",
+        "description": "Everything voice may name: OpenAI's names, saved voices, built-in speakers.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceOptionList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/voices": {
+      "get": {
+        "tags": [
+          "Voices"
+        ],
+        "summary": "List saved voices",
+        "operationId": "listVoices",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Name, style, transcript, description, tags."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cloned",
+                "designed",
+                "builtin"
+              ]
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Voices"
+        ],
+        "summary": "Clone a voice",
+        "operationId": "cloneVoice",
+        "description": "Saves a voice cloned from a recording (5–15 s of clean speech works best).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "ref_text": {
+                    "type": "string",
+                    "description": "What the recording says; empty lets the engine listen."
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "style": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Voice"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/voices/design": {
+      "post": {
+        "tags": [
+          "Voices"
+        ],
+        "summary": "Design a voice",
+        "operationId": "designVoice",
+        "description": "Saves a voice made from a description.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Designed"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/voices/{id}": {
+      "get": {
+        "tags": [
+          "Voices"
+        ],
+        "summary": "Get a voice",
+        "operationId": "getVoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Voice"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Voices"
+        ],
+        "summary": "Delete a voice",
+        "operationId": "deleteVoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/voices/{id}/audio": {
+      "get": {
+        "tags": [
+          "Voices"
+        ],
+        "summary": "A voice's audio",
+        "operationId": "voiceAudio",
+        "description": "Its sample (designed, locked) or its reference.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audio",
+            "content": {
+              "audio/wav": {}
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/generate": {
+      "post": {
+        "tags": [
+          "Generation"
+        ],
+        "summary": "Generate a take",
+        "operationId": "generate",
+        "description": "The Studio's generation: the whole recipe, any length (long scripts are chunked), Even out volume on by default. Waits for the take unless wait is false.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Generated"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued (wait: false)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes": {
+      "get": {
+        "tags": [
+          "Takes"
+        ],
+        "summary": "List takes",
+        "operationId": "listTakes",
+        "description": "Newest first.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Full text of the script."
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "name": "voice_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "name": "starred",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": ""
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "1–500, default 50"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakeList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/takes/{id}": {
+      "get": {
+        "tags": [
+          "Takes"
+        ],
+        "summary": "Get a take",
+        "operationId": "getTake",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Take"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Takes"
+        ],
+        "summary": "Delete a take",
+        "operationId": "deleteTake",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{id}/audio": {
+      "get": {
+        "tags": [
+          "Takes"
+        ],
+        "summary": "A take's audio",
+        "operationId": "takeAudio",
+        "description": "WAV; ranges supported.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WAV",
+            "content": {
+              "audio/wav": {}
+            }
+          },
+          "206": {
+            "description": "Range"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/transcripts": {
+      "get": {
+        "tags": [
+          "Transcripts"
+        ],
+        "summary": "List transcripts",
+        "operationId": "listTranscripts",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": ""
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Transcripts"
+        ],
+        "summary": "Transcribe a file",
+        "operationId": "createTranscript",
+        "description": "With word timings unless words is false.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "words": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transcript": {
+                      "$ref": "#/components/schemas/Transcript"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/transcripts/{id}": {
+      "get": {
+        "tags": [
+          "Transcripts"
+        ],
+        "summary": "Get a transcript",
+        "operationId": "getTranscript",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "txt",
+                "srt",
+                "vtt"
+              ]
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transcript"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Transcripts"
+        ],
+        "summary": "Delete a transcript",
+        "operationId": "deleteTranscript",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "List jobs",
+        "operationId": "listJobs",
+        "description": "Unfinished jobs by default.",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated states, or all."
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Exact, or a kind: prefix (take:)."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "name": "lane",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/events": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Every job's events",
+        "operationId": "allJobEvents",
+        "description": "Server-Sent Events: a job event per change of any job.",
+        "responses": {
+          "200": {
+            "description": "SSE",
+            "content": {
+              "text/event-stream": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{id}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get a job",
+        "operationId": "getJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/jobs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Cancel a job",
+        "operationId": "cancelJob",
+        "description": "Cancels it and the jobs that depend on it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/jobs/{id}/events": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "A job's events",
+        "operationId": "jobEvents",
+        "description": "Server-Sent Events: job (the job, at once and at each change), then done when it ends.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/models": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "List the catalogue",
+        "operationId": "listCatalog",
+        "parameters": [
+          {
+            "name": "task",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "tts",
+                "stt",
+                "align",
+                "vad",
+                "enhance"
+              ]
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Get a catalogue model",
+        "operationId": "getCatalogModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Model"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/models/{id}/download": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Download a model",
+        "operationId": "downloadModel",
+        "description": "Queues the download (resumable; licences are accepted in the app).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "job_id": {
+                      "type": "string"
+                    },
+                    "events_url": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/languages": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "List languages",
+        "operationId": "listLanguages",
+        "description": "Of a model, or of every speech model.",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguageList"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/tools/probe": {
+      "post": {
+        "tags": [
+          "Tools"
+        ],
+        "summary": "Probe a media file",
+        "operationId": "probe",
+        "description": "Codec, streams, duration (the engine's media worker). Loopback or the key only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Absolute path."
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Probe"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/tools/direction": {
+      "post": {
+        "tags": [
+          "Tools"
+        ],
+        "summary": "Parse a direction",
+        "operationId": "direction",
+        "description": "A performance note (“more urgent, a little scared”) → emotions, an instruction for instruct models, rate, pitch and energy biases; with the language model of Settings → Writing help when there is one, else keywords.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "note"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Direction"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/tools/rate-fit": {
+      "post": {
+        "tags": [
+          "Tools"
+        ],
+        "summary": "Speech-rate fit",
+        "operationId": "rateFit",
+        "description": "Predicts whether a line fits a slot when spoken; rewrite asks the language model for a shorter version when it overflows.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "slot": {
+                    "type": "number",
+                    "description": "Seconds."
+                  },
+                  "speed": {
+                    "type": "number"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "source_language": {
+                    "type": "string"
+                  },
+                  "rewrite": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "text",
+                  "language",
+                  "slot"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fit": {
+                      "$ref": "#/components/schemas/Fit"
+                    },
+                    "rewrite": {
+                      "type": "string"
+                    },
+                    "rewrite_fit": {
+                      "$ref": "#/components/schemas/Fit"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/ws/tts": {
+      "get": {
+        "tags": [
+          "Streaming"
+        ],
+        "summary": "Streaming speech (WebSocket)",
+        "operationId": "ttsStream",
+        "description": "Upgrade to a WebSocket. Send a JSON text message with GenerateRequest's fields (plus sample_rate: 24000 by default, 0 for the model's); receive {type: start, take_id, sample_rate, channels, encoding: pcm_s16le}, binary PCM frames as the take is made, then {type: done, audio_seconds, ttfa_ms, rtf, seed} — or {type: error, error}. {type: cancel} stops it. The socket serves one request at a time, as many as you like.",
+        "responses": {
+          "101": {
+            "description": "Switching Protocols"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "post": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "MCP (Streamable HTTP)",
+        "operationId": "mcpPost",
+        "description": "The Model Context Protocol server: tools generate_speech, clone_voice, design_voice, transcribe, list_voices, list_models, list_languages, check_health; resources voice://{id}, history://recent. Send X-AudioSmith-Client: <agent> for its bound voice. Stdio clients: AudioSmith.app/Contents/MacOS/AudioSmith --mcp-stdio.",
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response or SSE"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "MCP server-to-client stream",
+        "operationId": "mcpGet",
+        "responses": {
+          "200": {
+            "description": "SSE"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "End an MCP session",
+        "operationId": "mcpDelete",
+        "responses": {
+          "200": {
+            "description": "Closed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "What went wrong, in English."
+              },
+              "type": {
+                "type": "string",
+                "description": "OpenAI's error type: invalid_request_error, authentication_error, permission_error, not_found_error, rate_limit_error, server_error."
+              },
+              "code": {
+                "type": "string",
+                "description": "Machine-readable code: invalid_request, model_not_found, voice_not_found, ambiguous_voice, unsupported_format, unsupported_model, licence_required, model_not_downloaded, engine_unavailable, queue_timeout, unauthorized, forbidden_host, forbidden_origin, csrf_header_missing, too_many_attempts, translation_unavailable, or an engine code (oom, busy, input_too_long, unsupported_media…)."
+              },
+              "param": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "message",
+              "type",
+              "code"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "OpenAI's error object. AudioSmith adds data next to the fields: licence_required carries model, licence, licenceName, licenceURL."
+      },
+      "SpeechRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "A catalogue model (id, repo or label, see GET /api/models), or OpenAI's tts-1, tts-1-hd, gpt-4o-mini-tts (any gpt-*-tts): the Studio's default model — or, for a saved voice the default cannot speak, a model that can."
+          },
+          "input": {
+            "type": "string",
+            "description": "The text, at most 4096 characters. Markup ([pause 500ms], [laughter] on models that take it) is honoured.",
+            "maxLength": 4096
+          },
+          "voice": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            ],
+            "description": "A saved voice (id, or name when unique), a built-in speaker of the model (af_heart), default, or an OpenAI voice name (alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar), which picks a built-in speaker of that voice's gender."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Delivery (instruct models: Qwen3-TTS CustomVoice), or the voice to design on a design model without a saved voice (Qwen3-TTS VoiceDesign, OmniVoice). Ignored by others (see X-AudioSmith-Ignored)."
+          },
+          "response_format": {
+            "type": "string",
+            "description": "wav (default here: OpenAI's mp3 needs an encoder AudioSmith does not have), pcm (24 kHz 16-bit mono little-endian), aac (AAC-LC in an M4A container, through the engine's media worker). mp3, opus and flac answer 400 unsupported_format.",
+            "enum": [
+              "wav",
+              "pcm",
+              "aac",
+              "m4a",
+              "mp3",
+              "opus",
+              "flac"
+            ]
+          },
+          "speed": {
+            "type": "number",
+            "description": "0.25–4; models without speed control ignore it.",
+            "minimum": 0.25,
+            "maximum": 4
+          },
+          "stream_format": {
+            "type": "string",
+            "description": "audio: the bytes, streamed (wav and pcm stream as the take is made, a sentence or so at a time, unless normalize is on); sse: Server-Sent Events speech.audio.delta {audio: base64} then speech.audio.done {usage}.",
+            "enum": [
+              "audio",
+              "sse"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "description": "AudioSmith: BCP-47 (en, zh, pt-BR) or the model's own value."
+          },
+          "seed": {
+            "type": "integer",
+            "description": "AudioSmith: the seed (reproducible takes on models with sampling)."
+          },
+          "duration": {
+            "type": "number",
+            "description": "AudioSmith: target seconds (OmniVoice)."
+          },
+          "steps": {
+            "type": "integer",
+            "description": "AudioSmith: diffusion steps (OmniVoice)."
+          },
+          "num_step": {
+            "type": "integer",
+            "description": "Same as steps (VoiceStudio's name)."
+          },
+          "temperature": {
+            "type": "number",
+            "description": "AudioSmith: sampling temperature."
+          },
+          "top_p": {
+            "type": "number",
+            "description": "AudioSmith: nucleus sampling."
+          },
+          "guidance_scale": {
+            "type": "number",
+            "description": "AudioSmith: classifier-free guidance (OmniVoice, Chatterbox)."
+          },
+          "exaggeration": {
+            "type": "number",
+            "description": "AudioSmith: emotion intensity (Chatterbox)."
+          },
+          "normalize": {
+            "type": "boolean",
+            "description": "AudioSmith: Even out volume (mastering to −16 LUFS). Off by default here; on, the whole take is made before it is sent."
+          },
+          "instruct": {
+            "type": "string",
+            "description": "Same as instructions."
+          },
+          "description": {
+            "type": "string",
+            "description": "Same as instructions (design models)."
+          }
+        },
+        "required": [
+          "input"
+        ]
+      },
+      "Transcription": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "duration"
+                ]
+              },
+              "seconds": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "TranscriptionVerbose": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "transcribe",
+              "translate"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "description": "English name, lower case (english)."
+          },
+          "duration": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "seek": {
+                  "type": "integer"
+                },
+                "start": {
+                  "type": "number"
+                },
+                "end": {
+                  "type": "number"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "tokens": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                "temperature": {
+                  "type": "number"
+                },
+                "avg_logprob": {
+                  "type": "number"
+                },
+                "compression_ratio": {
+                  "type": "number"
+                },
+                "no_speech_prob": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "words": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Word"
+            }
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "seconds": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "required": [
+          "task",
+          "language",
+          "duration",
+          "text"
+        ]
+      },
+      "Word": {
+        "type": "object",
+        "properties": {
+          "word": {
+            "type": "string"
+          },
+          "start": {
+            "type": "number"
+          },
+          "end": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "word",
+          "start",
+          "end"
+        ]
+      },
+      "OpenAIModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "model"
+            ]
+          },
+          "created": {
+            "type": "integer"
+          },
+          "owned_by": {
+            "type": "string"
+          },
+          "audiosmith": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "tts",
+                  "stt"
+                ]
+              },
+              "alias_for": {
+                "type": "string",
+                "description": "For OpenAI's names: the catalogue model they stand for."
+              },
+              "repo": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "downloaded": {
+                "type": "boolean"
+              },
+              "licence": {
+                "type": "string"
+              },
+              "acceptance_needed": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "owned_by"
+        ]
+      },
+      "OpenAIModelList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenAIModel"
+            }
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ]
+      },
+      "VoiceOptionList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "default_model": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "openai",
+                    "saved",
+                    "builtin"
+                  ]
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "language": {
+                  "type": "string"
+                },
+                "gender": {
+                  "type": "string"
+                },
+                "addressable_by_name": {
+                  "type": "boolean"
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type"
+              ]
+            }
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ]
+      },
+      "Voice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "voice"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cloned",
+              "designed",
+              "builtin"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "description": "Repo the voice is for; empty = any model that can."
+          },
+          "speaker": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "style": {
+            "type": "string"
+          },
+          "design": {
+            "type": "string"
+          },
+          "seed": {
+            "type": "integer"
+          },
+          "ref_text": {
+            "type": "string"
+          },
+          "ref_seconds": {
+            "type": "number"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "The owner recorded the consent statement in AudioSmith."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "origin": {
+            "type": "string"
+          },
+          "has_audio": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "name",
+          "kind"
+        ]
+      },
+      "VoiceList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Voice"
+            }
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ]
+      },
+      "DesignRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "description": "Free text: “a warm older British man, deep voice”; 女，青年 works too."
+          },
+          "language": {
+            "type": "string"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "0 = a new one."
+          },
+          "model": {
+            "type": "string",
+            "description": "A design model; default the first."
+          }
+        },
+        "required": [
+          "description"
+        ]
+      },
+      "Designed": {
+        "type": "object",
+        "properties": {
+          "voice": {
+            "$ref": "#/components/schemas/Voice"
+          },
+          "unmatched": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Words the description parser could not map (design models still read them as free text)."
+          },
+          "model": {
+            "type": "string"
+          }
+        }
+      },
+      "GenerateRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "model": {
+            "type": "string",
+            "description": "As in SpeechRequest.model."
+          },
+          "voice": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "number"
+          },
+          "seed": {
+            "type": "integer"
+          },
+          "duration": {
+            "type": "number"
+          },
+          "steps": {
+            "type": "integer"
+          },
+          "temperature": {
+            "type": "number"
+          },
+          "top_p": {
+            "type": "number"
+          },
+          "guidance": {
+            "type": "number"
+          },
+          "exaggeration": {
+            "type": "number"
+          },
+          "normalize": {
+            "type": "boolean",
+            "description": "Even out volume; on unless false, as in the Studio."
+          },
+          "bits": {
+            "type": "integer",
+            "enum": [
+              16,
+              24,
+              32
+            ]
+          },
+          "wait": {
+            "type": "boolean",
+            "description": "Wait for the take (default). false answers 202 at once."
+          },
+          "background": {
+            "type": "boolean",
+            "description": "Queue behind interactive work."
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "Generated": {
+        "type": "object",
+        "properties": {
+          "take": {
+            "$ref": "#/components/schemas/Take"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "ignored": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "GenerateAccepted": {
+        "type": "object",
+        "properties": {
+          "take_id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "ignored": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "job_url": {
+            "type": "string"
+          },
+          "events_url": {
+            "type": "string"
+          },
+          "audio_url": {
+            "type": "string"
+          }
+        }
+      },
+      "Take": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "take"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "text": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "voice": {
+            "type": "string"
+          },
+          "voice_id": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "number"
+          },
+          "seed": {
+            "type": "integer"
+          },
+          "duration": {
+            "type": "number"
+          },
+          "steps": {
+            "type": "integer"
+          },
+          "sample_rate": {
+            "type": "integer"
+          },
+          "audio_seconds": {
+            "type": "number"
+          },
+          "gen_seconds": {
+            "type": "number"
+          },
+          "rtf": {
+            "type": "number"
+          },
+          "starred": {
+            "type": "boolean"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "audio_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "text",
+          "model",
+          "audio_url"
+        ]
+      },
+      "TakeList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Take"
+            }
+          }
+        }
+      },
+      "Transcript": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "transcript"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "title": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          },
+          "clean": {
+            "type": "string"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "number"
+                },
+                "end": {
+                  "type": "number"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "speaker": {
+                  "type": "string"
+                },
+                "words": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Word"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "text"
+        ]
+      },
+      "TranscriptList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transcript"
+            }
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "job"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "description": "take.render, transcript.make, model.download, media.encode…"
+          },
+          "lane": {
+            "type": "string",
+            "enum": [
+              "gpu",
+              "listen",
+              "media",
+              "net",
+              "cpu"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "stage": {
+                "type": "string"
+              },
+              "fraction": {
+                "type": "number",
+                "description": "0–1; −1 unknown"
+              },
+              "message": {
+                "type": "string"
+              },
+              "audio_seconds": {
+                "type": "number"
+              },
+              "bytes": {
+                "type": "integer"
+              },
+              "total_bytes": {
+                "type": "integer"
+              }
+            }
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {},
+              "retryable": {
+                "type": "boolean"
+              }
+            }
+          },
+          "result": {
+            "description": "The job's result (its kind's JSON), when it succeeded."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "kind",
+          "state"
+        ]
+      },
+      "JobList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            }
+          }
+        }
+      },
+      "Model": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "model"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "family": {
+            "type": "string"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "voices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "language": {
+                  "type": "string"
+                },
+                "gender": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "sample_rate": {
+            "type": "integer"
+          },
+          "max_chars": {
+            "type": "integer"
+          },
+          "rtf": {
+            "type": "number"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "min_memory_gb": {
+            "type": "number"
+          },
+          "downloaded": {
+            "type": "boolean"
+          },
+          "default": {
+            "type": "boolean"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "about": {
+            "type": "string"
+          },
+          "licence": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "commercial": {
+                "type": "boolean"
+              },
+              "acceptance_needed": {
+                "type": "boolean",
+                "description": "Accept it in AudioSmith → Models first; until then requests answer 403 licence_required."
+              }
+            }
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "repo",
+          "tasks",
+          "downloaded",
+          "licence"
+        ]
+      },
+      "ModelList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            }
+          }
+        }
+      },
+      "Language": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "native": {
+            "type": "string"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ]
+      },
+      "LanguageList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Language"
+            }
+          }
+        }
+      },
+      "EngineStatus": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "starting",
+              "restarting",
+              "failed",
+              "stopped"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "engineVersion": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "memory": {
+            "type": "integer"
+          },
+          "families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "loaded": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "starting",
+              "unavailable"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "engine": {
+            "$ref": "#/components/schemas/EngineStatus"
+          }
+        },
+        "required": [
+          "status",
+          "version"
+        ]
+      },
+      "Probe": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "number"
+          },
+          "hasAudio": {
+            "type": "boolean"
+          },
+          "hasVideo": {
+            "type": "boolean"
+          },
+          "audioTracks": {
+            "type": "integer"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "sampleRate": {
+            "type": "integer"
+          },
+          "channels": {
+            "type": "integer"
+          },
+          "bits": {
+            "type": "integer"
+          },
+          "bitRate": {
+            "type": "integer"
+          },
+          "video": {
+            "type": "object",
+            "properties": {
+              "codec": {
+                "type": "string"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              },
+              "fps": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "Direction": {
+        "type": "object",
+        "properties": {
+          "emotions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "instruct": {
+            "type": "string"
+          },
+          "rate": {
+            "type": "number"
+          },
+          "pitch": {
+            "type": "number"
+          },
+          "energy": {
+            "type": "number"
+          },
+          "translateHint": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "llm",
+              "keywords"
+            ]
+          },
+          "fallback": {
+            "type": "string"
+          }
+        }
+      },
+      "Fit": {
+        "type": "object",
+        "properties": {
+          "predicted": {
+            "type": "number"
+          },
+          "slot": {
+            "type": "number"
+          },
+          "ratio": {
+            "type": "number"
+          },
+          "over": {
+            "type": "number"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "tight",
+              "overflow"
+            ]
+          }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "An error (OpenAI's shape).",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Seconds, on 503 and 429."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The API key of Settings → Local API (optional on this Mac unless required)."
+      },
+      "pin": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-AudioSmith-Pin",
+        "description": "LAN sharing's 6-digit PIN."
+      }
+    }
+  }
+}
