@@ -143,9 +143,11 @@ func timelineLane(c *ui.Context, key string, s *timelineState, m tlModel, ev tlE
 	s.clampOffset(d)
 	k := tok(t)
 	ui.Row(c.Key(key + "-tools")).Gap(px(t, 2)).AlignItems(ui.Center).Shrink(0).Children(func() {
+		// Zoom out, the zoom, zoom in, fit: the order of the Workflows canvas.
 		if iconButton(c.Key("zoom-out"), icons.MagnifierZoomOut, i18n.T("Zoom out")).Disabled(s.zoom <= 1).Clicked() {
 			s.setZoom(s.zoom/2, s.offset+s.span(d)/2, d)
 		}
+		ui.Text(c, strconv.Itoa(int(s.zoom))+"×").FontSize(px(t, fsCaption)).TextColor(k.Text2).Shrink(0).Padding(0, px(t, 4))
 		if iconButton(c.Key("zoom-in"), icons.MagnifierZoomIn, i18n.T("Zoom in")).Disabled(s.zoom >= tlMaxZoom).Clicked() {
 			at := s.offset + s.span(d)/2
 			if m.Playhead >= 0 {
@@ -153,10 +155,9 @@ func timelineLane(c *ui.Context, key string, s *timelineState, m tlModel, ev tlE
 			}
 			s.setZoom(s.zoom*2, at, d)
 		}
-		if ghostButton(c.Key("zoom-fit"), i18n.T("Fit all")).Disabled(s.zoom <= 1).Shrink(0).Clicked() {
+		if iconButton(c.Key("zoom-fit"), icons.FullScreenSquare, i18n.T("Fit all")).Disabled(s.zoom <= 1).Clicked() {
 			s.zoom, s.offset = 1, 0
 		}
-		ui.Text(c, strconv.Itoa(int(s.zoom))+"×").FontSize(px(t, fsMicro)).TextColor(k.Text3).Shrink(0)
 		ui.Spacer(c)
 		if s.edit {
 			tagChip(c, i18n.T("Precise editing: ←/→ nudge · ⇧ end · ⌥ move · S snap · Esc")).Shrink(1).MinWidth(0).Ellipsis("…")

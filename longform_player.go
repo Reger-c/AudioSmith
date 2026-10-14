@@ -92,6 +92,17 @@ func wordsOf(s string) []string {
 	return out
 }
 
+// spaceBetween says whether a space separates two display words: not
+// when either side is unspaced (Han, kana, CJK punctuation…).
+func spaceBetween(prev, next string) bool {
+	return !text.IsUnspaced(lastRune(prev)) && !text.IsUnspaced(firstRune(next))
+}
+
+func firstRune(s string) rune {
+	r, _ := utf8.DecodeRuneInString(s)
+	return r
+}
+
 func lastRune(s string) rune {
 	r, _ := utf8.DecodeLastRuneInString(s)
 	return r
@@ -261,7 +272,7 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 			if pi != cur {
 				var b strings.Builder
 				for i, w := range para.Words {
-					if i > 0 {
+					if i > 0 && spaceBetween(para.Words[i-1].Text, w.Text) {
 						b.WriteByte(' ')
 					}
 					b.WriteString(w.Text)
@@ -274,8 +285,18 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 				}
 				continue
 			}
-			ui.Row(c.Key("ra-cur-" + strconv.Itoa(pi))).Wrap().Gap(px(t, 4)).Children(func() {
+			// Spaced words keep a space's gap after them; unspaced ones
+			// (Han, kana…) sit side by side, as the text has them.
+			ui.Row(c.Key("ra-cur-" + strconv.Itoa(pi))).Wrap().GapX(0).GapY(px(t, 4)).Children(func() {
 				for wi, w := range para.Words {
+					gap := float32(0)
+					if wi+1 < len(para.Words) && spaceBetween(w.Text, para.Words[wi+1].Text) {
+						gap = px(t, 4)
+					}
+					pad := px(t, 1)
+					if text.IsUnspaced(firstRune(w.Text)) {
+						pad = 0
+					}
 					color := t.Text
 					bg := ui.Transparent
 					switch {
@@ -285,7 +306,7 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 						color = k.Text2
 					}
 					start := w.Start
-					if ui.ButtonBase(c.Key("w"+strconv.Itoa(wi))).Label(w.Text).Radius(3).Padding(0, px(t, 1)).Background(bg).Children(func() {
+					if ui.ButtonBase(c.Key("w"+strconv.Itoa(wi))).Label(w.Text).Radius(3).Padding(0, pad).Margin(0, gap, 0, 0).Background(bg).Children(func() {
 						ui.Text(c, w.Text).TextColor(color).FontSize(px(t, 15))
 					}).Clicked() {
 						seek(start)

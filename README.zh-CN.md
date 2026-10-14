@@ -8,7 +8,7 @@ AudioSmith 是一款运行在 Apple 芯片 Mac 上的本地语音工作室。
 
 所有模型都用 [MLX](https://github.com/ml-explore/mlx) 在 Mac 的 GPU 上运行。不需要 Python，不需要云账号；除非你主动选择，数据不会离开这台 Mac。
 
-> **状态：0.2 预览版。** 已实现 VoiceStudio 开源版的全部功能，正在做 0.2 验证，可能还有粗糙的地方，见[已知限制](#已知限制)。
+> **状态：0.3 预览版。** 已实现 VoiceStudio 开源版的全部功能，并已在 0.2 完成验证；0.3 重新设计了界面，可能还有粗糙的地方，见[已知限制](#已知限制)。
 
 ![工作室](docs/screenshots/studio.png)
 
@@ -77,4 +77,4 @@ Marvis 标注为 Apache-2.0，但它的训练数据 Emilia 不允许商用。商
 
 ## 许可证
 
-[Apache-2.0](LICENSE)。模型权重各有自己的许可，见上方“模型”一节。
+[Apache-2.0](LICENSE)。模型权重各有自己的许可，见上方“模型”一节。界面图标为 480 Design 的 [Solar](https://icon-sets.iconify.design/solar/)，CC BY 4.0 许可（见 [NOTICE](NOTICE)）。

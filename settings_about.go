@@ -372,14 +372,14 @@ func (a *app) aboutSettings(c *ui.Context) {
 	})
 	for _, ch := range a.checks {
 		ui.Row(c.Key("check-" + ch.id)).Gap(px(t, 8)).AlignItems(ui.Start).Children(func() {
-			mark, col := "✓", t.Success
+			mark, col := icons.CheckCircle, t.Success
 			switch ch.status {
 			case "warn":
-				mark, col = "!", t.Warning
+				mark, col = icons.DangerTriangle, t.Warning
 			case "fail":
-				mark, col = "✗", t.Danger
+				mark, col = icons.CloseCircle, t.Danger
 			}
-			ui.Text(c, mark).TextColor(col).Bold().Width(px(t, 14))
+			ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0).Margin(px(t, 2), 0, 0)
 			ui.Text(c, ch.title).Width(px(t, 150))
 			ui.Text(c, ch.detail).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).MinWidth(0)
 		})

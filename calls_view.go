@@ -31,7 +31,7 @@ func (a *app) callsPage(c *ui.Context) {
 			if a.callHistOn {
 				tip = i18n.T("Hide recent calls")
 			}
-			if iconToggle(c.Key("calls-hist-toggle"), icons.History, a.callHistOn, tip).Clicked() {
+			if panelToggle(c.Key("calls-hist-toggle"), icons.PanelLeft, a.callHistOn, tip).Clicked() {
 				a.callHistOn = !a.callHistOn
 			}
 		}

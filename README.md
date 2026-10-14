@@ -6,7 +6,7 @@ A local voice studio for macOS on Apple silicon. It covers text to speech with s
 
 Every model runs on the Mac's GPU with [MLX](https://github.com/ml-explore/mlx): no Python, no cloud account, nothing leaves the Mac unless you ask.
 
-> **Status: 0.2 preview.** Feature parity with VoiceStudio's open-source edition is built; the 0.2 verification pass is under way. Expect rough edges, and see [Known limits](#known-limits).
+> **Status: 0.3 preview.** Feature parity with VoiceStudio's open-source edition is built and was verified in 0.2; 0.3 redesigns the interface. Expect rough edges, and see [Known limits](#known-limits).
 
 ![Studio](docs/screenshots/studio.png)
 
@@ -51,7 +51,7 @@ With ad-hoc builds, macOS forgets the Accessibility grant after each update. Re-
 | **Calls** | An AI phone agent over your own Twilio account, outbound and inbound. It always speaks a disclosure and uses only designed or consent-verified voices; you can take over the call. Off until you set it up |
 | **Models** | A pinned catalogue: TTS, speech recognition, alignment, VAD, separation, diarization, enhancement, LLMs, watermark. Downloads are resumable and checked, with licences reviewed before gated ones. Any Hugging Face repo mlx-audio-swift loads |
 | **Responsible use** | An invisible AudioSeal watermark on generated audio (on by default; **Settings → Privacy**), with a detector in Tools and the API. Consent recordings for cloned voices. Licence gate for non-commercial models |
-| **App** | Sidebar sections (Create, Voices, Library, Automate, Utilities, System), ⌘1–9, command palette (⌘K), shortcut sheet (?), ⌘E engine switch. A status bar with jobs and downloads, notifications, and a logs panel (⇧⌘L). Settings for storage, diagnostics, usage, network, privacy and appearance. English and 简体中文 UI |
+| **App** | Sidebar sections (Create, Voices, Library, Automate, Utilities, System), ⌘1–9, command palette (⌘K), shortcut sheet (?), ⌘E engine switch. A status bar with jobs and downloads, notifications, and a logs panel (⇧⌘L). Settings (a dialog, ⌘,) for storage, diagnostics, usage, network, privacy and appearance. English and 简体中文 UI |
 
 Long work runs as jobs in one persistent queue: renders, dubs, transcripts, workflows, downloads. A job the app quit in the middle of continues at the next start. The engine never touches the network: it loads the snapshots the app downloaded.
 
@@ -204,4 +204,4 @@ These come after the 0.2 verification:
 
 ## License
 
-[Apache-2.0](LICENSE). Model weights carry their own licences; see [Models](#models).
+[Apache-2.0](LICENSE). Model weights carry their own licences; see [Models](#models). The interface icons are [Solar](https://icon-sets.iconify.design/solar/) by 480 Design, CC BY 4.0 (see [NOTICE](NOTICE)).

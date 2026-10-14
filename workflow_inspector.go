@@ -30,9 +30,7 @@ func (a *app) wfInspector(c *ui.Context) {
 	id := n.ID
 	changed := func() { a.wfEdit(func(*workflow.Workflow) {}) }
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Size(px(t, 26), px(t, 26)).Radius(6).Background(wfKindColor(n.Kind)).Center().Shrink(0).Children(func() {
-			ui.Icon(c, wfKindIcons[n.Kind].Linear).Size(px(t, 16), px(t, 16)).TextColor(ui.RGB(255, 255, 255))
-		})
+		wfKindTile(c, n.Kind, px(t, 26), px(t, 16))
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			ui.Text(c, n.Kind.Label()).Bold()
 			ui.Text(c, n.Kind.About()).FontSize(px(t, 11.5)).TextColor(t.TextMuted)

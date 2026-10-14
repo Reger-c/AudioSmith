@@ -22,11 +22,7 @@ func (a *app) studioPage(c *ui.Context) {
 		if shown {
 			tip = i18n.T("Hide the inspector")
 		}
-		b := iconButton(c.Key("inspector-toggle"), icons.PanelRight, tip).Checked(shown)
-		if shown {
-			b.Background(k.Pressed)
-		}
-		if b.Clicked() {
+		if panelToggle(c.Key("inspector-toggle"), icons.PanelRight, shown, tip).Clicked() {
 			a.composer.panel, a.composer.panelSet = !shown, true
 		}
 	})

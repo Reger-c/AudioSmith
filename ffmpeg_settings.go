@@ -16,6 +16,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/ffmpeg"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -219,12 +220,12 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 		})
 		ui.Column(c.Key("ff-caps")).Gap(px(t, 4)).Children(func() {
 			for _, cp := range ffCapabilities(tool) {
-				mark, col := "✓", t.Success
+				mark, col := icons.CheckCircle, t.Success
 				if !cp.ok {
-					mark, col = "✗", t.TextMuted
+					mark, col = icons.CloseCircle, t.TextMuted
 				}
-				ui.Row(c).Gap(px(t, 6)).Children(func() {
-					ui.Text(c, mark).TextColor(col).FontSize(px(t, 12))
+				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+					ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0)
 					ui.Text(c, cp.what).FontSize(px(t, 12))
 				})
 			}

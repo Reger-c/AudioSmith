@@ -193,3 +193,20 @@ func TestWordsOf(t *testing.T) {
 		t.Errorf("%q", got)
 	}
 }
+
+// TestSpaceBetween: the read-along keeps a space between spaced words
+// only; Chinese characters sit side by side ("最后一班渡轮", not
+// "最 后 一 班 渡 轮").
+func TestSpaceBetween(t *testing.T) {
+	ws := wordsOf("Hello, world! 最后一班渡轮。 Ok")
+	var b strings.Builder
+	for i, w := range ws {
+		if i > 0 && spaceBetween(ws[i-1], w) {
+			b.WriteByte(' ')
+		}
+		b.WriteString(w)
+	}
+	if got, want := b.String(), "Hello, world!最后一班渡轮。Ok"; got != want {
+		t.Errorf("%q, want %q", got, want)
+	}
+}

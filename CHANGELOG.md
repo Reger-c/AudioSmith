@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.0 — 2026-10-14
+
+A new look for every page: flat, quiet and black-white-grey, in the spirit of Typeless. Nothing was removed; some actions moved into menus. Your library, voices and settings carry over unchanged.
+
+### The new look
+- One dark (ink) button per page for its main action — Generate, Create audiobook, Transcribe, Run workflow, Export — and quieter buttons for everything else.
+- Colour only where it means something: a teal accent for state (selection, progress, the played part of a waveform, switches) and red-orange for recording and deleting.
+- New icons everywhere (Solar), including the sidebar, the icon rail, the status bar and the dictation pill.
+- Flat cards with a hairline or a light grey fill, round play buttons, grey filter chips and tags.
+
+### Calmer pages
+- Secondary actions are in "⋯" menus and drop-downs (Save ▾, Insert ▾, Add ▾, Projects ▾); help text is behind ⓘ tooltips; results show as small toasts in the page header, where they no longer cover buttons.
+- Inspectors and lists open beside the page when there is room, or as drawers over it in a small window, with the same panel button on every page.
+- Nothing overflows at the smallest window (820×520) or with 125 % text: toolbars drop their labels, search fields and filters move to two lines, long names end in "…".
+- Notes on a page (warnings, finished steps) are one-line notices you can dismiss, instead of coloured boxes.
+
+### Settings
+- Settings opens as a dialog over the page you are on (⌘,), with its sections on the left; the page keeps its state behind it.
+- The accent colour choice is gone (the accent is teal); theme, text size, icon rail and reduce motion stay.
+
+### Pages
+- Studio: the script fills the page; Voice controls and Audio quality open as popovers; the inspector can be hidden.
+- Stories and Audiobook: flat line rows, an inspector with sections that fold, a ready card like the Studio's with one Save menu (whole book, one WAV per chapter, chapter times, stems). The read-along shows Chinese text without spaces between characters.
+- Dub: a quiet step bar, the step's settings as a side panel, one main button at the foot for the current step.
+- Voices, Gallery, Design, History, Projects, Transcribe, Batch, Workflows, Calls, Tools, Integrations, Models, Engine: the same header, search and card patterns; Workflows' zoom buttons stay visible next to the step panel.
+- The first-run wizard has step breadcrumbs and a single Continue button.
+
 ## 0.2.0 — 2026-10-14
 
 The first build meant to be installed and used: everything below runs on the Mac, offline once its models are downloaded. It follows the open-source edition of VoiceStudio feature by feature (no cloud, no account).
