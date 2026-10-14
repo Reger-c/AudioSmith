@@ -52,7 +52,7 @@ func voiceMatches(v *core.Voice, q string) bool {
 func (a *app) voicesPage(c *ui.Context) {
 	t := c.Theme()
 	narrow := a.pageWidth(c) < px(t, 640)
-	pageHeader(c, i18n.T("Voices"), func() {
+	pageHeader(c, i18n.T("My voices"), func() {
 		// The count, like History's and the Gallery's; it goes when the
 		// window leaves the actions little room.
 		if !narrow {
@@ -118,7 +118,7 @@ func (a *app) voicesGrid(c *ui.Context) {
 		default:
 			emptyState(c, icons.UserSpeakRounded, i18n.T("No saved voices yet"),
 				i18n.T("Upload or record a clip and save it as a voice, design one from a description, or pick one in the gallery."), func() {
-					if ui.Button(c.Key("empty-gallery"), i18n.T("Open the gallery")).Clicked() {
+					if ui.Button(c.Key("empty-gallery"), i18n.T("Discover voices")).Clicked() {
 						a.navigate("/gallery")
 					}
 					if ui.Button(c.Key("empty-design"), i18n.T("Design a voice")).Clicked() {

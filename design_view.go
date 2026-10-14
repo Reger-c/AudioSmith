@@ -28,7 +28,7 @@ func (a *app) designPage(c *ui.Context) {
 			d.reset()
 			d.script = script
 		}
-		if iconButton(c.Key("design-gallery"), icons.Widget, i18n.T("Gallery")).Tooltip(i18n.T("Start from a voice of the gallery")).Clicked() {
+		if iconButton(c.Key("design-gallery"), icons.Widget, i18n.T("Discover voices")).Tooltip(i18n.T("Start from a voice in Discover voices")).Clicked() {
 			a.navigate("/gallery")
 		}
 	})

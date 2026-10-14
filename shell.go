@@ -189,9 +189,9 @@ var navGroups = []navGroup{
 		{"/dub", "Dub", dubIcon},                   // M4: dub_pages.go
 	}},
 	{"Voices", []navPage{ // voices.go (thread V)
-		{"/voices", "Voices", voicesIcon},
+		{"/gallery", "Discover voices", galleryIcon},
+		{"/voices", "My voices", voicesIcon},
 		{"/design", "Design", designIcon},
-		{"/gallery", "Gallery", galleryIcon},
 	}},
 	{"Library", []navPage{
 		{"/projects", "Projects", projectsIcon}, // M3
@@ -216,7 +216,7 @@ var navGroups = []navGroup{
 
 // shortcutPages are the pages ⌘1…⌘9 open, in that order: the ones used
 // most. The others are a click or the palette (⌘K) away.
-var shortcutPages = []string{"/studio", "/stories", "/audiobook", "/dub", "/voices", "/design", "/gallery", "/projects", "/transcripts"}
+var shortcutPages = []string{"/studio", "/stories", "/audiobook", "/dub", "/gallery", "/voices", "/design", "/projects", "/transcripts"}
 
 // pages are every page of the sidebar, in its order.
 var pages = func() []navPage {

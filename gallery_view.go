@@ -37,7 +37,7 @@ func (a *app) galleryPage(c *ui.Context) {
 	g := &a.gallery
 	page := a.galleryResults()
 	narrow := a.pageWidth(c) < px(t, 720)
-	pageHeader(c, i18n.T("Gallery"), func() {
+	pageHeader(c, i18n.T("Discover voices"), func() {
 		caption(c, i18n.N(page.Total, "%d voice", "%d voices", page.Total)).SingleLine()
 		if ms := designModels(); len(ms) > 1 {
 			labels := make([]string, len(ms))
@@ -59,7 +59,7 @@ func (a *app) galleryPage(c *ui.Context) {
 	ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Gap(px(t, sp2)).Children(func() {
 		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
 			if searchField(c, "gallery-search", &g.text, i18n.T("Search: narrator, 东北, whisper…"), px(t, 360)).
-				Label(i18n.T("Search the gallery")).Changed() {
+				Label(i18n.T("Search Discover voices")).Changed() {
 				g.limit = galleryPageSize
 			}
 			a.galleryCategorySelect(c, page, narrow)

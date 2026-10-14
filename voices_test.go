@@ -119,7 +119,7 @@ func TestVoicesEmptyAndReload(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 1800)
 	a.navigate("/voices")
 	tt.Frame()
-	if !tt.HasText("No saved voices yet") || !tt.HasText("Open the gallery") {
+	if !tt.HasText("No saved voices yet") || !tt.HasText("Discover voices") {
 		t.Fatalf("empty: %q", tt.Texts())
 	}
 	tt.Click("Design a voice")

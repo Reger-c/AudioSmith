@@ -224,7 +224,7 @@ func voiceKindText(k core.VoiceKind) string {
 func (a *app) voicesRoute(c *ui.Context, r *ui.Route) bool {
 	switch {
 	case r.Match("/voices"):
-		r.Title(i18n.T("Voices"))
+		r.Title(i18n.T("My voices"))
 		a.voicesPage(c)
 	case r.Match("/voices/new"):
 		r.Title(i18n.T("New voice"))
@@ -233,7 +233,7 @@ func (a *app) voicesRoute(c *ui.Context, r *ui.Route) bool {
 		r.Title(i18n.T("Design"))
 		a.designPage(c)
 	case r.Match("/gallery"):
-		r.Title(i18n.T("Gallery"))
+		r.Title(i18n.T("Discover voices"))
 		a.galleryPage(c)
 	default:
 		return false
@@ -245,11 +245,11 @@ func (a *app) voicesRoute(c *ui.Context, r *ui.Route) bool {
 func voicePageTitle(path string) (string, bool) {
 	switch path {
 	case "/voices":
-		return i18n.T("Voices"), true
+		return i18n.T("My voices"), true
 	case "/design":
 		return i18n.T("Design"), true
 	case "/gallery":
-		return i18n.T("Gallery"), true
+		return i18n.T("Discover voices"), true
 	}
 	return "", false
 }

@@ -278,7 +278,7 @@ func (a *app) shortcutSheet(c *ui.Context) {
 			{i18n.T("Navigation"), [][2]string{
 				{"⌘K", i18n.T("Command palette")},
 				{"⌘1 … ⌘4", i18n.T("Studio, Stories, Audiobook, Dub")},
-				{"⌘5 … ⌘7", i18n.T("Voices, Design, Gallery")},
+				{"⌘5 … ⌘7", i18n.T("Discover voices, My voices, Design")},
 				{"⌘8  ⌘9", i18n.T("Projects, Transcribe")},
 				{"⌘,", i18n.T("Settings")},
 				{"⌘[  ⌘]", i18n.T("Back, forward")},
