@@ -37,6 +37,12 @@ type ffInstallState struct {
 	cancel     context.CancelFunc
 }
 
+// ffmpegDownloadOffered shows "Download ffmpeg" (the pinned build). Off
+// until the build to offer is decided (no reputable LGPL-only static
+// arm64 build exists; the pinned one is GPL): the page offers an ffmpeg
+// already on the Mac (Homebrew) or a chosen file. Tests turn it on.
+var ffmpegDownloadOffered = false
+
 // Test seams: the download and the search for copies on this Mac.
 var (
 	ffmpegInstall = ffmpeg.Install
@@ -225,6 +231,36 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 		})
 	}
 
+	if ffmpegDownloadOffered || a.ffInstall.running || m.Origin == settings.MediaDownloaded {
+		a.ffmpegDownloadSection(c)
+	}
+
+	sectionTitle(c, i18n.T("On this Mac"))
+	if a.ffScanned && len(a.ffSystem) == 0 {
+		ui.Text(c, i18n.T("No ffmpeg found in Homebrew's or MacPorts' folders. With Homebrew: brew install ffmpeg")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	}
+	for _, p := range a.ffSystem {
+		settingRow(c, "ff-sys-"+p, shortPath(p), "", func() {
+			inUse := m.FFmpeg == p
+			if ui.Button(c.Key("ff-use"), i18n.T("Use this one")).Disabled(inUse).Clicked() {
+				a.useFFmpeg(p, settings.MediaSystem)
+			}
+		})
+	}
+	ui.Row(c).Gap(px(t, 8)).Children(func() {
+		if ui.Button(c.Key("ff-rescan"), i18n.T("Look again")).Clicked() {
+			a.scanFFmpeg()
+		}
+		if a.win != nil && ui.Button(c.Key("ff-choose"), i18n.T("Choose a file…")).Clicked() {
+			a.chooseFFmpeg()
+		}
+	})
+}
+
+// ffmpegDownloadSection offers the pinned build (see ffmpegDownloadOffered).
+func (a *app) ffmpegDownloadSection(c *ui.Context) {
+	t := c.Theme()
+	m, tool := a.prefs.Media, a.mediaTool()
 	sectionTitle(c, i18n.T("Get ffmpeg"))
 	b := ffmpeg.Pinned
 	st := &a.ffInstall
@@ -255,26 +291,6 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 		ui.Text(c, st.err).FontSize(px(t, 12)).TextColor(t.Danger)
 	}
 
-	sectionTitle(c, i18n.T("On this Mac"))
-	if a.ffScanned && len(a.ffSystem) == 0 {
-		ui.Text(c, i18n.T("No ffmpeg found in Homebrew's or MacPorts' folders. With Homebrew: brew install ffmpeg")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-	}
-	for _, p := range a.ffSystem {
-		settingRow(c, "ff-sys-"+p, shortPath(p), "", func() {
-			inUse := m.FFmpeg == p
-			if ui.Button(c.Key("ff-use"), i18n.T("Use this one")).Disabled(inUse).Clicked() {
-				a.useFFmpeg(p, settings.MediaSystem)
-			}
-		})
-	}
-	ui.Row(c).Gap(px(t, 8)).Children(func() {
-		if ui.Button(c.Key("ff-rescan"), i18n.T("Look again")).Clicked() {
-			a.scanFFmpeg()
-		}
-		if a.win != nil && ui.Button(c.Key("ff-choose"), i18n.T("Choose a file…")).Clicked() {
-			a.chooseFFmpeg()
-		}
-	})
 }
 
 // ffmpegSettingsChanged follows the settings (shell_settings.go).

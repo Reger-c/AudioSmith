@@ -373,6 +373,7 @@ func (a *app) generalSettings(c *ui.Context) {
 		}
 	})
 	a.m2GeneralSettings(c) // M2: dictation_settings.go
+	a.onboardingRow(c)     // M7a: onboarding.go
 }
 
 func (a *app) appearanceSettings(c *ui.Context) {

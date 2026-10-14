@@ -85,6 +85,7 @@ type shellState struct {
 	storageState    // settings_storage.go (M7a)
 	networkState    // settings_network.go (M7a)
 	aboutState      // settings_about.go (M7a)
+	onboardingState // onboarding.go (M7a): the first-run wizard
 	settingsForm
 	licenceDialog
 	menuLocale string // locale the native menu was built in
@@ -363,6 +364,7 @@ func (a *app) openWindow() {
 		Content:        ui.View(a.view),
 	})
 	a.refreshModels()
+	a.maybeOnboard() // M7a: a fresh install opens the setup (onboarding.go)
 }
 
 func icon(shapes string) *ui.SVG {
@@ -418,6 +420,7 @@ func (a *app) view(c *ui.Context) {
 	})
 	a.palette(c)
 	a.shortcutSheet(c)
+	a.onboarding(c) // M7a: the first-run wizard, under the licence dialog
 	a.licenceModal(c)
 	a.modelsAlerts(c)
 }

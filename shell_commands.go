@@ -73,6 +73,7 @@ func (a *app) commands() []command {
 	add("logs-panel", view, i18n.T("Show or hide the logs panel"), "Show or hide the logs panel", "⇧⌘L", true, func() { a.logsPanel = !a.logsPanel })
 	add("notifications", view, i18n.T("Notifications"), "Notifications", "", true, func() { a.noticesOpen = true })
 	add("shortcuts", view, i18n.T("Keyboard shortcuts"), "Keyboard shortcuts", "?", true, func() { a.sheetOpen = true })
+	add("setup", view, i18n.T("Run the setup again"), "Run the setup again first run wizard welcome", "", !a.obOpen, a.openOnboarding) // M7a
 
 	look := i18n.T("Appearance")
 	for _, th := range []struct{ id, title, en string }{

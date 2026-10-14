@@ -143,8 +143,12 @@ func fallsBack(method string, err error) bool {
 		return false
 	}
 	switch pe.Code {
-	case proto.CodeUnsupportedMedia, proto.CodeUnsupported:
+	case proto.CodeUnsupportedMedia:
 		return true
+	case proto.CodeUnsupported:
+		// Not for a mux the engine refuses for a feature (retime): ffmpeg's
+		// would drop it silently.
+		return method != proto.MethodMediaMux
 	case proto.CodeMethodNotFound: // an engine without the method
 		return method != proto.MethodMediaProbe && method != proto.MethodMediaDecode
 	}

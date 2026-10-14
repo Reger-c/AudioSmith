@@ -60,7 +60,7 @@ func TestAudioToolsPage(t *testing.T) {
 	a.navigate("/settings/audio-tools")
 	tt.Frame()
 	tt.Frame()
-	if !tt.HasText("Not set up") || !tt.HasText("Download ffmpeg") || !tt.HasText("Use this one") {
+	if !tt.HasText("Not set up") || tt.HasText("Download ffmpeg") || !tt.HasText("Use this one") {
 		t.Fatalf("page: %q", tt.Texts())
 	}
 	if a.mediaTool() != nil {
@@ -108,7 +108,8 @@ func TestFFmpegDownload(t *testing.T) {
 		return filepath.Join(dir, "ffmpeg"), nil
 	}
 	ffmpegFind = func() []string { return nil }
-	t.Cleanup(func() { ffmpegInstall, ffmpegFind = ffmpeg.Install, ffmpeg.FindSystem })
+	ffmpegDownloadOffered = true
+	t.Cleanup(func() { ffmpegInstall, ffmpegFind, ffmpegDownloadOffered = ffmpeg.Install, ffmpeg.FindSystem, false })
 	a.navigate("/settings/audio-tools")
 	tt.Frame()
 	if !tt.HasText("No ffmpeg found in Homebrew's or MacPorts' folders. With Homebrew: brew install ffmpeg") {

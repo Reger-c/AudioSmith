@@ -108,6 +108,15 @@ func TestSnapshotsM7(t *testing.T) {
 		save("settings-appearance-violet")
 		a.updateSettings(func(s *settings.Settings) { s.Appearance.Palette = "" })
 
+		// The first-run wizard, each step.
+		a.navigate("/studio")
+		a.openOnboarding()
+		for i, name := range []string{"system", "models", "privacy", "dictation"} {
+			a.obStep = i
+			save("onboarding-" + name)
+		}
+		a.obOpen = false
+
 		// The icon rail.
 		a.navigate("/studio")
 		a.setRail(true)
