@@ -14,43 +14,67 @@ import (
 	"github.com/hehehai/AudioSmith/internal/text/markup"
 )
 
-// audiobookPage is /audiobook: the manuscript and its render on the left,
-// the book's settings on the right.
+// audiobookPage is /audiobook: the manuscript and its render in the main
+// column, the book's settings in the inspector (beside it, or a drawer
+// when the window is narrow).
 func (a *app) audiobookPage(c *ui.Context) {
 	t := c.Theme()
 	p := a.lfBook
 	a.syncManuscript(p)
 	a.lfToasts(c)
 	locked := a.lfLocked(p)
-	header(c, i18n.T("Audiobook"), func() {
-		if ui.Button(c.Key("ab-stories"), i18n.T("Stories")).Tooltip(i18n.T("Multi-voice scripts, line by line")).Clicked() {
-			a.navigate("/stories")
-		}
+	inline, shown := a.lfLayout(c, p)
+	pageHeader(c, i18n.T("Audiobook"), func() {
+		a.bookHeader(c, p, locked, shown)
 	})
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, 14), px(t, 20)).Gap(px(t, 10)).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, sp1), px(t, sp6), px(t, sp4)).Gap(px(t, sp3)).Children(func() {
 			a.manuscriptToolbar(c, p, locked)
 			a.manuscriptView(c, p, locked)
-			a.manuscriptStats(c, p)
 			a.manuscriptWarnings(c, p)
 			a.lfRenderPanel(c, p)
 		})
-		ui.Box(c).Width(1).Background(t.Border)
-		ui.Scroll(c.Key("ab-inspector")).Width(px(t, inspectorWidth+20)).Shrink(0).Background(t.Surface).Children(func() {
-			ui.Column(c).Padding(px(t, 16)).Gap(px(t, 6)).Children(func() {
-				a.lfSection(c, p, "setup", i18n.T("Setup"), func() { a.lfSetup(c, p, locked) })
-				a.lfSection(c, p, "cast", i18n.T("Cast"), func() { a.bookCastCard(c, p, locked) })
-				a.lfSection(c, p, "plan", i18n.T("Chapters"), func() { a.chapterPlan(c, p) })
-				a.lfSection(c, p, "lexicon", i18n.T("Pronunciation"), func() { a.lexiconCard(c, p, locked) })
-				a.lfSection(c, p, "production", i18n.T("Production"), func() { a.lfProduction(c, p, locked) })
-				a.lfSection(c, p, "book", i18n.T("Cover & details"), func() { a.lfBookCard(c, p, locked) })
-				a.lfSection(c, p, "project", i18n.T("Project"), func() { a.lfProjectCard(c, p, locked) })
-			})
+		a.lfInspector(c, p, inline, shown, func() {
+			a.lfSection(c, p, "setup", i18n.T("Setup"), entryFor(p.doc.Model).Label, func() { a.lfSetup(c, p, locked) })
+			a.lfSection(c, p, "cast", i18n.T("Cast"), lfCount(len(bookCast(p))), func() { a.bookCastCard(c, p, locked) })
+			a.lfSection(c, p, "plan", i18n.T("Chapters"), lfCount(len(p.spec.Chapters)), func() { a.chapterPlan(c, p) })
+			a.lfSection(c, p, "lexicon", i18n.T("Pronunciation"), lfCount(len(p.doc.Lexicon)), func() { a.lexiconCard(c, p, locked) })
+			a.lfSection(c, p, "production", i18n.T("Production"), "", func() { a.lfProduction(c, p, locked) })
+			a.lfSection(c, p, "book", i18n.T("Cover & details"), "", func() { a.lfBookCard(c, p, locked) })
+			a.lfSection(c, p, "project", i18n.T("Project"), "", func() { a.lfProjectCard(c, p, locked) })
 		})
 	})
 	a.lfConfirm(c, p)
 	a.syncManuscript(p)
 	a.autosaveLf(p)
+}
+
+// bookHeader is the Audiobook page's header: Import, the inspector
+// toggle, and ⋯ (the sample, Clear, Stories).
+func (a *app) bookHeader(c *ui.Context, p *lfPage, locked, shown bool) {
+	imp := i18n.T("Import…")
+	var b ui.Element
+	if p.narrow {
+		b = iconButton(c.Key("ab-import"), icons.Import, imp)
+	} else {
+		b = ghostIconButton(c.Key("ab-import"), icons.Import, imp).Label(imp)
+	}
+	if b.Tooltip(i18n.T("TXT, Markdown, EPUB or DOCX, up to 64 MB, split into chapters")).Disabled(locked).Clicked() {
+		a.importBook(p)
+	}
+	p.panel.toggle(c.Key("ab-panel"), icons.PanelRight, shown, i18n.T("Show the inspector"), i18n.T("Hide the inspector"))
+	moreMenu(c.Key("ab-more"), "", func(m *ui.Menu) {
+		if m.Item(i18n.T("Load sample")).Disabled(locked).Chosen() {
+			a.loadSample(p)
+		}
+		if m.Item(i18n.T("Clear…")).Disabled(locked || strings.TrimSpace(p.doc.Script) == "").Chosen() {
+			p.confirm, p.confirmOpen = "clear", true
+		}
+		m.Separator()
+		if m.Item(i18n.T("Go to Stories")).Chosen() {
+			a.navigate("/stories")
+		}
+	})
 }
 
 // lfLocked reports whether a page's inputs are locked: its render runs,
@@ -71,43 +95,49 @@ func (a *app) lfToasts(c *ui.Context) {
 	a.lfUndo = nil
 }
 
-// manuscriptToolbar: markup buttons, import, sample, clear.
+// manuscriptToolbar: Insert ▾ (pauses, voices, delivery), Reactions ▾,
+// and the sample while the manuscript is empty.
 func (a *app) manuscriptToolbar(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
-	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
-		if ui.Button(c.Key("mk-pause"), i18n.X("markup", "Pause")).Tooltip(i18n.T("Insert [pause 500ms]")).Disabled(locked).Clicked() {
-			a.insertMarkup(p, "[pause 500ms]")
-		}
-		if ui.Button(c.Key("mk-voice"), i18n.T("Voice")).Tooltip(i18n.T("Switch voice: [voice:NAME] until the next switch or chapter")).Disabled(locked).Clicked() {
-			a.insertVoice(p)
-		}
-		for _, s := range []struct{ key, label, tag string }{
-			{"slow", i18n.T("Slow"), markup.Slow}, {"fast", i18n.T("Fast"), markup.Fast},
-			{"emphasis", i18n.T("Emphasis"), markup.Emphasis}, {"spell", i18n.T("Spell"), markup.Spell},
-		} {
-			if ui.Button(c.Key("mk-"+s.key), s.label).Tooltip(i18n.T("Wrap the selection in [%s]…[/%s]", s.tag, s.tag)).Disabled(locked).Clicked() {
-				a.wrapMarkup(p, "["+s.tag+"]", "[/"+s.tag+"]")
+	ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+		drop := func(c *ui.Context, ic icons.Icon, label string) ui.Element {
+			if p.narrow {
+				return iconButton(c, ic, label)
 			}
+			return dropButton(c, ic, label).Shrink(0)
 		}
-		ui.MenuButton(c.Key("mk-reactions"), i18n.T("Reactions"), func(m *ui.Menu) {
+		drop(c.Key("mk-insert"), icons.AddCircle, i18n.T("Insert")).Tooltip(i18n.T("Insert a pause, a voice switch or a delivery change")).Disabled(locked).Menu(func(m *ui.Menu) {
+			if m.Item(i18n.X("markup", "Pause")).Chosen() {
+				a.insertMarkup(p, "[pause 500ms]")
+			}
+			if m.Item(i18n.T("Voice")).Chosen() {
+				a.insertVoice(p)
+			}
+			m.Separator()
+			for _, s := range []struct{ label, tag string }{
+				{i18n.T("Slow"), markup.Slow}, {i18n.T("Fast"), markup.Fast},
+				{i18n.T("Emphasis"), markup.Emphasis}, {i18n.T("Spell"), markup.Spell},
+			} {
+				if m.Item(s.label).Chosen() {
+					a.wrapMarkup(p, "["+s.tag+"]", "[/"+s.tag+"]")
+				}
+			}
+		})
+		drop(c.Key("mk-reactions"), icons.SmileCircle, i18n.T("Reactions")).Disabled(locked).Menu(func(m *ui.Menu) {
 			for _, tag := range markup.DefaultNonVerbal {
 				if m.Item(nonVerbalLabel(tag) + "  [" + tag + "]").Chosen() {
 					a.insertMarkup(p, "["+tag+"]")
 				}
 			}
-		}).Disabled(locked)
+		})
 		ui.Spacer(c)
 		if strings.TrimSpace(p.doc.Script) == "" {
-			if ui.Button(c.Key("ab-sample"), i18n.T("Load sample")).Tooltip(i18n.T("A short book that shows chapters, voices, pauses and reactions")).Disabled(locked).Clicked() {
+			if ghostButton(c.Key("ab-sample"), i18n.T("Load sample")).Tooltip(i18n.T("A short book that shows chapters, voices, pauses and reactions")).Disabled(locked).Clicked() {
 				a.loadSample(p)
 			}
+			return
 		}
-		if ui.Button(c.Key("ab-import"), i18n.T("Import…")).Tooltip(i18n.T("TXT, Markdown, EPUB or DOCX, up to 64 MB, split into chapters")).Disabled(locked).Clicked() {
-			a.importBook(p)
-		}
-		if ui.Button(c.Key("ab-clear"), i18n.T("Clear")).Disabled(locked || strings.TrimSpace(p.doc.Script) == "").Clicked() {
-			p.confirm, p.confirmOpen = "clear", true
-		}
+		a.manuscriptStats(c, p)
 	})
 }
 
@@ -119,25 +149,37 @@ func (a *app) manuscriptView(c *ui.Context, p *lfPage, locked bool) {
 	st.Placeholder = i18n.T("# Chapter One\n\nOnce upon a time… [pause 500ms] the end.\n\n# Chapter Two\n\n[voice:Mara] Hello!")
 	st.Label = i18n.T("Manuscript")
 	st.ReadOnly = locked
-	box := ui.Column(c.Key("ms-box")).Grow(1).MinHeight(px(t, 160)).Radius(8).Border(1, t.Border).Background(editor.DefaultTheme(t).Background).
-		Padding(px(t, 6), px(t, 4))
+	st.Theme = manuscriptTheme(t)
+	box := ui.Column(c.Key("ms-box")).Grow(1).MinHeight(px(t, 140)).Radius(px(t, radiusCard)).Border(1, tok(t).Line).Background(editor.DefaultTheme(t).Background).
+		Padding(px(t, sp2), px(t, sp1))
+	if box.FocusWithin() {
+		box.Border(1, tok(t).G[5])
+	}
 	if files := box.DroppedFiles(); len(files) > 0 && !locked {
 		a.importBookFrom(p, files[0])
 	}
 	box.Children(func() {
 		if p.importing {
-			ui.Row(c).Gap(px(t, 6)).Padding(px(t, 6)).Children(func() {
+			ui.Row(c).Gap(px(t, 6)).Padding(px(t, 6)).AlignItems(ui.Center).Children(func() {
 				ui.Spinner(c)
-				ui.Text(c, i18n.T("Importing…")).TextColor(t.TextMuted)
+				caption(c, i18n.T("Importing…"))
 			})
 		}
 		editor.View(c.Key("ms"), st).Grow(1).MinHeight(0)
 	})
 }
 
+// manuscriptTheme colours the manuscript like the Studio's script
+// (scriptTheme), with chapter headings in the text colour, semibold.
+func manuscriptTheme(t *ui.Theme) *editor.Theme {
+	th := scriptTheme(t)
+	th.Tokens[editor.TokenHeading].Color = tok(t).Text
+	th.Tokens[editor.TokenHeading].Bold = true
+	return th
+}
+
 // manuscriptStats: chapters · words · estimated runtime.
 func (a *app) manuscriptStats(c *ui.Context, p *lfPage) {
-	t := c.Theme()
 	st := p.stats
 	parts := []string{i18n.N(max(st.Chapters, 1), "%d chapter", "%d chapters", max(st.Chapters, 1))}
 	if st.Words > 0 {
@@ -147,7 +189,8 @@ func (a *app) manuscriptStats(c *ui.Context, p *lfPage) {
 		parts = append(parts, i18n.N(st.Chars, "%d character", "%d characters", st.Chars))
 	}
 	parts = append(parts, i18n.T("%s est. runtime", clockRuntime(st.Seconds)))
-	ui.Text(c.Key("ab-stats"), strings.Join(parts, " · ")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	s := strings.Join(parts, " · ")
+	caption(c.Key("ab-stats"), s).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Tooltip(s)
 }
 
 // clockRuntime is M:SS, or H:MM from an hour.
@@ -180,39 +223,44 @@ func (a *app) manuscriptWarnings(c *ui.Context, p *lfPage) {
 	if len(warn) == 0 || p.dismissed == p.fp || a.lfLocked(p) {
 		return
 	}
-	ui.Column(c.Key("ab-warn")).Gap(px(t, 4)).Padding(px(t, 10)).Radius(8).Background(t.Warning.Alpha(0.12)).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Before you create")).Bold().Grow(1)
+	k := tok(t)
+	card(c.Key("ab-warn")).Padding(px(t, sp2), px(t, sp3)).Gap(px(t, 2)).Shrink(0).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			statusMark(c, icons.DangerTriangle, t.Warning)
+			ui.Text(c, i18n.T("Before you create")).FontWeight(600).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			if iconButton(c.Key("ab-warn-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 				p.dismissed = p.fp
 			}
 		})
-		for i, pr := range warn {
-			if i == 8 {
-				ui.Text(c, i18n.N(len(warn)-8, "and %d more", "and %d more", len(warn)-8)).FontSize(px(t, 12)).TextColor(t.TextMuted)
-				break
-			}
-			msg := problemText(pr)
-			if pr.Span.End > pr.Span.Start {
-				start := pr.Span.Start
-				if ui.ButtonBase(c.Key("w-" + strconv.Itoa(i))).Label(msg).Children(func() {
-					ui.Text(c, "• "+msg).FontSize(px(t, 12)).Grow(1).MinWidth(0)
-				}).Clicked() {
-					p.ed.Select(start, pr.Span.End)
+		ui.Scroll(c.Key("ab-warn-list")).MaxHeight(px(t, 96)).Children(func() {
+			ui.Column(c).Gap(0).Padding(0, 0, 0, px(t, 22)).Children(func() {
+				for i, pr := range warn {
+					msg := problemText(pr)
+					if pr.Span.End > pr.Span.Start {
+						start, end := pr.Span.Start, pr.Span.End
+						b := ui.ButtonBase(c.Key("w-"+strconv.Itoa(i))).Label(msg).Tooltip(i18n.T("Show in the manuscript")).Padding(px(t, 2), px(t, 6)).Radius(px(t, 6))
+						if b.Hovered() {
+							b.Background(k.Hover)
+						}
+						if b.Children(func() {
+							caption(c, msg).Grow(1).MinWidth(0)
+						}).Clicked() {
+							p.ed.Select(start, end)
+						}
+						continue
+					}
+					caption(c, msg).Padding(px(t, 2), px(t, 6))
 				}
-				continue
-			}
-			ui.Text(c, "• "+msg).FontSize(px(t, 12))
-		}
+			})
+		})
 	})
 }
 
 // bookCastCard maps every [voice:NAME] of the manuscript to a voice.
 func (a *app) bookCastCard(c *ui.Context, p *lfPage, locked bool) {
-	t := c.Theme()
 	names := bookCast(p)
 	if len(names) == 0 {
-		ui.Text(c, i18n.T("Add [voice:NAME] tags to the manuscript to cast more voices; the narrator reads the rest.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Add [voice:NAME] tags to the manuscript to cast more voices; the narrator reads the rest."))
 		return
 	}
 	if p.doc.VoiceCast == nil {
@@ -234,11 +282,15 @@ func (a *app) bookCastCard(c *ui.Context, p *lfPage, locked bool) {
 // with an audition each.
 func (a *app) chapterPlan(c *ui.Context, p *lfPage) {
 	t := c.Theme()
+	k := tok(t)
 	if len(p.spec.Chapters) == 0 {
-		ui.Text(c, i18n.T("Write or import a manuscript to see its chapters.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Write or import a manuscript to see its chapters."))
 		return
 	}
-	ui.Text(c, i18n.T("Listen to one chapter with every setting before making the whole book; it warms the cache.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		caption(c, i18n.T("Preview a chapter")).Grow(1).MinWidth(0)
+		infoTip(c.Key("plan-tip"), i18n.T("Listen to one chapter with every setting before making the whole book; it warms the cache."))
+	})
 	ui.Scroll(c.Key("plan")).MaxHeight(px(t, 260)).Children(func() {
 		ui.Column(c).Gap(px(t, 2)).Children(func() {
 			for i, ch := range p.spec.Chapters {
@@ -255,8 +307,8 @@ func (a *app) chapterPlan(c *ui.Context, p *lfPage) {
 				what := "chapter:" + strconv.Itoa(i)
 				ui.Row(c.Key("plan-" + strconv.Itoa(i))).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 					ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-						ui.Text(c, title).SingleLine().Ellipsis("…")
-						ui.Text(c, i18n.N(chars, "%d character", "%d characters", chars)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+						truncText(c, title)
+						ui.Text(c, i18n.N(chars, "%d character", "%d characters", chars)).FontSize(px(t, fsMicro)).TextColor(k.Text3)
 					})
 					a.auditionButton(c, p, what, i18n.T("Preview chapter: %s", title))
 				})
@@ -265,22 +317,22 @@ func (a *app) chapterPlan(c *ui.Context, p *lfPage) {
 	})
 }
 
-// auditionButton renders, plays or stops an audition.
+// auditionButton renders, plays or stops an audition: headphones to
+// render one, then play / pause.
 func (a *app) auditionButton(c *ui.Context, p *lfPage, what, label string) {
+	t := c.Theme()
 	st, r := a.auditionState(p, what)
 	switch st {
 	case "running":
-		ui.Spinner(c).Label(i18n.T("Rendering the preview…"))
+		ui.Box(c).Size(px(t, 28), px(t, 28)).Center().Shrink(0).Children(func() {
+			ui.Spinner(c).Label(i18n.T("Rendering the preview…"))
+		})
 	case "done":
-		play := "▶"
-		if a.pl.Playing("audition:" + r.rec.ID) {
-			play = "❚❚"
-		}
-		if ui.Button(c.Key("aud-"+what), play).Label(label).Tooltip(label).Clicked() {
+		if playToggle(c.Key("aud-"+what), a.pl.Playing("audition:"+r.rec.ID), label, label).Clicked() {
 			a.playAudition(r)
 		}
 	default:
-		if ui.Button(c.Key("aud-"+what), "▶").Label(label).Tooltip(label).Disabled(a.engState != engineReady).Clicked() {
+		if iconButton(c.Key("aud-"+what), icons.HeadphonesRound, label).Disabled(a.engState != engineReady).Clicked() {
 			a.startLf(p, what)
 		}
 	}
@@ -289,14 +341,13 @@ func (a *app) auditionButton(c *ui.Context, p *lfPage, what, label string) {
 // lexiconCard is the book's pronunciations: word → say it as.
 func (a *app) lexiconCard(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
-	ui.Text(c, i18n.T("Words of this book and how to say them, on top of Settings → Pronunciation.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
 	dups := services.DuplicateWords(p.doc.Lexicon)
 	remove := -1
 	for i := range p.doc.Lexicon {
 		e := &p.doc.Lexicon[i]
-		ui.Row(c.Key("lex-" + strconv.Itoa(i))).Gap(px(t, 4)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c.Key("lex-" + strconv.Itoa(i))).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			ui.TextInput(c.Key("w"), &e.Word).Placeholder(i18n.T("Word")).Label(i18n.T("Word")).Grow(1).MinWidth(0).Disabled(locked)
-			ui.Text(c, "→").TextColor(t.TextMuted)
+			statusMark(c, icons.AltArrowRight, tok(t).Text3)
 			ui.TextInput(c.Key("s"), &e.Say).Placeholder(i18n.T("Say it as…")).Label(i18n.T("Say it as…")).Grow(1).MinWidth(0).Disabled(locked)
 			if iconButton(c.Key("x"), icons.Close, i18n.T("Remove")).Disabled(locked).Clicked() {
 				remove = i
@@ -307,9 +358,15 @@ func (a *app) lexiconCard(c *ui.Context, p *lfPage, locked bool) {
 		p.doc.Lexicon = append(p.doc.Lexicon[:remove:remove], p.doc.Lexicon[remove+1:]...)
 	}
 	if len(dups) > 0 {
-		ui.Text(c, i18n.T("Keep one pronunciation per word: %s", strings.Join(dups, ", "))).FontSize(px(t, 12)).TextColor(t.Danger)
+		ui.Row(c).Gap(px(t, 6)).Children(func() {
+			statusMark(c, icons.DangerCircle, t.Danger)
+			caption(c, i18n.T("Keep one pronunciation per word: %s", strings.Join(dups, ", "))).TextColor(t.Danger).Grow(1).MinWidth(0)
+		})
 	}
-	if ui.Button(c.Key("lex-add"), i18n.T("Add word")).Disabled(locked).Clicked() {
-		p.doc.Lexicon = append(p.doc.Lexicon, services.LexiconEntry{})
-	}
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		if ghostIconButton(c.Key("lex-add"), icons.AddCircle, i18n.T("Add word")).Label(i18n.T("Add word")).Disabled(locked).Clicked() {
+			p.doc.Lexicon = append(p.doc.Lexicon, services.LexiconEntry{})
+		}
+		infoTip(c.Key("lex-tip"), i18n.T("Words of this book and how to say them, on top of Settings → Pronunciation."))
+	})
 }

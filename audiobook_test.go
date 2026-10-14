@@ -35,9 +35,10 @@ func TestAudiobookManuscriptCastAndWarnings(t *testing.T) {
 	if len(p.spec.Chapters) != 2 || a.lfBlocker(p) != "" {
 		t.Fatalf("plan %d chapters, blocker %q", len(p.spec.Chapters), a.lfBlocker(p))
 	}
-	// The markup toolbar inserts at the caret.
+	// The Insert menu inserts at the caret.
 	p.ed.Select(0, 0)
-	if err := tt.Click("Pause"); err != nil {
+	tt.Click("Insert")
+	if err := tt.ChooseMenuItem("Pause"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -45,7 +46,10 @@ func TestAudiobookManuscriptCastAndWarnings(t *testing.T) {
 		t.Errorf("pause: %q", p.doc.Script[:30])
 	}
 	p.ed.Select(0, 0)
-	tt.Click("Voice")
+	tt.Click("Insert")
+	if err := tt.ChooseMenuItem("Voice"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
 	if !strings.HasPrefix(p.doc.Script, "[voice:NAME]") || p.ed.SelectedText() != "NAME" {
 		t.Errorf("voice: %q, selected %q", p.doc.Script[:30], p.ed.SelectedText())

@@ -78,3 +78,14 @@ pen-new-round           # writing help
 text-square             # pronunciation
 cloud-download          # models and downloads
 case-round              # audio tools
+
+# Phase B1 (Stories, Audiobook, Dub, Batch, Transcribe, Projects).
+trash-bin-minimalistic  # delete
+pen                     # rename, edit
+stop                    # stop a render
+headphones-round        # audition a line
+undo-left               # undo
+undo-right              # redo
+magnifer-zoom-in        # timeline zoom
+magnifer-zoom-out
+smile-circle            # reactions
