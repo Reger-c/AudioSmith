@@ -59,6 +59,7 @@ func settingsSections() []settingsSection {
 		{"dictation", i18n.T("Dictation"), "Dictation"},
 		{"writing", i18n.T("Writing help"), "Writing help"},
 		{"permissions", i18n.T("Permissions"), "Permissions"},
+		dubSettingsSection(), // M4: dub_settings.go (thread #19)
 	}
 }
 
@@ -317,6 +318,7 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 						r.Title(i18n.T("Permissions"))
 						a.lastSettings = "permissions"
 						a.permissionsSettings(c)
+					case a.dubSettingsRoute(c, r): // M4: Settings → Dubbing (dub_pages.go, thread #19)
 					default:
 						ui.Text(c, i18n.T("There is no page at %s.", a.router.Path())).TextColor(t.TextMuted)
 					}

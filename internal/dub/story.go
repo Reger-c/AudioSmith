@@ -35,7 +35,8 @@ type StoryLine struct {
 // StoryVoice reports whether a VoiceRef is one Stories can use.
 func StoryVoice(ref string) string {
 	switch {
-	case ref == "", ref == VoiceAuto, ref == VoiceDefault, strings.HasPrefix(ref, DesignPrefix), strings.HasPrefix(ref, GalleryPrefix):
+	case ref == "", ref == VoiceAuto, ref == VoiceDefault, strings.HasPrefix(ref, DesignPrefix), strings.HasPrefix(ref, GalleryPrefix),
+		strings.HasPrefix(ref, PresetPrefix):
 		return ""
 	}
 	return ref
@@ -95,6 +96,8 @@ const (
 	DesignPrefix = "design:"
 	// GalleryPrefix: "gallery:<archetype id>", a Voice Gallery voice.
 	GalleryPrefix = "gallery:"
+	// PresetPrefix: "preset:<id>", a design preset (gallery.Presets).
+	PresetPrefix = "preset:"
 	// SpeakerPrefix: "speaker:<id>", one of the model's own speakers.
 	SpeakerPrefix = "speaker:"
 )
