@@ -246,20 +246,64 @@ func (a *app) canGenerate() bool {
 
 // studioMissingReference is true when the Studio's model only clones
 // voices (catalog NeedsReference) and nothing gives it a reference clip:
-// no clip chosen, no unsaved clip, no saved voice that carries one.
+// no clip chosen, no unsaved clip, no saved voice that carries one. It
+// asks the voice the recipe would send, as the services do.
 func (a *app) studioMissingReference() bool {
 	p := a.preset()
-	if !p.NeedsReference {
-		return false
+	return takeVoice(a.studioVoiceTake(p), p) == voiceMissing
+}
+
+// studioDefaultVoice is true when the Studio's model clones voices but
+// the recipe would give it nothing to speak with — no reference clip, no
+// saved voice, no speaker or style — so it speaks in its default voice.
+func (a *app) studioDefaultVoice() bool {
+	p := a.preset()
+	return takeVoice(a.studioVoiceTake(p), p) == voiceDefault
+}
+
+// voiceOutcome is what a model does with the voice fields of a recipe.
+type voiceOutcome int
+
+const (
+	voiceGiven   voiceOutcome = iota // a voice to clone, a speaker, a style, or the model's own voices
+	voiceMissing                     // the model only clones and has nothing to clone: refused
+	voiceDefault                     // the model clones but has nothing to clone: its default voice
+)
+
+// takeVoice is what model e does with the voice of recipe t: the one
+// predicate behind the Studio's hints and Generate, on the same fields
+// the services check (services.HasReference, checkReference).
+func takeVoice(t core.Take, e catalog.Entry) voiceOutcome {
+	switch {
+	case services.HasReference(t):
+		return voiceGiven
+	case e.NeedsReference:
+		return voiceMissing
+	case e.Has(catalog.CapClone) && len(e.Voices) == 0 && !e.Has(catalog.CapVoiceStyle) && strings.TrimSpace(t.Voice) == "":
+		return voiceDefault
 	}
-	if a.studioVoice == "" && a.studioClip != nil {
-		return false
+	return voiceGiven
+}
+
+// studioVoiceTake is the voice part of the recipe the Studio would make
+// for model e (recipe without the rest): what the hints look at.
+func (a *app) studioVoiceTake(e catalog.Entry) core.Take {
+	t := core.Take{Model: e.Repo, Voice: strings.TrimSpace(a.voice), Language: strings.TrimSpace(a.language)}
+	a.setStudioVoice(&t, e)
+	return t
+}
+
+// setStudioVoice sets the voice of recipe t for model e: the inspector's
+// reference clip, unless the picker supplies the voice; then the
+// picker's voice (applyStudioVoice) and its encoded prompt.
+func (a *app) setStudioVoice(t *core.Take, e catalog.Entry) {
+	if e.Has(catalog.CapClone) && strings.TrimSpace(a.refAudio) != "" && !a.studioUsesSavedVoice(e) {
+		t.RefAudio, t.RefText = strings.TrimSpace(a.refAudio), strings.TrimSpace(a.refText)
 	}
-	if v := a.findVoice(a.studioVoice); v != nil {
-		ok, _ := voiceUsable(v, p)
-		return !ok
-	}
-	return strings.TrimSpace(a.refAudio) == ""
+	// A voice from the library (voices.go): its reference, design, seed,
+	// style, and the encoded prompt the engine prefers to the reference.
+	a.applyStudioVoice(t, e)
+	t.VoicePrompt = a.studioVoicePrompt(e)
 }
 
 // generate makes a take of the form: TakeService checks the licence and
@@ -303,13 +347,7 @@ func (a *app) recipe(now time.Time) core.Take {
 	if p.Has(catalog.CapSampling) && !a.modelDefaults {
 		t.Temperature, t.TopP, t.MaxTokens = a.temperature, a.topP, int(a.maxTokens)
 	}
-	if p.Has(catalog.CapClone) && strings.TrimSpace(a.refAudio) != "" && !a.studioUsesSavedVoice(p) {
-		t.RefAudio, t.RefText = strings.TrimSpace(a.refAudio), strings.TrimSpace(a.refText)
-	}
-	// A voice from the library (voices.go): its reference, design, seed,
-	// style, and the encoded prompt the engine prefers to the reference.
-	a.applyStudioVoice(&t, p)
-	t.VoicePrompt = a.studioVoicePrompt(p)
+	a.setStudioVoice(&t, p)
 	if p.Has(catalog.CapDuration) && a.duration > 0 {
 		t.Duration = a.duration
 	}

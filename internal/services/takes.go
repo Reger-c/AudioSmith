@@ -166,11 +166,19 @@ func (s *Takes) check(ctx context.Context, r core.Take) (core.Take, error) {
 	return r, nil
 }
 
+// HasReference reports whether a recipe gives a cloning model a voice to
+// clone: a reference clip or an encoded voice prompt. Without one, a model
+// that only clones refuses it (checkReference) and the others speak in
+// their default voice; the Studio's hints ask the same question.
+func HasReference(t core.Take) bool {
+	return strings.TrimSpace(t.RefAudio) != "" || strings.TrimSpace(t.VoicePrompt) != ""
+}
+
 // checkReference refuses a recipe for a model that only clones voices
 // (ModelInfo.NeedsReference) when it has neither a reference clip nor a
 // voice prompt: the engine would fail it.
 func checkReference(t core.Take, info ModelInfo) error {
-	if !info.NeedsReference || strings.TrimSpace(t.RefAudio) != "" || strings.TrimSpace(t.VoicePrompt) != "" {
+	if !info.NeedsReference || HasReference(t) {
 		return nil
 	}
 	name := info.Label
