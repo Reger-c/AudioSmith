@@ -1,8 +1,21 @@
 diff --git a/Sources/MLXAudioTTS/Models/StyleTTS2/KittenTTS/KittenTTSModel.swift b/Sources/MLXAudioTTS/Models/StyleTTS2/KittenTTS/KittenTTSModel.swift
-index 868e182..972298d 100644
+index 868e182..3e8767e 100644
 --- a/Sources/MLXAudioTTS/Models/StyleTTS2/KittenTTS/KittenTTSModel.swift
 +++ b/Sources/MLXAudioTTS/Models/StyleTTS2/KittenTTS/KittenTTSModel.swift
-@@ -331,13 +331,98 @@ public final class KittenTTSModel: Module, SpeechGenerationModel, @unchecked Sen
+@@ -161,6 +161,12 @@ public final class KittenTTSModel: Module, SpeechGenerationModel, @unchecked Sen
+         }
+ 
+         let tokens = try phonemize(text, language: language)
++        // AudioSmith patch: its ALBERT has 512 positions (as Kokoro's); a
++        // longer input made NaN durations and crashed MLX (concatenate of
++        // nothing). Refuse it as Kokoro does.
++        guard tokens.count <= 510 else {
++            throw AudioGenerationError.invalidInput("Input too long: \(tokens.count) tokens exceeds max 510")
++        }
+         var tokenArray = [Int32(0)]
+         tokenArray.append(contentsOf: tokens.map { Int32($0) })
+         tokenArray.append(0)
+@@ -331,13 +337,98 @@ public final class KittenTTSModel: Module, SpeechGenerationModel, @unchecked Sen
                  voices[k] = v.asType(.float32)
              }
          } else if FileManager.default.fileExists(atPath: npzURL.path) {
