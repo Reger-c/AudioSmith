@@ -48,6 +48,7 @@ const (
 
 	MethodMediaProbe  = "media.probe"  // request (media)
 	MethodMediaDecode = "media.decode" // request, job (media): any audio/video → WAV
+	MethodMediaEncode = "media.encode" // request, job (media): WAV → M4B/M4A (AAC) with chapters, tags, cover (M3)
 
 	MethodCaptureDevices = "capture.devices" // request (listen)
 	MethodCaptureStart   = "capture.start"   // request, job (listen): records until capture.stop
@@ -62,7 +63,7 @@ var Reserved = []string{
 	"stt.stream.open", "stt.stream.push", "stt.stream.close", "stt.partial", "stt.final",
 	"diarize.run", "lid.detect", "separate.run",
 	"llm.generate", "translate.run",
-	"media.encode", "media.mux", "media.timePitch", "media.thumbnail", "media.ocr", "doc.extractText",
+	"media.mux", "media.timePitch", "media.thumbnail", "media.ocr", "doc.extractText",
 	"capture.pcm",
 }
 
@@ -102,7 +103,7 @@ func SplitKind(kind string) (Role, string) {
 // models.* go to whichever worker holds the model (gpu in M1).
 func RoleOf(method string) Role {
 	switch method {
-	case MethodMediaProbe, MethodMediaDecode:
+	case MethodMediaProbe, MethodMediaDecode, MethodMediaEncode:
 		return RoleMedia
 	case MethodCaptureDevices, MethodCaptureStart, MethodCaptureStop:
 		return RoleListen
@@ -335,6 +336,8 @@ func ParamsFor(method string) any {
 		return new(ProbeParams)
 	case MethodMediaDecode:
 		return new(DecodeParams)
+	case MethodMediaEncode:
+		return new(EncodeParams)
 	case MethodCaptureDevices:
 		return new(Empty)
 	case MethodCaptureStart:
@@ -382,6 +385,8 @@ func ResultFor(method string) any {
 		return new(ProbeResult)
 	case MethodMediaDecode:
 		return new(DecodeResult)
+	case MethodMediaEncode:
+		return new(EncodeResult)
 	case MethodCaptureDevices:
 		return new(DevicesResult)
 	case MethodCaptureStart:
@@ -413,7 +418,7 @@ func IsJob(method string) bool {
 	switch method {
 	case MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
 		MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
-		MethodMediaDecode, MethodCaptureStart:
+		MethodMediaDecode, MethodMediaEncode, MethodCaptureStart:
 		return true
 	}
 	return false
@@ -423,5 +428,5 @@ func IsJob(method string) bool {
 var JobMethods = []string{
 	MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
 	MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
-	MethodMediaDecode, MethodCaptureStart,
+	MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
 }

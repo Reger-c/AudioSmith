@@ -43,7 +43,7 @@ type ExecutorOptions struct {
 var ExecutorKinds = []string{
 	proto.MethodModelsLoad, proto.MethodTTSSynthesize, proto.MethodTTSEncodeVoice,
 	proto.MethodSTTTranscribe, proto.MethodSTTAlign, proto.MethodVADDetect, proto.MethodEnhanceRun,
-	proto.MethodMediaDecode,
+	proto.MethodMediaDecode, proto.MethodMediaEncode,
 }
 
 // RegisterExecutors registers the engine-backed job kinds (ExecutorKinds)

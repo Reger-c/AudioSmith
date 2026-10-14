@@ -351,3 +351,29 @@ func TestListenTranscribes(t *testing.T) {
 		t.Errorf("gpu loaded it: %s", raw)
 	}
 }
+
+// media.encode (M3): an executor kind on the media worker.
+func TestEncode(t *testing.T) {
+	sup, w := newTestSup(t, "", allRoles)
+	w.until(t, "ready", ready)
+	ctx := context.Background()
+	dir := t.TempDir()
+	wav := speechWAV(t, dir)
+	out := filepath.Join(dir, "book.m4b")
+	p := proto.EncodeParams{Input: wav, Output: proto.Output{Path: out, Format: "m4b"}, Codec: "aac",
+		Chapters: []proto.EncodeChapter{{Title: "One", Start: 0, End: 1.5}, {Title: "Two", Start: 1.5, End: 3.3}},
+		Metadata: proto.EncodeMetadata{Title: "Book", Author: "A"}}
+	raw, _ := json.Marshal(p)
+	res, err := KindExecutor(sup, proto.MethodMediaEncode).Run(ctx, jobs.Job{ID: "E1", Spec: jobs.Spec{Params: raw}}, func(jobs.Progress) {}, nil)
+	var r proto.EncodeResult
+	if err != nil || json.Unmarshal(res, &r) != nil || r.Output != out || r.Format != "m4b" || r.Bitrate != 64000 || r.Duration < 3.2 {
+		t.Fatalf("encode: %s %v", res, err)
+	}
+	p.Output = proto.Output{Path: filepath.Join(dir, "book.mp3"), Format: "mp3"}
+	raw, _ = json.Marshal(p)
+	_, err = KindExecutor(sup, proto.MethodMediaEncode).Run(ctx, jobs.Job{ID: "E2", Spec: jobs.Spec{Params: raw}}, func(jobs.Progress) {}, nil)
+	var je *jobs.Error
+	if !errors.As(err, &je) || je.Code != proto.CodeUnsupported {
+		t.Errorf("mp3: %v", err)
+	}
+}

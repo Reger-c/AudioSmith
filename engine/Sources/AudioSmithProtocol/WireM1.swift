@@ -350,3 +350,47 @@ public struct CaptureStopResult: Codable, Sendable {
     public var stopped: Bool
     public init(stopped: Bool) { self.stopped = stopped }
 }
+
+// MARK: - media.encode (job, media; M3)
+
+public struct EncodeChapter: Codable, Sendable {
+    public var title: String
+    public var start: Double
+    public var end: Double
+}
+
+public struct EncodeMetadata: Codable, Sendable {
+    public var title: String?
+    public var author: String?
+    public var narrator: String?
+    public var year: String?
+    public var genre: String?
+    public var description: String?
+}
+
+public struct EncodeParams: Codable, Sendable {
+    public var input: String
+    public var output: Output
+    public var codec: String?
+    public var bitrate: Int?
+    public var sampleRate: Int?
+    public var chapters: [EncodeChapter]?
+    public var metadata: EncodeMetadata
+    public var cover: String?
+}
+
+public struct EncodeResult: Codable, Sendable {
+    public var output: String
+    public var format: String
+    public var bytes: Int64
+    public var duration: Double
+    public var bitrate: Int?
+
+    public init(output: String, format: String, bytes: Int64, duration: Double, bitrate: Int?) {
+        self.output = output
+        self.format = format
+        self.bytes = bytes
+        self.duration = duration
+        self.bitrate = bitrate
+    }
+}

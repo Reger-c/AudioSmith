@@ -38,6 +38,7 @@ public enum Method {
     public static let enhanceRun = "enhance.run"
     public static let mediaProbe = "media.probe"
     public static let mediaDecode = "media.decode"
+    public static let mediaEncode = "media.encode"
     public static let captureDevices = "capture.devices"
     public static let captureStart = "capture.start"
     public static let captureStop = "capture.stop"
@@ -51,7 +52,7 @@ public enum Method {
     public static func isJob(_ method: String) -> Bool {
         switch method {
         case modelsLoad, ttsSynthesize, ttsEncodeVoice, sttTranscribe, sttAlign, vadDetect, enhanceRun,
-             mediaDecode, captureStart:
+             mediaDecode, mediaEncode, captureStart:
             return true
         default:
             return false
@@ -61,7 +62,7 @@ public enum Method {
     /// The role whose worker serves method (engine.*, job.cancel: every role).
     public static func role(of method: String) -> Role {
         switch method {
-        case mediaProbe, mediaDecode: return .media
+        case mediaProbe, mediaDecode, mediaEncode: return .media
         case captureDevices, captureStart, captureStop: return .listen
         default: return .gpu
         }
@@ -516,6 +517,7 @@ public func paramsType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.enhanceRun: EnhanceParams.self
     case Method.mediaProbe: ProbeParams.self
     case Method.mediaDecode: DecodeParams.self
+    case Method.mediaEncode: EncodeParams.self
     case Method.captureDevices: Empty.self
     case Method.captureStart: CaptureParams.self
     case Method.captureStop: CaptureStopParams.self
@@ -542,6 +544,7 @@ public func resultType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.enhanceRun: EnhanceResult.self
     case Method.mediaProbe: ProbeResult.self
     case Method.mediaDecode: DecodeResult.self
+    case Method.mediaEncode: EncodeResult.self
     case Method.captureDevices: DevicesResult.self
     case Method.captureStart: CaptureResult.self
     case Method.captureStop: CaptureStopResult.self

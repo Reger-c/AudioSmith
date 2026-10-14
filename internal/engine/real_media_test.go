@@ -3,6 +3,10 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"image"
+	"image/png"
+	"slices"
+	"strings"
 	"errors"
 	"math"
 	"os"
@@ -134,6 +138,60 @@ func TestRealEngineMedia(t *testing.T) {
 		t.Errorf("window: %+v %v %v", r, err, rerr)
 	}
 	t.Logf("speech %.2f s; window %+v", speechSeconds, r.AudioOut)
+
+	// media.encode (M3): an M4B with chapters, tags and a cover, read back by ffprobe.
+	coverPath := filepath.Join(dir, "cover.png")
+	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	for i := range img.Pix {
+		img.Pix[i] = byte(i)
+	}
+	cf, _ := os.Create(coverPath)
+	png.Encode(cf, img)
+	cf.Close()
+	book := filepath.Join(dir, "book.m4b")
+	enc := Executor(sup, proto.RoleMedia, proto.MethodMediaEncode)
+	res, err = runJob(ctx, enc, proto.EncodeParams{Input: speech, Output: proto.Output{Path: book, Format: "m4b"}, Codec: "aac",
+		Chapters: []proto.EncodeChapter{{Title: "Opening", Start: 0, End: 2}, {Title: "第一章 Chapter One", Start: 2, End: speechSeconds}},
+		Metadata: proto.EncodeMetadata{Title: "Smoke Book", Author: "A. Writer", Narrator: "Kokoro", Year: "2026", Genre: "Fiction", Description: "A test."},
+		Cover:    coverPath})
+	var er proto.EncodeResult
+	if err == nil {
+		decodeInto(t, res, &er)
+	}
+	t.Logf("encode: %+v %v", er, err)
+	if err != nil || er.Bytes == 0 || math.Abs(er.Duration-speechSeconds) > 0.1 || er.Bitrate != 64000 {
+		t.Errorf("encode: %+v %v", er, err)
+	} else if fp := tool("ffprobe"); fp != "" {
+		out, err := exec.Command(fp, "-v", "error", "-show_chapters", "-show_format", "-show_streams", "-of", "json", book).Output()
+		var probe struct {
+			Chapters []struct {
+				Start string            `json:"start_time"`
+				Tags  map[string]string `json:"tags"`
+			} `json:"chapters"`
+			Format struct {
+				Duration string            `json:"duration"`
+				Tags     map[string]string `json:"tags"`
+			} `json:"format"`
+			Streams []struct {
+				Codec string `json:"codec_name"`
+				Type  string `json:"codec_type"`
+			} `json:"streams"`
+		}
+		json.Unmarshal(out, &probe)
+		t.Logf("ffprobe: %+v %v", probe, err)
+		var codecs []string
+		for _, s := range probe.Streams {
+			codecs = append(codecs, s.Type+":"+s.Codec)
+		}
+		if len(probe.Chapters) != 2 || probe.Chapters[1].Tags["title"] != "第一章 Chapter One" || probe.Format.Tags["title"] != "Smoke Book" ||
+			probe.Format.Tags["artist"] != "A. Writer" || probe.Format.Tags["composer"] != "Kokoro" || !slices.Contains(codecs, "audio:aac") ||
+			!slices.ContainsFunc(codecs, func(c string) bool { return strings.HasPrefix(c, "video:") }) { // the cover shows as an attached picture
+			t.Errorf("m4b as ffprobe reads it: chapters %+v, tags %v, streams %v", probe.Chapters, probe.Format.Tags, codecs)
+		}
+	}
+	if _, err := runJob(ctx, enc, proto.EncodeParams{Input: speech, Output: proto.Output{Path: filepath.Join(dir, "b.mp3"), Format: "mp3"}}); !errors.As(err, new(*jobs.Error)) {
+		t.Errorf("mp3: %v", err)
+	}
 
 	// Refusals.
 	var je *jobs.Error

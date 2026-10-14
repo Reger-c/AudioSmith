@@ -135,7 +135,7 @@ final class Server: @unchecked Sendable {
             m += [Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.ttsSynthesize, Method.ttsEncodeVoice,
                   Method.sttTranscribe, Method.sttAlign, Method.vadDetect, Method.enhanceRun]
         case .media:
-            m += [Method.mediaProbe, Method.mediaDecode]
+            m += [Method.mediaProbe, Method.mediaDecode, Method.mediaEncode]
         case .listen:
             m += [Method.captureDevices, Method.captureStart, Method.captureStop,
                   Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.sttTranscribe]
@@ -255,6 +255,10 @@ final class Server: @unchecked Sendable {
                 let p = try msg.decodeParams(DecodeParams.self)
                 guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
                 startJob(id) { try await media.decode(p, job: id) }
+            case Method.mediaEncode:
+                let p = try msg.decodeParams(EncodeParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await media.encode(p, job: id) }
             case Method.captureDevices:
                 out.result(id, DevicesResult(devices: captureDevices()))
             case Method.captureStart:

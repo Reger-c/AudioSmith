@@ -78,7 +78,7 @@ func Methods(role proto.Role) []string {
 	common := []string{proto.MethodHello, proto.MethodStats, proto.MethodFlush, proto.MethodShutdown, proto.MethodJobCancel}
 	switch role {
 	case proto.RoleMedia:
-		return append(common, proto.MethodMediaProbe, proto.MethodMediaDecode)
+		return append(common, proto.MethodMediaProbe, proto.MethodMediaDecode, proto.MethodMediaEncode)
 	case proto.RoleListen:
 		return append(common, proto.MethodCaptureDevices, proto.MethodCaptureStart, proto.MethodCaptureStop,
 			proto.MethodModelsLoad, proto.MethodModelsUnload, proto.MethodModelsLoaded, proto.MethodSTTTranscribe)
@@ -309,6 +309,8 @@ func (f *fakeEngine) startJob(m proto.Message) {
 			f.enhance(m)
 		case proto.MethodMediaDecode:
 			f.decode(m)
+		case proto.MethodMediaEncode:
+			f.encode(m)
 		case proto.MethodCaptureStart:
 			f.capture(m)
 		default:

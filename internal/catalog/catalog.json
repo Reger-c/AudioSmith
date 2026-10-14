@@ -90,7 +90,7 @@
         {"id": "Ryan"},
         {"id": "Aiden"}
       ],
-      "capabilities": ["sampling", "voiceStyle", "language"],
+      "capabilities": ["sampling", "voiceStyle", "language", "stream"],
       "sampleRate": 24000,
       "maxChars": 600,
       "rtf": 2,
@@ -119,7 +119,7 @@
         {"code": "pt", "value": "Portuguese"},
         {"code": "ru", "value": "Russian"}
       ],
-      "capabilities": ["sampling", "clone", "language", "voicePrompt", "seed"],
+      "capabilities": ["sampling", "clone", "language", "voicePrompt", "seed", "stream"],
       "sampleRate": 24000,
       "maxChars": 600,
       "rtf": 1.2,
@@ -209,7 +209,7 @@
         {"code": "pt", "value": "Portuguese"},
         {"code": "ru", "value": "Russian"}
       ],
-      "capabilities": ["sampling", "design", "voiceStyle", "language"],
+      "capabilities": ["sampling", "design", "voiceStyle", "language", "stream"],
       "sampleRate": 24000,
       "maxChars": 600,
       "rtf": 1.8,
@@ -238,7 +238,7 @@
         {"code": "pt", "value": "Portuguese"},
         {"code": "ru", "value": "Russian"}
       ],
-      "capabilities": ["sampling", "clone", "language", "voicePrompt", "seed"],
+      "capabilities": ["sampling", "clone", "language", "voicePrompt", "seed", "stream"],
       "sampleRate": 24000,
       "maxChars": 600,
       "rtf": 1,

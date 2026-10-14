@@ -69,6 +69,7 @@ func TestLongRender(t *testing.T) {
 	}
 	a.startEngine()
 	waitFor("ready", time.Minute, func() bool { return a.engState == engineReady })
+	acceptLicences(t, a) // OmniVoice
 
 	render := func(name, modelID, voice, language, text string, duration float64) *core.Take {
 		t.Helper()
@@ -77,6 +78,7 @@ func TestLongRender(t *testing.T) {
 		a.text, a.voice, a.language, a.duration = text, voice, language, duration
 		a.evenOut = true
 		started := time.Now()
+		before := a.lastClipID
 		a.generate()
 		if a.job == nil {
 			t.Fatalf("%s: did not start: %q", name, a.jobError)
@@ -86,7 +88,7 @@ func TestLongRender(t *testing.T) {
 			t.Fatalf("%s: %s", name, a.jobError)
 		}
 		take := a.lastClip()
-		if take == nil || take.Render == nil {
+		if take == nil || take.Render == nil || a.lastClipID == before {
 			t.Fatalf("%s: no take", name)
 		}
 		buf, _, err := wav.ReadFile(a.takeStore.AudioPath(*take))
@@ -136,9 +138,15 @@ func TestLongRender(t *testing.T) {
 		}
 		// Speed per chunk.
 		take = render("kokoro-speed", "kokoro-82m-bf16", "af_heart", "",
-			"This sentence is read at the normal pace. [slow] This one is read slowly, word by word. [fast] And this last one rushes past as fast as it can.", 0)
+			"The quick brown fox jumps over the lazy dog. [slow]The quick brown fox jumps over the lazy dog.[/slow] [fast]The quick brown fox jumps over the lazy dog.[/fast]", 0)
 		for i, c := range take.Render.Chunks {
 			t.Logf("  chunk %d: %.2f–%.2f s %q", i+1, c.Start, c.End, c.Text)
+		}
+		if cs := take.Render.Chunks; len(cs) == 3 {
+			d := func(i int) float64 { return cs[i].End - cs[i].Start }
+			if !(d(1) > d(0) && d(0) > d(2)) {
+				t.Errorf("speeds: normal %.2f s, slow %.2f s, fast %.2f s", d(0), d(1), d(2))
+			}
 		}
 	}
 	if strings.Contains(models, "omnivoice") {
