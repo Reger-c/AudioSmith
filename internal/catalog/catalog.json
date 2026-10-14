@@ -534,6 +534,7 @@
       "tasks": ["separate"],
       "about": "Separates voices from music and effects, fast. The default for dubbing.",
       "sampleRate": 44100,
+      "rtf": 10,
       "size": 168007757,
       "files": [
         {"path": "htdemucs.safetensors", "size": 168005865},
@@ -551,6 +552,7 @@
       "tasks": ["separate"],
       "about": "Separates voices from music and effects with the best quality; about as slow as real time.",
       "sampleRate": 44100,
+      "rtf": 1.5,
       "size": 456484296,
       "files": [
         {"path": "config.json", "size": 833},
@@ -568,6 +570,7 @@
       "tasks": ["diarize"],
       "about": "Finds who speaks when, for up to four speakers.",
       "sampleRate": 16000,
+      "rtf": 40,
       "size": 236114032,
       "minMemoryGB": 1,
       "licence": {"id": "nvidia-open-model", "name": "NVIDIA Open Model License", "url": "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/", "commercial": true, "verified": true}
