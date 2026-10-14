@@ -79,13 +79,26 @@ text-square             # pronunciation
 cloud-download          # models and downloads
 case-round              # audio tools
 
-# Phase B1 (Stories, Audiobook, Dub, Batch, Transcribe, Projects).
+# Phase B2 pages (Voices, Gallery, History, Workflows, Calls, Models, …).
+pen                     # edit
 trash-bin-minimalistic  # delete
-pen                     # rename, edit
-stop                    # stop a render
+stop                    # stop playing
+verified-check          # a verified voice
+lock-keyhole            # a locked voice
+magnifier-zoom-in       # workflow canvas zoom
+magnifier-zoom-out
+full-screen-square      # fit the canvas
+end-call-rounded        # hang up
+square-arrow-right-up   # open externally
+upload-minimalistic     # drop or choose a file
+code                    # code snippets
+panel-left              # the workflow rail toggle
+arrow-right-up          # an outgoing call
+arrow-left-down         # an incoming call
+
+# Phase B1 (Stories, Audiobook, Dub, Batch, Transcribe, Projects); pen,
+# trash-bin-minimalistic, stop and the zoom icons are in the B2 block.
 headphones-round        # audition a line
 undo-left               # undo
 undo-right              # redo
-magnifer-zoom-in        # timeline zoom
-magnifer-zoom-out
 smile-circle            # reactions

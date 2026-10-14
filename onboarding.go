@@ -20,6 +20,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -281,23 +282,27 @@ func (a *app) onboardingRow(c *ui.Context) {
 
 // --- the wizard's view ----------------------------------------------------------
 
-// onboarding is the wizard, over the window.
+// onboarding is the wizard, over the window: step breadcrumbs with a thin
+// ink progress line, a big title, one column, Back at the bottom left and
+// Continue at the bottom right.
 func (a *app) onboarding(c *ui.Context) {
 	a.maybeFirstSound()
 	if !a.obOpen {
 		return
 	}
 	t := c.Theme()
+	k := tok(t)
+	w, h := c.Size()
 	open := true
 	ui.DialogBase(c.Key("onboarding"), &open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
-		panel.Width(px(t, 760)).Height(px(t, 600)).Radius(14).Background(t.Background).Border(1, t.Border).
+		panel.Width(min(px(t, 720), w-px(t, sp6))).Height(min(px(t, 600), h-px(t, sp6))).Radius(px(t, radiusCard)).Background(k.Bg).Border(1, k.Line).
 			Shadow(0, 16, 40, 0, ui.RGBA(0, 0, 0, 0.3)).Label(i18n.T("Set up AudioSmith"))
 		ui.Column(c).Fill().Children(func() {
 			a.obHeader(c)
-			ui.Divider(c)
-			ui.Scroll(c).Grow(1).Children(func() {
-				ui.Column(c).Padding(px(t, 20), px(t, 28)).Gap(px(t, 14)).Children(func() {
+			ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+				ui.Column(c).Padding(px(t, sp2), px(t, sp8), px(t, sp5)).Gap(px(t, sp3)).Children(func() {
+					a.obTitle(c)
 					switch a.obStep {
 					case 0:
 						a.obSystem(c)
@@ -310,7 +315,7 @@ func (a *app) onboarding(c *ui.Context) {
 					}
 				})
 			})
-			ui.Divider(c)
+			ui.Box(c).Height(1).Background(k.Line)
 			a.obFooter(c)
 		})
 	})
@@ -324,47 +329,86 @@ func obSteps() []string {
 	return []string{i18n.T("This Mac"), i18n.T("Models"), i18n.T("Privacy"), i18n.T("Dictation")}
 }
 
+// obHeader is the steps as breadcrumbs (done ones with a check), the
+// language, and the progress line under them.
 func (a *app) obHeader(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Padding(px(t, 18), px(t, 24)).Gap(px(t, 16)).AlignItems(ui.Center).Children(func() {
-		ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
-			ui.Text(c, i18n.T("Welcome to AudioSmith")).FontSize(px(t, 18)).Bold()
-			ui.Text(c, i18n.T("Speech, voices and dubbing, made on this Mac. Four short steps; everything can be changed later in Settings.")).
-				FontSize(px(t, 12)).TextColor(t.TextMuted)
+	k := tok(t)
+	steps := obSteps()
+	ui.Row(c).Padding(px(t, sp3), px(t, sp5), px(t, sp3), px(t, sp8)).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Grow(1).MinWidth(0).Wrap().Children(func() {
+			for i, s := range steps {
+				if i > 0 {
+					ui.Icon(c, icons.AltArrowRight.Linear).Size(px(t, 12), px(t, 12)).TextColor(k.Text3)
+				}
+				ui.Row(c.Key("ob-step-" + itoa(i))).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+					col := k.Text3
+					switch {
+					case i == a.obStep:
+						col = k.Text
+					case i < a.obStep:
+						col = k.Text2
+						ui.Icon(c, icons.CheckCircle.Bold).Size(px(t, 12), px(t, 12)).TextColor(k.Accent)
+					}
+					tx := ui.Text(c, s).FontSize(px(t, fsCaption)).TextColor(col).SingleLine()
+					if i == a.obStep {
+						tx.FontWeight(600)
+					}
+				})
+			}
 		})
 		langs := languageOptions()
-		if ui.Select(c.Key("ob-lang"), &a.settingsForm.language, langs).Label(i18n.T("Language")).Width(px(t, 160)).Changed() {
-			tag := ""
-			if i := slices.Index(langs, a.settingsForm.language); i > 0 {
-				tag = i18n.Supported()[i-1]
+		dropButton(c.Key("ob-lang"), icons.Global, a.settingsForm.language).Label(i18n.T("Language")).Tooltip(i18n.T("Language")).Shrink(0).Menu(func(m *ui.Menu) {
+			for i, l := range langs {
+				if m.Item(l).Checked(l == a.settingsForm.language).Chosen() {
+					a.settingsForm.language = l
+					tag := ""
+					if i > 0 {
+						tag = i18n.Supported()[i-1]
+					}
+					a.updateSettings(func(s *settings.Settings) { s.General.Language = tag })
+				}
 			}
-			a.updateSettings(func(s *settings.Settings) { s.General.Language = tag })
-		}
+		})
 	})
-	ui.Row(c).Padding(0, px(t, 24), px(t, 12), px(t, 24)).Gap(px(t, 6)).Children(func() {
-		for i, s := range obSteps() {
-			col, bg := t.TextMuted, t.Surface
-			if i == a.obStep {
-				col, bg = t.AccentText, t.Accent
-			} else if i < a.obStep {
-				col = t.Text
-			}
-			ui.Row(c.Key("ob-step-"+itoa(i))).Padding(px(t, 4), px(t, 10)).Radius(12).Background(bg).Children(func() {
-				ui.Text(c, itoa(i+1)+" · "+s).FontSize(px(t, 12)).TextColor(col)
-			})
+	// The progress line: thin, in ink.
+	frac := float32(a.obStep+1) / float32(len(steps))
+	ui.Box(c).Height(2).Draw(func(p *ui.Painter, r ui.Rect) {
+		p.Fill(r, k.Line, 0)
+		p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W * frac, H: r.H}, k.Ink, 0)
+	})
+}
+
+// obTitle is the step's big title and its line of explanation.
+func (a *app) obTitle(c *ui.Context) {
+	t := c.Theme()
+	title, sub := obSteps()[min(a.obStep, 3)], ""
+	switch a.obStep {
+	case 0:
+		title = i18n.T("Welcome to AudioSmith")
+		sub = i18n.T("Speech, voices and dubbing, made on this Mac. Four short steps; everything can be changed later in Settings.")
+	case 1:
+		sub = i18n.T("Choose what to download now. Each model downloads once, resumes if interrupted, and can be added or removed later in Models.")
+	case 3:
+		sub = i18n.T("Dictate into any app: press the shortcut, speak, and the text is typed where your cursor is. Speech stays on this Mac.")
+	}
+	ui.Column(c).Gap(px(t, sp1)).Margin(px(t, sp3), 0, px(t, sp2)).Children(func() {
+		ui.Text(c, title).FontSize(px(t, fsTitle)).FontWeight(600)
+		if sub != "" {
+			ui.Text(c, sub).TextColor(tok(t).Text2)
 		}
 	})
 }
 
 func (a *app) obFooter(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Padding(px(t, 12), px(t, 24)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if ui.Button(c.Key("ob-skip"), i18n.T("Skip setup")).Tooltip(i18n.T("Settings → General runs it again")).Clicked() {
-			a.skipOnboarding()
+	ui.Row(c).Padding(px(t, sp3), px(t, sp5)).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+		if a.obStep > 0 && ghostIconButton(c.Key("ob-back"), icons.AltArrowLeft, i18n.T("Back")).Label(i18n.T("Back")).Clicked() {
+			a.obStep--
 		}
 		ui.Spacer(c)
-		if a.obStep > 0 && ui.Button(c.Key("ob-back"), i18n.T("Back")).Clicked() {
-			a.obStep--
+		if ghostButton(c.Key("ob-skip"), i18n.T("Skip setup")).Tooltip(i18n.T("Settings → General runs it again")).Clicked() {
+			a.skipOnboarding()
 		}
 		if a.obStep < 3 {
 			if primaryButton(c.Key("ob-next"), i18n.T("Continue")).Clicked() {
@@ -378,24 +422,28 @@ func (a *app) obFooter(c *ui.Context) {
 	})
 }
 
-// obCheckRow is a line of the system check.
+// obCheckRow is a line of the system check: a status mark, what was
+// checked, and a detail under it.
 func obCheckRow(c *ui.Context, key, status, title, detail string, action func()) {
 	t := c.Theme()
-	ui.Row(c.Key(key)).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-		mark, col := "✓", t.Success
-		switch status {
-		case "warn":
-			mark, col = "!", t.Warning
-		case "fail":
-			mark, col = "✗", t.Danger
-		case "wait":
-			mark, col = "…", t.TextMuted
-		}
-		ui.Text(c, mark).Bold().TextColor(col).Width(px(t, 14))
+	k := tok(t)
+	ui.Row(c.Key(key)).Gap(px(t, sp3)).AlignItems(ui.Center).Padding(px(t, 6), 0).Children(func() {
+		ui.Column(c).Size(px(t, 18), px(t, 18)).Center().Shrink(0).Children(func() {
+			switch status {
+			case "warn":
+				ui.Icon(c, icons.DangerTriangle.Linear).Size(px(t, 18), px(t, 18)).TextColor(t.Warning)
+			case "fail":
+				ui.Icon(c, icons.CloseCircle.Linear).Size(px(t, 18), px(t, 18)).TextColor(t.Danger)
+			case "wait":
+				ui.Spinner(c).Size(px(t, 14), px(t, 14))
+			default:
+				ui.Icon(c, icons.CheckCircle.Linear).Size(px(t, 18), px(t, 18)).TextColor(t.Success)
+			}
+		})
 		ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 1)).Children(func() {
 			ui.Text(c, title)
 			if detail != "" {
-				ui.Text(c, detail).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				ui.Text(c, detail).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 			}
 		})
 		if action != nil {
@@ -406,11 +454,10 @@ func obCheckRow(c *ui.Context, key, status, title, detail string, action func())
 
 // obSystem is step 1: this Mac.
 func (a *app) obSystem(c *ui.Context) {
-	t := c.Theme()
 	if !a.obChecked {
 		a.runSystemCheck()
 	}
-	ui.Text(c, i18n.T("AudioSmith needs no other software: the models run on the Mac's GPU with MLX.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	caption(c, i18n.T("AudioSmith needs no other software: the models run on the Mac's GPU with MLX."))
 	s := a.sys
 	if s == nil {
 		obCheckRow(c, "ob-sys", "wait", i18n.T("Looking at this Mac…"), "", nil)
@@ -457,13 +504,13 @@ func (a *app) obSystem(c *ui.Context) {
 	case mirror != nil && mirror.ok:
 		usesMirror := slices.Equal(a.prefs.Models.Endpoints, []string{"https://hf-mirror.com"})
 		obCheckRow(c, "ob-net", "warn", i18n.T("huggingface.co does not answer; hf-mirror.com does"), hf.err, func() {
-			if ui.Button(c.Key("ob-mirror"), i18n.T("Use the mirror")).Disabled(usesMirror).Clicked() {
+			if ghostButton(c.Key("ob-mirror"), i18n.T("Use the mirror")).Disabled(usesMirror).Clicked() {
 				a.updateSettings(func(s *settings.Settings) { s.Models.Endpoints = []string{"https://hf-mirror.com"} })
 			}
 		})
 	default:
 		obCheckRow(c, "ob-net", "warn", i18n.T("No download source answers"), i18n.T("You can download models later; a proxy goes in Settings → Network."), func() {
-			if ui.Button(c.Key("ob-net-retry"), i18n.T("Try again")).Clicked() {
+			if ghostIconButton(c.Key("ob-net-retry"), icons.Restart, i18n.T("Try again")).Label(i18n.T("Try again")).Clicked() {
 				a.testNetwork(nil)
 			}
 		})
@@ -484,7 +531,7 @@ func (a *app) obSystem(c *ui.Context) {
 	case len(a.ffSystem) > 0:
 		p := a.ffSystem[0]
 		obCheckRow(c, "ob-ffmpeg", "pass", i18n.T("ffmpeg found: %s", shortPath(p)), i18n.T("Optional: adds MP3, Opus and FLAC export, WebM and MKV videos."), func() {
-			if ui.Button(c.Key("ob-ffmpeg-use"), i18n.T("Use it")).Clicked() {
+			if ghostButton(c.Key("ob-ffmpeg-use"), i18n.T("Use it")).Clicked() {
 				a.useFFmpeg(p, settings.MediaSystem)
 			}
 		})
@@ -512,34 +559,40 @@ func (a *app) obModels(c *ui.Context) {
 	if a.obPack == "" && a.prefs.Setup.Pack == "" {
 		a.obPack = rec
 	}
-	ui.Text(c, i18n.T("Choose what to download now. Each model downloads once, resumes if interrupted, and can be added or removed later in Models.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
+	k := tok(t)
 	for _, p := range modelPacks {
 		total, missing, names := a.packSizes(p.id)
 		chosen := a.obPack == p.id
-		card := ui.ButtonBase(c.Key("ob-pack-"+p.id)).Padding(px(t, 12), px(t, 14)).Radius(10).Border(1, t.Border).Label(packTitle(p.id))
-		if chosen {
-			card.Border(2, t.Accent).Background(t.Accent.Alpha(0.08))
-		} else if card.Hovered() {
-			card.Background(t.SurfaceHover)
+		card := ui.ButtonBase(c.Key("ob-pack-"+p.id)).Padding(px(t, sp3), px(t, sp4)).Radius(px(t, radiusCard)).Border(1, k.Line).Label(packTitle(p.id)).
+			Checked(chosen).Gap(px(t, sp3)).AlignItems(ui.Center)
+		switch {
+		case chosen:
+			card.Background(k.Pressed).Border(1, k.Pressed)
+		case card.Hovered():
+			card.Background(k.Hover)
 		}
 		card.Children(func() {
-			ui.Column(c).Grow(1).Gap(px(t, 4)).Children(func() {
-				ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, packTitle(p.id)).Bold()
+			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, sp1)).Children(func() {
+				ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
+					ui.Text(c, packTitle(p.id)).FontWeight(600)
 					if p.id == rec {
-						ui.Badge(c, i18n.T("Recommended for this Mac"))
+						tagChip(c, i18n.T("Recommended for this Mac")).TextColor(k.AccentInk).Background(k.AccentSoft)
 					}
 					ui.Spacer(c)
 					size := humanBytes(total)
 					if missing < total {
 						size = i18n.T("%s to download of %s", humanBytes(missing), humanBytes(total))
 					}
-					ui.Text(c, size).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					caption(c, size).SingleLine()
 				})
-				ui.Text(c, packAbout(p.id)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				caption(c, packAbout(p.id))
 				if chosen && len(names) > 0 {
-					ui.Text(c, i18n.T("Still needed: %s", joinNames(names))).FontSize(px(t, 11)).TextColor(t.TextMuted)
+					ui.Text(c, i18n.T("Still needed: %s", joinNames(names))).FontSize(px(t, fsMicro)).TextColor(k.Text2)
+				}
+			})
+			ui.Column(c).Size(px(t, 20), px(t, 20)).Center().Shrink(0).Children(func() {
+				if chosen {
+					ui.Icon(c, icons.CheckCircle.Bold).Size(px(t, 20), px(t, 20)).TextColor(k.Accent)
 				}
 			})
 		})
@@ -547,26 +600,32 @@ func (a *app) obModels(c *ui.Context) {
 			a.obPack = p.id
 		}
 	}
-	none := ui.ButtonBase(c.Key("ob-pack-none")).Padding(px(t, 10), px(t, 14)).Radius(10).Label(i18n.T("Download models later"))
-	if a.obPack == "" {
-		none.Border(2, t.Accent)
-	} else {
-		none.Border(1, t.Border)
+	none := ui.ButtonBase(c.Key("ob-pack-none")).Padding(px(t, sp2), px(t, sp4)).Radius(px(t, radiusCard)).Label(i18n.T("Download models later")).
+		Checked(a.obPack == "").Gap(px(t, sp3)).AlignItems(ui.Center)
+	switch {
+	case a.obPack == "":
+		none.Background(k.Pressed)
+	case none.Hovered():
+		none.Background(k.Hover)
 	}
-	none.Children(func() { ui.Text(c, i18n.T("Download models later")).FontSize(px(t, 12)) })
+	none.Children(func() {
+		ui.Text(c, i18n.T("Download models later")).FontSize(px(t, fsCaption)).Grow(1)
+		if a.obPack == "" {
+			ui.Icon(c, icons.CheckCircle.Bold).Size(px(t, 20), px(t, 20)).TextColor(k.Accent)
+		}
+	})
 	if none.Clicked() {
 		a.obPack = ""
 	}
 	if a.obPack != "" {
 		_, missing, _ := a.packSizes(a.obPack)
 		if a.obFree > 0 && missing > a.obFree-(5<<30) {
-			ui.Text(c, i18n.T("Not enough free space: %s needed, %s free.", humanBytes(missing), humanBytes(a.obFree))).FontSize(px(t, 12)).TextColor(t.Danger)
+			statusMark(c, icons.DangerCircle, t.Danger, i18n.T("Not enough free space: %s needed, %s free.", humanBytes(missing), humanBytes(a.obFree)))
 		}
 		if a.obPack == "max" {
-			ui.Text(c, i18n.T("OmniVoice's licence (CC BY-NC 4.0) allows non-commercial use only: you are asked to accept it before it downloads.")).
-				FontSize(px(t, 12)).TextColor(t.Warning)
+			banner(c, icons.DangerTriangle, t.Warning, i18n.T("OmniVoice's licence (CC BY-NC 4.0) allows non-commercial use only: you are asked to accept it before it downloads."), nil)
 		}
-		ui.Text(c, i18n.T("Downloads start when you finish, and go on in the background.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Downloads start when you finish, and go on in the background."))
 	}
 }
 
@@ -575,7 +634,7 @@ func joinNames(names []string) string { return strings.Join(names, " · ") }
 // obPrivacy is step 3.
 func (a *app) obPrivacy(c *ui.Context) {
 	t := c.Theme()
-	ui.Text(c, i18n.T("Everything you write, record and generate stays on this Mac. AudioSmith has no analytics and no account.")).Bold()
+	banner(c, icons.ShieldCheck, t.Success, i18n.T("Everything you write, record and generate stays on this Mac. AudioSmith has no analytics and no account."), nil)
 	local := a.prefs.Privacy.LocalOnlyLLM
 	settingRowNote(c, "ob-local", i18n.T("Local language models only"), i18n.T("Writing help and translation never use a cloud provider, even one you add later."), func() {
 		if ui.Switch(c.Key("ob-local"), &local).Label(i18n.T("Keep text on this Mac")).Changed() {
@@ -593,14 +652,11 @@ func (a *app) obPrivacy(c *ui.Context) {
 	settingRowNote(c, "ob-keep", i18n.T("History"), i18n.T("Older takes that are not starred are deleted beyond the limit."), func() {
 		ui.Segmented(c.Key("ob-keep"), &a.obKeep, i18n.T("Keep every take"), i18n.T("Last 1000"), i18n.T("Last 200")).Label(i18n.T("History"))
 	})
-	ui.Text(c, i18n.T("Settings → Privacy says exactly what may use the network, and when.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	caption(c, i18n.T("Settings → Privacy says exactly what may use the network, and when."))
 }
 
 // obDictation is step 4.
 func (a *app) obDictation(c *ui.Context) {
-	t := c.Theme()
-	ui.Text(c, i18n.T("Dictate into any app: press the shortcut, speak, and the text is typed where your cursor is. Speech stays on this Mac.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
 	f := &a.dictSet
 	f.enabled = a.prefs.Dictation.Enabled
 	settingRowNote(c, "ob-dict", i18n.T("Dictation shortcut"), i18n.T("Works in every app while AudioSmith runs."), func() {
@@ -616,7 +672,7 @@ func (a *app) obDictation(c *ui.Context) {
 			a.permissionsSettings(c) // permissions.go: microphone, accessibility
 		}
 	}
-	ui.Text(c, i18n.T("When you finish, the Studio says hello as soon as the Kokoro voice is downloaded.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	caption(c, i18n.T("When you finish, the Studio says hello as soon as the Kokoro voice is downloaded."))
 }
 
 // obPackNames lists a pack's models (tests, the palette).

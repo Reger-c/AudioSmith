@@ -21,7 +21,7 @@ func (a *app) projectsPage(c *ui.Context) {
 	k := tok(t)
 	s := &a.projects
 	a.refreshLibrary()
-	narrow := a.mainWidth(c)-px(t, 190) < px(t, 520)
+	narrow := a.pageWidth(c)-px(t, 190) < px(t, 520)
 	pageHeader(c, i18n.T("Projects"), func() {
 		primaryIconButton(c.Key("pj-new"), icons.AddCircle, i18n.T("New")).Label(i18n.T("New")).Menu(func(m *ui.Menu) {
 			if m.Item(i18n.T("New story")).Chosen() {
@@ -73,7 +73,6 @@ func (a *app) projectsPage(c *ui.Context) {
 // libraryToolbar: the category (narrow), search, view, selection.
 func (a *app) libraryToolbar(c *ui.Context, narrow bool) {
 	t := c.Theme()
-	k := tok(t)
 	s := &a.projects
 	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if narrow {
@@ -91,14 +90,9 @@ func (a *app) libraryToolbar(c *ui.Context, narrow bool) {
 				clear(s.selected)
 			}
 		}
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Padding(0, 0, 0, px(t, sp2)).Radius(px(t, radiusControl)).Background(k.Hover).
-			Grow(1).MinWidth(px(t, 120)).MaxWidth(px(t, 380)).Children(func() {
-			ui.Icon(c, icons.Magnifer.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Text3)
-			if ui.TextInput(c.Key("pj-search"), &s.query).Placeholder(i18n.T("Search projects, voices, takes, exports…")).Label(i18n.T("Search the library")).
-				Background(ui.Transparent).Border(0, ui.Transparent).Grow(1).MinWidth(0).Changed() {
-				clear(s.selected)
-			}
-		})
+		if searchField(c, "pj-search", &s.query, i18n.T("Search projects, voices, takes, exports…"), px(t, 380)).Label(i18n.T("Search the library")).Changed() {
+			clear(s.selected)
+		}
 		ui.Segmented(c.Key("pj-view"), &s.cards, i18n.T("List"), i18n.T("Cards")).Label(i18n.T("View")).Shrink(0)
 		ui.Spacer(c)
 		n := len(s.selected)
@@ -137,10 +131,9 @@ func (a *app) libraryItems(c *ui.Context) {
 		case s.loading && s.loaded == "":
 			ui.Column(c.Key("pj-empty")).Grow(1).Center().Children(func() { ui.Spinner(c).Label(i18n.T("Loading…")) })
 		case strings.TrimSpace(s.query) != "":
-			emptyState(c, "pj-empty", icons.Magnifer, "", i18n.T("No matches for “%s”", strings.TrimSpace(s.query)), nil)
+			emptyState(c.Key("pj-empty"), icons.Magnifer, i18n.T("No matches for “%s”", strings.TrimSpace(s.query)), "", nil)
 		default:
-			emptyState(c, "pj-empty", projectsIcon, i18n.T("Nothing here yet"),
-				i18n.T("Write a story, make an audiobook, design a voice or generate a take, and it shows up here."), nil)
+			emptyState(c.Key("pj-empty"), projectsIcon, i18n.T("Nothing here yet"), i18n.T("Write a story, make an audiobook, design a voice or generate a take, and it shows up here."), nil)
 		}
 		return
 	}
@@ -471,7 +464,7 @@ func (a *app) libraryDialogs(c *ui.Context) {
 							line := strings.Join(strings.Fields(it.Title), " ")
 							e := s.errors[libKey(it)]
 							ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-								statusMark(c, itemIcon(it), tok(t).Text2)
+								iconMark(c, itemIcon(it), tok(t).Text2, "")
 								truncText(c, line).FontSize(px(t, fsCaption)).Grow(1)
 								if e != "" {
 									caption(c, e).TextColor(t.Danger).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Tooltip(e)

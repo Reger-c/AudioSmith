@@ -234,7 +234,7 @@ func (a *app) dubExportPanel(c *ui.Context) {
 	ready := a.dubExportReady()
 	mark := func(ic icons.Icon, col ui.Color, text string) {
 		ui.Row(c).Gap(px(t, 6)).Children(func() {
-			statusMark(c, ic, col)
+			iconMark(c, ic, col, "")
 			caption(c, text).TextColor(col).Grow(1).MinWidth(0)
 		})
 	}
@@ -255,7 +255,7 @@ func (a *app) dubExportPanel(c *ui.Context) {
 	}
 	if ex.last != "" {
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			statusMark(c, icons.CheckCircle, t.Success)
+			iconMark(c, icons.CheckCircle, t.Success, "")
 			truncText(c, i18n.T("Exported %s", filepath.Base(ex.last))).FontSize(px(t, fsCaption)).Grow(1)
 			if a.win != nil && iconButton(c.Key("dx-reveal"), icons.FolderOpen, i18n.T("Show in Finder")).Clicked() {
 				mygo.Shell.ShowItemInFolder(ex.last)

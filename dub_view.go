@@ -59,7 +59,7 @@ func (a *app) dubPage(c *ui.Context) {
 	}
 	width := px(t, inspectorWidth+20)
 	inline, shown := a.dubSide.layout(a, c, width, px(t, 480))
-	w := a.mainWidth(c)
+	w := a.pageWidth(c)
 	if inline && shown {
 		w -= width
 	}
@@ -240,7 +240,7 @@ func (a *app) dubEmpty(c *ui.Context) {
 			ui.Row(c).Gap(px(t, sp2)).Wrap().Justify(ui.Center).Children(func() {
 				for i, s := range []string{i18n.T("Upload & transcribe"), i18n.T("Translate"), i18n.T("Generate the dub")} {
 					if i > 0 {
-						statusMark(c, icons.AltArrowRight, k.Text3)
+						iconMark(c, icons.AltArrowRight, k.Text3, "")
 					}
 					ui.Text(c, strconv.Itoa(i+1)+" · "+s).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 				}
@@ -255,7 +255,7 @@ func (a *app) dubEmpty(c *ui.Context) {
 							row.Background(k.Hover)
 						}
 						row.Children(func() {
-							statusMark(c, dubIcon, k.Text2)
+							iconMark(c, dubIcon, k.Text2, "")
 							ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 								truncText(c, firstOf(r.Title, i18n.T("Untitled dub")))
 								meta := []string{dubPhaseText(dub.Phase(r.Phase))}
@@ -364,9 +364,9 @@ func (a *app) dubStepper(c *ui.Context) {
 					case running:
 						ui.Spinner(c).Size(px(t, 14), px(t, 14))
 					case failed:
-						statusMark(c, icons.DangerCircle, k.Danger)
+						iconMark(c, icons.DangerCircle, k.Danger, "")
 					case done:
-						statusMark(c, icons.CheckCircle, k.AccentInk)
+						iconMark(c, icons.CheckCircle, k.AccentInk, "")
 					default:
 						ui.Text(c, strconv.Itoa(i+1)).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(col)
 					}
@@ -528,22 +528,8 @@ func (a *app) dubPlayerBar(c *ui.Context) {
 		}
 	}
 	ui.Row(c.Key("dub-player")).Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(0).Children(func() {
-		ic := icons.Play
-		if a.dubPlaying() {
-			ic = icons.Pause
-		}
-		play := ui.ButtonBase(c.Key("dub-play")).Size(px(t, 32), px(t, 32)).Radius(px(t, 16)).Center().Shrink(0).
-			Label(i18n.T("Play or pause")).Tooltip(i18n.T("Play or pause (Space)")).Disabled(pl.loading || p.Media.Audio == "")
-		switch {
-		case play.Pressed():
-			play.Background(k.InkPressed)
-		case play.Hovered():
-			play.Background(k.InkHover)
-		default:
-			play.Background(k.Ink)
-		}
-		play.Children(func() { ui.Icon(c, ic.Bold).Size(px(t, 14), px(t, 14)).TextColor(k.OnInk) })
-		if play.Clicked() {
+		if playButton(c.Key("dub-play"), a.dubPlaying(), false, 32).Label(i18n.T("Play or pause")).Tooltip(i18n.T("Play or pause (Space)")).
+			Disabled(pl.loading || p.Media.Audio == "").Clicked() {
 			a.dubTogglePlay()
 		}
 		tracks := []string{dubOrig}
@@ -629,7 +615,7 @@ func (a *app) dubTimeline(c *ui.Context) {
 	if len(over) > 0 {
 		t := c.Theme()
 		ui.Row(c.Key("dub-overlap")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			statusMark(c, icons.DangerCircle, t.Danger)
+			iconMark(c, icons.DangerCircle, t.Danger, "")
 			caption(c, i18n.T("Some lines overlap the next: both play at once.")).TextColor(t.Danger)
 		})
 	}
@@ -732,7 +718,7 @@ func (a *app) dubFooter(c *ui.Context) {
 			if p.TracksReady() {
 				if n == 0 {
 					ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-						statusMark(c, icons.CheckCircle, t.Success)
+						iconMark(c, icons.CheckCircle, t.Success, "")
 						caption(c, i18n.T("Every line is up to date.")).SingleLine()
 					})
 					return
@@ -788,7 +774,7 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 				if p.Source.HasVideo {
 					ic = dubIcon
 				}
-				statusMark(c, ic, tok(t).Text2)
+				iconMark(c, ic, tok(t).Text2, "")
 				ui.Text(c, name).FontWeight(600).MaxLines(2).Ellipsis("…").Grow(1).MinWidth(0).Tooltip(name)
 				if iconButton(c.Key("src-remove"), icons.TrashBinMinimalistic, i18n.T("Remove source")).Disabled(locked).Clicked() {
 					if len(p.Segments) > 0 {
@@ -871,15 +857,15 @@ func (a *app) dubTranscribePanel(c *ui.Context) {
 			ui.Box(c).Size(px(t, 14), px(t, 14)).Center().Shrink(0).Children(func() {
 				switch s.Status {
 				case dub.StatusDone:
-					statusMark(c, icons.CheckCircle, t.Success)
+					iconMark(c, icons.CheckCircle, t.Success, "")
 				case dub.StatusSkipped:
-					statusMark(c, icons.DangerTriangle, t.Warning)
+					iconMark(c, icons.DangerTriangle, t.Warning, "")
 				case dub.StatusFailed:
-					statusMark(c, icons.DangerCircle, t.Danger)
+					iconMark(c, icons.DangerCircle, t.Danger, "")
 				case dub.StatusRunning:
 					ui.Spinner(c).Size(px(t, 12), px(t, 12))
 				default:
-					dot(c, tok(t).G[5])
+					statusDot(c, tok(t).G[5])
 				}
 			})
 			ui.Text(c, dubStageTitle(st)).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0)
@@ -904,7 +890,7 @@ func (a *app) dubTranscribePanel(c *ui.Context) {
 				if in.Changed() {
 					a.dubRenameSpeaker(sp, name)
 				}
-				chip(c, i18n.N(n, "%d line", "%d lines", n))
+				tagChip(c, i18n.N(n, "%d line", "%d lines", n))
 			})
 		}
 		ui.Column(c).Gap(px(t, 2)).Children(func() {
@@ -1034,7 +1020,7 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 	case !ok:
 		fillCard(c.Key("tl-needs")).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
 			ui.Row(c).Gap(px(t, 6)).Children(func() {
-				statusMark(c, icons.DangerTriangle, t.Warning)
+				iconMark(c, icons.DangerTriangle, t.Warning, "")
 				caption(c, i18n.T("Translating needs a translation engine: a local model (Ollama, LM Studio) or a provider in Settings → Writing help.")).TextColor(tok(t).Text).Grow(1).MinWidth(0)
 			})
 			if ui.Button(c.Key("tl-setup"), i18n.T("Set up writing help")).Clicked() {
@@ -1154,7 +1140,7 @@ func (a *app) dubCastPanel(c *ui.Context) {
 			})
 			if _, ok := p.References[sp]; !ok && p.Stage(dub.StageReferences, "").Status == dub.StatusDone {
 				ui.Row(c).Gap(px(t, 6)).Children(func() {
-					statusMark(c, icons.DangerTriangle, t.Warning)
+					iconMark(c, icons.DangerTriangle, t.Warning, "")
 					caption(c, i18n.T("Says too little to clone: uses the default voice unless cast.")).TextColor(t.Warning).Grow(1).MinWidth(0)
 				})
 			}
@@ -1375,7 +1361,7 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 				}
 				truncText(c, line).Grow(1)
 				if term.Auto {
-					chip(c, i18n.T("auto"))
+					tagChip(c, i18n.T("auto"))
 				}
 				if iconButton(c.Key("edit"), icons.Pen, i18n.T("Edit")).Clicked() {
 					g.editing, g.eSrc, g.eTgt, g.eNot = ii, term.Source, term.Target, term.Note
@@ -1434,10 +1420,10 @@ func (a *app) dubPastePanel(c *ui.Context) {
 		pv := ps.preview
 		mode := map[dub.PasteMode]string{dub.PasteTimed: i18n.T("Timestamped"), dub.PasteNumbered: i18n.T("Numbered lines"), dub.PastePlain: i18n.T("Plain lines")}[pv.Mode]
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
-			chip(c, mode)
+			tagChip(c, mode)
 			ui.Text(c, i18n.T("%d of %d segments matched", pv.Matched, len(pv.Rows))).FontSize(px(t, fsCaption))
 			if pv.Unused > 0 {
-				statusMark(c, icons.DangerTriangle, t.Warning)
+				iconMark(c, icons.DangerTriangle, t.Warning, "")
 				caption(c, i18n.N(pv.Unused, "%d pasted line went unused", "%d pasted lines went unused", pv.Unused)).TextColor(t.Warning)
 			}
 		})

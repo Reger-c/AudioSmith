@@ -109,7 +109,7 @@ func (a *app) dubbingSettings(c *ui.Context) {
 	}
 	if y.err != "" {
 		ui.Row(c).Gap(px(t, 6)).Children(func() {
-			statusMark(c, icons.DangerCircle, t.Danger)
+			iconMark(c, icons.DangerCircle, t.Danger, "")
 			caption(c, y.err).TextColor(t.Danger).Grow(1).MinWidth(0)
 		})
 	}

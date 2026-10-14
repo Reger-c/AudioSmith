@@ -13,46 +13,55 @@ import (
 	"github.com/hehehai/AudioSmith/internal/telephony"
 )
 
-// callsWide is the width from which the Calls page shows three panes.
-const callsWide = 1280
+// callsHistoryWidth is the recent calls' column.
+const callsHistoryWidth = 280
 
-// callsPage is /calls: recent calls, the call shown, a new call.
+// callsPage is /calls: recent calls, the call shown, a new call. The
+// recent calls are a drawer when the window is narrow; the new call is a
+// third column when it is wide, else a tab beside the call.
 func (a *app) callsPage(c *ui.Context) {
 	t := c.Theme()
-	header(c, i18n.T("Calls"), func() {
-		if ui.Button(c.Key("calls-inbound"), i18n.T("Incoming calls…")).Clicked() {
+	k := tok(t)
+	pw := a.pageWidth(c)
+	histInline := pw-px(t, callsHistoryWidth) >= px(t, 480)
+	wide := histInline && pw-px(t, callsHistoryWidth+380) >= px(t, 480)
+	pageHeader(c, i18n.T("Calls"), func() {
+		if !histInline {
+			tip := i18n.T("Show recent calls")
+			if a.callHistOn {
+				tip = i18n.T("Hide recent calls")
+			}
+			if iconToggle(c.Key("calls-hist-toggle"), icons.History, a.callHistOn, tip).Clicked() {
+				a.callHistOn = !a.callHistOn
+			}
+		}
+		if labelOrIcon(c.Key("calls-inbound"), icons.PhoneCallingRounded, i18n.T("Incoming calls…"), pw < px(t, 640)).Clicked() {
 			a.openInbound()
 		}
-		if ui.Button(c.Key("calls-setup"), i18n.T("Set up Twilio")).Clicked() {
+		if iconButton(c.Key("calls-setup"), icons.Settings, i18n.T("Set up Twilio")).Clicked() {
 			a.navigate("/calls/setup")
 		}
 	})
-	wide := false
-	if b := a.callPageH.Bounds(c); b.W > 0 {
-		wide = b.W/px(t, 1) >= callsWide
-	}
-	ui.Row(c.Key("calls-body")).Bind(&a.callPageH).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c.Key("calls-history")).Width(px(t, 290)).Shrink(0).Background(t.Surface.Alpha(0.5)).Children(func() {
-			a.callHistory(c)
-		})
-		ui.Box(c).Width(1).Background(t.Border)
+	main := func() {
 		if wide {
 			ui.Scroll(c.Key("calls-call")).Grow(1).MinWidth(0).Children(func() {
-				ui.Column(c).Padding(px(t, 18)).Gap(px(t, 14)).Children(func() {
+				ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp3)).Children(func() {
 					a.callsBanner(c)
 					a.callView(c)
 				})
 			})
-			ui.Box(c).Width(1).Background(t.Border)
-			ui.Scroll(c.Key("calls-new")).Width(px(t, 400)).Shrink(0).Children(func() {
-				ui.Column(c).Padding(px(t, 18)).Gap(px(t, 14)).Children(func() { a.newCallForm(c) })
+			ui.Box(c).Width(1).Background(k.Line)
+			ui.Scroll(c.Key("calls-new")).Width(px(t, 380)).Shrink(0).Children(func() {
+				ui.Column(c).Padding(px(t, sp1), px(t, sp5), px(t, sp6)).Gap(px(t, sp3)).Children(func() { a.newCallForm(c) })
 			})
 			return
 		}
 		ui.Scroll(c.Key("calls-main")).Grow(1).MinWidth(0).Children(func() {
-			ui.Column(c).Padding(px(t, 18)).Gap(px(t, 14)).MaxWidth(px(t, 760)).Children(func() {
+			ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp3)).MaxWidth(px(t, 760)).Children(func() {
 				a.callsBanner(c)
-				ui.Segmented(c.Key("calls-tab"), &a.callTab, i18n.T("New call"), i18n.T("Call")).Label(i18n.T("Show"))
+				ui.Row(c).Children(func() {
+					ui.Segmented(c.Key("calls-tab"), &a.callTab, i18n.T("New call"), i18n.T("Call")).Label(i18n.T("Show"))
+				})
 				if a.callTab == 0 {
 					a.newCallForm(c)
 				} else {
@@ -60,23 +69,46 @@ func (a *app) callsPage(c *ui.Context) {
 				}
 			})
 		})
+	}
+	ui.Row(c.Key("calls-body")).Bind(&a.callPageH).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		if histInline {
+			ui.Column(c.Key("calls-history")).Width(px(t, callsHistoryWidth)).Shrink(0).Background(k.Subtle).Children(func() {
+				a.callHistory(c)
+			})
+			ui.Box(c).Width(1).Background(k.Line)
+		}
+		main()
 	})
+	if !histInline && a.callHistOn {
+		ui.Overlay(c, func() {
+			w, h := c.Size()
+			d := ui.Column(c.Key("calls-history-drawer")).Absolute().Left(w-pw).Top(titleBarHeight).Width(px(t, callsHistoryWidth)).
+				Height(h-titleBarHeight-px(t, statusBarHeight)-1).Background(k.Bg).BorderWidth(0, 1, 0, 0).BorderColor(k.Line).
+				Shadow(8, 0, 24, 0, ui.RGBA(0, 0, 0, 0.12)).Label(i18n.T("Recent calls"))
+			d.Children(func() { a.callHistory(c) })
+			if d.PressedOutside() || d.OverlayShortcut(0, ui.KeyEscape) {
+				a.callHistOn = false
+			}
+		})
+	}
 	a.callDialogs(c)
 }
 
 // callsBanner lists what is missing before calls can be placed.
 func (a *app) callsBanner(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	checks := a.callChecks()
 	ready, n := callsReady(checks)
 	if ready {
 		return
 	}
-	ui.Column(c.Key("calls-banner")).Gap(px(t, 6)).Padding(px(t, 12)).Radius(8).Background(t.Warning.Alpha(0.12)).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Finish setup to place calls")).Bold().Grow(1)
-			ui.Text(c, i18n.T("%d of %d ready", n, len(checks))).FontSize(px(t, 12)).TextColor(t.TextMuted)
-			if ui.Button(c.Key("calls-recheck"), i18n.T("Check again")).Disabled(a.tw.checking).Clicked() {
+	fillCard(c.Key("calls-banner")).Gap(px(t, sp2)).Padding(px(t, sp3), px(t, sp4)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, icons.DangerTriangle.Linear).Size(px(t, 16), px(t, 16)).TextColor(t.Warning)
+			ui.Text(c, i18n.T("Finish setup to place calls")).FontWeight(600).Grow(1).MinWidth(0)
+			caption(c, i18n.T("%d of %d ready", n, len(checks))).SingleLine()
+			if iconButton(c.Key("calls-recheck"), icons.Refresh, i18n.T("Check again")).Disabled(a.tw.checking).Clicked() {
 				a.checkTwilioAccount()
 			}
 		})
@@ -84,13 +116,13 @@ func (a *app) callsBanner(c *ui.Context) {
 			if ck.ok {
 				continue
 			}
-			ui.Row(c.Key("ck-" + ck.id)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "•").TextColor(t.Warning)
+			ui.Row(c.Key("ck-" + ck.id)).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+				statusDot(c, t.Warning)
 				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					ui.Text(c, ck.title).FontSize(px(t, 13))
-					ui.Text(c, ck.detail).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
+					ui.Text(c, ck.title)
+					ui.Text(c, ck.detail).FontSize(px(t, fsCaption)).TextColor(k.Text2).Wrap()
 				})
-				if ui.Button(c.Key("fix"), i18n.T("Fix")).Clicked() {
+				if ghostButton(c.Key("fix"), i18n.T("Fix")).Clicked() {
 					a.navigate(ck.fix)
 				}
 			})
@@ -101,25 +133,26 @@ func (a *app) callsBanner(c *ui.Context) {
 // callHistory is the recent calls.
 func (a *app) callHistory(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Height(px(t, 40)).Padding(0, px(t, 10), 0, px(t, 14)).AlignItems(ui.Center).Children(func() {
+	k := tok(t)
+	ui.Row(c).Height(px(t, 40)).Padding(0, px(t, sp2), 0, px(t, sp4)).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 		live, max := 0, 1
 		if a.callSvc != nil {
 			live, max = a.callSvc.Running()
 		}
-		ui.Text(c, i18n.T("Recent calls")).Bold().Grow(1)
-		ui.Text(c, i18n.T("%d of %d lines in use", live, max)).FontSize(px(t, 11)).TextColor(t.TextMuted)
-		if iconButton(c.Key("calls-refresh"), icons.Refresh, i18n.T("Refresh")).Tooltip(i18n.T("Refresh")).Clicked() {
+		ui.Text(c, i18n.T("Recent calls")).FontSize(px(t, fsCaption)).FontWeight(600).TextColor(k.Text2).Grow(1).SingleLine()
+		ui.Text(c, i18n.T("%d of %d lines in use", live, max)).FontSize(px(t, fsMicro)).TextColor(k.Text3).SingleLine().Ellipsis("…").MinWidth(0)
+		if iconButton(c.Key("calls-refresh"), icons.Refresh, i18n.T("Refresh")).Clicked() {
 			a.loadCalls()
 		}
 	})
 	if len(a.callList) == 0 {
-		ui.Column(c).Padding(px(t, 14)).Children(func() {
-			ui.Text(c, i18n.T("No calls yet. Your calls will show up here.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
+		ui.Column(c).Padding(px(t, sp4)).Children(func() {
+			caption(c, i18n.T("No calls yet. Your calls will show up here.")).Wrap()
 		})
 		return
 	}
 	ui.Scroll(c.Key("calls-list")).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Padding(px(t, 6)).Gap(px(t, 2)).Children(func() {
+		ui.Column(c).Padding(px(t, sp1), px(t, sp2)).Gap(px(t, 2)).Children(func() {
 			for _, r := range a.callList {
 				a.callRow(c, r)
 			}
@@ -131,34 +164,35 @@ func (a *app) callHistory(c *ui.Context) {
 func (a *app) callRow(c *ui.Context, r store.CallRecord) {
 	t := c.Theme()
 	sel := a.callSel == r.ID
-	b := ui.ButtonBase(c.Key("call-"+r.ID)).Padding(px(t, 8), px(t, 10)).Radius(6).Label(i18n.T("Open %s", r.Title))
+	k := tok(t)
+	b := ui.ButtonBase(c.Key("call-"+r.ID)).Padding(px(t, sp2), px(t, 10)).Radius(px(t, radiusControl)).Label(i18n.T("Open %s", r.Title))
 	switch {
 	case sel:
-		b.Background(t.Accent.Alpha(0.14))
+		b.Background(k.Pressed)
 	case b.Hovered():
-		b.Background(t.SurfaceHover)
+		b.Background(k.Hover)
 	}
 	b.Children(func() {
-		ui.Column(c).Gap(px(t, 3)).Grow(1).MinWidth(0).Children(func() {
+		ui.Column(c).Gap(px(t, 2)).Grow(1).MinWidth(0).Children(func() {
 			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-				arrow := "↗"
+				ic, tip := icons.ArrowRightUp, i18n.T("Outgoing")
 				if r.Direction == services.CallInbound {
-					arrow = "↙"
+					ic, tip = icons.ArrowLeftDown, i18n.T("Incoming")
 				}
-				ui.Text(c, arrow).TextColor(t.TextMuted)
-				ui.Text(c, telephony.MaskNumber(r.Number)).FontSize(px(t, 13)).Bold().Grow(1).SingleLine()
+				iconMark(c, ic, k.Text2, tip)
+				ui.Text(c, telephony.MaskNumber(r.Number)).FontWeight(600).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
 				a.callBadge(c, r.Status, r.Outcome)
 			})
 			title := r.Title
 			if title == "" {
 				title = i18n.T("No task")
 			}
-			ui.Text(c, title).FontSize(px(t, 12)).MaxLines(2).Ellipsis("…")
+			ui.Text(c, title).FontSize(px(t, fsCaption)).MaxLines(2).Ellipsis("…")
 			meta := i18n.DateTime(r.CreatedAt)
 			if r.Duration > 0 {
 				meta += " · " + callClock(time.Duration(r.Duration*float64(time.Second)))
 			}
-			ui.Text(c, meta).FontSize(px(t, 11)).TextColor(t.TextMuted)
+			ui.Text(c, meta).FontSize(px(t, fsMicro)).TextColor(k.Text3)
 		})
 	})
 	if b.Clicked() {
@@ -171,9 +205,12 @@ func (a *app) callBadge(c *ui.Context, phase, outcome string) {
 	t := c.Theme()
 	switch {
 	case phase == services.CallDialing || phase == services.CallRinging || phase == services.CallLive:
-		ui.Text(c, "● "+i18n.T("Live")).FontSize(px(t, 11)).Bold().TextColor(t.Success)
+		ui.Row(c).Gap(px(t, 4)).AlignItems(ui.Center).Shrink(0).Children(func() {
+			statusDot(c, t.Success)
+			ui.Text(c, i18n.T("Live")).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(t.Success)
+		})
 	case outcome != "":
-		col := t.TextMuted
+		col := tok(t).Text2
 		switch outcome {
 		case telephony.OutcomeBooked, telephony.OutcomeDone:
 			col = t.Success
@@ -182,7 +219,7 @@ func (a *app) callBadge(c *ui.Context, phase, outcome string) {
 		case telephony.OutcomeFailed:
 			col = t.Danger
 		}
-		ui.Text(c, callOutcomeText(outcome)).FontSize(px(t, 11)).Bold().TextColor(col)
+		ui.Text(c, callOutcomeText(outcome)).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(col).SingleLine().Shrink(0)
 	}
 }
 
@@ -192,20 +229,20 @@ func (a *app) callView(c *ui.Context) {
 	t := c.Theme()
 	call := a.callFull[a.callSel]
 	if call == nil {
-		ui.Text(c, i18n.T("Choose a call, or place a new one.")).TextColor(t.TextMuted)
+		emptyState(c, icons.PhoneCallingRounded, i18n.T("Choose a call, or place a new one."), "", nil)
 		return
 	}
-	ui.Row(c.Key("cv-head")).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("cv-head")).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 		dir := i18n.T("Outgoing")
 		if call.Direction == services.CallInbound {
 			dir = i18n.T("Incoming")
 		}
-		ui.Text(c, telephony.MaskNumber(call.Number)).FontSize(px(t, 17)).Bold()
-		ui.Badge(c, dir)
+		ui.Text(c, telephony.MaskNumber(call.Number)).FontSize(px(t, fsSection)).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0)
+		tagChip(c, dir)
 		a.callBadge(c, call.Phase, call.Outcome)
 		ui.Spacer(c)
 		if call.Live() {
-			if primaryButton(c.Key("cv-hangup"), i18n.T("Hang up")).Background(t.Danger).Clicked() {
+			if recordButton(c.Key("cv-hangup"), i18n.T("Hang up")).Clicked() {
 				a.hangupCall(call.ID)
 			}
 		}
@@ -237,27 +274,36 @@ func (a *app) callTimeline(c *ui.Context, call *services.Call) {
 	case services.CallEnded, services.CallFailed:
 		cur = 3
 	}
-	ui.Row(c.Key("cv-steps")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+	k := tok(t)
+	ui.Row(c.Key("cv-steps")).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
 		for i, s := range steps {
 			if i > 0 {
-				ui.Box(c).Width(px(t, 24)).Height(1).Background(t.Border)
-			}
-			mark, col := "○", t.TextMuted
-			switch {
-			case i < cur:
-				mark, col = "✓", t.Success
-			case i == cur && i == 3 && call.Phase == services.CallFailed:
-				mark, col = "✕", t.Danger
-			case i == cur && i == 3:
-				mark, col = "✓", t.Success
-			case i == cur:
-				mark, col = "●", t.Accent
+				ui.Box(c).Width(px(t, 20)).Height(1).Background(k.Line)
 			}
 			label := callPhaseText(s)
 			if i == 3 && call.Phase == services.CallFailed {
 				label = callPhaseText(services.CallFailed)
 			}
-			ui.Text(c, mark+" "+label).FontSize(px(t, 12)).TextColor(col)
+			ui.Row(c).Gap(px(t, 4)).AlignItems(ui.Center).Children(func() {
+				col := k.Text3
+				switch {
+				case i < cur, i == cur && i == 3 && call.Phase != services.CallFailed:
+					col = k.Text2
+					ui.Icon(c, icons.CheckCircle.Linear).Size(px(t, 13), px(t, 13)).TextColor(t.Success)
+				case i == cur && i == 3:
+					col = t.Danger
+					ui.Icon(c, icons.CloseCircle.Linear).Size(px(t, 13), px(t, 13)).TextColor(t.Danger)
+				case i == cur:
+					col = k.Text
+					statusDot(c, k.Accent)
+				default:
+					statusDot(c, k.G[5])
+				}
+				tx := ui.Text(c, label).FontSize(px(t, fsCaption)).TextColor(col).SingleLine()
+				if i == cur {
+					tx.FontWeight(600)
+				}
+			})
 		}
 	})
 }
@@ -265,19 +311,20 @@ func (a *app) callTimeline(c *ui.Context, call *services.Call) {
 // callLiveControls: the agent's state, the clock, take-over and Say.
 func (a *app) callLiveControls(c *ui.Context, call *services.Call) {
 	t := c.Theme()
-	ui.Column(c.Key("cv-live")).Gap(px(t, 10)).Padding(px(t, 12)).Radius(8).Background(t.Surface).Children(func() {
-		ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
+	fillCard(c.Key("cv-live")).Gap(px(t, sp2)).Padding(px(t, sp3), px(t, sp4)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 			if call.Phase == services.CallLive && call.State != "" {
-				col := t.Accent
+				col := tok(t).Accent
 				if call.State == telephony.StateSpeaking {
 					col = t.Success
 				}
-				ui.Text(c, "● "+callStateText(call.State)).Bold().TextColor(col)
+				statusDot(c, col)
+				ui.Text(c, callStateText(call.State)).FontWeight(600)
 			}
 			ui.Spacer(c)
 			if !call.Answered.IsZero() {
 				ui.Text(c, callClock(time.Since(call.Answered))+" / "+callClock(time.Duration(call.MaxMinutes)*time.Minute)).
-					Font(monoFont).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					Font(monoFont).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2)
 			}
 		})
 		if call.Phase != services.CallLive {
@@ -292,7 +339,7 @@ func (a *app) callLiveControls(c *ui.Context, call *services.Call) {
 		if call.Takeover {
 			ui.Row(c.Key("cv-say")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 				in := ui.TextInput(c.Key("cv-say-text"), &a.callSay).Placeholder(i18n.T("What to say next")).Label(i18n.T("What to say next")).Grow(1).AutoFocus()
-				if in.Submitted() || primaryButton(c.Key("cv-say-go"), i18n.T("Say")).Disabled(strings.TrimSpace(a.callSay) == "").Clicked() {
+				if in.Submitted() || ui.Button(c.Key("cv-say-go"), i18n.T("Say")).Disabled(strings.TrimSpace(a.callSay) == "").Clicked() {
 					a.sayInCall(call.ID)
 				}
 			})
@@ -307,9 +354,9 @@ func (a *app) callDetails(c *ui.Context, call *services.Call) {
 		if value == "" {
 			return
 		}
-		ui.Row(c.Key("cvd-" + k)).Gap(px(t, 10)).Children(func() {
-			ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted).Width(px(t, 90)).Shrink(0)
-			ui.Text(c, value).FontSize(px(t, 12)).Wrap().Grow(1).MinWidth(0).Selectable()
+		ui.Row(c.Key("cvd-" + k)).Gap(px(t, sp3)).Children(func() {
+			ui.Text(c, label).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).Width(px(t, 90)).Shrink(0)
+			ui.Text(c, value).FontSize(px(t, fsCaption)).Wrap().Grow(1).MinWidth(0).Selectable()
 		})
 	}
 	ui.Column(c.Key("cv-details")).Gap(px(t, 4)).Children(func() {
@@ -334,13 +381,14 @@ func (a *app) callDetails(c *ui.Context, call *services.Call) {
 // callTranscript shows the conversation as bubbles.
 func (a *app) callTranscript(c *ui.Context, call *services.Call) {
 	t := c.Theme()
-	ui.Text(c, i18n.T("Transcript")).Bold()
+	k := tok(t)
+	sectionTitle(c, i18n.T("Transcript"))
 	if len(call.Transcript) == 0 {
 		msg := i18n.T("No transcript for this call.")
 		if call.Live() {
 			msg = i18n.T("The transcript appears here once the call is answered.")
 		}
-		ui.Text(c, msg).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, msg)
 		return
 	}
 	ui.Column(c.Key("cv-transcript")).Gap(px(t, 8)).Children(func() {
@@ -350,27 +398,27 @@ func (a *app) callTranscript(c *ui.Context, call *services.Call) {
 			}
 			mine := l.Speaker != telephony.SpeakerCaller
 			who := i18n.T("Them")
-			bg := t.Surface
+			bg := k.Subtle
 			switch l.Speaker {
 			case telephony.SpeakerAgent:
-				who, bg = "AudioSmith", t.Accent.Alpha(0.14)
+				who, bg = "AudioSmith", k.AccentSoft
 			case telephony.SpeakerUser:
-				who, bg = i18n.T("You"), t.Warning.Alpha(0.14)
+				who, bg = i18n.T("You"), k.Pressed
 			}
 			ui.Row(c.Key(i)).Children(func() {
 				if mine {
 					ui.Spacer(c)
 				}
-				ui.Column(c).Gap(px(t, 2)).Padding(px(t, 8), px(t, 10)).Radius(10).Background(bg).MaxWidth(px(t, 460)).Children(func() {
+				ui.Column(c).Gap(px(t, 2)).Padding(px(t, sp2), px(t, sp3)).Radius(px(t, radiusCard)).Background(bg).MaxWidth(px(t, 460)).Shrink(1).MinWidth(0).Children(func() {
 					head := who + " · " + callClock(l.At)
-					ui.Text(c, head).FontSize(px(t, 10)).TextColor(t.TextMuted)
+					ui.Text(c, head).FontSize(px(t, fsMicro)).TextColor(k.Text2)
 					text := l.Text
 					if l.Interrupted {
 						text += " —"
 					}
-					tx := ui.Text(c, text).FontSize(px(t, 13)).Wrap().Selectable()
+					tx := ui.Text(c, text).Wrap().Selectable()
 					if l.Interrupted {
-						tx.TextColor(t.TextMuted)
+						tx.TextColor(k.Text2)
 					}
 				})
 				if !mine {
@@ -384,45 +432,46 @@ func (a *app) callTranscript(c *ui.Context, call *services.Call) {
 // callAfter is the summary and the actions of an ended call.
 func (a *app) callAfter(c *ui.Context, call *services.Call) {
 	t := c.Theme()
-	ui.Column(c.Key("cv-after")).Gap(px(t, 8)).Padding(px(t, 12)).Radius(8).Background(t.Surface).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Summary")).Bold().Grow(1)
+	k := tok(t)
+	card(c.Key("cv-after")).Gap(px(t, sp2)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			sectionHeading(c, i18n.T("Summary")).Grow(1)
 			a.callBadge(c, call.Phase, call.Outcome)
 		})
 		if call.Summary != "" {
 			ui.Text(c, call.Summary).Wrap().Selectable()
 		} else {
-			ui.Text(c, i18n.T("The summary appears here when it is ready.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("The summary appears here when it is ready."))
 		}
 		if call.Note != "" && call.Note != call.Summary {
-			ui.Text(c, i18n.T("Agent's note: %s", call.Note)).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
+			caption(c, i18n.T("Agent's note: %s", call.Note)).Wrap()
 		}
 		if s := callLatencyText(call.Turns); s != "" {
-			ui.Text(c, s).FontSize(px(t, 11)).TextColor(t.TextMuted).Wrap()
+			ui.Text(c, s).FontSize(px(t, fsMicro)).TextColor(k.Text3).Wrap()
 		}
-		ui.Row(c).Gap(px(t, 8)).Children(func() {
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			if call.Direction == services.CallOutbound {
-				if ui.Button(c.Key("cv-again"), i18n.T("Call again")).Clicked() {
+				if secondaryIconButton(c.Key("cv-again"), icons.PhoneCallingRounded, i18n.T("Call again")).Label(i18n.T("Call again")).Clicked() {
 					a.callAgain(call)
 				}
 			}
-			if ui.Button(c.Key("cv-copy"), i18n.T("Copy summary")).Disabled(call.Summary == "").Clicked() {
+			if iconButton(c.Key("cv-copy"), icons.Copy, i18n.T("Copy summary")).Disabled(call.Summary == "").Clicked() {
 				c.Services().WriteClipboard(call.Summary)
 				a.toast(i18n.T("Copied"))
 			}
 			if p := a.callSvc.RecordingPath(*call); p != "" {
-				label := i18n.T("Play recording")
+				label, ic := i18n.T("Play recording"), icons.Play
 				if a.pl.Playing("call-rec:" + call.ID) {
-					label = i18n.T("Stop")
+					label, ic = i18n.T("Stop"), icons.Stop
 				}
-				if ui.Button(c.Key("cv-rec"), label).Clicked() {
+				if iconButton(c.Key("cv-rec"), ic, label).Clicked() {
 					if err := a.pl.Toggle("call-rec:"+call.ID, p); err != nil {
 						a.toast(i18n.T("Could not play: %v", err))
 					}
 				}
 			}
 			ui.Spacer(c)
-			if ui.Button(c.Key("cv-delete"), i18n.T("Delete")).Clicked() {
+			if iconButton(c.Key("cv-delete"), icons.TrashBinMinimalistic, i18n.T("Delete")).Clicked() {
 				a.deleteCall(call.ID)
 			}
 		})
@@ -449,8 +498,9 @@ func callLatencyText(turns []telephony.TurnLatency) string {
 // newCallForm is the new call.
 func (a *app) newCallForm(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	f := &a.callForm
-	ui.Text(c, i18n.T("New call")).FontSize(px(t, 15)).Bold()
+	sectionHeading(c, i18n.T("New call"))
 	ui.Field(c, i18n.T("Phone number"), func() {
 		ui.TextInput(c.Key("nc-number"), &f.number).Placeholder("+1 555 010 0199").Label(i18n.T("Phone number"))
 	})
@@ -473,19 +523,23 @@ func (a *app) newCallForm(c *ui.Context) {
 		}
 	}
 	if hint != "" {
-		col := t.TextMuted
+		col := k.Text2
 		if bad {
 			col = t.Danger
 		}
-		ui.Text(c.Key("nc-number-hint"), hint).FontSize(px(t, 12)).TextColor(col)
+		ui.Text(c.Key("nc-number-hint"), hint).FontSize(px(t, fsCaption)).TextColor(col)
 	}
 	ui.Field(c, i18n.T("What should it do?"), func() {
 		ui.TextArea(c.Key("nc-brief"), &f.brief).Height(px(t, 96)).Placeholder(i18n.T("Book a table for two this Friday at 7 pm under the name Sam. If 7 is taken, anything between 6 and 8 is fine.")).
 			Label(i18n.T("What should it do?"))
 	})
-	ui.Row(c.Key("nc-chips")).Gap(px(t, 6)).Wrap().Children(func() {
+	ui.Row(c.Key("nc-chips")).Gap(px(t, sp1)).Wrap().Children(func() {
 		for i, ex := range callExamples() {
-			if ui.Button(c.Key(i), ex.title).Clicked() {
+			b := chip(c.Key(i), ex.title, "", f.brief == ex.brief)
+			if f.brief != ex.brief && !b.Hovered() {
+				b.Background(k.Hover)
+			}
+			if b.Clicked() {
 				f.brief = ex.brief
 			}
 		}
@@ -494,13 +548,13 @@ func (a *app) newCallForm(c *ui.Context) {
 	ui.Field(c, i18n.T("Voice"), func() {
 		if len(labels) == 0 {
 			ui.Column(c.Key("nc-novoice")).Gap(px(t, 4)).Children(func() {
-				ui.Text(c, i18n.T("No voice can place calls yet.")).TextColor(t.Warning)
-				ui.Text(c, i18n.T("Calls speak only in designed voices, or in your own cloned voice once you record its consent statement.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
-				ui.Row(c).Gap(px(t, 8)).Children(func() {
-					if ui.Button(c.Key("nc-verify"), i18n.T("Verify a voice")).Clicked() {
+				statusMark(c, icons.DangerTriangle, t.Warning, i18n.T("No voice can place calls yet."))
+				caption(c, i18n.T("Calls speak only in designed voices, or in your own cloned voice once you record its consent statement.")).Wrap()
+				ui.Row(c).Gap(px(t, sp2)).Children(func() {
+					if ghostButton(c.Key("nc-verify"), i18n.T("Verify a voice")).Clicked() {
 						a.navigate("/voices")
 					}
-					if ui.Button(c.Key("nc-design"), i18n.T("Design a voice")).Clicked() {
+					if ghostButton(c.Key("nc-design"), i18n.T("Design a voice")).Clicked() {
 						a.navigate("/design")
 					}
 				})
@@ -508,9 +562,9 @@ func (a *app) newCallForm(c *ui.Context) {
 			return
 		}
 		a.formVoice()
-		ui.Select(c.Key("nc-voice"), &f.voice, labels).Label(i18n.T("Voice")).Width(px(t, 300))
+		ui.Select(c.Key("nc-voice"), &f.voice, labels).Label(i18n.T("Voice")).Width(px(t, 300)).Shrink(1).MinWidth(0)
 	})
-	ui.Text(c, i18n.T("What it will say first")).Bold()
+	sectionTitle(c, i18n.T("What it will say first"))
 	settingRow(c, "nc-disclose", i18n.T("AI disclosure"), i18n.T("Plays in full before the conversation starts; it can't be interrupted."), func() {
 		ui.Switch(c.Key("nc-disclose-switch"), &f.disclose).Label(i18n.T("AI disclosure"))
 	})
@@ -522,8 +576,9 @@ func (a *app) newCallForm(c *ui.Context) {
 			f.edited = true
 		}
 	} else {
-		ui.Text(c.Key("nc-nodisclose"), i18n.T("Without a disclosure the other person may not know they are talking to an AI. In many places telling them is required.")).
-			FontSize(px(t, 12)).TextColor(t.Warning).Wrap()
+		ui.Column(c.Key("nc-nodisclose")).Children(func() {
+			banner(c, icons.DangerTriangle, t.Warning, i18n.T("Without a disclosure the other person may not know they are talking to an AI. In many places telling them is required."), nil)
+		})
 	}
 	mins := make([]string, len(callMinutes))
 	for i, n := range callMinutes {
@@ -533,12 +588,12 @@ func (a *app) newCallForm(c *ui.Context) {
 		ui.Select(c.Key("nc-minutes"), &f.minutes, mins).Label(i18n.T("Maximum length")).Width(px(t, 140))
 	})
 	// The plan.
-	ui.Column(c.Key("nc-plan")).Gap(px(t, 6)).Padding(px(t, 12)).Radius(8).Border(1, t.Border).Children(func() {
-		ui.Text(c, i18n.T("Plan preview")).Bold()
+	fillCard(c.Key("nc-plan")).Gap(px(t, 6)).Padding(px(t, sp3), px(t, sp4)).Children(func() {
+		ui.Text(c, i18n.T("Plan preview")).FontWeight(600)
 		if b := strings.TrimSpace(f.brief); b != "" {
-			ui.Text(c, b).FontSize(px(t, 12)).Wrap()
+			ui.Text(c, b).FontSize(px(t, fsCaption)).Wrap()
 		} else {
-			ui.Text(c, i18n.T("Describe the task above and the plan appears here.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("Describe the task above and the plan appears here."))
 		}
 		var rules []string
 		if f.disclose {
@@ -549,7 +604,10 @@ func (a *app) newCallForm(c *ui.Context) {
 			i18n.T("Asks you when it is unsure; you can take over at any time."),
 			i18n.T("Ends politely, and hangs up after %d min at most.", a.formMinutes()))
 		for _, r := range rules {
-			ui.Text(c, "✓ "+r).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
+			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Start).Children(func() {
+				ui.Icon(c, icons.Check.Linear).Size(px(t, 13), px(t, 13)).TextColor(k.AccentInk).Shrink(0).Margin(px(t, 2), 0, 0)
+				ui.Text(c, r).FontSize(px(t, fsCaption)).TextColor(k.Text2).Wrap().Grow(1).MinWidth(0)
+			})
 		}
 	})
 	ready, _ := callsReady(a.callChecks())
@@ -571,12 +629,12 @@ func (a *app) newCallForm(c *ui.Context) {
 	})
 	switch {
 	case !ready:
-		ui.Text(c, i18n.T("Finish the setup steps above to place calls.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Finish the setup steps above to place calls."))
 	case problem != "":
-		ui.Text(c, problem).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, problem)
 	}
 	if a.callErr != "" {
-		ui.Text(c.Key("nc-err"), a.callErr).FontSize(px(t, 12)).TextColor(t.Danger).Wrap()
+		ui.Text(c.Key("nc-err"), a.callErr).FontSize(px(t, fsCaption)).TextColor(t.Danger).Wrap()
 	}
 }
 
@@ -600,9 +658,11 @@ func (a *app) callDialogs(c *ui.Context) {
 		voice := strings.SplitN(f.voice, " · ", 2)[0]
 		ui.Modal(c.Key("calls-confirm"), &a.callAsk, func() {
 			ui.Column(c.Key("cc")).Width(px(t, 440)).Gap(px(t, 10)).Padding(px(t, 18)).Children(func() {
-				ui.Text(c, i18n.T("Call %s now?", num)).FontSize(px(t, 15)).Bold()
-				ui.Text(c, i18n.T("AudioSmith will call as %s and follow this task for up to %d min:", voice, a.formMinutes())).FontSize(px(t, 13)).Wrap()
-				ui.Text(c, strings.TrimSpace(f.brief)).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap().MaxLines(6).Ellipsis("…")
+				sectionHeading(c, i18n.T("Call %s now?", num))
+				ui.Text(c, i18n.T("AudioSmith will call as %s and follow this task for up to %d min:", voice, a.formMinutes())).Wrap()
+				fillCard(c).Padding(px(t, sp3)).Children(func() {
+					ui.Text(c, strings.TrimSpace(f.brief)).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).Wrap().MaxLines(6).Ellipsis("…")
+				})
 				ui.Row(c).Gap(px(t, 8)).Children(func() {
 					ui.Spacer(c)
 					if ui.Button(c.Key("cc-cancel"), i18n.T("Cancel")).AutoFocus().Clicked() {
@@ -618,8 +678,8 @@ func (a *app) callDialogs(c *ui.Context) {
 	if a.callInOpen {
 		ui.Modal(c.Key("calls-inbound-modal"), &a.callInOpen, func() {
 			ui.Column(c.Key("ci")).Width(px(t, 460)).Gap(px(t, 10)).Padding(px(t, 18)).Children(func() {
-				ui.Text(c, i18n.T("Incoming calls")).FontSize(px(t, 15)).Bold()
-				ui.Text(c, i18n.T("Choose what happens when someone calls your Twilio number.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
+				sectionHeading(c, i18n.T("Incoming calls"))
+				caption(c, i18n.T("Choose what happens when someone calls your Twilio number.")).Wrap()
 				ui.Segmented(c.Key("ci-mode"), &a.callInMode, i18n.T("Greeting"), i18n.T("AI agent")).Label(i18n.T("When someone calls"))
 				if a.callInMode == 0 {
 					ui.Text(c, i18n.T("Play your greeting, then hang up.")).FontSize(px(t, 12)).Wrap()
@@ -630,9 +690,9 @@ func (a *app) callDialogs(c *ui.Context) {
 							Placeholder(i18n.T("Take a message: ask who is calling and why, and when to call back.")).Label(i18n.T("What the agent should do"))
 					})
 				}
-				ui.Text(c, i18n.T("The voice, greeting and disclosure are set in the Twilio setup.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
-				ui.Row(c).Gap(px(t, 8)).Children(func() {
-					if ui.Button(c.Key("ci-setup"), i18n.T("Open the setup")).Clicked() {
+				caption(c, i18n.T("The voice, greeting and disclosure are set in the Twilio setup.")).Wrap()
+				ui.Row(c).Gap(px(t, sp2)).Children(func() {
+					if ghostButton(c.Key("ci-setup"), i18n.T("Open the setup")).Clicked() {
 						a.callInOpen = false
 						a.navigate("/calls/setup")
 					}

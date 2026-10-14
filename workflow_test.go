@@ -170,7 +170,7 @@ func TestWorkflowsTemplateRunAndResults(t *testing.T) {
 		t.Fatalf("exports %v", files)
 	}
 	tt.Frame()
-	if a.wfPanel != wfPanelRun || !tt.HasText("2 / 2 items ready") || !tt.HasText("✓") {
+	if a.wfPanel != wfPanelRun || !tt.HasText("2 / 2 items ready") || !tt.HasText("Made") {
 		t.Errorf("run panel: %q", tt.Texts())
 	}
 	// A second run makes nothing.

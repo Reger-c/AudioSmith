@@ -31,7 +31,7 @@ import (
 func (a *app) lfLayout(c *ui.Context, p *lfPage) (inline, shown bool) {
 	t := c.Theme()
 	inline, shown = p.panel.layout(a, c, px(t, inspectorWidth), px(t, 480))
-	w := a.mainWidth(c)
+	w := a.pageWidth(c)
 	if inline && shown {
 		w -= px(t, inspectorWidth)
 	}
@@ -100,7 +100,7 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 	})
 	if m := a.model(e); e.ID != "custom" && m.known && m.local.State != hub.Downloaded {
 		ui.Row(c.Key("lf-download")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			statusMark(c, icons.DangerTriangle, t.Warning)
+			iconMark(c, icons.DangerTriangle, t.Warning, "")
 			caption(c, i18n.T("%s is not downloaded yet.", e.Label)).TextColor(t.Warning).Grow(1).MinWidth(0)
 			if !m.downloading && secondaryIconButton(c.Key("lf-dl"), icons.DownloadMinimalistic, i18n.T("Download")).Label(i18n.T("Download")).Tooltip(e.Repo).Clicked() {
 				a.download(e)
@@ -414,7 +414,7 @@ func (a *app) lfProjectCard(c *ui.Context, p *lfPage, locked bool) {
 			a.saveLf(p, false)
 		}
 		if p.project != "" && p.unsaved() {
-			dot(c, t.Warning)
+			statusDot(c, t.Warning)
 			caption(c, i18n.T("Unsaved changes")).SingleLine().Ellipsis("…").MinWidth(0)
 		}
 		ui.Spacer(c)
@@ -549,7 +549,7 @@ func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 					msg = a.lfReadyLine(p)
 				}
 				if blocker != "" {
-					statusMark(c, icons.DangerTriangle, t.Warning)
+					iconMark(c, icons.DangerTriangle, t.Warning, "")
 				}
 				txt := caption(c.Key("lf-blocker"), msg).Grow(1).MinWidth(0)
 				if blocker != "" {
@@ -579,7 +579,7 @@ func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 				msg = i18n.N(n, "%d chapter failed: Resume retries just that one.", "%d chapters failed: Resume retries just those.", n) + " " + msg
 			}
 			ui.Row(c).Gap(px(t, 6)).Children(func() {
-				statusMark(c, icons.DangerCircle, t.Danger)
+				iconMark(c, icons.DangerCircle, t.Danger, "")
 				caption(c.Key("lf-failed"), msg).TextColor(t.Danger).Selectable().Grow(1).MinWidth(0)
 			})
 			a.chapterTracker(c, r)
@@ -681,17 +681,17 @@ func (a *app) chapterTracker(c *ui.Context, r *lfRender) {
 						ui.Box(c).Size(px(t, 14), px(t, 14)).Center().Shrink(0).Children(func() {
 							switch ch.State {
 							case services.ChapterRendering:
-								dot(c, k.Accent)
+								statusDot(c, k.Accent)
 							case services.ChapterDone:
-								statusMark(c, icons.CheckCircle, t.Success)
+								iconMark(c, icons.CheckCircle, t.Success, "")
 							case services.ChapterCached:
-								statusMark(c, icons.CheckCircle, k.Text2)
+								iconMark(c, icons.CheckCircle, k.Text2, "")
 							case services.ChapterFailed:
-								statusMark(c, icons.CloseCircle, t.Danger)
+								iconMark(c, icons.CloseCircle, t.Danger, "")
 							case services.ChapterStopped:
-								statusMark(c, icons.Stop, k.Text3)
+								iconMark(c, icons.Stop, k.Text3, "")
 							default:
-								dot(c, k.G[5])
+								statusDot(c, k.G[5])
 							}
 						})
 						truncText(c, title+extra).FontSize(px(t, fsCaption)).Grow(1)
@@ -731,7 +731,7 @@ func (a *app) interruptedRenders(c *ui.Context, p *lfPage) {
 	for _, r := range list {
 		ui.Row(c.Key("int-"+r.rec.ID)).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, sp2), px(t, sp2), px(t, sp2), px(t, sp3)).
 			Radius(px(t, radiusControl)).Border(1, tok(t).Line).Children(func() {
-			statusMark(c, icons.Stop, tok(t).Text3)
+			iconMark(c, icons.Stop, tok(t).Text3, "")
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				truncText(c, i18n.T("Interrupted: %s", r.rec.Title))
 				ui.Text(c, i18n.T("%d of %d chapters are made", r.body.Done(), len(r.body.Chapters))).FontSize(px(t, fsMicro)).TextColor(tok(t).Text2)
@@ -763,11 +763,7 @@ func (a *app) lfOutputs(c *ui.Context, p *lfPage) {
 	id := "book:" + r.rec.ID
 	card(c.Key("lf-out")).Padding(px(t, sp3), px(t, sp4)).Children(func() {
 		ui.Row(c).Gap(px(t, sp3)).AlignItems(ui.Center).Children(func() {
-			play := i18n.T("Play")
-			if a.pl.Playing(id) {
-				play = i18n.T("Pause")
-			}
-			if roundPlay(c.Key("out-play"), a.pl.Playing(id), play).Clicked() {
+			if playButton(c.Key("out-play"), a.pl.Playing(id), false, 36).Clicked() {
 				if err := a.pl.Toggle(id, out.Book); err != nil {
 					a.toast(i18n.T("Can't play: %v", err))
 				}
@@ -831,7 +827,7 @@ func (a *app) lfOutputs(c *ui.Context, p *lfPage) {
 		}
 		if out.EncodeError != "" {
 			ui.Row(c).Gap(px(t, 6)).Children(func() {
-				statusMark(c, icons.DangerTriangle, t.Warning)
+				iconMark(c, icons.DangerTriangle, t.Warning, "")
 				caption(c, i18n.T("No M4B: %s", out.EncodeError)).TextColor(t.Warning).Grow(1).MinWidth(0)
 			})
 		}
@@ -905,9 +901,9 @@ func (a *app) loudnessReport(c *ui.Context, p *lfPage, r *lfRender) {
 				}
 				ui.Row(c.Key("loud-" + strconv.Itoa(i))).Gap(px(t, sp2)).Children(func() {
 					if ch.Report.Compliant {
-						statusMark(c, icons.CheckCircle, t.Success)
+						iconMark(c, icons.CheckCircle, t.Success, "")
 					} else {
-						statusMark(c, icons.CloseCircle, t.Danger)
+						iconMark(c, icons.CloseCircle, t.Danger, "")
 					}
 					ui.Text(c, text).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).Grow(1).MinWidth(0)
 				})

@@ -226,7 +226,7 @@ func (a *app) manuscriptWarnings(c *ui.Context, p *lfPage) {
 	k := tok(t)
 	card(c.Key("ab-warn")).Padding(px(t, sp2), px(t, sp3)).Gap(px(t, 2)).Shrink(0).Children(func() {
 		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
-			statusMark(c, icons.DangerTriangle, t.Warning)
+			iconMark(c, icons.DangerTriangle, t.Warning, "")
 			ui.Text(c, i18n.T("Before you create")).FontWeight(600).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			if iconButton(c.Key("ab-warn-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 				p.dismissed = p.fp
@@ -347,7 +347,7 @@ func (a *app) lexiconCard(c *ui.Context, p *lfPage, locked bool) {
 		e := &p.doc.Lexicon[i]
 		ui.Row(c.Key("lex-" + strconv.Itoa(i))).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			ui.TextInput(c.Key("w"), &e.Word).Placeholder(i18n.T("Word")).Label(i18n.T("Word")).Grow(1).MinWidth(0).Disabled(locked)
-			statusMark(c, icons.AltArrowRight, tok(t).Text3)
+			iconMark(c, icons.AltArrowRight, tok(t).Text3, "")
 			ui.TextInput(c.Key("s"), &e.Say).Placeholder(i18n.T("Say it as…")).Label(i18n.T("Say it as…")).Grow(1).MinWidth(0).Disabled(locked)
 			if iconButton(c.Key("x"), icons.Close, i18n.T("Remove")).Disabled(locked).Clicked() {
 				remove = i
@@ -359,7 +359,7 @@ func (a *app) lexiconCard(c *ui.Context, p *lfPage, locked bool) {
 	}
 	if len(dups) > 0 {
 		ui.Row(c).Gap(px(t, 6)).Children(func() {
-			statusMark(c, icons.DangerCircle, t.Danger)
+			iconMark(c, icons.DangerCircle, t.Danger, "")
 			caption(c, i18n.T("Keep one pronunciation per word: %s", strings.Join(dups, ", "))).TextColor(t.Danger).Grow(1).MinWidth(0)
 		})
 	}

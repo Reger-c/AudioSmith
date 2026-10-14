@@ -49,7 +49,7 @@ func (a *app) transcribePage(c *ui.Context) {
 	t := c.Theme()
 	width := px(t, 280)
 	inline, shown := a.trSide.layout(a, c, width, px(t, 480))
-	w := a.mainWidth(c)
+	w := a.pageWidth(c)
 	if inline && shown {
 		w -= width
 	}
@@ -168,7 +168,7 @@ func (a *app) trLanguageButton(c *ui.Context, e catalog.Entry) {
 			auto.Children(func() {
 				ui.Text(c, i18n.T("Auto-detect")).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
 				if a.prefs.Transcribe.Language == "" {
-					statusMark(c, icons.Check, k.AccentInk)
+					iconMark(c, icons.Check, k.AccentInk, "")
 				}
 			})
 			ui.List(c.Key("tr-lang-list"), &p.list, len(opts)).Height(min(px(t, 280), h*0.45)).ItemKey(func(i int) any { return opts[i].Code }).Rows(func(r ui.ListRow) {
@@ -188,7 +188,7 @@ func (a *app) trLanguageButton(c *ui.Context, e catalog.Entry) {
 					ui.Text(c, o.Flag()).Width(px(t, 22))
 					ui.Text(c, o.NameIn(i18n.Locale())).TextColor(color).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
 					if o.Code == a.prefs.Transcribe.Language {
-						statusMark(c, icons.Check, k.AccentInk)
+						iconMark(c, icons.Check, k.AccentInk, "")
 					}
 					ui.Text(c, o.Code).FontSize(px(t, fsMicro)).TextColor(k.Text3)
 				})
@@ -228,10 +228,8 @@ func (a *app) transcriptHistory(c *ui.Context, inline bool) {
 			}
 		})
 		if len(a.trList) > 0 {
-			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Padding(0, px(t, sp2)).Radius(px(t, radiusControl)).Background(k.Hover).Children(func() {
-				ui.Icon(c, icons.Magnifer.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Text3)
-				if ui.TextInput(c.Key("tr-search"), &a.trQuery).Placeholder(i18n.T("Search transcripts")).Label(i18n.T("Search transcripts")).
-					Background(ui.Transparent).Border(0, ui.Transparent).Grow(1).MinWidth(0).Changed() {
+			ui.Row(c).Children(func() {
+				if searchField(c, "tr-search", &a.trQuery, i18n.T("Search transcripts"), 0).Changed() {
 					a.searchTranscripts()
 				}
 			})
@@ -307,7 +305,7 @@ func (a *app) transcriptStatus(c *ui.Context) {
 	if a.trErr != "" {
 		card(c.Key("tr-error")).Gap(px(t, sp2)).Padding(px(t, sp3), px(t, sp4)).Children(func() {
 			ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
-				statusMark(c, icons.DangerCircle, t.Danger)
+				iconMark(c, icons.DangerCircle, t.Danger, "")
 				ui.Text(c, i18n.T("Transcription failed")).FontWeight(600).TextColor(t.Danger).Grow(1).MinWidth(0)
 				if iconButton(c.Key("tr-dismiss"), icons.Close, i18n.T("Dismiss")).Clicked() {
 					a.trErr, a.trRetry, a.trNeed = "", nil, nil
@@ -355,7 +353,7 @@ func (a *app) transcribeSources(c *ui.Context) {
 	ui.Column(c).Gap(px(t, 2)).Children(func() {
 		ui.Text(c, i18n.T("Turn speech into text: a meeting, an interview, a voice memo or a video. Everything stays on this Mac.")).TextColor(k.Text2)
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			statusMark(c, icons.Box, k.Text3)
+			iconMark(c, icons.Box, k.Text3, "")
 			ui.Text(c, a.trModelLine()).FontSize(px(t, fsCaption)).TextColor(k.Text3).SingleLine().Ellipsis("…").MinWidth(0)
 		})
 	})
@@ -499,11 +497,7 @@ func (a *app) transcriptPlayer(c *ui.Context, tr *core.Transcript) {
 	id := trPlayID(tr.ID)
 	pos := max(a.trPosition(), 0)
 	card(c.Key("tr-player")).Row().Gap(px(t, sp3)).AlignItems(ui.Center).Padding(px(t, sp2), px(t, sp3)).Children(func() {
-		label := i18n.T("Play")
-		if a.pl.Playing(id) {
-			label = i18n.T("Pause")
-		}
-		if roundPlay(c.Key("tr-play"), a.pl.Playing(id), label).Clicked() {
+		if playButton(c.Key("tr-play"), a.pl.Playing(id), false, 36).Clicked() {
 			a.toggleTranscriptPlayback()
 		}
 		seek := pos
@@ -631,7 +625,7 @@ func (a *app) transcriptSegments(c *ui.Context, tr *core.Transcript) {
 				}
 				tb.Children(func() { ui.Text(c, clock(s.Start)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.AccentInk) })
 				if s.Speaker != "" {
-					chip(c, speakerLabel(*tr, s.Speaker)).Margin(px(t, 2), 0, 0, 0)
+					tagChip(c, speakerLabel(*tr, s.Speaker)).Margin(px(t, 2), 0, 0, 0)
 				}
 				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 6)).Children(func() {
 					if a.trEdit == i {
@@ -662,7 +656,7 @@ func (a *app) transcriptSegments(c *ui.Context, tr *core.Transcript) {
 					txt.Children(func() {
 						ui.Text(c, s.Text).Grow(1).MinWidth(0)
 						if s.Edited {
-							chip(c, i18n.T("edited"))
+							tagChip(c, i18n.T("edited"))
 						}
 					})
 					if playing && len(s.Words) > 0 && !s.Edited {
@@ -712,7 +706,7 @@ func (a *app) trRecorder(c *ui.Context, busy bool) {
 		ui.Meter(c, float64(levelFraction(m.level)), 0, 1, nil).Width(px(t, 180)).Label(i18n.T("Input level"))
 		if inputDetected(m.level) {
 			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-				dot(c, k.Success)
+				statusDot(c, k.Success)
 				caption(c, i18n.T("Input detected"))
 			})
 		} else {

@@ -36,8 +36,9 @@ func (a *app) galleryPage(c *ui.Context) {
 	t := c.Theme()
 	g := &a.gallery
 	page := a.galleryResults()
-	header(c, i18n.T("Gallery"), func() {
-		ui.Text(c, i18n.N(page.Total, "%d voice", "%d voices", page.Total)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	narrow := a.pageWidth(c) < px(t, 720)
+	pageHeader(c, i18n.T("Gallery"), func() {
+		caption(c, i18n.N(page.Total, "%d voice", "%d voices", page.Total)).SingleLine()
 		if ms := designModels(); len(ms) > 1 {
 			labels := make([]string, len(ms))
 			for i, m := range ms {
@@ -46,40 +47,51 @@ func (a *app) galleryPage(c *ui.Context) {
 			if g.model == "" {
 				g.model = labels[0]
 			}
-			ui.Select(c.Key("gallery-model"), &g.model, labels).Label(i18n.T("Preview with"))
+			dropButton(c.Key("gallery-model"), icons.Soundwave, g.model).Tooltip(i18n.T("Preview with")).MaxWidth(px(t, 200)).Menu(func(m *ui.Menu) {
+				for _, l := range labels {
+					if m.Item(l).Checked(l == g.model).Chosen() {
+						g.model = l
+					}
+				}
+			})
 		}
 	})
-	ui.Column(c).Padding(px(t, 10), px(t, 20), px(t, 4)).Gap(px(t, 8)).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			if ui.TextInput(c.Key("gallery-search"), &g.text).Placeholder(i18n.T("Search: narrator, 东北, whisper…")).
-				Label(i18n.T("Search the gallery")).Grow(1).MaxWidth(px(t, 360)).Changed() {
+	ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Gap(px(t, sp2)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			if searchField(c, "gallery-search", &g.text, i18n.T("Search: narrator, 东北, whisper…"), px(t, 360)).
+				Label(i18n.T("Search the gallery")).Changed() {
 				g.limit = galleryPageSize
 			}
-			if ui.Toggle(c.Key("gallery-favs"), &g.favOnly, i18n.T("★ Favorites")).Changed() {
+			if iconToggle(c.Key("gallery-favs"), icons.Star, g.favOnly, i18n.T("Favorites")).Tooltip(i18n.T("Show only your favorites")).Clicked() {
+				g.favOnly = !g.favOnly
 				g.limit = galleryPageSize
 			}
+			ui.Spacer(c)
 			if len(g.filters) > 0 || g.text != "" || g.tab != 0 || g.favOnly {
-				if ui.Button(c.Key("gallery-reset"), i18n.T("Reset")).Clicked() {
+				if ghostIconButton(c.Key("gallery-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
 					g.text, g.tab, g.favOnly, g.limit = "", 0, false, galleryPageSize
 					clear(g.filters)
 				}
 			}
 		})
-		a.galleryTabs(c, page)
-		ui.Row(c.Key("gallery-facets")).Gap(px(t, 6)).Wrap().Children(func() {
+		if !narrow {
+			a.galleryTabs(c, page)
+		}
+		ui.Row(c.Key("gallery-facets")).Gap(px(t, sp1)).Wrap().Children(func() {
+			if narrow {
+				a.galleryCategoryMenu(c, page)
+			}
 			for _, f := range galleryFacets {
 				a.facetMenu(c, f, page.Facets[f])
 			}
 		})
 	})
 	if len(page.Items) == 0 {
-		ui.Column(c).Grow(1).Center().Children(func() {
-			ui.Text(c, i18n.T("No voices match these filters.")).TextColor(t.TextMuted)
-		})
+		emptyState(c, icons.Widget, i18n.T("No voices match these filters."), "", nil)
 		return
 	}
 	items := page.Items
-	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), px(t, 150), func(i int) {
+	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), px(t, 140), func(i int) {
 		if i == len(items) {
 			ui.Column(c.Key("more")).Grow(1).Center().Children(func() {
 				if ui.Button(c.Key("gallery-more"), i18n.T("Load more")).Clicked() {
@@ -89,7 +101,7 @@ func (a *app) galleryPage(c *ui.Context) {
 			return
 		}
 		a.archetypeCard(c, items[i])
-	}).Grow(1).Padding(px(t, 8), px(t, 16)).Gap(px(t, 10))
+	}).Grow(1).Padding(0, px(t, sp6), px(t, sp4)).Gap(px(t, sp3))
 }
 
 func boolInt(b bool) int {
@@ -99,27 +111,54 @@ func boolInt(b bool) int {
 	return 0
 }
 
-// galleryTabs are the categories, with counts.
-func (a *app) galleryTabs(c *ui.Context, page gallery.Page) {
-	t := c.Theme()
-	g := &a.gallery
-	loc := i18n.Locale()
-	counts := map[string]int{}
-	total := 0
+// galleryCounts are the voices of each category, and of all of them.
+func galleryCounts(page gallery.Page) (counts map[string]int, total int) {
+	counts = map[string]int{}
 	for _, fc := range page.Facets[gallery.FacetCategory] {
 		counts[fc.Value] = fc.Count
 		total += fc.Count
 	}
-	ui.Row(c.Key("gallery-tabs")).Gap(px(t, 4)).Wrap().Children(func() {
+	return counts, total
+}
+
+// galleryTabs are the categories, with counts, as filter chips.
+func (a *app) galleryTabs(c *ui.Context, page gallery.Page) {
+	t := c.Theme()
+	g := &a.gallery
+	loc := i18n.Locale()
+	counts, total := galleryCounts(page)
+	ui.Row(c.Key("gallery-tabs")).Gap(px(t, sp1)).Wrap().Children(func() {
 		tab := func(i int, label string, n int) {
-			on := g.tab == i
-			if ui.Toggle(c.Key("tab-"+itoa(i)), &on, label+" "+itoa(n)).Changed() {
+			if chip(c.Key("tab-"+itoa(i)), label, itoa(n), g.tab == i).Clicked() {
 				g.tab, g.limit = i, galleryPageSize
 			}
 		}
 		tab(0, i18n.T("All"), total)
 		for i, cat := range gallery.Categories() {
 			tab(i+1, cat.Name.In(loc), counts[cat.ID])
+		}
+	})
+}
+
+// galleryCategoryMenu is the categories as a menu, when the page is too
+// narrow for the chips.
+func (a *app) galleryCategoryMenu(c *ui.Context, page gallery.Page) {
+	g := &a.gallery
+	loc := i18n.Locale()
+	counts, total := galleryCounts(page)
+	cats := gallery.Categories()
+	label := i18n.T("Category")
+	if g.tab > 0 && g.tab <= len(cats) {
+		label += ": " + cats[g.tab-1].Name.In(loc)
+	}
+	dropText(c.Key("gallery-category"), label, g.tab != 0).Label(i18n.T("Category")).Menu(func(m *ui.Menu) {
+		if m.Item(i18n.T("All") + "  " + itoa(total)).Checked(g.tab == 0).Chosen() {
+			g.tab, g.limit = 0, galleryPageSize
+		}
+		for i, cat := range cats {
+			if m.Item(cat.Name.In(loc) + "  " + itoa(counts[cat.ID])).Checked(g.tab == i+1).Chosen() {
+				g.tab, g.limit = i+1, galleryPageSize
+			}
 		}
 	})
 }
@@ -137,7 +176,7 @@ func (a *app) facetMenu(c *ui.Context, f gallery.Facet, values []gallery.FacetCo
 			}
 		}
 	}
-	ui.MenuButton(c.Key("facet-"+string(f)), label, func(m *ui.Menu) {
+	dropText(c.Key("facet-"+string(f)), label, cur != "").Label(facetTitle(f)).Tooltip(label).Menu(func(m *ui.Menu) {
 		if m.Item(i18n.T("Any")).Checked(cur == "").Chosen() {
 			delete(g.filters, f)
 			g.limit = galleryPageSize
@@ -148,44 +187,45 @@ func (a *app) facetMenu(c *ui.Context, f gallery.Facet, values []gallery.FacetCo
 				g.limit = galleryPageSize
 			}
 		}
-	}).Label(facetTitle(f))
+	})
 }
 
-// archetypeCard is one gallery voice.
+// archetypeCard is one gallery voice: a flat card with its avatar, name,
+// traits, star, description, Preview, Use voice and ⋯.
 func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 	t := c.Theme()
+	k := tok(t)
 	g := &a.gallery
 	loc := i18n.Locale()
-	ui.Column(c.Key("arch-"+arch.ID)).Grow(1).Gap(px(t, 6)).Padding(px(t, 12)).Radius(10).Border(1, t.Border).Background(t.Surface).Children(func() {
+	card(c.Key("arch-" + arch.ID)).Grow(1).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
 		name := arch.Name.In(loc)
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 			ui.Avatar(c, name, nil)
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, name).Bold().SingleLine().Ellipsis("…")
-				ui.Text(c, arch.Attrs.Summary(loc)).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
+				ui.Text(c, name).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Tooltip(name)
+				truncText(c, arch.Attrs.Summary(loc)).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 			})
 			fav := g.favs.Has(arch.ID)
-			star := "☆"
 			tip := i18n.T("Add to favorites")
 			if fav {
-				star, tip = "★", i18n.T("Remove from favorites")
+				tip = i18n.T("Remove from favorites")
 			}
-			if ui.Button(c.Key("fav"), star).Label(tip).Tooltip(tip).Clicked() {
+			if iconToggle(c.Key("fav"), icons.Star, fav, tip).Clicked() {
 				a.toggleFavorite(arch.ID)
 			}
 		})
-		ui.Text(c, arch.Description.In(loc)).FontSize(px(t, 12)).MaxLines(2).Ellipsis("…").Grow(1)
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, arch.Description.In(loc)).FontSize(px(t, fsCaption)).TextColor(k.Text2).MaxLines(2).Ellipsis("…").Grow(1)
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			p := g.previews[arch.ID]
 			switch {
 			case p != nil && p.rendering:
 				ui.Spinner(c).Label(i18n.T("Rendering the preview…"))
 			default:
-				label := i18n.T("Preview")
+				label, ic := i18n.T("Preview"), icons.Play
 				if a.pl.Playing(galleryOwner + arch.ID) {
-					label = i18n.T("Stop")
+					label, ic = i18n.T("Stop"), icons.Stop
 				}
-				b := ui.Button(c.Key("preview"), label)
+				b := ghostIconButton(c.Key("preview"), ic, label).Label(label)
 				if p != nil && p.err != "" {
 					b.Tooltip(p.err)
 				}
@@ -194,14 +234,14 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 				}
 			}
 			if p != nil && p.err != "" {
-				ui.Text(c, i18n.T("Preview failed")).FontSize(px(t, 11)).TextColor(t.Danger).Tooltip(p.err)
+				iconMark(c, icons.DangerCircle, t.Danger, i18n.T("Preview failed")+": "+p.err).Label(i18n.T("Preview failed"))
 			}
-			ui.Box(c).Grow(1)
-			if primaryButton(c.Key("use"), i18n.T("Use voice")).Disabled(g.using).
+			ui.Spacer(c)
+			if ui.Button(c.Key("use"), i18n.T("Use voice")).Disabled(g.using).
 				Tooltip(i18n.T("Save it to your voices and open it in Design")).Clicked() {
 				a.useArchetype(arch, false)
 			}
-			iconButton(c.Key("more"), icons.MenuDots, i18n.T("More actions")).Menu(func(m *ui.Menu) {
+			moreMenu(c.Key("more"), "", func(m *ui.Menu) {
 				if m.Item(i18n.T("Use in Studio")).Chosen() {
 					a.useArchetype(arch, true)
 				}

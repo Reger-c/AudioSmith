@@ -152,15 +152,14 @@ func (a *app) storyLines(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
 	lines := p.doc.Lines
 	if len(lines) == 0 {
-		emptyState(c, "st-empty", icons.Dialog2, i18n.T("New story"),
-			i18n.T("Start your story with dialogue and narration lines, and give each character a voice in the Cast."), func() {
-				if ghostButton(c.Key("st-empty-sample"), i18n.T("Load sample")).Disabled(locked).Clicked() {
-					a.loadSampleStory(p)
-				}
-				if secondaryIconButton(c.Key("st-empty-add"), icons.AddCircle, i18n.T("Add first line")).Label(i18n.T("Add first line")).Disabled(locked).Clicked() {
-					a.addLine(p, false)
-				}
-			}).MinHeight(px(t, 160))
+		emptyState(c.Key("st-empty"), icons.Dialog2, i18n.T("New story"), i18n.T("Start your story with dialogue and narration lines, and give each character a voice in the Cast."), func() {
+			if ghostButton(c.Key("st-empty-sample"), i18n.T("Load sample")).Disabled(locked).Clicked() {
+				a.loadSampleStory(p)
+			}
+			if secondaryIconButton(c.Key("st-empty-add"), icons.AddCircle, i18n.T("Add first line")).Label(i18n.T("Add first line")).Disabled(locked).Clicked() {
+				a.addLine(p, false)
+			}
+		}).MinHeight(px(t, 160))
 		return
 	}
 	var after func() // a change to the lines, made once they are built
@@ -202,7 +201,7 @@ func (a *app) storyLine(c *ui.Context, p *lfPage, i int, l *services.StoryLine, 
 	row.Children(func() {
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 			if l.Chapter {
-				statusMark(c, icons.NotebookMinimalistic, k.Text3)
+				iconMark(c, icons.NotebookMinimalistic, k.Text3, "")
 				ui.TextInput(c.Key("title"), &l.Text).Label(i18n.T("Chapter title")).Placeholder(i18n.T("Chapter")).
 					FontSize(px(t, fsSection)).FontWeight(600).Grow(1).MinWidth(0).Disabled(locked)
 			} else {
@@ -210,13 +209,13 @@ func (a *app) storyLine(c *ui.Context, p *lfPage, i int, l *services.StoryLine, 
 				a.characterSelect(c, p, l, locked)
 				ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Grow(1).MinWidth(0).ClipX().Children(func() {
 					if l.Voice != "" {
-						chip(c, i18n.T("voice · %s", a.lfVoiceLabel(l.Voice))).Shrink(1).MinWidth(0).Ellipsis("…")
+						tagChip(c, i18n.T("voice · %s", a.lfVoiceLabel(l.Voice))).Shrink(1).MinWidth(0).Ellipsis("…")
 					}
 					if l.Speed > 0 {
-						chip(c, strconv.FormatFloat(l.Speed, 'f', 2, 64)+"×")
+						tagChip(c, strconv.FormatFloat(l.Speed, 'f', 2, 64)+"×")
 					}
 					if l.PauseAfter > 0 {
-						chip(c, i18n.T("then %d ms", l.PauseAfter))
+						tagChip(c, i18n.T("then %d ms", l.PauseAfter))
 					}
 				})
 				a.auditionButton(c, p, "line:"+l.ID, i18n.T("Preview this line"))
@@ -367,7 +366,7 @@ func (a *app) storyCast(c *ui.Context, p *lfPage, locked bool) {
 						n++
 					}
 				}
-				chip(c, i18n.N(n, "%d line", "%d lines", n))
+				tagChip(c, i18n.N(n, "%d line", "%d lines", n))
 				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove character")).Tooltip(i18n.T("Remove character: its lines go to the narrator")).Disabled(locked).Clicked() {
 					remove = m.ID
 				}

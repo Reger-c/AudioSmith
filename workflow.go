@@ -67,6 +67,14 @@ type wfState struct {
 	wfCanvas   wfCanvasState
 	wfCanvasH  ui.Handle
 
+	// The side panels (0.3): the library rail can be hidden; when the
+	// page is narrow the rail and the step/run panel are drawers.
+	wfRailHide  bool   // the rail hidden while it would fit
+	wfRailOpen  bool   // the rail's drawer open
+	wfPanelOpen bool   // the step/run panel's drawer open
+	wfPanelFor  string // the step the drawer opened for
+	wfPanelSeen int    // the panel tab the drawer opened for
+
 	// wfEngine replaces the engine's executors (tests).
 	wfEngine func(method string) jobs.Executor
 }

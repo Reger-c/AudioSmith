@@ -26,7 +26,7 @@ func (a *app) batchPage(c *ui.Context) {
 		c.After(time.Second)
 	}
 	side := px(t, inspectorWidth+40)
-	stacked := a.mainWidth(c)-side < px(t, 440)
+	stacked := a.pageWidth(c)-side < px(t, 440)
 	pageHeader(c, i18n.T("Batch dubbing"), func() {
 		label := i18n.T("Dub page")
 		var btn ui.Element
@@ -86,7 +86,7 @@ func (a *app) batchSetup(c *ui.Context) {
 		for _, f := range b.files {
 			ff := f
 			ui.Row(c.Key("file-"+f)).Gap(px(t, 6)).AlignItems(ui.Center).Padding(0, 0, 0, px(t, sp2)).Children(func() {
-				statusMark(c, dubIcon, k.Text2)
+				iconMark(c, dubIcon, k.Text2, "")
 				truncText(c, filepath.Base(ff)).FontSize(px(t, fsCaption)).Grow(1)
 				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", filepath.Base(ff))).Clicked() {
 					b.files = slices.DeleteFunc(b.files, func(x string) bool { return x == ff })
@@ -173,7 +173,7 @@ func (a *app) batchSetup(c *ui.Context) {
 	} else {
 		fillCard(c.Key("batch-needs")).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
 			ui.Row(c).Gap(px(t, 6)).Children(func() {
-				statusMark(c, icons.DangerTriangle, t.Warning)
+				iconMark(c, icons.DangerTriangle, t.Warning, "")
 				caption(c, i18n.T("Translating needs a translation engine: a local model (Ollama, LM Studio) or a provider in Settings → Writing help.")).TextColor(k.Text).Grow(1).MinWidth(0)
 			})
 			if ui.Button(c.Key("batch-llm"), i18n.T("Set up writing help")).Clicked() {
@@ -190,7 +190,7 @@ func (a *app) batchSetup(c *ui.Context) {
 	})
 	for _, e := range b.errs {
 		ui.Row(c).Gap(px(t, 6)).Children(func() {
-			statusMark(c, icons.DangerCircle, t.Danger)
+			iconMark(c, icons.DangerCircle, t.Danger, "")
 			caption(c, e).TextColor(t.Danger).Grow(1).MinWidth(0)
 		})
 	}
@@ -220,7 +220,7 @@ func (a *app) batchWatchPanel(c *ui.Context) {
 			state, col = i18n.T("Paused"), k.G[5]
 		}
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			dot(c, col)
+			statusDot(c, col)
 			truncText(c, state+" · "+shortPath(w.Dir)).FontSize(px(t, fsCaption)).Grow(1)
 		})
 		caption(c, i18n.N(w.Added, "%d video added", "%d videos added", w.Added))
@@ -265,7 +265,7 @@ func (a *app) batchQueue(c *ui.Context, stacked bool) {
 	list := tabs[min(max(b.tab, 0), 2)]
 	if len(list) == 0 {
 		empty := []string{i18n.T("No active dubs. Add videos on the left."), i18n.T("Nothing has completed yet."), i18n.T("No failed dubs.")}[min(max(b.tab, 0), 2)]
-		emptyState(c, "batch-empty", batchIcon, "", empty, nil).MinHeight(px(t, 160))
+		emptyState(c.Key("batch-empty"), batchIcon, empty, "", nil).MinHeight(px(t, 160))
 		return
 	}
 	cards := func() {
@@ -293,10 +293,10 @@ func (a *app) batchCard(c *ui.Context, r store.DubRecord) {
 	status := a.batchStatus(id)
 	card(c.Key("card-"+id)).Padding(px(t, sp3), px(t, sp4)).Gap(px(t, 6)).Children(func() {
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			statusMark(c, dubIcon, k.Text2)
+			iconMark(c, dubIcon, k.Text2, "")
 			ui.Text(c, firstOf(r.Title, filepath.Base(r.Source))).FontWeight(600).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			for _, l := range r.Languages {
-				chip(c, l)
+				tagChip(c, l)
 			}
 			moreMenu(c.Key("more"), i18n.T("Dub actions"), func(m *ui.Menu) {
 				if m.Item(i18n.T("Open in the Dub page")).Chosen() {
@@ -332,7 +332,7 @@ func (a *app) batchCard(c *ui.Context, r store.DubRecord) {
 				if j.ID != "" && j.State == jobs.StateRunning {
 					ui.Spinner(c)
 				} else {
-					dot(c, k.G[5])
+					statusDot(c, k.G[5])
 				}
 				ui.Text(c, stage).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 				if j.Progress.Fraction > 0 {
@@ -344,7 +344,7 @@ func (a *app) batchCard(c *ui.Context, r store.DubRecord) {
 			})
 		case "done":
 			ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
-				statusMark(c, icons.CheckCircle, k.Success)
+				iconMark(c, icons.CheckCircle, k.Success, "")
 				caption(c, i18n.T("Done")).Grow(1)
 				if p != nil {
 					dropButton(c.Key("export"), icons.Export, i18n.T("Export")).Shrink(0).Menu(func(m *ui.Menu) {
@@ -367,7 +367,7 @@ func (a *app) batchCard(c *ui.Context, r store.DubRecord) {
 				}
 			}
 			ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
-				statusMark(c, icons.DangerCircle, t.Danger)
+				iconMark(c, icons.DangerCircle, t.Danger, "")
 				caption(c, why).TextColor(t.Danger).MaxLines(3).Ellipsis("…").Tooltip(why).Grow(1).MinWidth(0)
 				if ui.Button(c.Key("retry"), i18n.T("Retry")).Clicked() {
 					a.batchRetry(id)

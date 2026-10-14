@@ -452,7 +452,7 @@ func (a *app) wfCanvasView(c *ui.Context) {
 	v := w.View
 	z := float32(v.Zoom)
 	canvas := ui.Box(c.Key("wf-canvas")).Grow(1).MinWidth(0).MinHeight(0).Clip().Focusable().Bind(&a.wfCanvasH).
-		Background(t.Background).Label(i18n.T("Workflow canvas"))
+		Background(tok(t).Subtle).Label(i18n.T("Workflow canvas"))
 	held := c.Modifiers() // the view builds again as they change
 	canvas.HandleInput(func(ev ui.InputEvent) bool {
 		if ev.Kind == ui.InputScroll {
@@ -471,7 +471,7 @@ func (a *app) wfCanvasView(c *ui.Context) {
 		x, y, _ := canvas.PointerPosition()
 		a.wfAddStep(k, v.X+float64(x)/v.Zoom-wfCardW/2, v.Y+float64(y)/v.Zoom-wfCardH/2)
 	}
-	dot := t.Border
+	dot := tok(t).G[4]
 	canvas.Draw(func(p *ui.Painter, r ui.Rect) {
 		// Dots every 24 content units, moving with the view.
 		gap := 24 * z
@@ -501,7 +501,7 @@ func (a *app) wfCanvasView(c *ui.Context) {
 		a.wfMinimap(c)
 		if len(w.Nodes) == 0 {
 			ui.Column(c.Key("wf-empty")).Absolute().Left(0).Top(0).Right(0).Bottom(0).Center().PassThrough().Children(func() {
-				ui.Text(c, i18n.T("Add a step from the left, or start from a template.")).TextColor(t.TextMuted)
+				ui.Text(c, i18n.T("Add a step from the left, or start from a template.")).TextColor(tok(t).Text2)
 			})
 		}
 	})
@@ -572,7 +572,7 @@ func (a *app) wfCard(c *ui.Context, n *workflow.Node, rep *workflow.Report) {
 		}
 	}
 	sel := n.ID == a.wfSel
-	border, bw := t.Border, float32(1)
+	border, bw := tok(t).G[4], float32(1)
 	switch {
 	case sel:
 		border, bw = t.Accent, 2
@@ -582,7 +582,7 @@ func (a *app) wfCard(c *ui.Context, n *workflow.Node, rep *workflow.Report) {
 	kc := wfKindColor(n.Kind)
 	name := n.StepName(n.Kind.Label())
 	card := ui.Column(c.Key("wf-node-"+n.ID)).Absolute().Left(float32(n.X)).Top(float32(n.Y)).Size(wfCardW, wfCardH).
-		Padding(8, 12).Gap(3).Radius(10).Background(t.Surface).Border(bw, border).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.12)).
+		Padding(8, 12).Gap(3).Radius(10).Background(tok(t).Bg).Border(bw, border).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.08)).
 		Label(i18n.T("Step %s", name)).Role(ui.RoleGroup)
 	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -595,14 +595,21 @@ func (a *app) wfCard(c *ui.Context, n *workflow.Node, rep *workflow.Report) {
 					ui.Text(c, n.Kind.Label()).FontSize(10.5).TextColor(t.TextMuted).SingleLine()
 				}
 			})
-			if s := a.wfStepBadge(n.ID); s != "" {
+			switch s := a.wfStepBadge(n.ID); s {
+			case "":
+			case "✓":
+				ui.Icon(c, icons.CheckCircle.Linear).Size(14, 14).TextColor(t.Success).Shrink(0)
+			default:
 				ui.Text(c, s).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(0)
 			}
 		})
 		ui.Text(c, a.wfSummary(n)).FontSize(11.5).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 		switch {
 		case errs > 0:
-			ui.Text(c, "⚠ "+diags[0].Text()).FontSize(11).TextColor(t.Danger).SingleLine().Ellipsis("…")
+			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, icons.DangerTriangle.Linear).Size(12, 12).TextColor(t.Danger).Shrink(0)
+				ui.Text(c, diags[0].Text()).FontSize(11).TextColor(t.Danger).SingleLine().Ellipsis("…").MinWidth(0)
+			})
 		case warns > 0:
 			ui.Text(c, diags[0].Text()).FontSize(11).TextColor(t.Warning).SingleLine().Ellipsis("…")
 		}
@@ -726,7 +733,7 @@ func (a *app) wfMinimap(c *ui.Context) {
 	x1, y1 = math.Max(x1, v.X+vw), math.Max(y1, v.Y+vh)
 	s := math.Min((mw-12)/(x1-x0), (mh-12)/(y1-y0))
 	ox, oy := 6-x0*s, 6-y0*s
-	m := ui.Box(c.Key("wf-minimap")).Absolute().Right(10).Bottom(10).Size(mw, mh).Radius(8).Background(t.Surface).Border(1, t.Border).
+	m := ui.Box(c.Key("wf-minimap")).Absolute().Right(10).Bottom(10).Size(mw, mh).Radius(8).Background(tok(t).Bg).Border(1, tok(t).Line).
 		Opacity(0.95).Label(i18n.T("Minimap"))
 	m.HandleInput(func(ev ui.InputEvent) bool {
 		center := func() {

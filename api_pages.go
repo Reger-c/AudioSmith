@@ -60,17 +60,19 @@ func (a *app) m5Commands(nav string, add func(id, group, title, en, keys string,
 // by the API itself) in a web view.
 func (a *app) apiReferencePage(c *ui.Context) {
 	t := c.Theme()
-	header(c, i18n.T("API reference"), func() {
-		if ui.Button(c.Key("ref-browser"), i18n.T("Open in the browser")).Disabled(a.apiPort == 0).Clicked() {
+	pageHeader(c, i18n.T("API reference"), func() {
+		if iconButton(c.Key("ref-browser"), icons.SquareArrowRightUp, i18n.T("Open in the browser")).Disabled(a.apiPort == 0).Clicked() {
 			go mygo.Shell.OpenExternal(a.apiBaseURL() + "/docs")
 		}
-		if ui.Button(c.Key("ref-settings"), i18n.T("Settings…")).Clicked() {
+		if iconButton(c.Key("ref-settings"), icons.Settings, i18n.T("Settings…")).Clicked() {
 			a.navigate("/settings/api")
 		}
 	})
 	if a.apiPort == 0 {
-		ui.Column(c).Grow(1).Center().Gap(px(t, 8)).Children(func() {
-			ui.Text(c, i18n.T("The Local API is not running.")).TextColor(t.TextMuted)
+		emptyState(c, icons.Programming, i18n.T("The Local API is not running."), "", func() {
+			if ui.Button(c.Key("ref-settings-empty"), i18n.T("Settings…")).Clicked() {
+				a.navigate("/settings/api")
+			}
 		})
 		return
 	}
@@ -86,13 +88,13 @@ func (a *app) apiReferencePage(c *ui.Context) {
 		a.apiDocs = v
 	}
 	if a.apiDocs == nil {
-		ui.Column(c).Grow(1).Center().Gap(px(t, 8)).Padding(px(t, 20)).Children(func() {
-			msg := i18n.T("The reference opens in a web view of the app window.")
-			if a.apiDocsErr != "" {
-				msg = i18n.T("The reference could not open here: %s", a.apiDocsErr)
-			}
-			ui.Text(c, msg).TextColor(t.TextMuted).Wrap()
-			ui.Text(c, a.apiBaseURL()+"/docs").Font(monoFont).Selectable()
+		msg := i18n.T("The reference opens in a web view of the app window.")
+		if a.apiDocsErr != "" {
+			msg = i18n.T("The reference could not open here: %s", a.apiDocsErr)
+		}
+		emptyState(c, icons.Programming, msg, "", func() {
+			ui.Text(c, a.apiBaseURL()+"/docs").Font(monoFont).FontSize(px(t, fsCaption)).Padding(px(t, 6), px(t, sp3)).Radius(px(t, radiusControl)).
+				Background(tok(t).Subtle).Selectable()
 		})
 		return
 	}

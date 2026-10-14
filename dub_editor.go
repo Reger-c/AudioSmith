@@ -316,7 +316,7 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 		}
 		if a.dubLang != "" && line.Err != "" {
 			ui.Row(c).Gap(px(t, 6)).Children(func() {
-				statusMark(c, icons.DangerCircle, t.Danger)
+				iconMark(c, icons.DangerCircle, t.Danger, "")
 				caption(c, i18n.T("The translation failed (%s).", line.Err)).TextColor(t.Danger).Grow(1).MinWidth(0)
 			})
 		}
@@ -324,7 +324,7 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 			for _, q := range qc.Lines {
 				if q.ID == id && q.Flagged {
 					ui.Row(c).Gap(px(t, 6)).Children(func() {
-						statusMark(c, icons.DangerTriangle, t.Warning)
+						iconMark(c, icons.DangerTriangle, t.Warning, "")
 						caption(c, i18n.T("Heard: “%s”", q.Heard)).TextColor(t.Warning).Grow(1).MinWidth(0)
 					})
 				}
@@ -342,7 +342,7 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 func dubBadge(c *ui.Context, text, tone string) {
 	t := c.Theme()
 	k := tok(t)
-	b := chip(c, text)
+	b := tagChip(c, text)
 	switch tone {
 	case "danger":
 		b.TextColor(k.Danger)

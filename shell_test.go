@@ -449,17 +449,22 @@ func TestModelsPage(t *testing.T) {
 	if len(a.notices) == 0 || a.notices[0].Title != "Kokoro 82M is downloaded" {
 		t.Errorf("notices %+v", a.notices)
 	}
-	if !tt.HasText("Verify") || !strings.Contains(strings.Join(tt.Texts(), "|"), "Downloaded · ") {
+	if !tt.HasText("More actions for Kokoro 82M") || !strings.Contains(strings.Join(tt.Texts(), "|"), "Downloaded · ") {
 		t.Errorf("downloaded card: %q", tt.Texts())
 	}
-	tt.Click("Verify")
+	tt.Click("More actions for Kokoro 82M")
+	if err := tt.ChooseMenuItem("Verify"); err != nil {
+		t.Fatalf("verify: %v (menu %q)", err, tt.Menu())
+	}
 	tt.Frame()
 	if !strings.Contains(strings.Join(a.toasts, "|")+strings.Join(tt.Texts(), "|"), "checks out") && len(a.notices) != 1 {
 		t.Errorf("verify: toasts %q notices %+v", a.toasts, a.notices)
 	}
 
 	// Delete asks first; Enter confirms.
-	tt.Click("Delete")
+	tt.Click("More actions for Kokoro 82M")
+	tt.ChooseMenuItem("Delete")
+	tt.Frame()
 	if !a.deleteAsk || !tt.HasText("Delete Kokoro 82M?") {
 		t.Fatalf("delete alert: %q", tt.Texts())
 	}
