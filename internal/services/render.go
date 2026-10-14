@@ -1027,3 +1027,12 @@ func convertWAV(ctx context.Context, src, dst string, bits int) error {
 	}
 	return out.Close()
 }
+
+// CopyFile copies src to dst through a temporary file beside it (exports).
+func CopyFile(ctx context.Context, src, dst string) error { return copyFile(ctx, src, dst) }
+
+// ConvertWAV writes src to dst as a WAV of bits (16 with dither, 24, 32
+// float): exports of renders.
+func ConvertWAV(ctx context.Context, src, dst string, bits int) error {
+	return convertWAV(ctx, src, dst, bits)
+}

@@ -31,6 +31,7 @@ type app struct {
 	takesState
 	engineLink
 	voicesState // voices.go (thread V): voice library, design, gallery
+	longformState // M3 (thread #18): longform.go — Stories, Audiobook, Projects
 }
 
 func newApp(eng *engineHost, lib *library) *app {
@@ -42,6 +43,7 @@ func newApp(eng *engineHost, lib *library) *app {
 	a.openShell(lib)
 	a.openTakes(lib)
 	a.openVoices(lib) // voices.go (thread V)
+	a.openLongform(lib) // M3: longform.go (thread #18)
 	return a
 }
 
