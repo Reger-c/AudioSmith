@@ -50,6 +50,7 @@ services ──▶ core, store, jobs, engine/proto (the job's params), i18n (job
 text/plan ──▶ text, text/markup, text/normalize, text/lexicon
 services ──▶ doc/subtitle, dsp, dsp/{resample,wav} (M2 transcripts)
 main ──▶ dictation, llm, translate (M2)
+services ──▶ doc (CueSheet), engine/proto (encode output) (M3 longform)
 dictation ──▶ (nothing internal; mygo/transfer, purego, purego/objc)
 store ──▶ core, jobs            store/sqlitestore ──▶ core, jobs, store, store/historyjson
 engine ──▶ core, engine/proto, jobs (its executors)        engine/enginetest ──▶ engine/proto
@@ -139,6 +140,8 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | `a.trSvc` (`*services.Transcripts`: Transcribe/Get/List/Update/Delete/AudioPath; `services.Export/ExportAll`), job kind `transcript.make` (owner `transcript:<id>`), event `core.TranscriptChanged` | transcribe*.go, internal/services/transcripts*.go (M2) | dictation, projects, later API `/v1/audio/transcriptions` |
 | `a.llmRouter`, `a.llmAvailable()` (registry/router from `settings.LLM`; HTTP via `hub.NewHTTPClient`, keys `hub.Secret("llm.<provider>")`) | transcribe_llm.go (M2) | dictation cleanup, M4 translation |
 | `a.dictToggle()`, `dictation.System`/`Inserter`, `sttEntries()`, `sttEntry(id, fallback)` | dictation*.go, internal/dictation (M2) | tray, palette, settings |
+| Longform: `services.Compile`, `Longform.Start/Stop/Resume/Delete/Reconcile`, `Library.*` (search/counts over projects, renders, voices, takes, exports); jobs `longform.chapter` (gpu, one per chapter) + `longform.assemble` (cpu lane, After chapters), owner `longform:<id>`; `stt.align` owner `readalong:`; `media.encode` (M4B) via `services.Config.Encode` once the engine has it | internal/services/longform*.go, projects.go (M3) | stories, audiobook, projects pages |
+| `a.useVoiceInStories`, `a.useVoiceInAudiobook`, `a.projectUsageLink`, `a.longformVoiceItems`, `a.recordTakeExport`, `a.recordVoiceExport` | longform*.go, projects*.go (M3) | gallery, voice editor, studio output, history |
 | `a.voicePicker(c, p)`, `a.applyStudioVoice(&t, p)`, `a.studioUsesSavedVoice(p)`, `a.studioVoicePrompt(p)`, `a.useVoiceInStudio`, `a.openVoiceEditor`, `a.openDesignFor`, `a.startClone` | voices*.go, clone*.go, design*.go (M1-V) | studio, gallery, palette |
 | `a.probeMedia`, `a.captureDevices`, `a.startRecording(params, onLevel, then)`, `a.stopRecording`, `engineErrorText(err)`, `jobErrorText(*jobs.Error)` | enginelink.go (M1) | voices/clone (reference recorder, imports), studio |
 | Engine jobs: submit `proto` job kinds (`engine.ExecutorKinds`) on `jobs.Lane(proto.RoleOf(kind))`; listen/media workers start on demand (`engine.Config.OnDemand`); default models `catalog.DefaultSTT/DefaultAlign/DefaultVAD/DefaultEnhance` | internal/engine, internal/catalog (M1) | voices, studio, later dictation/dubbing |
@@ -211,6 +214,7 @@ Rules that stay:
 | Waveform cache | `~/Library/Caches/AudioSmith/peaks/<take id>.f32` |
 | Voices | `…/AudioSmith/voices/<voice id>/` (reference, locked.wav, sample, consent, portrait, prompts); unsaved clips in `…/AudioSmith/references/` |
 | Transcripts | `…/AudioSmith/transcripts/<id>.wav` (16 kHz mono copy; table `transcripts`, migration 003); dictation temp `…/AudioSmith/dictation/*.wav` |
+| Renders (Stories/Audiobook) | `…/AudioSmith/renders/<id>/{chapters/NNN.wav(.json), book.wav, cues.txt, report.json, stems/}`; covers `…/AudioSmith/covers/`; longform chunk cache `~/Library/Caches/AudioSmith/longform/chunks/` (60 days / 24 GB); auditions `…/Caches/AudioSmith/auditions/`; tables `renders`, `exports` (migration 004) |
 | Chunk cache | `~/Library/Caches/AudioSmith/chunks/<text.Key>.wav` (float32, pruned to 2 GB LRU) |
 | Gallery previews | `~/Library/Caches/AudioSmith/voice-previews/<key>.wav` (job owner `archetype:<id>`; voice jobs use owner `voicework:`) |
 | Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app, rotated at 5 MB) and `engine-gpu.log` (engine stderr) |
