@@ -129,6 +129,7 @@ func (a *app) dubExportPanel(c *ui.Context) {
 		}
 		ex.def, ex.bits, ex.subs = p.Primary(), 1, true
 	}
+	dubPanelTitle(c, i18n.T("Export"))
 	formats := a.dubExportFormats()
 	labels := make([]string, len(formats))
 	for i, f := range formats {
