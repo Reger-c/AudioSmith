@@ -547,6 +547,7 @@
   "Not yet: live text while you speak, and dictating while AudioSmith plays audio (echo cancellation).": "暂不支持：边说边显示文字，以及 AudioSmith 播放音频时听写（回声消除）。",
   "Nothing is running.": "没有正在运行的任务。",
   "Nothing new.": "没有新消息。",
+  "Nothing was heard. Check the microphone in Settings → Dictation.": "没有听到声音。请在“设置 → 听写”中检查麦克风。",
   "Notifications": "通知",
   "Numbers": "数字",
   "Numbers, times, dates, money and abbreviations, before the model reads them.": "在模型朗读前，把数字、时间、日期、金额和缩写转成文字。",

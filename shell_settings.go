@@ -350,9 +350,9 @@ func (a *app) generalSettings(c *ui.Context) {
 	t := c.Theme()
 	settingRow(c, "language", i18n.T("Language"), i18n.T("The language of the app. Following the system uses English unless the system's language is supported."), func() {
 		opts := languageOptions()
-		if ui.Select(c.Key("language-select"), &a.language, opts).Label(i18n.T("Language")).Width(px(t, 200)).Changed() {
+		if ui.Select(c.Key("language-select"), &a.settingsForm.language, opts).Label(i18n.T("Language")).Width(px(t, 200)).Changed() {
 			tag := ""
-			if i := slices.Index(opts, a.language); i > 0 {
+			if i := slices.Index(opts, a.settingsForm.language); i > 0 {
 				tag = i18n.Supported()[i-1]
 			}
 			a.updateSettings(func(s *settings.Settings) { s.General.Language = tag })

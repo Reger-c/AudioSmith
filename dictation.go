@@ -376,8 +376,9 @@ func (a *app) dictStop() {
 			a.dictFail(s, engineErrorText(err))
 		case res.AudioSeconds < minSpeech:
 			os.Remove(path)
-			a.dictEnd(s, dictNoSpeech, i18n.T("No speech detected"))
+			a.dictEnd(s, dictNoSpeech, i18n.T("Nothing was heard. Check the microphone in Settings → Dictation."))
 		default:
+			s.out = path
 			a.dictTranscribe(s, path)
 		}
 	})
@@ -443,8 +444,10 @@ func (a *app) dictJobUpdated(u jobs.Job) bool {
 		json.Unmarshal(u.Result, &res)
 		a.dictDeliver(s, res.Transcript)
 	case jobs.StateCancelled:
+		os.Remove(s.out)
 		a.dictEnd(s, dictIdle, "")
 	default:
+		os.Remove(s.out) // the recording, if the job did not take it
 		if u.Err != nil && u.Err.Code == proto.CodeModelNotDownloaded {
 			e := a.dictModel()
 			s.need = &e
@@ -461,7 +464,7 @@ func (a *app) dictDeliver(s *dictSession, t core.Transcript) {
 	if raw == "" {
 		svc := a.trSvc
 		a.async(func() { svc.Delete(context.Background(), t.ID) })
-		a.dictEnd(s, dictNoSpeech, i18n.T("No speech detected"))
+		a.dictEnd(s, dictNoSpeech, i18n.T("Nothing was heard. Check the microphone in Settings → Dictation."))
 		return
 	}
 	d := a.prefs.Dictation

@@ -328,7 +328,7 @@ func TestLanguageSwitch(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	a.navigate("/settings/general")
 	tt.Frame()
-	a.language = "简体中文"
+	a.settingsForm.language = "简体中文"
 	a.updateSettings(func(s *settings.Settings) { s.General.Language = "zh-Hans" })
 	tt.Frame()
 	if i18n.Locale() != "zh-Hans" || !tt.HasText("工作室") || !tt.HasText("设置") || !tt.HasText("引擎就绪") {
