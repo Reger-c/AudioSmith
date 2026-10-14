@@ -437,6 +437,54 @@ func (a *app) view(c *ui.Context) {
 	a.onboarding(c) // M7a: the first-run wizard, under the licence dialog
 	a.licenceModal(c)
 	a.modelsAlerts(c)
+	a.toastsView(c) // last: over dialogs too
+}
+
+// toastsView gives the toasts their place and look: small ink toasts in
+// the middle of the page's header (between its title and its actions,
+// where it is empty), centred over the page; more stack under it. At the
+// window's bottom (MyGo's place) they covered the bars and cards there:
+// the Studio's Generate, a ready card's Save, the status bar. While the
+// Settings dialog shows, they go to the foot of the dialog instead.
+func (a *app) toastsView(c *ui.Context) {
+	t := c.Theme()
+	k := tok(t)
+	ui.ToastViewportBase(c, func(vp ui.Element, toasts []ui.Toast) {
+		w, _ := c.Size()
+		page := a.pageWidth(c)
+		vp.AlignItems(ui.Center).Gap(px(t, sp2))
+		if a.settingsOpen {
+			// Over the Settings dialog's foot: its title row is at the top.
+			vp.Justify(ui.End).Padding(0, px(t, sp4), px(t, statusBarHeight+sp8))
+		} else {
+			vp.Justify(ui.Start).Padding(max(px(t, 4), (titleBarHeight-px(t, 36))/2), px(t, sp4), 0, w-page+px(t, sp4))
+		}
+		for _, ts := range toasts {
+			p := ui.ToastBase(c, ts)
+			box := p.Root.Row().AlignItems(ui.Center).Gap(px(t, sp3)).Padding(px(t, 9), px(t, 14)).Radius(px(t, radiusControl)).
+				MaxWidth(min(px(t, 480), page-px(t, sp8))).Background(k.Ink).TextColor(k.OnInk).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.22))
+			// It fades out at the end.
+			const fade = 200 * time.Millisecond
+			switch left := p.Left(); {
+			case left > 0 && left < fade:
+				box.Opacity(float32(left) / float32(fade))
+				c.AnimationFrame()
+			case left > 0:
+				c.After(left - fade)
+			}
+			box.Children(func() {
+				ui.Text(c, ts.Title).MinWidth(0).Shrink(1)
+				if ts.Action == "" {
+					return
+				}
+				b := p.ActionButton().Padding(px(t, 3), px(t, 8)).Radius(px(t, 6)).TextColor(k.OnInk).FontWeight(600).Label(ts.Action).Shrink(0)
+				if b.Hovered() {
+					b.Background(k.OnInk.Alpha(0.14))
+				}
+				b.Children(func() { ui.Text(c, ts.Action).SingleLine() })
+			})
+		}
+	})
 }
 
 // pages builds the page the router shows.
@@ -475,10 +523,8 @@ func (a *app) pages(c *ui.Context) {
 }
 
 func (a *app) notFoundPage(c *ui.Context, path string) {
-	t := c.Theme()
-	header(c, i18n.T("Not found"), nil)
-	ui.Column(c).Grow(1).Center().Gap(px(t, 8)).Children(func() {
-		ui.Text(c, i18n.T("There is no page at %s.", path)).TextColor(t.TextMuted)
+	pageHeader(c, i18n.T("Not found"), nil)
+	emptyState(c, icons.Magnifer, i18n.T("There is no page at %s.", path), "", func() {
 		if ui.Button(c.Key("go-studio"), i18n.T("Go to the Studio")).Clicked() {
 			a.navigate("/studio")
 		}
@@ -573,13 +619,6 @@ func (a *app) sidebarSearch(c *ui.Context) {
 			a.openPalette()
 		}
 	})
-}
-
-// header is a page's title bar, which drags the window, above a hairline
-// (pageHeader in ui_kit.go without it).
-func header(c *ui.Context, title string, trailing func()) {
-	pageHeader(c, title, trailing)
-	ui.Divider(c)
 }
 
 // orDash shows "—" for an empty value.
