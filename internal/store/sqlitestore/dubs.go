@@ -12,6 +12,20 @@ import (
 	"github.com/hehehai/AudioSmith/internal/store"
 )
 
+// The Projects page lists the Dub page's projects (not the batch
+// queue's) under "Dubbing projects", as items of source "dub" whose
+// detail is the phase.
+func init() {
+	libParts = append(libParts, libPart{
+		sql:      `SELECT 'dub' AS src, id, 'dub' AS cat, title, phase AS detail, updated_at AS at FROM dubs`,
+		where:    `batch = ''`,
+		fts:      `seq IN (SELECT rowid FROM dubs_fts WHERE dubs_fts MATCH ?)`,
+		like:     `(title LIKE ? ESCAPE '\' OR source LIKE ? ESCAPE '\')`,
+		likeArgs: 2,
+		category: func(c string) bool { return c == "" || c == store.LibDub },
+	})
+}
+
 // dubRepo stores dub projects (migration 005).
 type dubRepo struct {
 	db  *sqlite.DB

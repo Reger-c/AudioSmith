@@ -37,6 +37,17 @@ func TestDubs(t *testing.T) {
 	if l, _ := r.List(ctx, store.DubQuery{AllBatches: true, Limit: 2}); len(l) != 2 || l[0].ID != "c" {
 		t.Errorf("all %+v", l)
 	}
+	lib := s.Library()
+	items, err := lib.Search(ctx, store.LibraryQuery{Category: store.LibDub})
+	if err != nil || len(items) != 2 || items[0].Source != "dub" || items[0].Category != store.LibDub || items[0].Detail != "editing" {
+		t.Errorf("library %+v %v", items, err)
+	}
+	if items, _ := lib.Search(ctx, store.LibraryQuery{Search: "T b"}); len(items) != 1 || items[0].ID != "b" {
+		t.Errorf("search %+v", items)
+	}
+	if n, _ := lib.Counts(ctx, ""); n[store.LibDub] != 2 {
+		t.Errorf("counts %v", n)
+	}
 	d, err := r.Get(ctx, "a")
 	if err != nil || string(d.Doc) != `{"id":"a"}` || d.Title != "T a" {
 		t.Errorf("%+v %v", d, err)

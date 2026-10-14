@@ -26,3 +26,16 @@ CREATE TABLE dubs (
 );
 CREATE INDEX dubs_updated ON dubs(updated_at DESC);
 CREATE INDEX dubs_batch ON dubs(batch, created_at);
+-- The Projects page searches dubs by title and source (trigram, as the
+-- other tables; queries under 3 characters use LIKE).
+CREATE VIRTUAL TABLE dubs_fts USING fts5(title, source, content='dubs', content_rowid='seq', tokenize='trigram');
+CREATE TRIGGER dubs_fts_insert AFTER INSERT ON dubs BEGIN
+  INSERT INTO dubs_fts(rowid, title, source) VALUES (new.seq, new.title, new.source);
+END;
+CREATE TRIGGER dubs_fts_delete AFTER DELETE ON dubs BEGIN
+  INSERT INTO dubs_fts(dubs_fts, rowid, title, source) VALUES ('delete', old.seq, old.title, old.source);
+END;
+CREATE TRIGGER dubs_fts_update AFTER UPDATE OF title, source ON dubs BEGIN
+  INSERT INTO dubs_fts(dubs_fts, rowid, title, source) VALUES ('delete', old.seq, old.title, old.source);
+  INSERT INTO dubs_fts(rowid, title, source) VALUES (new.seq, new.title, new.source);
+END;
