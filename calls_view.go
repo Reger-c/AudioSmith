@@ -30,11 +30,11 @@ func (a *app) callsPage(c *ui.Context) {
 	if b := a.callPageH.Bounds(c); b.W > 0 {
 		wide = b.W/px(t, 1) >= callsWide
 	}
-	ui.Row(c.Key("calls-body")).Bind(&a.callPageH).Grow(1).MinHeight(0).Children(func() {
+	ui.Row(c.Key("calls-body")).Bind(&a.callPageH).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c.Key("calls-history")).Width(px(t, 290)).Shrink(0).Background(t.Surface.Alpha(0.5)).Children(func() {
 			a.callHistory(c)
 		})
-		ui.Divider(c)
+		ui.Box(c).Width(1).Background(t.Border)
 		if wide {
 			ui.Scroll(c.Key("calls-call")).Grow(1).MinWidth(0).Children(func() {
 				ui.Column(c).Padding(px(t, 18)).Gap(px(t, 14)).Children(func() {
@@ -42,7 +42,7 @@ func (a *app) callsPage(c *ui.Context) {
 					a.callView(c)
 				})
 			})
-			ui.Divider(c)
+			ui.Box(c).Width(1).Background(t.Border)
 			ui.Scroll(c.Key("calls-new")).Width(px(t, 400)).Shrink(0).Children(func() {
 				ui.Column(c).Padding(px(t, 18)).Gap(px(t, 14)).Children(func() { a.newCallForm(c) })
 			})
@@ -117,7 +117,7 @@ func (a *app) callHistory(c *ui.Context) {
 		})
 		return
 	}
-	ui.Scroll(c.Key("calls-list")).Grow(1).Children(func() {
+	ui.Scroll(c.Key("calls-list")).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(px(t, 6)).Gap(px(t, 2)).Children(func() {
 			for _, r := range a.callList {
 				a.callRow(c, r)

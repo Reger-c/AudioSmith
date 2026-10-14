@@ -14,6 +14,10 @@ import (
 // twilioPage is /calls/setup (and /integrations/twilio): the guided setup.
 func (a *app) twilioPage(c *ui.Context) {
 	t := c.Theme()
+	if !a.tw.autoChecked && a.tw.account == nil && a.prefs.Calls.AccountSID != "" && a.callHasTok {
+		a.tw.autoChecked = true // once per run: the account's name and type
+		a.checkTwilioAccount()
+	}
 	checks := a.callChecks()
 	ready, _ := callsReady(checks)
 	header(c, i18n.T("Twilio setup"), func() {
@@ -62,7 +66,7 @@ func (a *app) twilioPage(c *ui.Context) {
 			})
 		}
 		if wide {
-			ui.Row(c).Padding(px(t, 20)).Gap(px(t, 20)).Children(func() { body(); rail() })
+			ui.Row(c).Padding(px(t, 20)).Gap(px(t, 20)).AlignItems(ui.Start).Children(func() { body(); rail() })
 		} else {
 			ui.Column(c).Padding(px(t, 20)).Gap(px(t, 20)).Children(func() { body(); rail() })
 		}
@@ -356,7 +360,7 @@ func (a *app) twChecklist(c *ui.Context, checks []callCheck) {
 				b.Background(t.SurfaceHover)
 			}
 			b.Children(func() {
-				ui.Row(c).Gap(px(t, 8)).Children(func() {
+				ui.Row(c).Gap(px(t, 8)).Grow(1).MinWidth(0).Children(func() {
 					mark, col := "○", t.TextMuted
 					if ck.ok {
 						mark, col = "✓", t.Success

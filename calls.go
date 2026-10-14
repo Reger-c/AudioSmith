@@ -252,7 +252,10 @@ func (a *app) openCalls(lib *library) {
 	core.On(lib.bus, func(ev services.CallChanged) { a.post(func() { a.callChanged(ev) }) })
 	core.On(lib.bus, func(ev settings.Changed) {
 		if ev.Old.Calls != ev.New.Calls {
-			a.post(a.applyCalls)
+			a.post(func() {
+				a.syncTwilioChanged(ev.Old.Calls, ev.New.Calls)
+				a.applyCalls()
+			})
 		}
 	})
 	svc := a.callSvc

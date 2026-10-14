@@ -45,7 +45,9 @@ type API struct {
 	FailCall *telephony.APIError
 	// Trial reports the account as a trial account.
 	Trial bool
-	seq   int
+	// Requests counts every request received.
+	Requests int
+	seq      int
 }
 
 // NewAPI starts a fake REST API; Close it when done.
@@ -64,6 +66,9 @@ var callPath = regexp.MustCompile(`^/2010-04-01/Accounts/([^/]+)/Calls/([^/]+)\.
 var numberPath = regexp.MustCompile(`^/2010-04-01/Accounts/([^/]+)/IncomingPhoneNumbers/([^/]+)\.json$`)
 
 func (f *API) serve(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	f.Requests++
+	f.mu.Unlock()
 	user, pass, ok := r.BasicAuth()
 	if !ok || user != AccountSID || pass != AuthToken {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -112,6 +117,13 @@ func (f *API) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		io.WriteString(w, `{"code":20404,"message":"The requested resource was not found","status":404}`)
 	}
+}
+
+// RequestCount is how many requests arrived.
+func (f *API) RequestCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.Requests
 }
 
 // PlacedCalls returns a copy of the calls placed.

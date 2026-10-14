@@ -59,6 +59,7 @@ type twilioSetup struct {
 	previewPath string
 	previewErr  string
 	howOpen     bool
+	autoChecked bool // the saved account was checked once
 }
 
 // syncTwilioForm fills the setup form from the settings.
@@ -97,6 +98,31 @@ func (a *app) syncTwilioForm() {
 	}
 }
 
+// syncTwilioChanged updates the form's fields whose settings changed
+// (elsewhere, or by the form's own save), keeping what is being typed in
+// the others.
+func (a *app) syncTwilioChanged(old, new settings.Calls) {
+	w := &a.tw
+	if old.AccountSID != new.AccountSID && !w.replacing {
+		w.sid = new.AccountSID
+	}
+	if old.PublicURL != new.PublicURL {
+		w.publicURL = new.PublicURL
+	}
+	if old.Port() != new.Port() {
+		w.port = float64(new.Port())
+	}
+	if old.GatewayAll != new.GatewayAll {
+		w.all = new.GatewayAll
+	}
+	if old.UserName != new.UserName || old.Greeting != new.Greeting || old.InboundBrief != new.InboundBrief || old.Record != new.Record ||
+		old.Disclosure != new.Disclosure || old.Inbound != new.Inbound || old.Voice != new.Voice || old.Model != new.Model {
+		pub, port, all, sid := w.publicURL, w.port, w.all, w.sid
+		a.syncTwilioForm()
+		w.publicURL, w.port, w.all, w.sid = pub, port, all, sid
+	}
+}
+
 // callModelOptions are the setup's model choices: the voice's own, or a
 // speech model.
 func callModelOptions() (labels, ids []string) {
@@ -129,16 +155,18 @@ func (a *app) saveTwilioAccount() {
 	a.updateSettings(func(s *settings.Settings) { s.Calls.AccountSID = sid })
 	tok, proxy := a.callToken, a.prefs.Models.Proxy
 	a.async(func() {
-		var err error
-		if token != "" {
-			err = twilioTokenStore.Set(token)
-			if err == nil {
+		// Check first: a token Twilio refuses is not kept.
+		try := token
+		if try == "" {
+			try = tok.get()
+		}
+		acc, err := a.twilioClient(sid, try, proxy).Account(context.Background())
+		if token != "" && (err == nil || !telephony.Unauthorized(err)) {
+			if serr := twilioTokenStore.Set(token); serr != nil {
+				err = serr
+			} else {
 				tok.set(token)
 			}
-		}
-		var acc telephony.Account
-		if err == nil {
-			acc, err = a.twilioClient(sid, tok.get(), proxy).Account(context.Background())
 		}
 		a.post(func() {
 			w.checking = false
