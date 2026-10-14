@@ -69,6 +69,8 @@ type v02 struct {
 
 	mu   sync.Mutex
 	rows []string
+	// restarting tolerates a failed engine while it restarts (crash step).
+	restarting bool
 }
 
 func TestV02(t *testing.T) {
@@ -188,7 +190,7 @@ func (v *v02) wait(t *testing.T, what string, timeout time.Duration, done func()
 	tick := time.NewTicker(250 * time.Millisecond)
 	defer tick.Stop()
 	for !done() {
-		if v.a.engState == engineFailed {
+		if v.a.engState == engineFailed && !v.restarting {
 			t.Fatalf("%s: engine failed: %s\n%s", what, v.a.engError, v.a.engTail)
 		}
 		select {
@@ -399,7 +401,7 @@ func newMemSampler() *memSampler {
 }
 
 func (m *memSampler) sample() {
-	out, err := exec.Command("ps", "-axo", "pid=,rss=,comm=").Output()
+	out, err := exec.Command("ps", "-axo", "pid=,ppid=,rss=,comm=").Output()
 	if err != nil {
 		return
 	}
@@ -407,12 +409,15 @@ func (m *memSampler) sample() {
 	var sum int64
 	for _, l := range strings.Split(string(out), "\n") {
 		f := strings.Fields(l)
-		if len(f) < 3 {
+		if len(f) < 4 {
 			continue
 		}
 		pid, _ := strconv.Atoi(f[0])
-		kb, _ := strconv.ParseInt(f[1], 10, 64)
-		if pid == self || strings.HasSuffix(f[len(f)-1], "audiosmith-engine") {
+		ppid, _ := strconv.Atoi(f[1])
+		kb, _ := strconv.ParseInt(f[2], 10, 64)
+		// This process and its engine workers (not an AudioSmith the
+		// user runs at the same time).
+		if pid == self || ppid == self && strings.HasSuffix(f[len(f)-1], "audiosmith-engine") {
 			sum += kb << 10
 		}
 	}
@@ -567,7 +572,7 @@ func (v *v02) design(t *testing.T) string {
 	d.saveName = "V02 Narrator"
 	n := len(a.voices)
 	a.designSave()
-	v.wait(t, "design save", 2*time.Minute, func() bool { return len(a.voices) > n })
+	v.wait(t, "design save", 2*time.Minute, func() bool { return len(a.voices) > n && d.linked != "" })
 	vo := a.findVoice(d.linked)
 	if vo == nil || vo.Kind != core.VoiceDesigned {
 		t.Fatalf("designed voice %+v", vo)
@@ -1197,7 +1202,7 @@ func (v *v02) watermarkFlow(t *testing.T, takeID string) string {
 			t.Fatalf("%s: %s", c.name, a.wmCheck.err)
 		}
 		r := a.wmCheck.res
-		notes = append(notes, fmt.Sprintf("%s: %+v", c.name, *r))
+		notes = append(notes, fmt.Sprintf("%s: detected %v, p=%.2f, message %d, %.0f s in %.2f s", c.name, r.Detected, r.Probability, r.Message, r.AudioSeconds, r.Seconds))
 		if r.Detected != c.want {
 			t.Errorf("%s: detected %v, want %v (%+v)", c.name, r.Detected, c.want, *r)
 		}
@@ -1223,6 +1228,8 @@ func (v *v02) crashFlow(t *testing.T) string {
 	if pid == 0 {
 		t.Fatal("no gpu worker pid")
 	}
+	v.restarting = true
+	defer func() { v.restarting = false }()
 	syscall.Kill(pid, syscall.SIGKILL)
 	killed := time.Now()
 	v.wait(t, "after the crash", 15*time.Minute, func() bool { return a.job == nil && a.awaitTake == "" })
