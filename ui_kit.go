@@ -406,6 +406,11 @@ func collapsible(c *ui.Context, title string, open *bool, trailing, fn func()) u
 				trailing()
 			}
 		})
+		// Apply a click now, in this build pass: callers often hand in a
+		// local copied from a map and store it back after this returns, so a
+		// click applied after the frame would land in a dead local and the
+		// section would never open or close.
+		tr.Changed()
 		if p := parts.Panel(fn); p.Valid() {
 			p.Gap(px(t, sp3)).Padding(px(t, sp2), px(t, 4), px(t, 4))
 		}
