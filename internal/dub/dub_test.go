@@ -491,7 +491,7 @@ func TestReferencesAndSpeakers(t *testing.T) {
 	s := p.NewSegment(0, 4, "", "one two three four five six")
 	s.Words = words(0, 4, "one", "two", "three", "four", "five", "six")
 	p.Segments = append(p.Segments, s, p.NewSegment(4.2, 8, "", "seven eight"), p.NewSegment(8.3, 12, "", "nine ten"), p.NewSegment(13, 14, "", "hey"))
-	turns := []Turn{{0, 2, "B"}, {2, 12, "A"}, {12.5, 14.5, "C"}}
+	turns := []Turn{{Start: 0, End: 2, Speaker: "B"}, {Start: 2, End: 12, Speaker: "A"}, {Start: 12.5, End: 14.5, Speaker: "C"}}
 	p.AssignSpeakers(turns)
 	if len(p.Segments) != 5 {
 		t.Fatalf("split by turns: %+v", p.Segments)

@@ -56,14 +56,23 @@ const (
 	MethodCaptureLevel   = "capture.level"   // notification, engine → app: input meter, ~20 Hz
 )
 
+// Methods added in M4, dubbing (docs/protocol-v2.md §5.3; types in m4.go).
+const (
+	MethodSeparateRun    = "separate.run"    // request, job (gpu): vocals / background stems
+	MethodDiarizeRun     = "diarize.run"     // request, job (gpu): who speaks when
+	MethodMediaMux       = "media.mux"       // request, job (media): MP4 with the source video, N audio tracks, subtitles
+	MethodMediaThumbnail = "media.thumbnail" // request, job (media): video frames as images
+	MethodMediaTranscode = "media.transcode" // request, job (media): an H.264 preview
+)
+
 // Reserved method names for later milestones (see docs/protocol-v2.md §8).
 // Listed so names are not reused for something else; not implemented.
 var Reserved = []string{
 	"tts.batch",
 	"stt.stream.open", "stt.stream.push", "stt.stream.close", "stt.partial", "stt.final",
-	"diarize.run", "lid.detect", "separate.run",
+	"lid.detect",
 	"llm.generate", "translate.run",
-	"media.mux", "media.timePitch", "media.thumbnail", "media.ocr", "doc.extractText",
+	"media.timePitch", "media.ocr", "doc.extractText",
 	"capture.pcm",
 }
 
@@ -103,7 +112,7 @@ func SplitKind(kind string) (Role, string) {
 // models.* go to whichever worker holds the model (gpu in M1).
 func RoleOf(method string) Role {
 	switch method {
-	case MethodMediaProbe, MethodMediaDecode, MethodMediaEncode:
+	case MethodMediaProbe, MethodMediaDecode, MethodMediaEncode, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode:
 		return RoleMedia
 	case MethodCaptureDevices, MethodCaptureStart, MethodCaptureStop:
 		return RoleListen
@@ -338,6 +347,16 @@ func ParamsFor(method string) any {
 		return new(DecodeParams)
 	case MethodMediaEncode:
 		return new(EncodeParams)
+	case MethodSeparateRun:
+		return new(SeparateParams)
+	case MethodDiarizeRun:
+		return new(DiarizeParams)
+	case MethodMediaMux:
+		return new(MuxParams)
+	case MethodMediaThumbnail:
+		return new(ThumbnailParams)
+	case MethodMediaTranscode:
+		return new(TranscodeParams)
 	case MethodCaptureDevices:
 		return new(Empty)
 	case MethodCaptureStart:
@@ -387,6 +406,16 @@ func ResultFor(method string) any {
 		return new(DecodeResult)
 	case MethodMediaEncode:
 		return new(EncodeResult)
+	case MethodSeparateRun:
+		return new(SeparateResult)
+	case MethodDiarizeRun:
+		return new(DiarizeResult)
+	case MethodMediaMux:
+		return new(MuxResult)
+	case MethodMediaThumbnail:
+		return new(ThumbnailResult)
+	case MethodMediaTranscode:
+		return new(TranscodeResult)
 	case MethodCaptureDevices:
 		return new(DevicesResult)
 	case MethodCaptureStart:
@@ -418,7 +447,8 @@ func IsJob(method string) bool {
 	switch method {
 	case MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
 		MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
-		MethodMediaDecode, MethodMediaEncode, MethodCaptureStart:
+		MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
+		MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode:
 		return true
 	}
 	return false
@@ -429,4 +459,5 @@ var JobMethods = []string{
 	MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
 	MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
 	MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
+	MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode,
 }

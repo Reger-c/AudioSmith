@@ -44,6 +44,8 @@ var ExecutorKinds = []string{
 	proto.MethodModelsLoad, proto.MethodTTSSynthesize, proto.MethodTTSEncodeVoice,
 	proto.MethodSTTTranscribe, proto.MethodSTTAlign, proto.MethodVADDetect, proto.MethodEnhanceRun,
 	proto.MethodMediaDecode, proto.MethodMediaEncode,
+	proto.MethodSeparateRun, proto.MethodDiarizeRun,
+	proto.MethodMediaMux, proto.MethodMediaThumbnail, proto.MethodMediaTranscode,
 }
 
 // RegisterExecutors registers the engine-backed job kinds (ExecutorKinds)

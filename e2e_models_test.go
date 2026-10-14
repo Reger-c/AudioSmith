@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -39,18 +37,7 @@ func TestModelLifecycle(t *testing.T) {
 		t.Fatal("no engine: run scripts/build-engine.sh")
 	}
 	logDir := t.TempDir()
-	if sb, err := exec.LookPath("sandbox-exec"); err == nil {
-		// The engine may not reach the network: every model must load
-		// from the local snapshot the app downloaded.
-		wrapper := filepath.Join(t.TempDir(), "engine-offline.sh")
-		script := "#!/bin/sh\ncd '" + filepath.Dir(bin) + "' && exec " + sb +
-			" -p '(version 1)(allow default)(deny network-outbound (remote ip))' '" + bin + "' \"$@\"\n"
-		if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		bin = wrapper
-		t.Log("engine runs with outbound network denied (sandbox-exec)")
-	}
+	bin = offlineEngine(t, bin)
 
 	lib := openTestLibrary(t)
 	models := t.TempDir()
