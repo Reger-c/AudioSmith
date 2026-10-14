@@ -55,9 +55,13 @@ final class ModelStore: @unchecked Sendable {
 
     /// Returns model as T, loading it with load (stage "loading") when it
     /// is not resident. Call release(model) when the job is done with it.
+    /// estimate (bytes the load adds, e.g. its weights on disk) first
+    /// drops idle models, least recently used first, until it fits in the
+    /// memory budget: a language model evicts TTS models when memory is
+    /// tight, without waiting for the app's supervisor.
     func acquire<T>(
         _ model: String, task: String, job: String, as type: T.Type,
-        sampleRate: (T) -> Int, load: () async throws -> T
+        sampleRate: (T) -> Int, estimate: Int64 = 0, load: () async throws -> T
     ) async throws -> (T, Resident) {
         if let r = take(model) {
             guard let m = r.model as? T else {
@@ -67,6 +71,7 @@ final class ModelStore: @unchecked Sendable {
             return (m, r)
         }
         out.notify(Method.jobProgress, ProgressParams(job: job, stage: "loading", message: "Loading \(shortName(model))"))
+        if estimate > 0 { makeRoom(for: estimate) }
         let started = Date()
         let before = MLX.Memory.activeMemory
         let loaded: T
@@ -86,6 +91,33 @@ final class ModelStore: @unchecked Sendable {
         insert(model, r)
         out.logLine("info", String(format: "Loaded %@ in %.1f s", model, Date().timeIntervalSince(started)), job: job)
         return (loaded, r)
+    }
+
+    /// The bytes resident models may take (AUDIOSMITH_MEMORY_BUDGET, else
+    /// 60 % of the Mac's memory, as the app's supervisor assumes).
+    static var memoryBudget: Int64 {
+        if let b = Int64(ProcessInfo.processInfo.environment["AUDIOSMITH_MEMORY_BUDGET"] ?? ""), b > 0 { return b }
+        return Int64(ProcessInfo.processInfo.physicalMemory) * 6 / 10
+    }
+
+    /// Drops idle models, least recently used first, until bytes more fit
+    /// in the memory budget (or nothing idle is left).
+    func makeRoom(for bytes: Int64) {
+        let budget = Self.memoryBudget
+        var dropped: [String] = []
+        while Int64(MLX.Memory.activeMemory) + bytes > budget {
+            let victim: String? = lock.withLock {
+                guard let lru = resident.filter({ $0.value.inUse == 0 }).min(by: { $0.value.lastUsed < $1.value.lastUsed })?.key else { return nil }
+                resident[lru] = nil
+                return lru
+            }
+            guard let victim else { break }
+            dropped.append(victim)
+            MLX.Memory.clearCache()
+        }
+        if !dropped.isEmpty {
+            out.logLine("info", "Unloaded \(dropped.joined(separator: ", ")) to make room for a \(bytes >> 20) MB model", job: nil)
+        }
     }
 
     private func take(_ model: String) -> Resident? {
