@@ -277,7 +277,7 @@ func (a *app) takeDetails(c *ui.Context, tk *core.Take) {
 		sectionTitle(c, i18n.T("Recipe"))
 		ui.Column(c).Gap(px(t, sp1)).Children(func() {
 			for _, row := range recipeRows(tk) {
-				ui.Row(c.Key("recipe-"+row[0])).Gap(px(t, sp2)).Children(func() {
+				ui.Row(c.Key("recipe-" + row[0])).Gap(px(t, sp2)).Children(func() {
 					ui.Text(c, row[0]).FontSize(px(t, fsCaption)).TextColor(k.Text2).Width(px(t, 116)).Shrink(0)
 					ui.Text(c, row[1]).FontSize(px(t, fsCaption)).Selectable().Grow(1).MinWidth(0)
 				})

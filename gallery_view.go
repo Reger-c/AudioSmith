@@ -152,11 +152,11 @@ func (a *app) galleryCategoryMenu(c *ui.Context, page gallery.Page) {
 		label += ": " + cats[g.tab-1].Name.In(loc)
 	}
 	dropText(c.Key("gallery-category"), label, g.tab != 0).Label(i18n.T("Category")).Menu(func(m *ui.Menu) {
-		if m.Item(i18n.T("All")+"  "+itoa(total)).Checked(g.tab == 0).Chosen() {
+		if m.Item(i18n.T("All") + "  " + itoa(total)).Checked(g.tab == 0).Chosen() {
 			g.tab, g.limit = 0, galleryPageSize
 		}
 		for i, cat := range cats {
-			if m.Item(cat.Name.In(loc)+"  "+itoa(counts[cat.ID])).Checked(g.tab == i+1).Chosen() {
+			if m.Item(cat.Name.In(loc) + "  " + itoa(counts[cat.ID])).Checked(g.tab == i+1).Chosen() {
 				g.tab, g.limit = i+1, galleryPageSize
 			}
 		}
@@ -197,7 +197,7 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 	k := tok(t)
 	g := &a.gallery
 	loc := i18n.Locale()
-	card(c.Key("arch-"+arch.ID)).Grow(1).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
+	card(c.Key("arch-" + arch.ID)).Grow(1).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
 		name := arch.Name.In(loc)
 		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 			ui.Avatar(c, name, nil)

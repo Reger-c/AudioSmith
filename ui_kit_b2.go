@@ -73,7 +73,7 @@ func searchField(c *ui.Context, key string, value *string, placeholder string, m
 	t := c.Theme()
 	k := tok(t)
 	var in ui.Element
-	box := ui.Row(c.Key(key+"-box")).Grow(1).Shrink(1).Basis(0).MinWidth(px(t, 120)).AlignItems(ui.Stretch)
+	box := ui.Row(c.Key(key + "-box")).Grow(1).Shrink(1).Basis(0).MinWidth(px(t, 120)).AlignItems(ui.Stretch)
 	if maxW > 0 {
 		box.MaxWidth(maxW)
 	}
