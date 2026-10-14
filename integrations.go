@@ -104,12 +104,46 @@ func jsonText(v any) string {
 	return string(b)
 }
 
-func claudeCodeBlocks(e integEnv) []integBlock {
-	headers := map[string]string{api.HeaderClient: "claude-code"}
-	if e.auth() {
-		headers["Authorization"] = "Bearer " + e.keyRef("${"+integKeyEnv+"}")
+// obj is a JSON object that keeps its keys in order (configurations read
+// better with "type" and "url" before "headers").
+type obj []kv
+
+type kv struct {
+	K string
+	V any
+}
+
+func (o obj) MarshalJSON() ([]byte, error) {
+	b := []byte{'{'}
+	for i, x := range o {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		k, err := json.Marshal(x.K)
+		if err != nil {
+			return nil, err
+		}
+		v, err := json.Marshal(x.V)
+		if err != nil {
+			return nil, err
+		}
+		b = append(append(append(b, k...), ':'), v...)
 	}
-	conf := map[string]any{"mcpServers": map[string]any{"audiosmith": map[string]any{"type": "http", "url": e.mcpURL(), "headers": headers}}}
+	return append(b, '}'), nil
+}
+
+// headersObj is a client's headers: its name, then the key when sent.
+func (e integEnv) headersObj(client, keySyntax string) obj {
+	h := obj{{api.HeaderClient, client}}
+	if e.auth() {
+		h = append(h, kv{"Authorization", "Bearer " + e.keyRef(keySyntax)})
+	}
+	return h
+}
+
+func claudeCodeBlocks(e integEnv) []integBlock {
+	conf := obj{{"mcpServers", obj{{"audiosmith", obj{{"type", "http"}, {"url", e.mcpURL()},
+		{"headers", e.headersObj("claude-code", "${"+integKeyEnv+"}")}}}}}}
 	cmd := fmt.Sprintf("claude mcp add --transport http audiosmith %s --header \"%s: claude-code\"", e.mcpURL(), api.HeaderClient)
 	if e.auth() {
 		cmd += fmt.Sprintf(" --header \"Authorization: Bearer %s\"", e.keyRef("$"+integKeyEnv))
@@ -121,11 +155,8 @@ func claudeCodeBlocks(e integEnv) []integBlock {
 }
 
 func cursorBlocks(e integEnv) []integBlock {
-	headers := map[string]string{api.HeaderClient: "cursor"}
-	if e.auth() {
-		headers["Authorization"] = "Bearer " + e.keyRef("${env:"+integKeyEnv+"}")
-	}
-	conf := map[string]any{"mcpServers": map[string]any{"audiosmith": map[string]any{"url": e.mcpURL(), "headers": headers}}}
+	conf := obj{{"mcpServers", obj{{"audiosmith", obj{{"url", e.mcpURL()},
+		{"headers", e.headersObj("cursor", "${env:"+integKeyEnv+"}")}}}}}}
 	return []integBlock{{Title: i18n.T("Client configuration"), Hint: i18n.T("Merge this into .cursor/mcp.json in your project, or ~/.cursor/mcp.json for every project."),
 		Lang: "json", Code: jsonText(conf), File: "mcp.json"}}
 }
@@ -150,16 +181,12 @@ func codexBlocks(e integEnv) []integBlock {
 }
 
 func mcpBlocks(e integEnv) []integBlock {
-	headers := map[string]string{api.HeaderClient: "my-agent"}
-	if e.auth() {
-		headers["Authorization"] = "Bearer " + e.keyRef("<"+integKeyEnv+">")
-	}
-	httpConf := map[string]any{"url": e.mcpURL(), "transport": "streamable-http", "headers": headers}
-	env := map[string]string{"AUDIOSMITH_CLIENT": "my-agent"}
+	httpConf := obj{{"url", e.mcpURL()}, {"transport", "streamable-http"}, {"headers", e.headersObj("my-agent", "<"+integKeyEnv+">")}}
+	env := obj{{"AUDIOSMITH_CLIENT", "my-agent"}}
 	if e.Key != "" {
-		env[integKeyEnv] = e.Key
+		env = append(env, kv{integKeyEnv, e.Key})
 	}
-	stdio := map[string]any{"mcpServers": map[string]any{"audiosmith": map[string]any{"command": e.Exe, "args": []string{"--mcp-stdio"}, "env": env}}}
+	stdio := obj{{"mcpServers", obj{{"audiosmith", obj{{"command", e.Exe}, {"args", []string{"--mcp-stdio"}}, {"env", env}}}}}}
 	tools := "generate_speech · clone_voice · design_voice · describe_voice · transcribe · list_voices · list_models · list_languages · check_health\n" +
 		"resources: voice://{id} · history://recent"
 	return []integBlock{
@@ -281,23 +308,23 @@ func n8nWorkflow(e integEnv) string {
 	if e.auth() {
 		headers = append(headers, map[string]string{"name": "Authorization", "value": "Bearer " + e.keyRef("{{ $env."+integKeyEnv+" }}")})
 	}
-	wf := map[string]any{
-		"name": "AudioSmith: text to speech",
-		"nodes": []map[string]any{
-			{"parameters": map[string]any{}, "name": "Manual Trigger", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": []int{0, 0}},
-			{"parameters": map[string]any{
-				"method": "POST", "url": e.Base + "/v1/audio/speech",
-				"sendHeaders": true, "headerParameters": map[string]any{"parameters": headers},
-				"sendBody": true, "specifyBody": "json",
-				"jsonBody": `{"model": "tts-1", "voice": "alloy", "input": "Hello from n8n and AudioSmith.", "response_format": "wav"}`,
-				"options": map[string]any{
-					"response": map[string]any{"response": map[string]any{"responseFormat": "file", "outputPropertyName": "audio"}},
-					"timeout":  1860000,
-					"redirect": map[string]any{"redirect": map[string]any{"followRedirects": false}},
-				},
-			}, "name": "AudioSmith speech", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": []int{240, 0}},
-		},
-		"connections": map[string]any{"Manual Trigger": map[string]any{"main": [][]map[string]any{{{"node": "AudioSmith speech", "type": "main", "index": 0}}}}},
+	wf := obj{
+		{"name", "AudioSmith: text to speech"},
+		{"nodes", []obj{
+			{{"parameters", obj{}}, {"name", "Manual Trigger"}, {"type", "n8n-nodes-base.manualTrigger"}, {"typeVersion", 1}, {"position", []int{0, 0}}},
+			{{"parameters", obj{
+				{"method", "POST"}, {"url", e.Base + "/v1/audio/speech"},
+				{"sendHeaders", true}, {"headerParameters", obj{{"parameters", headers}}},
+				{"sendBody", true}, {"specifyBody", "json"},
+				{"jsonBody", `{"model": "tts-1", "voice": "alloy", "input": "Hello from n8n and AudioSmith.", "response_format": "wav"}`},
+				{"options", obj{
+					{"response", obj{{"response", obj{{"responseFormat", "file"}, {"outputPropertyName", "audio"}}}}},
+					{"timeout", 1860000},
+					{"redirect", obj{{"redirect", obj{{"followRedirects", false}}}}},
+				}},
+			}}, {"name", "AudioSmith speech"}, {"type", "n8n-nodes-base.httpRequest"}, {"typeVersion", 4.2}, {"position", []int{240, 0}}},
+		}},
+		{"connections", obj{{"Manual Trigger", obj{{"main", [][]obj{{{{"node", "AudioSmith speech"}, {"type", "main"}, {"index", 0}}}}}}}}},
 	}
 	return jsonText(wf)
 }

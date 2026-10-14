@@ -91,9 +91,11 @@ func (a *app) abTool(c *ui.Context) {
 		})
 	})
 	busy := a.ab.runs[0] != nil && a.ab.runs[0].busy || a.ab.runs[1] != nil && a.ab.runs[1].busy
-	if ui.PrimaryButton(c.Key("ab-run"), i18n.T("Compare")).Disabled(busy || strings.TrimSpace(a.ab.text) == "").Clicked() {
-		a.runAB()
-	}
+	ui.Row(c).Children(func() {
+		if ui.PrimaryButton(c.Key("ab-run"), i18n.T("Compare")).Disabled(busy || strings.TrimSpace(a.ab.text) == "").Clicked() {
+			a.runAB()
+		}
+	})
 	ui.Row(c).Gap(px(t, 12)).Children(func() {
 		ui.Column(c).Grow(1).Children(func() { a.runRow(c, "ab-0", "A · "+a.ab.a, a.ab.runs[0]) })
 		ui.Column(c).Grow(1).Children(func() { a.runRow(c, "ab-1", "B · "+a.ab.b, a.ab.runs[1]) })
@@ -178,10 +180,10 @@ func (a *app) rateFitTool(c *ui.Context) {
 			ui.Select(c.Key("rf-lang"), &rf.lang, labels).Label(i18n.T("Language")).Width(px(t, 200))
 		})
 		ui.Field(c, i18n.T("Slot (seconds)"), func() {
-			ui.NumberInput(c.Key("rf-slot"), &rf.slot, 0.1, 600, 0.1).Width(px(t, 110)).Label(i18n.T("Slot (seconds)"))
+			ui.NumberInput(c.Key("rf-slot"), &rf.slot, 0.1, 600, 0.1).Label(i18n.T("Slot (seconds)"))
 		})
 		ui.Field(c, i18n.T("Speed"), func() {
-			ui.NumberInput(c.Key("rf-speed"), &rf.speed, 0.5, 2, 0.05).Width(px(t, 90)).Label(i18n.T("Speed"))
+			ui.NumberInput(c.Key("rf-speed"), &rf.speed, 0.5, 2, 0.05).Label(i18n.T("Speed"))
 		})
 	})
 	canRewrite := a.llmCan(llm.SkillFitRewrite)
@@ -192,12 +194,14 @@ func (a *app) rateFitTool(c *ui.Context) {
 	settingRow(c, "rf-rewrite", i18n.T("Suggest a shorter version"), desc, func() {
 		ui.Switch(c.Key("rf-rewrite-switch"), &rf.rewrite).Disabled(!canRewrite).Label(i18n.T("Suggest a shorter version"))
 	})
-	if ui.PrimaryButton(c.Key("rf-run"), i18n.T("Check")).Disabled(rf.busy || strings.TrimSpace(rf.text) == "" || rf.slot <= 0).Clicked() {
-		a.runRateFit()
-	}
-	if rf.busy {
-		ui.Spinner(c)
-	}
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		if ui.PrimaryButton(c.Key("rf-run"), i18n.T("Check")).Disabled(rf.busy || strings.TrimSpace(rf.text) == "" || rf.slot <= 0).Clicked() {
+			a.runRateFit()
+		}
+		if rf.busy {
+			ui.Spinner(c)
+		}
+	})
 	if rf.err != "" {
 		ui.Text(c, rf.err).TextColor(t.Danger).Wrap()
 	}

@@ -42,10 +42,7 @@ func (a *app) m5Sidebar(c *ui.Context) {
 	ui.SidebarSection(c, i18n.T("Utilities"), nil, func() {
 		for _, p := range m5Pages {
 			title, _ := m5PageTitle(p.path)
-			item := ui.SidebarItem(c, p.path, p.icon, title)
-			if p.path == "/integrations" && a.apiShare != nil {
-				item.Children(func() { ui.Badge(c, i18n.T("Shared")) })
-			}
+			ui.SidebarItem(c, p.path, p.icon, title)
 		}
 	})
 }

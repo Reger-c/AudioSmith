@@ -46,7 +46,7 @@ func (a *app) apiSettings(c *ui.Context) {
 		}
 	})
 	settingRow(c, "api-port", i18n.T("Port"), i18n.T("Clients connect to 127.0.0.1 at this port. Changing it breaks the configurations you gave out."), func() {
-		ui.NumberInput(c.Key("api-port-input"), &a.apiForm.port, 1024, 65535, 1).Width(px(t, 110)).Label(i18n.T("Port"))
+		ui.NumberInput(c.Key("api-port-input"), &a.apiForm.port, 1024, 65535, 1).Label(i18n.T("Port"))
 		p := int(a.apiForm.port)
 		if ui.Button(c.Key("api-port-apply"), i18n.T("Apply")).Disabled(p == cfg.LoopbackPort() || p < 1024).Clicked() {
 			a.updateSettings(func(s *settings.Settings) { s.API.Port = p })
