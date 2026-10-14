@@ -174,6 +174,9 @@ type Licence struct {
 	Gated bool `json:"gated,omitempty"`
 	// Verified is false until someone checked the upstream model card.
 	Verified bool `json:"verified"`
+	// Note explains a licence that differs from the repo's own tag (for
+	// the credits and reviewers; English, not shown in pickers).
+	Note string `json:"note,omitempty"`
 }
 
 //go:embed catalog.json
