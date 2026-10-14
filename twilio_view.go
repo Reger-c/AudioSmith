@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/telephony"
 )
@@ -20,25 +21,28 @@ func (a *app) twilioPage(c *ui.Context) {
 	}
 	checks := a.callChecks()
 	ready, _ := callsReady(checks)
-	header(c, i18n.T("Twilio setup"), func() {
-		status, col := i18n.T("Not set up"), t.TextMuted
+	pageHeader(c, i18n.T("Twilio setup"), func() {
+		status, col := i18n.T("Not set up"), tok(t).G[5]
 		switch {
 		case ready && a.callGWAddr != "":
 			status, col = i18n.T("Live"), t.Success
 		case a.prefs.Calls.Enabled && a.callGWAddr == "":
 			status, col = i18n.T("Not listening"), t.Danger
 		case ready:
-			status, col = i18n.T("Ready"), t.Accent
+			status, col = i18n.T("Ready"), tok(t).Accent
 		}
-		ui.Text(c, "● "+status).FontSize(px(t, 12)).Bold().TextColor(col)
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Shrink(0).Margin(0, px(t, sp2), 0, 0).Children(func() {
+			statusDot(c, col)
+			caption(c, status).SingleLine()
+		})
 		if a.prefs.Calls.Enabled {
-			if ui.Button(c.Key("tw-off"), i18n.T("Turn off calls")).Clicked() {
+			if ghostButton(c.Key("tw-off"), i18n.T("Turn off calls")).Clicked() {
 				a.setCallsOn(false)
 			}
 		} else if primaryButton(c.Key("tw-on"), i18n.T("Turn on calls")).Disabled(a.prefs.Calls.AccountSID == "" || !a.callHasTok).Clicked() {
 			a.setCallsOn(true)
 		}
-		if ui.Button(c.Key("tw-calls"), i18n.T("Open Calls")).Clicked() {
+		if iconButton(c.Key("tw-calls"), icons.PhoneCallingRounded, i18n.T("Open Calls")).Clicked() {
 			a.navigate("/calls")
 		}
 	})
@@ -48,9 +52,8 @@ func (a *app) twilioPage(c *ui.Context) {
 	}
 	ui.Scroll(c.Key("tw-scroll")).Bind(&a.twPageH).Grow(1).Children(func() {
 		body := func() {
-			ui.Column(c.Key("tw-steps")).Gap(px(t, 14)).Grow(1).MinWidth(0).MaxWidth(px(t, 700)).Children(func() {
-				ui.Text(c, i18n.T("Let an AI agent place and answer phone calls with your Twilio number. Twilio reaches AudioSmith through a tunnel you run; calls are off until you turn them on.")).
-					FontSize(px(t, 13)).TextColor(t.TextMuted).Wrap()
+			ui.Column(c.Key("tw-steps")).Gap(px(t, sp3)).Grow(1).MinWidth(0).MaxWidth(px(t, 700)).Children(func() {
+				caption(c, i18n.T("Let an AI agent place and answer phone calls with your Twilio number. Twilio reaches AudioSmith through a tunnel you run; calls are off until you turn them on.")).Wrap()
 				a.twStepAccount(c)
 				a.twStepTunnel(c)
 				a.twStepNumber(c)
@@ -58,7 +61,7 @@ func (a *app) twilioPage(c *ui.Context) {
 			})
 		}
 		rail := func() {
-			ui.Column(c.Key("tw-rail")).Gap(px(t, 14)).Width(px(t, 330)).Shrink(0).Children(func() {
+			ui.Column(c.Key("tw-rail")).Gap(px(t, sp3)).Width(px(t, 320)).Shrink(0).Children(func() {
 				a.twChecklist(c, checks)
 				a.twTest(c)
 				a.twLog(c)
@@ -66,9 +69,17 @@ func (a *app) twilioPage(c *ui.Context) {
 			})
 		}
 		if wide {
-			ui.Row(c).Padding(px(t, 20)).Gap(px(t, 20)).AlignItems(ui.Start).Children(func() { body(); rail() })
+			ui.Row(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp5)).AlignItems(ui.Start).Children(func() { body(); rail() })
 		} else {
-			ui.Column(c).Padding(px(t, 20)).Gap(px(t, 20)).Children(func() { body(); rail() })
+			ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp5)).Children(func() {
+				body()
+				ui.Column(c).Gap(px(t, sp3)).MaxWidth(px(t, 700)).Children(func() {
+					a.twChecklist(c, checks)
+					a.twTest(c)
+					a.twLog(c)
+					a.twHow(c)
+				})
+			})
 		}
 	})
 }
@@ -76,13 +87,13 @@ func (a *app) twilioPage(c *ui.Context) {
 // twCard is a step's frame: its number, title and state.
 func twCard(c *ui.Context, key string, n int, title string, done bool, fn func()) {
 	t := c.Theme()
-	ui.Column(c.Key(key)).Gap(px(t, 10)).Padding(px(t, 16)).Radius(10).Border(1, t.Border).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, itoa(n)+" · "+title).FontSize(px(t, 14)).Bold().Grow(1)
+	card(c.Key(key)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			sectionHeading(c, itoa(n)+" · "+title).Grow(1)
 			if done {
-				ui.Text(c, "✓ "+i18n.T("Done")).FontSize(px(t, 12)).TextColor(t.Success)
+				statusMark(c, icons.CheckCircle, t.Success, i18n.T("Done"))
 			} else {
-				ui.Text(c, i18n.T("To do")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				caption(c, i18n.T("To do")).SingleLine()
 			}
 		})
 		fn()
@@ -92,9 +103,9 @@ func twCard(c *ui.Context, key string, n int, title string, done bool, fn func()
 // twCode is a copyable command or URL.
 func (a *app) twCode(c *ui.Context, key, code string) {
 	t := c.Theme()
-	ui.Row(c.Key(key)).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 8), px(t, 10)).Radius(6).Background(t.Surface).Border(1, t.Border).Children(func() {
-		ui.Text(c, code).Font(monoFont).FontSize(px(t, 12)).Grow(1).MinWidth(0).Wrap().Selectable()
-		if ui.Button(c.Key("copy"), i18n.T("Copy")).Clicked() {
+	ui.Row(c.Key(key)).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, 6), px(t, 6), px(t, 6), px(t, sp3)).Radius(px(t, radiusControl)).Background(tok(t).Subtle).Children(func() {
+		ui.Text(c, code).Font(monoFont).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0).Wrap().Selectable()
+		if iconButton(c.Key("copy"), icons.Copy, i18n.T("Copy")).Clicked() {
 			c.Services().WriteClipboard(code)
 			a.toast(i18n.T("Copied"))
 		}
@@ -120,19 +131,18 @@ func (a *app) twStepAccount(c *ui.Context) {
 				if w.checking {
 					ui.Spinner(c)
 				}
-				if ui.Button(c.Key("tw-check"), i18n.T("Check")).Disabled(w.checking).Clicked() {
+				if iconButton(c.Key("tw-check"), icons.Refresh, i18n.T("Check")).Disabled(w.checking).Clicked() {
 					a.checkTwilioAccount()
 				}
-				if ui.Button(c.Key("tw-replace"), i18n.T("Replace")).Clicked() {
+				if ghostButton(c.Key("tw-replace"), i18n.T("Replace")).Clicked() {
 					w.replacing, w.sid, w.token = true, cfg.AccountSID, ""
 				}
-				if ui.Button(c.Key("tw-remove"), i18n.T("Remove")).Clicked() {
+				if iconButton(c.Key("tw-remove"), icons.TrashBinMinimalistic, i18n.T("Remove")).Clicked() {
 					a.removeTwilioAccount()
 				}
 			})
 			if w.account != nil && w.account.Type == "Trial" {
-				ui.Text(c, i18n.T("Trial accounts can only call numbers verified in the Twilio Console, and callers first hear Twilio's trial message (press a key to continue).")).
-					FontSize(px(t, 12)).TextColor(t.Warning).Wrap()
+				banner(c, icons.DangerTriangle, t.Warning, i18n.T("Trial accounts can only call numbers verified in the Twilio Console, and callers first hear Twilio's trial message (press a key to continue)."), nil)
 			}
 		} else {
 			ui.Text(c, i18n.T("Find both on the Twilio Console's home page, under Account Info.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
@@ -144,10 +154,10 @@ func (a *app) twStepAccount(c *ui.Context) {
 			})
 			ui.Text(c, i18n.T("The token is kept in your Mac's Keychain. It is never shown again or exported.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
 			ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-				if primaryButton(c.Key("tw-save"), i18n.T("Save and check")).Disabled(w.checking || strings.TrimSpace(w.sid) == "").Clicked() {
+				if ui.Button(c.Key("tw-save"), i18n.T("Save and check")).Disabled(w.checking || strings.TrimSpace(w.sid) == "").Clicked() {
 					a.saveTwilioAccount()
 				}
-				if w.replacing && ui.Button(c.Key("tw-cancel"), i18n.T("Cancel")).Clicked() {
+				if w.replacing && ghostButton(c.Key("tw-cancel"), i18n.T("Cancel")).Clicked() {
 					w.replacing, w.accountErr = false, ""
 				}
 				if w.checking {
@@ -168,7 +178,9 @@ func (a *app) twStepTunnel(c *ui.Context) {
 	twCard(c, "tw-tunnel", 2, i18n.T("Public tunnel"), cfg.Public() != "" && w.tunnel == "ok", func() {
 		ui.Text(c, i18n.T("Twilio needs a public https address. A tunnel gives your Mac one and forwards it to AudioSmith's call gateway — a separate port that serves only Twilio, never the Local API.")).
 			FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
-		ui.Segmented(c.Key("tw-tool"), &w.tool, "cloudflared", "ngrok").Label(i18n.T("Tunnel"))
+		ui.Row(c).Children(func() {
+			ui.Segmented(c.Key("tw-tool"), &w.tool, "cloudflared", "ngrok").Label(i18n.T("Tunnel"))
+		})
 		install, run := tunnelCommands(w.tool, cfg.Port())
 		ui.Text(c, i18n.T("Install it (Homebrew):")).FontSize(px(t, 12))
 		a.twCode(c, "tw-install", install)
@@ -182,19 +194,19 @@ func (a *app) twStepTunnel(c *ui.Context) {
 		ui.Field(c, i18n.T("Public tunnel URL"), func() {
 			ui.TextInput(c.Key("tw-url"), &w.publicURL).Placeholder("https://example.trycloudflare.com").Label(i18n.T("Public tunnel URL")).Font(monoFont)
 		})
-		ui.Row(c).Gap(px(t, 12)).AlignItems(ui.End).Children(func() {
+		ui.Row(c).Gap(px(t, sp3)).AlignItems(ui.End).Wrap().Children(func() {
 			ui.Field(c, i18n.T("Gateway port"), func() {
 				ui.NumberInput(c.Key("tw-port"), &w.port, 1024, 65535, 1).Label(i18n.T("Gateway port"))
 			})
-			ui.Column(c).Grow(1).Children(func() {
+			ui.Column(c).Grow(1).Basis(px(t, 200)).MinWidth(0).Children(func() {
 				ui.Checkbox(c.Key("tw-all"), &w.all, i18n.T("Listen on every interface (a tunnel on another machine)"))
 			})
 		})
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			if primaryButton(c.Key("tw-url-save"), i18n.T("Save")).Clicked() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
+			if ui.Button(c.Key("tw-url-save"), i18n.T("Save")).Clicked() {
 				a.saveTunnel()
 			}
-			if ui.Button(c.Key("tw-url-check"), i18n.T("Check")).Disabled(w.tunnel == "checking").Clicked() {
+			if ghostButton(c.Key("tw-url-check"), i18n.T("Check")).Disabled(w.tunnel == "checking").Clicked() {
 				a.checkTunnel()
 			}
 			switch {
@@ -235,7 +247,7 @@ func (a *app) twStepNumber(c *ui.Context) {
 		if cfg.Number != "" {
 			ui.Text(c, i18n.T("Calls come from %s.", cfg.Number)).Bold()
 		}
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
 			labels := make([]string, len(w.numbers))
 			for i, n := range w.numbers {
 				labels[i] = numberLabel(n)
@@ -249,12 +261,12 @@ func (a *app) twStepNumber(c *ui.Context) {
 						}
 					}
 				}
-				ui.Select(c.Key("tw-numbers"), &w.numberSel, labels).Label(i18n.T("Your Twilio number")).Width(px(t, 300))
-				if primaryButton(c.Key("tw-use"), i18n.T("Use this number")).Disabled(w.hooking).Clicked() {
+				ui.Select(c.Key("tw-numbers"), &w.numberSel, labels).Label(i18n.T("Your Twilio number")).Width(px(t, 300)).Shrink(1).MinWidth(px(t, 160))
+				if ui.Button(c.Key("tw-use"), i18n.T("Use this number")).Disabled(w.hooking).Clicked() {
 					a.useTwilioNumber()
 				}
 			}
-			if ui.Button(c.Key("tw-list"), i18n.T("Load my numbers")).Disabled(w.listing || !a.callHasTok).Clicked() {
+			if ghostIconButton(c.Key("tw-list"), icons.Refresh, i18n.T("Load my numbers")).Label(i18n.T("Load my numbers")).Disabled(w.listing || !a.callHasTok).Clicked() {
 				a.loadTwilioNumbers()
 			}
 			if w.listing || w.hooking {
@@ -291,18 +303,18 @@ func (a *app) twStepBehaviour(c *ui.Context) {
 		labels, _ := a.callVoices()
 		ui.Field(c, i18n.T("Voice"), func() {
 			if len(labels) == 0 {
-				ui.Text(c, i18n.T("No voice can place calls yet.")).TextColor(t.Warning)
+				statusMark(c, icons.DangerTriangle, t.Warning, i18n.T("No voice can place calls yet."))
 				return
 			}
 			if w.voice == "" {
 				w.voice = labels[0]
 			}
-			ui.Select(c.Key("tw-voice"), &w.voice, labels).Label(i18n.T("Voice")).Width(px(t, 300))
+			ui.Select(c.Key("tw-voice"), &w.voice, labels).Label(i18n.T("Voice")).Width(px(t, 300)).Shrink(1).MinWidth(0)
 		})
 		ui.Text(c, i18n.T("Calls speak only in designed voices, or in your own cloned voice once you record its consent statement.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
 		ml, _ := callModelOptions()
 		ui.Field(c, i18n.T("Speech model"), func() {
-			ui.Select(c.Key("tw-model"), &w.model, ml).Label(i18n.T("Speech model")).Width(px(t, 300))
+			ui.Select(c.Key("tw-model"), &w.model, ml).Label(i18n.T("Speech model")).Width(px(t, 300)).Shrink(1).MinWidth(0)
 		})
 		ui.Field(c, i18n.T("Your name"), func() {
 			ui.TextInput(c.Key("tw-name"), &w.userName).Placeholder(i18n.T("Sam")).Label(i18n.T("Your name")).Width(px(t, 240))
@@ -312,7 +324,9 @@ func (a *app) twStepBehaviour(c *ui.Context) {
 		})
 		ui.Text(c, i18n.T("Said first on every outgoing call. {name} becomes your name (or the voice's). Leave it empty for the default.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
 		ui.Field(c, i18n.T("When someone calls"), func() {
-			ui.Segmented(c.Key("tw-inbound"), &w.inbound, i18n.T("Play greeting"), i18n.T("AI agent")).Label(i18n.T("When someone calls"))
+			ui.Row(c).Children(func() {
+				ui.Segmented(c.Key("tw-inbound"), &w.inbound, i18n.T("Play greeting"), i18n.T("AI agent")).Label(i18n.T("When someone calls"))
+			})
 		})
 		if w.inbound == 0 {
 			ui.Field(c, i18n.T("Greeting"), func() {
@@ -333,12 +347,14 @@ func (a *app) twStepBehaviour(c *ui.Context) {
 			ui.Switch(c.Key("tw-record-switch"), &w.record).Label(i18n.T("Record calls"))
 		})
 		if w.record && strings.TrimSpace(w.disclosure) != "" && !callMentionsRecording(w.disclosure) {
-			ui.Text(c.Key("tw-record-warn"), i18n.T("Your disclosure does not say the call is recorded, so calls won't be.")).FontSize(px(t, 12)).TextColor(t.Warning).Wrap()
+			ui.Column(c.Key("tw-record-warn")).Children(func() {
+				banner(c, icons.DangerTriangle, t.Warning, i18n.T("Your disclosure does not say the call is recorded, so calls won't be."), nil)
+			})
 		}
 		ui.Text(c, i18n.T("You are responsible for following the laws on automated calls, AI disclosure and recording where you and the people you call are.")).
 			FontSize(px(t, 11)).TextColor(t.TextMuted).Wrap()
 		ui.Row(c).Children(func() {
-			if primaryButton(c.Key("tw-behaviour-save"), i18n.T("Save")).Clicked() {
+			if ui.Button(c.Key("tw-behaviour-save"), i18n.T("Save")).Clicked() {
 				a.saveTwilioBehaviour()
 			}
 		})
@@ -348,27 +364,30 @@ func (a *app) twStepBehaviour(c *ui.Context) {
 // twChecklist is the rail's readiness list.
 func (a *app) twChecklist(c *ui.Context, checks []callCheck) {
 	t := c.Theme()
-	ui.Column(c.Key("tw-checklist")).Gap(px(t, 6)).Padding(px(t, 14)).Radius(10).Background(t.Surface).Children(func() {
+	k := tok(t)
+	fillCard(c.Key("tw-checklist")).Gap(px(t, sp1)).Children(func() {
 		_, n := callsReady(checks)
-		ui.Row(c).Children(func() {
-			ui.Text(c, i18n.T("Readiness")).Bold().Grow(1)
-			ui.Text(c, i18n.T("%d of %d ready", n, len(checks))).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		ui.Row(c).Gap(px(t, sp2)).Children(func() {
+			ui.Text(c, i18n.T("Readiness")).FontWeight(600).Grow(1)
+			caption(c, i18n.T("%d of %d ready", n, len(checks))).SingleLine()
 		})
 		for _, ck := range checks {
-			b := ui.ButtonBase(c.Key("twck-" + ck.id)).Padding(px(t, 4)).Radius(6).Label(ck.title)
+			b := ui.ButtonBase(c.Key("twck-" + ck.id)).Padding(px(t, 4)).Radius(px(t, 6)).Label(ck.title)
 			if b.Hovered() {
-				b.Background(t.SurfaceHover)
+				b.Background(k.Hover)
 			}
 			b.Children(func() {
-				ui.Row(c).Gap(px(t, 8)).Grow(1).MinWidth(0).Children(func() {
-					mark, col := "○", t.TextMuted
-					if ck.ok {
-						mark, col = "✓", t.Success
-					}
-					ui.Text(c, mark).TextColor(col)
+				ui.Row(c).Gap(px(t, sp2)).Grow(1).MinWidth(0).Children(func() {
+					ui.Column(c).Size(px(t, 16), px(t, 16)).Center().Shrink(0).Children(func() {
+						if ck.ok {
+							ui.Icon(c, icons.CheckCircle.Linear).Size(px(t, 14), px(t, 14)).TextColor(t.Success)
+						} else {
+							statusDot(c, k.G[5])
+						}
+					})
 					ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-						ui.Text(c, ck.title).FontSize(px(t, 12))
-						ui.Text(c, ck.detail).FontSize(px(t, 11)).TextColor(t.TextMuted).MaxLines(2).Ellipsis("…")
+						ui.Text(c, ck.title).FontSize(px(t, fsCaption))
+						ui.Text(c, ck.detail).FontSize(px(t, fsMicro)).TextColor(k.Text2).MaxLines(2).Ellipsis("…")
 					})
 				})
 			})
@@ -383,16 +402,18 @@ func (a *app) twChecklist(c *ui.Context, checks []callCheck) {
 func (a *app) twTest(c *ui.Context) {
 	t := c.Theme()
 	w := &a.tw
-	ui.Column(c.Key("tw-test")).Gap(px(t, 8)).Padding(px(t, 14)).Radius(10).Background(t.Surface).Children(func() {
-		ui.Text(c, i18n.T("Test")).Bold()
-		ui.Text(c, i18n.T("Hear the greeting (or a sample line) in the chosen voice as a phone carries it: 8 kHz μ-law. Nothing is sent to Twilio.")).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
+	fillCard(c.Key("tw-test")).Gap(px(t, sp2)).Children(func() {
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, i18n.T("Test")).FontWeight(600).Grow(1)
+			infoTip(c.Key("tw-test-info"), i18n.T("Hear the greeting (or a sample line) in the chosen voice as a phone carries it: 8 kHz μ-law. Nothing is sent to Twilio."))
+		})
 		labels, _ := a.callVoices()
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			label := i18n.T("Play phone-quality preview")
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			label, ic := i18n.T("Play phone-quality preview"), icons.Play
 			if a.pl.Playing("phone-preview") {
-				label = i18n.T("Stop")
+				label, ic = i18n.T("Stop"), icons.Stop
 			}
-			if ui.Button(c.Key("tw-preview"), label).Disabled(len(labels) == 0 || w.previewBusy).Clicked() {
+			if secondaryIconButton(c.Key("tw-preview"), ic, label).Label(label).Disabled(len(labels) == 0 || w.previewBusy).Clicked() {
 				if a.pl.Playing("phone-preview") {
 					a.pl.Toggle("phone-preview", w.previewPath)
 				} else {
@@ -412,15 +433,15 @@ func (a *app) twTest(c *ui.Context) {
 // twLog is the gateway's recent requests.
 func (a *app) twLog(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c.Key("tw-log")).Gap(px(t, 4)).Padding(px(t, 14)).Radius(10).Background(t.Surface).Children(func() {
+	fillCard(c.Key("tw-log")).Gap(px(t, sp1)).Children(func() {
 		live, max := a.callSvc.Running()
-		ui.Row(c).Children(func() {
-			ui.Text(c, i18n.T("Recent requests")).Bold().Grow(1)
-			ui.Text(c, i18n.T("%d of %d lines in use", live, max)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		ui.Row(c).Gap(px(t, sp2)).Children(func() {
+			ui.Text(c, i18n.T("Recent requests")).FontWeight(600).Grow(1)
+			ui.Text(c, i18n.T("%d of %d lines in use", live, max)).FontSize(px(t, fsMicro)).TextColor(tok(t).Text3).SingleLine()
 		})
 		log := a.callSvc.GatewayLog()
 		if len(log) == 0 {
-			ui.Text(c, i18n.T("Nothing yet.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("Nothing yet."))
 			return
 		}
 		for i, e := range log {
@@ -435,7 +456,7 @@ func (a *app) twLog(c *ui.Context) {
 			if strings.HasPrefix(e.Event, "invalid") || e.Event == telephony.RejectAccount || e.Event == telephony.RejectLimit || e.Event == "no_voice" {
 				col = t.Danger
 			}
-			ui.Text(c.Key(i), e.At.Format("15:04:05")+" · "+firstOf(sid, "—")+" · "+gatewayEventText(e.Event)).FontSize(px(t, 11)).TextColor(col).SingleLine()
+			ui.Text(c.Key(i), e.At.Format("15:04:05")+" · "+firstOf(sid, "—")+" · "+gatewayEventText(e.Event)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(col).SingleLine().Ellipsis("…")
 		}
 	})
 }
@@ -443,9 +464,9 @@ func (a *app) twLog(c *ui.Context) {
 // twHow explains the call path and its safeguards.
 func (a *app) twHow(c *ui.Context) {
 	t := c.Theme()
-	ui.Collapsible(c.Key("tw-how"), i18n.T("How it works"), &a.tw.howOpen, func() {
-		ui.Column(c).Gap(px(t, 4)).Children(func() {
-			ui.Text(c, i18n.T("Twilio → your tunnel → call gateway (%s) → AudioSmith", a.prefs.Calls.GatewayAddr())).FontSize(px(t, 12)).Font(monoFont).Wrap()
+	collapsible(c.Key("tw-how"), i18n.T("How it works"), &a.tw.howOpen, nil, func() {
+		ui.Column(c).Gap(px(t, sp1)).Children(func() {
+			ui.Text(c, i18n.T("Twilio → your tunnel → call gateway (%s) → AudioSmith", a.prefs.Calls.GatewayAddr())).FontSize(px(t, fsCaption)).Font(monoFont).Wrap()
 			for _, s := range []string{
 				i18n.T("Every webhook must carry Twilio's signature for your auth token."),
 				i18n.T("Audio streams need a single-use token that expires after a minute."),
@@ -453,7 +474,10 @@ func (a *app) twHow(c *ui.Context) {
 				i18n.T("The auth token stays in the Keychain."),
 				i18n.T("Speech recognition, the voice and (with a local model) the conversation run on this Mac."),
 			} {
-				ui.Text(c, "• "+s).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
+				ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Start).Children(func() {
+					ui.Icon(c, icons.ShieldCheck.Linear).Size(px(t, 13), px(t, 13)).TextColor(tok(t).Text2).Shrink(0).Margin(px(t, 2), 0, 0)
+					ui.Text(c, s).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).Wrap().Grow(1).MinWidth(0)
+				})
 			}
 		})
 	})
