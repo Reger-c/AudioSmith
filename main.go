@@ -40,10 +40,12 @@ func main() {
 	a := newApp(eng, lib)                      // app.go
 	a.connectShell(logDir)                     // shell.go
 	a.connectEngine(eng)                       // enginelink.go
+	a.registerDubMedia()                       // M4: dub_pages.go (the video preview's scheme)
 
 	mygo.App.WhenReady(func() {
 		a.openWindow() // shell.go
 		a.startEngine()
+		a.startDubs()        // M4: dub.go (the watch folder)
 		a.connectDictation() // M2: dictation.go (shortcut, menu bar icon, close to tray)
 		mygo.App.OnSecondInstance(func([]string, string) { a.post(a.showMainWindow) })
 	})

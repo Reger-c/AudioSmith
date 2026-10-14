@@ -36,6 +36,7 @@ type app struct {
 	dictationState
 	llmState
 	longformState // M3 (thread #18): longform.go — Stories, Audiobook, Projects
+	dubState      // M4 (thread #19): dub*.go, batch*.go, timeline.go
 }
 
 func newApp(eng *engineHost, lib *library) *app {
@@ -52,6 +53,7 @@ func newApp(eng *engineHost, lib *library) *app {
 	a.openLLM()            // transcribe_llm.go
 	a.openDictation()      // dictation.go
 	a.openLongform(lib)    // M3: longform.go (thread #18)
+	a.openDubs(lib)        // M4: dub.go (thread #19)
 	return a
 }
 
@@ -87,6 +89,7 @@ func (a *app) toast(msg string) {
 func (a *app) quit() {
 	a.pl.Stop()
 	a.closeDictation() // M2: dictation.go
+	a.closeDubs()      // M4: dub.go
 	a.eng.Stop()
 	a.closeShell()
 }
