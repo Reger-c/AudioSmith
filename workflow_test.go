@@ -419,3 +419,27 @@ func TestWorkflowsConditionAndTranslate(t *testing.T) {
 	}
 	_ = store.LibWorkflow
 }
+
+func TestWorkflowsImportScripts(t *testing.T) {
+	d := newWfTest(t)
+	a, tt := d.a, d.tt
+	a.wfNew("narration")
+	start := a.wf.InputNode()
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "one.txt"), []byte("First lesson.\n\nIt has two paragraphs."), 0o644)
+	os.WriteFile(filepath.Join(dir, "two.md"), []byte("# Title\n\nSecond **lesson**."), 0o644)
+	os.WriteFile(filepath.Join(dir, "bad.docx"), []byte("not a zip"), 0o644)
+	a.wfScriptFiles(start.ID, []string{filepath.Join(dir, "one.txt"), filepath.Join(dir, "two.md"), filepath.Join(dir, "bad.docx")})
+	tt.Frame()
+	ss := a.wfNode(start.ID).P.Scripts
+	// The template's sample script stays; the imports follow it.
+	if len(ss) != 3 || ss[1].Name != "one.txt" || !strings.Contains(ss[2].Text, "Second lesson.") {
+		t.Fatalf("scripts %+v", ss)
+	}
+	if rep := a.wfReport(); rep.Items != 3 {
+		t.Errorf("items %d", rep.Items)
+	}
+	if !tt.HasText("one.txt") {
+		t.Errorf("inspector: %q", tt.Texts())
+	}
+}

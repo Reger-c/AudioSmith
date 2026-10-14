@@ -37,6 +37,9 @@ type wfEnv struct {
 	started chan struct{}
 	missing string // a model "not downloaded"
 	mu      sync.Mutex
+	st      *sqlitestore.Store
+	ms      *jobs.MemStore
+	cfg     WorkflowsConfig
 }
 
 func newWorkflowEnv(t *testing.T) *wfEnv {
@@ -48,7 +51,8 @@ func newWorkflowEnv(t *testing.T) *wfEnv {
 	}
 	e := &wfEnv{dir: dir, bus: core.NewBus(), eng: dubtest.New(), tr: &fakeTranslator{fail: map[string]bool{}}, out: t.TempDir()}
 	e.eng.Script = []string{"Hello there.", "How are you today?"}
-	e.sched = jobs.New(jobs.Options{Store: jobs.NewMemStore(), Publish: func(u jobs.Updated) { e.bus.Publish(u) },
+	e.st, e.ms = st, jobs.NewMemStore()
+	e.sched = jobs.New(jobs.Options{Store: e.ms, Publish: func(u jobs.Updated) { e.bus.Publish(u) },
 		RetryDelay: func(int) time.Duration { return time.Millisecond }})
 	modelPath := func(_ context.Context, m string) (string, error) {
 		if m == e.missing {
@@ -81,7 +85,7 @@ func newWorkflowEnv(t *testing.T) *wfEnv {
 			return ModelInfo{Traits: TraitsFor("qwen3_tts", []string{"speed", "clone"}), Revision: "r1"}
 		},
 	})
-	e.wf = NewWorkflows(WorkflowsConfig{
+	e.cfg = WorkflowsConfig{
 		Store: st.Workflows(), Bus: e.bus, Scheduler: e.sched, Render: e.svc.Render,
 		Engine:    func(m string) jobs.Executor { return e.eng.Executor(m) },
 		ModelPath: modelPath,
@@ -94,7 +98,8 @@ func newWorkflowEnv(t *testing.T) *wfEnv {
 			return dub.VoiceSpec{Voice: "speaker-" + ref}, nil
 		},
 		Translator: func(context.Context, string) (translate.Translator, error) { return e.tr, nil },
-	})
+	}
+	e.wf = NewWorkflows(e.cfg)
 	if err := e.sched.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -108,6 +113,21 @@ func newWorkflowEnv(t *testing.T) *wfEnv {
 		t.Fatal(err)
 	}
 	return e
+}
+
+// restart quits the job queue (running jobs are interrupted) and opens
+// a new one over the same jobs, as AudioSmith does at its next start.
+func (e *wfEnv) restart(t *testing.T) {
+	t.Helper()
+	e.sched.Close()
+	e.sched = jobs.New(jobs.Options{Store: e.ms, Publish: func(u jobs.Updated) { e.bus.Publish(u) },
+		RetryDelay: func(int) time.Duration { return time.Millisecond }})
+	cfg := e.cfg
+	cfg.Scheduler = e.sched
+	e.wf = NewWorkflows(cfg)
+	if err := e.sched.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (e *wfEnv) save(t *testing.T, w *workflow.Workflow) *workflow.Workflow {
@@ -433,5 +453,66 @@ func TestWorkflowConvertVoice(t *testing.T) {
 	outs := Outputs(w, run)
 	if len(outs) != 1 || filepath.IsAbs(outs[0].Value.File) {
 		t.Errorf("outputs %+v", outs)
+	}
+}
+
+func TestWorkflowResumesAfterQuit(t *testing.T) {
+	e := newWorkflowEnv(t)
+	w := e.save(t, narration(e, "One.", "Two.", "Three."))
+	e.mu.Lock()
+	e.gate, e.started = make(chan struct{}), make(chan struct{}, 8)
+	gate := e.gate
+	e.mu.Unlock()
+	if _, err := e.wf.Run(ctx, w.ID, RunOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	<-e.started
+	gate <- struct{}{}
+	<-e.started
+	calls := e.eng.Count(proto.MethodTTSSynthesize)
+	// Quit in the middle of the second item.
+	e.mu.Lock()
+	e.gate = nil
+	e.mu.Unlock()
+	e.restart(t)
+	run := e.wait(t, w.ID)
+	if run.State != workflow.RunDone {
+		t.Fatalf("after restart: %s %s", run.State, run.Err)
+	}
+	if n := e.eng.Count(proto.MethodTTSSynthesize) - calls; n != 2 {
+		t.Errorf("spoke %d items again, want the 2 left", n)
+	}
+	if files, _ := filepath.Glob(filepath.Join(e.out, "*.wav")); len(files) != 3 {
+		t.Errorf("exports %v", files)
+	}
+}
+
+func TestWorkflowExportM4AAndText(t *testing.T) {
+	e := newWorkflowEnv(t)
+	w := narration(e, "One.")
+	nodeOf(w, workflow.KindExport).P.Format = workflow.FormatM4A
+	// The script itself, as text, beside it.
+	tx := w.AddNode(workflow.KindExport, 0, 0)
+	w.Node(tx).P.Folder, w.Node(tx).P.Template = e.out, "{item}-script"
+	w.Connect(nodeOf(w, workflow.KindStart).ID, workflow.PortOut, tx, workflow.PortIn)
+	w = e.save(t, w)
+	run := e.run(t, w.ID, RunOptions{})
+	if run.State != workflow.RunDone {
+		t.Fatalf("%s %+v", run.State, run.Items[0].Steps)
+	}
+	if e.eng.Count(proto.MethodMediaEncode) != 1 {
+		t.Error("no media.encode")
+	}
+	if m4a, _ := filepath.Glob(filepath.Join(e.out, "*.m4a")); len(m4a) != 1 {
+		t.Errorf("m4a %v", m4a)
+	}
+	if data, err := os.ReadFile(filepath.Join(e.out, "One.-script.txt")); err != nil || string(data) != "One.\n" {
+		t.Errorf("text %q %v", data, err)
+	}
+	// Without media.encode the step fails and the run stops.
+	e.eng.Missing[proto.MethodMediaEncode] = true
+	run = e.run(t, w.ID, RunOptions{Again: true})
+	if run.State != workflow.RunFailed || run.Code != WorkflowCodeEncode {
+		t.Errorf("no encoder: %s %q", run.State, run.Code)
 	}
 }
