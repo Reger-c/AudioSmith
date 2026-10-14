@@ -1,15 +1,18 @@
 package main
 
-// The smoke suite's case for language models (catalogue task llm).
+// The smoke suite's cases for language models (catalogue task llm) and the
+// watermark (task watermark).
 
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"unicode"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/watermark"
 )
 
 // smokeLLM: a sentence translated into Chinese and Spanish, and JSON
@@ -58,4 +61,32 @@ func smokeLLM(e catalog.Entry, snap string, call func(string, any, any) error, a
 		row.Note = fmt.Sprintf("constrained %v", r.Constrained)
 	}
 	add(row)
+}
+
+// smokeWatermark: the reference take watermarked with AudioSmith's message
+// and found again; the clean take not.
+func smokeWatermark(e catalog.Entry, snap, ref, outDir string, call func(string, any, any) error, add func(smokeRow)) {
+	r := smokeRow{Case: "watermark"}
+	dir, err := watermark.Prepare(snap, filepath.Join(outDir, "audioseal"))
+	if err != nil {
+		r.Note = err.Error()
+		add(r)
+		return
+	}
+	out := filepath.Join(outDir, e.ID+"-wm.wav")
+	msg := watermark.Message(1)
+	var er proto.WatermarkEmbedResult
+	if err := call(proto.MethodWatermarkEmbed, proto.WatermarkEmbedParams{Model: e.Repo, ModelPath: dir, Input: ref, Output: proto.Output{Path: out}, Message: msg}, &er); err != nil {
+		r.Note = err.Error()
+		add(r)
+		return
+	}
+	var on, off proto.WatermarkDetectResult
+	err1 := call(proto.MethodWatermarkDetect, proto.WatermarkDetectParams{Model: e.Repo, ModelPath: dir, Input: out}, &on)
+	err2 := call(proto.MethodWatermarkDetect, proto.WatermarkDetectParams{Model: e.Repo, ModelPath: dir, Input: ref}, &off)
+	r.Seconds, r.AudioSeconds, r.Output = er.Seconds, er.AudioSeconds, out
+	r.RTF = er.AudioSeconds / max(er.Seconds, 1e-3)
+	r.Note = fmt.Sprintf("SNR %.1f dB; marked p=%.3f %#04x; clean p=%.3f", er.SNR, on.Probability, on.Message, off.Probability)
+	r.Pass = err1 == nil && err2 == nil && on.Probability >= 0.9 && on.Message == msg && off.Probability <= 0.1
+	add(r)
 }
