@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/gallery"
@@ -85,12 +87,19 @@ func (a *app) galleryPage(c *ui.Context) {
 		return
 	}
 	items := page.Items
+	g.moreAsked = false
 	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), px(t, 140), func(i int) {
 		if i == len(items) {
+			// The grid builds only the rows in view: this cell is built
+			// when the end scrolls into view, so the next page loads then
+			// (an in-memory search: at once), with no button to press.
+			if !g.moreAsked {
+				g.moreAsked = true
+				g.limit += galleryPageSize
+				c.After(time.Millisecond)
+			}
 			ui.Column(c.Key("more")).Grow(1).Center().Children(func() {
-				if ui.Button(c.Key("gallery-more"), i18n.T("Load more")).Clicked() {
-					g.limit += galleryPageSize
-				}
+				ui.Spinner(c).Label(i18n.T("Loading…"))
 			})
 			return
 		}

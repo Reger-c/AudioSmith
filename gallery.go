@@ -31,11 +31,12 @@ const galleryOwner = "archetype:"
 
 // galleryState is the Gallery page's view state.
 type galleryState struct {
-	text    string
-	tab     int // 0 = all categories, i = gallery.Categories()[i-1]
-	filters map[gallery.Facet]string
-	favOnly bool
-	limit   int
+	text      string
+	tab       int // 0 = all categories, i = gallery.Categories()[i-1]
+	filters   map[gallery.Facet]string
+	favOnly   bool
+	limit     int
+	moreAsked bool // the next page was asked for in this frame (infinite scroll)
 
 	page    gallery.Page
 	pageFor string // the query page answers

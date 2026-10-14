@@ -227,3 +227,28 @@ func TestGalleryFiltersKeepTheirPlace(t *testing.T) {
 		t.Errorf("cards moved from y=%.1f to %.1f when Reset appeared", before.Y, after.Y)
 	}
 }
+
+// TestGalleryLoadsMoreAtTheEnd: no Load more button: scrolling to the end
+// of the grid loads the next page.
+func TestGalleryLoadsMoreAtTheEnd(t *testing.T) {
+	a, _, _ := newTestAppIn(t, t.TempDir())
+	tt := ui.NewTester(a.view, 1100, 720)
+	g := &a.gallery
+	a.navigate("/gallery")
+	tt.Frame()
+	tt.Frame()
+	start := len(g.page.Items)
+	if start == 0 || start >= gallery.Default().Len() {
+		t.Fatalf("first page: %d items", start)
+	}
+	if tt.HasText("Load more") {
+		t.Error("a Load more button")
+	}
+	for range 40 {
+		tt.Scroll(700, 500, 0, 2000)
+		tt.Frame()
+	}
+	if got := len(g.page.Items); got <= start {
+		t.Errorf("scrolled to the end: still %d items", got)
+	}
+}
