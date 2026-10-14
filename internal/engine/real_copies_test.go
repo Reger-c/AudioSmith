@@ -61,11 +61,18 @@ func TestRealEngineLoadsInPlace(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Kokoro's phonemizers are repos it resolves by id: link the engine's copies.
+	// Kokoro's phonemizers are repos it resolves by id: copies of the
+	// engine's copies (without the marker a fixed engine adds).
 	os.MkdirAll(filepath.Join(cache, "mlx-audio"), 0o755)
 	aux, _ := filepath.Glob(filepath.Join(real, "mlx-audio", "beshkenadze_*"))
 	for _, d := range aux {
-		os.Symlink(d, filepath.Join(cache, "mlx-audio", filepath.Base(d)))
+		dst := filepath.Join(cache, "mlx-audio", filepath.Base(d))
+		if out, err := exec.Command("cp", "-R", d, dst).CombinedOutput(); err != nil {
+			t.Fatalf("cp: %v %s", err, out)
+		}
+		if strings.HasSuffix(d, "kitten-tts-g2p") {
+			os.Remove(filepath.Join(dst, "config.json"))
+		}
 	}
 	// Copies an older engine left: Kokoro's whole, Qwen3-ASR's weights.
 	for repo, name := range map[string]string{kokoro: "kokoro-v1_0.safetensors", asr: "model.safetensors"} {
@@ -105,6 +112,18 @@ func TestRealEngineLoadsInPlace(t *testing.T) {
 	if _, err := runJob(ctx, Executor(sup, proto.RoleGPU, proto.MethodTTSSynthesize), proto.SynthesizeParams{Model: kokoro, ModelPath: snaps[kokoro],
 		Text: "Hello.", Voice: "af_heart", Output: proto.Output{Path: filepath.Join(dir, "k.wav")}}); err != nil {
 		t.Fatalf("kokoro: %v", err)
+	}
+	// Again after an unload: the phonemizer comes from the engine's copy,
+	// not from a listing of the repo on huggingface.co.
+	if _, err := runJob(ctx, Executor(sup, proto.RoleGPU, proto.MethodModelsUnload), proto.UnloadParams{}); err != nil {
+		t.Fatalf("unload: %v", err)
+	}
+	if _, err := runJob(ctx, Executor(sup, proto.RoleGPU, proto.MethodTTSSynthesize), proto.SynthesizeParams{Model: kokoro, ModelPath: snaps[kokoro],
+		Text: "Hello again.", Voice: "af_heart", Output: proto.Output{Path: filepath.Join(dir, "k2.wav")}}); err != nil {
+		t.Fatalf("kokoro again: %v", err)
+	}
+	if log, _ := os.ReadFile(filepath.Join(dir, "engine-gpu.log")); strings.Contains(string(log), "Downloading model beshkenadze") {
+		t.Errorf("Kokoro's phonemizer was fetched again:\n%s", log)
 	}
 	var tr proto.TranscribeResult
 	res, err := runJob(ctx, Executor(sup, proto.RoleGPU, proto.MethodSTTTranscribe), proto.TranscribeParams{Model: asr, ModelPath: snaps[asr], Audio: wav})

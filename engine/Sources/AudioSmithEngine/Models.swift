@@ -211,6 +211,25 @@ func linkedModelDirectory(_ model: String, snapshot: URL) throws -> URL {
     return dir
 }
 
+/// Auxiliary repos mlx-audio-swift resolves by id without a config.json
+/// (Kokoro's English G2P). Its resolver accepts a cached copy only when
+/// config.json is there, so without one it listed the repo on
+/// huggingface.co at every Kokoro load (and copied it again). An empty
+/// config.json beside a complete copy makes it use the copy, offline.
+let configlessAuxRepos = ["beshkenadze/kitten-tts-g2p"]
+
+func markAuxCopies() {
+    let fm = FileManager.default
+    for repo in configlessAuxRepos {
+        let dir = engineCopyDirectory(repo)
+        let config = dir.appendingPathComponent("config.json")
+        guard !fm.fileExists(atPath: config.path),
+              let names = try? fm.contentsOfDirectory(atPath: dir.path),
+              names.contains(where: { $0.hasSuffix(".safetensors") }) else { continue }
+        try? Data("{}".utf8).write(to: config)
+    }
+}
+
 /// Removes mlx-audio-swift's full copy of a model that has just loaded
 /// from the app's snapshot (older engines and the MVP loaded by repo id,
 /// which copied the model): the copy is never read again. Folders of

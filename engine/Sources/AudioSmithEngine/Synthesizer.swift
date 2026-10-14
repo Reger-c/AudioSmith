@@ -29,6 +29,7 @@ final class Synthesizer: @unchecked Sendable {
             throw EngineError.notDownloaded(model: model, missing: missing)
         }
         let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
+        markAuxCopies()
         let (m, _) = try await store.acquire(model, task: "tts", job: job, as: SpeechGenerationModel.self,
                                              sampleRate: { $0.sampleRate }) {
             if let path, !path.isEmpty {
