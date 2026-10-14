@@ -320,6 +320,26 @@ func TestDownload(t *testing.T) {
 	}
 }
 
+// Files with the same content share a blob: it is fetched once, and both
+// paths of the snapshot link to it (Marvis ships two identical prompts).
+func TestDownloadDuplicateContent(t *testing.T) {
+	h := newFakeHub(t)
+	h.files["prompts/a.txt"] = []byte("the same words")
+	h.files["prompts/b.txt"] = []byte("the same words")
+	h.files["copy.safetensors"] = h.files["model.safetensors"]
+	h.lfs["copy.safetensors"] = true
+	c := h.client(t, nil)
+	ctx := context.Background()
+	p, err := c.Plan(ctx, h.entry())
+	if err != nil || p.TotalBytes != sumSizes(h.files)-int64(len(h.files["prompts/b.txt"])+len(h.files["copy.safetensors"])) {
+		t.Fatalf("plan %+v %v", p, err)
+	}
+	if err := c.Download(ctx, h.entry(), nil); err != nil {
+		t.Fatal(err)
+	}
+	checkSnapshot(t, c, h)
+}
+
 func TestResume(t *testing.T) {
 	h := newFakeHub(t)
 	ctx := context.Background()

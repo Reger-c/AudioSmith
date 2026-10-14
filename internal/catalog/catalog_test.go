@@ -25,11 +25,12 @@ func TestBuiltin(t *testing.T) {
 		{"Qwen3-TTS 0.6B Base (voice clone)", "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit", "≈ 2 GB", nil,
 			[]string{"Chinese", "English", "Japanese", "Korean", "German", "French", "Spanish", "Italian", "Portuguese", "Russian"},
 			false, true, true, false},
-		{"Marvis TTS 250M", "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit", "≈ 672 MB", []string{"conversational_a", "conversational_b"}, nil, false, true, true, false},
+		{"Marvis TTS 250M", "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit", "≈ 672 MB", []string{"conversational_a", "conversational_b"}, nil, false, true, false, false}, // M1 smoke: cloning rambles past the text
 		{"Soprano 80M", "mlx-community/Soprano-80M-bf16", "≈ 221 MB", nil, nil, false, true, false, false},
 	}
 	labels := c.Labels(TaskTTS)
-	if len(labels) != len(want)+2 || labels[len(want)] != "OmniVoice" || labels[len(labels)-1] != CustomLabel {
+	// The MVP presets, then OmniVoice (M0), then what M1 added, then Custom.
+	if len(labels) < len(want)+2 || labels[len(want)] != "OmniVoice" || labels[len(labels)-1] != CustomLabel {
 		t.Fatalf("labels %q", labels)
 	}
 	for i, w := range want {
@@ -180,7 +181,7 @@ func TestUnknownLanguageCode(t *testing.T) {
 
 func TestM1Entries(t *testing.T) {
 	c := Builtin()
-	for id, task := range map[string]Task{DefaultSTT: TaskSTT, DefaultAlign: TaskAlign, DefaultVAD: TaskVAD, DefaultEnhance: TaskEnhance} {
+	for id, task := range map[string]Task{DefaultSTT: TaskSTT, DefaultAlign: TaskAlign, DefaultVAD: TaskVAD, DefaultEnhance: TaskEnhance, DefaultDictation: TaskSTT} {
 		e, ok := c.ByID(id)
 		if !ok || !slices.Contains(e.Tasks, task) || e.SampleRate == 0 {
 			t.Errorf("default %s: %+v", id, e)

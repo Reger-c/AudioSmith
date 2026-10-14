@@ -101,6 +101,14 @@ type Entry struct {
 	// NonVerbal lists the inline tags the model renders (CapNonVerbal),
 	// as written in the text: "[laughter]", "[sigh]"…
 	NonVerbal []string `json:"nonVerbal,omitempty"`
+	// RTF is the model's typical real-time factor (seconds of audio per
+	// second of generation) measured by the smoke suite on a MacBook Air
+	// M4 with 24 GB (e2e_smoke_test.go); the Studio warns about slow
+	// renders with it. 0 = not measured.
+	RTF float64 `json:"rtf,omitempty"`
+	// Deterministic models make the same audio for the same input without
+	// a seed (no sampling): their chunk cache ignores the seed.
+	Deterministic bool `json:"deterministic,omitempty"`
 
 	// Size is the download size in bytes: the sum of Files when they are
 	// listed, else an estimate until the hub lists the repo.
@@ -256,6 +264,10 @@ const (
 	DefaultAlign   = "qwen3-forcedaligner-0.6b-4bit"
 	DefaultVAD     = "silero-vad"
 	DefaultEnhance = "deepfilternet-v3"
+	// DefaultDictation is the speech-to-text model dictation starts with:
+	// on a MacBook Air M4 it transcribes 5 s of speech in 0.2–0.33 s warm
+	// (Whisper turbo: 1.2–1.3 s) and Chinese exactly (TestDictationLatency).
+	DefaultDictation = "qwen3-asr-0.6b-4bit"
 )
 
 // TextLength measures text against Entry.MaxChars: one per character,

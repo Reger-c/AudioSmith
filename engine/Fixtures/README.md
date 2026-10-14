@@ -13,8 +13,8 @@ Golden transcripts of the engine protocol: the contract between the Go app and t
 | `voice.jsonl` | `tts.encodeVoice`, a take from a voice prompt, VoiceDesign, CustomVoice + instruct, Chatterbox parameters |
 | `stt.jsonl` | `stt.transcribe` (auto language, word timings, translate refused, missing file), `stt.align` |
 | `analysis.jsonl` | `vad.detect`, `enhance.run`, `unsupported_media` |
-| `media.jsonl` | a `media` worker: hello, `media.probe` (video, WAV, unreadable), `media.decode` of a window, `file_not_found`, a gpu method refused |
-| `capture.jsonl` | a `listen` worker: `capture.devices`, a recording with its meter stopped by `capture.stop`, refusals (device, permission), cancel, `maxSeconds` |
+| `media.jsonl` | a `media` worker: hello, `media.probe` (video, WAV, unreadable), `media.decode` of a window, `media.encode` of an M4B (and MP3 refused), `file_not_found`, a gpu method refused |
+| `capture.jsonl` | a `listen` worker: its own speech-to-text model (`models.load`, `stt.transcribe`), `capture.devices`, a recording with its meter stopped by `capture.stop`, refusals (device, permission), cancel, `maxSeconds` |
 | `logs.jsonl` | structured `log` notifications |
 | `legacy_v1.jsonl` | the first line of a protocol-1 engine (detected, refused) |
 

@@ -157,6 +157,53 @@ func (f *fakeEngine) decode(m proto.Message) {
 	f.result(m.ID, proto.DecodeResult{AudioOut: audioOut(p.Output.Path, out), Source: probeOf(p.Input, src), Seconds: 0.01})
 }
 
+// encode "encodes" to M4B/M4A: the output holds "FAKE-M4B" and then the
+// params as JSON, so tests can read back what was asked.
+func (f *fakeEngine) encode(m proto.Message) {
+	var p proto.EncodeParams
+	if err := m.DecodeParams(&p); err != nil || p.Output.Path == "" {
+		f.fail(m.ID, proto.CodeBadRequest, "Missing input or output")
+		return
+	}
+	switch p.Output.Format {
+	case "m4b", "m4a":
+	case "mp3":
+		f.failData(m.ID, proto.CodeUnsupported, map[string]string{"capability": "mp3"}, "This engine cannot encode MP3")
+		return
+	default:
+		f.fail(m.ID, proto.CodeBadRequest, "Unknown output format %q", p.Output.Format)
+		return
+	}
+	if p.Codec != "" && p.Codec != "aac" {
+		f.fail(m.ID, proto.CodeBadRequest, "Unknown codec %q", p.Codec)
+		return
+	}
+	src, ok := f.readInput(m.ID, p.Input)
+	if !ok || !f.work(m.ID, p.Input, "encoding", nil) {
+		return
+	}
+	if p.Cover != "" {
+		if _, err := os.Stat(p.Cover); err != nil {
+			f.failData(m.ID, proto.CodeFileNotFound, map[string]string{"path": p.Cover}, "No such file: %s", p.Cover)
+			return
+		}
+	}
+	body, _ := json.Marshal(p)
+	data := append([]byte("FAKE-M4B\n"), body...)
+	if err := os.WriteFile(p.Output.Path, data, 0o644); err != nil {
+		f.fail(m.ID, proto.CodeInternal, "Could not write %s: %v", p.Output.Path, err)
+		return
+	}
+	rate := p.Bitrate
+	if rate == 0 {
+		rate = 64000
+		if src.Channels > 1 {
+			rate = 96000
+		}
+	}
+	f.result(m.ID, proto.EncodeResult{Output: p.Output.Path, Format: p.Output.Format, Bytes: int64(len(data)), Duration: round3(src.Seconds()), Bitrate: rate})
+}
+
 func audioOut(path string, a Audio) proto.AudioOut {
 	return proto.AudioOut{Output: path, SampleRate: a.Rate, Channels: a.Channels, Frames: int64(a.Frames()), AudioSeconds: a.Seconds()}
 }

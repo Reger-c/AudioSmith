@@ -7,6 +7,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DERIVED="$ROOT/engine/.build/xcode"
 LOG="$DERIVED/test.log"
+"$ROOT/scripts/fetch-engine-deps.sh"
 mkdir -p "$DERIVED"
 cd "$ROOT/engine"
 status=0

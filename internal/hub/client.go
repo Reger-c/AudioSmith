@@ -331,6 +331,7 @@ func (c *Client) plan(ctx context.Context, e catalog.Entry) (*plan, error) {
 	p := &plan{repo: e.Repo, rev: rev, commit: info.SHA, ep: ep}
 	p.Revision, p.Endpoint, p.Gated = info.SHA, ep, info.gated()
 	restrict := len(e.Files) > 0
+	blobs := map[string]bool{} // files with the same content share one blob, counted once
 	want := map[string]catalog.File{}
 	for _, f := range e.Files {
 		want[f.Path] = f
@@ -356,8 +357,11 @@ func (c *Client) plan(ctx context.Context, e catalog.Entry) (*plan, error) {
 		}
 		p.files = append(p.files, f)
 		p.Files = append(p.Files, f.File)
-		p.TotalBytes += f.Size
-		p.Bytes += f.Size - c.have(e.Repo, f)
+		if !blobs[f.blob] {
+			blobs[f.blob] = true
+			p.TotalBytes += f.Size
+			p.Bytes += f.Size - c.have(e.Repo, f)
+		}
 	}
 	for missing := range want {
 		return nil, fmt.Errorf("%s@%s has no %s: %w", e.Repo, rev, missing, ErrNotFound)
@@ -521,7 +525,14 @@ func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)
 	// Tasks for what is missing.
 	var tasks []task
 	var states []*fileState
+	scheduled := map[string]bool{}
 	for _, f := range p.files {
+		// Two files with the same content (Marvis's prompts/*.txt) are one
+		// blob: fetch it once, or the two writers race on its .incomplete.
+		if scheduled[f.blob] {
+			continue
+		}
+		scheduled[f.blob] = true
 		final := filepath.Join(blobs, f.blob)
 		if st, err := os.Stat(final); err == nil && st.Size() == f.Size {
 			continue

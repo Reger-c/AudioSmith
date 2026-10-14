@@ -112,6 +112,10 @@ type TranscribeRequest struct {
 	Language string `json:"language,omitempty"` // BCP-47; "" detects it
 	Prompt   string `json:"prompt,omitempty"`   // vocabulary hint
 	App      string `json:"app,omitempty"`      // dictation: the app it was for
+	// Role is the engine worker that transcribes: "" the gpu worker, or
+	// proto.RoleListen for dictation, which then runs on jobs.LaneListen
+	// and the listen worker's own model, not behind renders.
+	Role proto.Role `json:"role,omitempty"`
 }
 
 // TranscribeResult is a transcription job's result.
@@ -162,7 +166,11 @@ func (s *Transcripts) Transcribe(ctx context.Context, req TranscribeRequest) (Tr
 	if req.Title == "" {
 		title = i18n.T("Transcribe a recording")
 	}
-	id, err := s.sched.Submit(ctx, jobs.Spec{Kind: KindTranscribe, Lane: jobs.LaneGPU, Priority: jobs.PriorityInteractive,
+	lane := jobs.LaneGPU
+	if req.Role == proto.RoleListen {
+		lane = jobs.LaneListen
+	}
+	id, err := s.sched.Submit(ctx, jobs.Spec{Kind: KindTranscribe, Lane: lane, Priority: jobs.PriorityInteractive,
 		Params: params, Title: title, Owner: TranscriptOwner + req.ID, MaxAttempts: 2, Idempotent: true})
 	return req, id, err
 }
@@ -261,7 +269,7 @@ func (s *Transcripts) run(ctx context.Context, job jobs.Job, req TranscribeReque
 	// Speech to text.
 	tp := proto.TranscribeParams{Model: req.Model, Audio: audio, Language: req.Language, Words: req.Words, Prompt: req.Prompt}
 	var tr proto.TranscribeResult
-	if err := s.call(ctx, job, proto.MethodSTTTranscribe, req.Model, &tp, &tp.ModelPath, &tr, func(p jobs.Progress) {
+	if err := s.call(ctx, job, proto.KindFor(req.Role, proto.MethodSTTTranscribe), req.Model, &tp, &tp.ModelPath, &tr, func(p jobs.Progress) {
 		if p.Stage == "" {
 			p.Stage = "transcribing"
 		}
@@ -403,7 +411,8 @@ func (s *Transcripts) call(ctx context.Context, job jobs.Job, method, model stri
 	if err != nil {
 		return err
 	}
-	sub := jobs.Job{ID: job.ID + "." + method, Spec: jobs.Spec{Kind: method, Lane: jobs.Lane(proto.RoleOf(method)), Params: raw, Owner: job.Owner}}
+	role, m := proto.SplitKind(method) // a method, or "listen:stt.transcribe"
+	sub := jobs.Job{ID: job.ID + "." + m, Spec: jobs.Spec{Kind: method, Lane: jobs.Lane(role), Params: raw, Owner: job.Owner}}
 	res, err := ex.Run(ctx, sub, report, nil)
 	if err != nil {
 		if ctx.Err() != nil {

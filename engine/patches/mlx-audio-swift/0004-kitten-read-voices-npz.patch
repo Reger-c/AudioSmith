@@ -1,0 +1,118 @@
+diff --git a/Sources/MLXAudioTTS/Models/StyleTTS2/KittenTTS/KittenTTSModel.swift b/Sources/MLXAudioTTS/Models/StyleTTS2/KittenTTS/KittenTTSModel.swift
+index 868e182..3e8767e 100644
+--- a/Sources/MLXAudioTTS/Models/StyleTTS2/KittenTTS/KittenTTSModel.swift
++++ b/Sources/MLXAudioTTS/Models/StyleTTS2/KittenTTS/KittenTTSModel.swift
+@@ -161,6 +161,12 @@ public final class KittenTTSModel: Module, SpeechGenerationModel, @unchecked Sen
+         }
+ 
+         let tokens = try phonemize(text, language: language)
++        // AudioSmith patch: its ALBERT has 512 positions (as Kokoro's); a
++        // longer input made NaN durations and crashed MLX (concatenate of
++        // nothing). Refuse it as Kokoro does.
++        guard tokens.count <= 510 else {
++            throw AudioGenerationError.invalidInput("Input too long: \(tokens.count) tokens exceeds max 510")
++        }
+         var tokenArray = [Int32(0)]
+         tokenArray.append(contentsOf: tokens.map { Int32($0) })
+         tokenArray.append(0)
+@@ -331,13 +337,98 @@ public final class KittenTTSModel: Module, SpeechGenerationModel, @unchecked Sen
+                 voices[k] = v.asType(.float32)
+             }
+         } else if FileManager.default.fileExists(atPath: npzURL.path) {
+-            throw AudioGenerationError.invalidInput(
+-                "voices.npz format not supported. Convert to safetensors using scripts/convert_voices_npz.py")
++            // AudioSmith patch: read the npz (an uncompressed zip of
++            // float32 .npy arrays, as np.savez writes it) directly.
++            for (k, v) in try Self.readNPZ(npzURL) {
++                voices[k] = v
++            }
+         } else {
+             throw AudioGenerationError.invalidInput("No voices file found in model directory")
+         }
+     }
+ 
++    /// The float32 arrays of a stored (uncompressed) npz file, by name:
++    /// the zip's central directory (with zip64 sizes, which np.savez
++    /// writes), then each .npy entry.
++    static func readNPZ(_ url: URL) throws -> [String: MLXArray] {
++        let data = try Data(contentsOf: url)
++        func bad(_ why: String) -> Error { AudioGenerationError.invalidInput("voices.npz: \(why)") }
++        func u(_ o: Int, _ n: Int) throws -> Int {
++            guard o >= 0, o + n <= data.count else { throw bad("truncated") }
++            var v = 0
++            for i in (0 ..< n).reversed() { v = v << 8 | Int(data[data.startIndex + o + i]) }
++            return v
++        }
++        // End of central directory: the last "PK\u{5}\u{6}".
++        var eocd = data.count - 22
++        while eocd >= 0, try u(eocd, 4) != 0x0605_4B50 { eocd -= 1 }
++        guard eocd >= 0 else { throw bad("not a zip file") }
++        var count = try u(eocd + 10, 2)
++        var dir = try u(eocd + 16, 4)
++        if dir == 0xFFFF_FFFF || count == 0xFFFF {
++            // zip64 end of central directory, through its locator.
++            let loc = eocd - 20
++            guard try u(loc, 4) == 0x0706_4B50 else { throw bad("zip64 locator missing") }
++            let z = try u(loc + 8, 8)
++            guard try u(z, 4) == 0x0606_4B50 else { throw bad("zip64 directory missing") }
++            count = try u(z + 32, 8)
++            dir = try u(z + 48, 8)
++        }
++        var out: [String: MLXArray] = [:]
++        var o = dir
++        for _ in 0 ..< count {
++            guard try u(o, 4) == 0x0201_4B50 else { throw bad("bad central directory") }
++            let method = try u(o + 10, 2)
++            var size = try u(o + 20, 4)
++            let nameLen = try u(o + 28, 2), extraLen = try u(o + 30, 2), commentLen = try u(o + 32, 2)
++            var local = try u(o + 42, 4)
++            let name = String(decoding: data[(data.startIndex + o + 46) ..< (data.startIndex + o + 46 + nameLen)], as: UTF8.self)
++            // zip64 extra field: uncompressed, compressed, offset — those set to 0xFFFFFFFF.
++            var e = o + 46 + nameLen
++            let extraEnd = e + extraLen
++            while e + 4 <= extraEnd {
++                let id = try u(e, 2), len = try u(e + 2, 2)
++                if id == 1 {
++                    var f = e + 4
++                    if try u(o + 24, 4) == 0xFFFF_FFFF { f += 8 }
++                    if size == 0xFFFF_FFFF { size = try u(f, 8); f += 8 }
++                    if local == 0xFFFF_FFFF { local = try u(f, 8) }
++                }
++                e += 4 + len
++            }
++            o = extraEnd + commentLen
++            guard name.hasSuffix(".npy") else { continue }
++            guard method == 0 else { throw bad("\(name) is compressed") }
++            guard try u(local, 4) == 0x0403_4B50 else { throw bad("bad local header for \(name)") }
++            let start = local + 30 + (try u(local + 26, 2)) + (try u(local + 28, 2))
++            guard start + size <= data.count else { throw bad("\(name) is truncated") }
++            let npy = data[(data.startIndex + start) ..< (data.startIndex + start + size)]
++            guard npy.count > 10, npy.starts(with: [0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59]) else { throw bad("\(name) is not .npy") }
++            let b = npy.startIndex
++            let major = npy[b + 6]
++            let headerLen = major == 1 ? Int(npy[b + 8]) | Int(npy[b + 9]) << 8
++                : Int(npy[b + 8]) | Int(npy[b + 9]) << 8 | Int(npy[b + 10]) << 16 | Int(npy[b + 11]) << 24
++            let headerStart = b + (major == 1 ? 10 : 12)
++            let header = String(decoding: npy[headerStart ..< (headerStart + headerLen)], as: UTF8.self)
++            guard header.contains("'<f4'"), header.contains("'fortran_order': False") else {
++                throw bad("\(name) is not little-endian float32 in C order")
++            }
++            guard let open = header.range(of: "'shape': ("), let close = header[open.upperBound...].firstIndex(of: ")") else {
++                throw bad("\(name) has no shape")
++            }
++            let shape = header[open.upperBound ..< close].split(separator: ",")
++                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
++            let body = npy[(headerStart + headerLen)...]
++            let n = shape.reduce(1, *)
++            guard body.count >= n * 4 else { throw bad("\(name) is short") }
++            var floats = [Float](repeating: 0, count: n)
++            _ = floats.withUnsafeMutableBytes { body.prefix(n * 4).copyBytes(to: $0) }
++            out[String(name.dropLast(4))] = MLXArray(floats, shape)
++        }
++        guard !out.isEmpty else { throw bad("no arrays") }
++        return out
++    }
++
+     private static func loadWeights(modelDir: URL) throws -> [String: MLXArray] {
+         let url = modelDir.appendingPathComponent("model.safetensors")
+         if FileManager.default.fileExists(atPath: url.path) {

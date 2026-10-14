@@ -14,6 +14,9 @@ final class Writer: @unchecked Sendable {
     init() {
         let fd = dup(STDOUT_FILENO)
         dup2(STDERR_FILENO, STDOUT_FILENO)
+        // Libraries print diagnostics; unbuffered, they reach the log even
+        // when the process is killed.
+        setvbuf(stdout, nil, _IONBF, 0)
         handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
     }
 
@@ -48,23 +51,40 @@ enum EngineError: Error, LocalizedError {
     case unsupported(String, capability: String)
     case notDownloaded(model: String, missing: [String])
     case loadFailed(String)
+    case inputTooLong(limit: Int, actual: Int, unit: String)
+    case fileNotFound(String)
+    case unsupportedMedia(String, String)
+    case permissionDenied(String)
+    case deviceUnavailable(String)
 
     var errorDescription: String? {
         switch self {
         case .badRequest(let m), .loadFailed(let m): m
         case .unsupported(let m, _): m
         case .notDownloaded(let model, _): "\(model) is not downloaded"
+        case .inputTooLong(let limit, let actual, let unit): "The text is \(actual) \(unit); the model takes at most \(limit) per request"
+        case .fileNotFound(let path): "No such file: \(path)"
+        case .unsupportedMedia(let path, let why): "Cannot read \(path): \(why)"
+        case .permissionDenied(let what): "\(what.capitalized) access is denied for AudioSmith"
+        case .deviceUnavailable(let device): "The audio input \(device) is not available"
         }
     }
 
     var rpc: RPCError {
-        switch self {
-        case .badRequest(let m): RPCError(Code.badRequest, m)
-        case .unsupported(let m, let cap): RPCError(Code.unsupported, m, data: .object(["capability": .string(cap)]))
+        let m = errorDescription!
+        return switch self {
+        case .badRequest: RPCError(Code.badRequest, m)
+        case .unsupported(_, let cap): RPCError(Code.unsupported, m, data: .object(["capability": .string(cap)]))
         case .notDownloaded(let model, let missing):
-            RPCError(Code.modelNotDownloaded, errorDescription!,
+            RPCError(Code.modelNotDownloaded, m,
                      data: .object(["model": .string(model), "missing": .array(missing.map { .string($0) })]))
-        case .loadFailed(let m): RPCError(Code.modelLoadFailed, m)
+        case .loadFailed: RPCError(Code.modelLoadFailed, m)
+        case .inputTooLong(let limit, let actual, let unit):
+            RPCError(Code.inputTooLong, m, data: .object(["limit": .int(Int64(limit)), "actual": .int(Int64(actual)), "unit": .string(unit)]))
+        case .fileNotFound(let path): RPCError(Code.fileNotFound, m, data: .object(["path": .string(path)]))
+        case .unsupportedMedia(let path, _): RPCError(Code.unsupportedMedia, m, data: .object(["path": .string(path)]))
+        case .permissionDenied(let what): RPCError(Code.permissionDenied, m, data: .object(["permission": .string(what)]))
+        case .deviceUnavailable(let device): RPCError(Code.deviceUnavailable, m, data: .object(["device": .string(device)]))
         }
     }
 }
@@ -81,25 +101,44 @@ final class Server: @unchecked Sendable {
     let role: Role
     let out: Writer
     let synth: Synthesizer?
+    let analyzer: Analyzer?
+    let media: MediaWorker?
+    let recorder: Recorder?
     private let lock = NSLock()
     private var hello: HelloParams?
     private var jobs: [String: Task<Void, Never>] = [:]
     private var cancelled: Set<String> = []
 
-    /// Jobs it runs at once; one more gets "busy". The gpu worker runs one:
-    /// MLX models must not generate from two jobs at once.
-    let concurrency = 1
+    /// Jobs it runs at once; one more gets "busy". The gpu worker runs one
+    /// (MLX models must not generate from two jobs at once), the listen
+    /// worker one recording, the media worker two decodes.
+    let concurrency: Int
+    let store: ModelStore?
 
     init(role: Role, out: Writer) {
         self.role = role
         self.out = out
-        synth = role == .gpu ? Synthesizer(out: out) : nil
+        // The listen worker keeps one small speech-to-text model of its own
+        // (dictation), beside recordings: concurrency 2.
+        store = role == .gpu ? ModelStore(out: out) : role == .listen ? ModelStore(out: out, maxResident: 1) : nil
+        synth = role == .gpu ? store.map { Synthesizer(out: out, store: $0) } : nil
+        analyzer = store.map { Analyzer(out: out, store: $0) }
+        media = role == .media ? MediaWorker(out: out) : nil
+        recorder = role == .listen ? Recorder(out: out) : nil
+        concurrency = role == .gpu ? 1 : 2
     }
 
     var methods: [String] {
         var m = [Method.hello, Method.stats, Method.flush, Method.shutdown]
-        if role == .gpu {
-            m += [Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.ttsSynthesize]
+        switch role {
+        case .gpu:
+            m += [Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.ttsSynthesize, Method.ttsEncodeVoice,
+                  Method.sttTranscribe, Method.sttAlign, Method.vadDetect, Method.enhanceRun]
+        case .media:
+            m += [Method.mediaProbe, Method.mediaDecode, Method.mediaEncode]
+        case .listen:
+            m += [Method.captureDevices, Method.captureStart, Method.captureStop,
+                  Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.sttTranscribe]
         }
         return m + [Method.jobCancel]
     }
@@ -159,21 +198,89 @@ final class Server: @unchecked Sendable {
                 let p = try msg.decodeParams(CancelParams.self)
                 out.result(id, CancelResult(cancelled: cancel(p.job)))
             case Method.modelsLoaded:
-                out.result(id, LoadedResult(models: synth?.loaded() ?? []))
+                out.result(id, LoadedResult(models: store?.loaded() ?? []))
             case Method.modelsUnload:
                 let p = try msg.decodeParams(UnloadParams.self)
-                out.result(id, UnloadResult(unloaded: synth?.unload(p.model) ?? []))
+                out.result(id, UnloadResult(unloaded: store?.unload(p.model) ?? []))
             case Method.modelsLoad:
                 let p = try msg.decodeParams(LoadParams.self)
                 guard !p.model.isEmpty else { throw EngineError.badRequest("Missing model") }
-                guard let synth else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
                 let offline = self.offline
-                startJob(id) { try await synth.load(p, job: id, offline: offline) }
+                if let analyzer, ["stt", "align", "vad", "enhance"].contains(p.task ?? "tts") {
+                    if role == .listen, p.task != "stt" { throw EngineError.badRequest("The listen worker loads speech-to-text models only") }
+                    startJob(id) { try await analyzer.load(p, job: id, offline: offline) }
+                } else {
+                    guard let synth else { throw EngineError.badRequest("The \(role.rawValue) worker loads speech-to-text models only (task \"stt\")") }
+                    startJob(id) { try await synth.load(p, job: id, offline: offline) }
+                }
             case Method.ttsSynthesize:
                 let p = try msg.decodeParams(SynthesizeParams.self)
                 guard let synth else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
                 let offline = self.offline
                 startJob(id) { try await synth.synthesize(p, job: id, offline: offline) }
+            case Method.ttsEncodeVoice:
+                let p = try msg.decodeParams(EncodeVoiceParams.self)
+                guard let synth else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let offline = self.offline
+                startJob(id) { try await synth.encodeVoice(p, job: id, offline: offline) }
+            case Method.sttTranscribe:
+                let p = try msg.decodeParams(TranscribeParams.self)
+                guard let analyzer else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let offline = self.offline
+                startJob(id) { try await analyzer.transcribe(p, job: id, offline: offline) }
+            case Method.sttAlign:
+                let p = try msg.decodeParams(AlignParams.self)
+                guard let analyzer else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let offline = self.offline
+                startJob(id) { try await analyzer.align(p, job: id, offline: offline) }
+            case Method.vadDetect:
+                let p = try msg.decodeParams(VADParams.self)
+                guard let analyzer else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let offline = self.offline
+                startJob(id) { try await analyzer.vad(p, job: id, offline: offline) }
+            case Method.enhanceRun:
+                let p = try msg.decodeParams(EnhanceParams.self)
+                guard let analyzer else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let offline = self.offline
+                startJob(id) { try await analyzer.enhance(p, job: id, offline: offline) }
+            case Method.mediaProbe:
+                let p = try msg.decodeParams(ProbeParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let out = self.out
+                // A control request, answered from its own task.
+                Task {
+                    do { out.result(id, try await media.probe(p)) } catch { out.fail(id, rpcError(error)) }
+                }
+            case Method.mediaDecode:
+                let p = try msg.decodeParams(DecodeParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await media.decode(p, job: id) }
+            case Method.mediaEncode:
+                let p = try msg.decodeParams(EncodeParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await media.encode(p, job: id) }
+            case Method.captureDevices:
+                out.result(id, DevicesResult(devices: captureDevices()))
+            case Method.captureStart:
+                let p = try msg.decodeParams(CaptureParams.self)
+                guard let recorder else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await recorder.record(p, job: id) }
+            case Method.captureStop:
+                let p = try msg.decodeParams(CaptureStopParams.self)
+                guard let recorder else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                lock.lock()
+                let task = jobs[p.job]
+                lock.unlock()
+                guard let task, recorder.stop(p.job) else {
+                    out.result(id, CaptureStopResult(stopped: false))
+                    return
+                }
+                // The recording's job answers first, with the file.
+                let out = self.out
+                Task {
+                    await task.value
+                    out.result(id, CaptureStopResult(stopped: true))
+                }
             default:
                 out.fail(id, RPCError(Code.methodNotFound, "Unknown method \(method)"))
             }
@@ -215,7 +322,8 @@ final class Server: @unchecked Sendable {
         }
         out.result(id, HelloResult(
             protocol: protocolVersion, version: engineVersion, role: role, pid: Int(getpid()),
-            concurrency: concurrency, methods: methods, families: role == .gpu ? Synthesizer.families : [],
+            concurrency: concurrency, methods: methods,
+            families: role == .gpu ? Synthesizer.families + Analyzer.families : role == .listen ? Analyzer.listenFamilies : [],
             device: deviceInfo()))
     }
 
@@ -226,7 +334,7 @@ final class Server: @unchecked Sendable {
         return StatsResult(
             memory: AudioSmithProtocol.Memory(
                 active: Int64(MLX.Memory.activeMemory), cache: Int64(MLX.Memory.cacheMemory), peak: Int64(MLX.Memory.peakMemory)),
-            models: synth?.loaded() ?? [], jobs: running)
+            models: store?.loaded() ?? [], jobs: running)
     }
 
     /// Runs work as job id: its response is written when it ends, after
@@ -239,7 +347,7 @@ final class Server: @unchecked Sendable {
             return
         }
         if jobs.count >= concurrency {
-            out.fail(id, RPCError(Code.busy, "The engine runs \(concurrency) job at a time"))
+            out.fail(id, RPCError(Code.busy, "The engine runs \(concurrency) job(s) at a time"))
             return
         }
         let out = self.out

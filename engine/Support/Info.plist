@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Linked into audiosmith-engine (__TEXT,__info_plist; engine/Package.swift)
+     so the helper names itself and explains its microphone use when it runs
+     outside AudioSmith.app (development, smoke tests). Inside the app, macOS
+     asks with the app's own NSMicrophoneUsageDescription (mygo.json). -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>dev.hehehai.audiosmith.engine</string>
+	<key>CFBundleName</key>
+	<string>audiosmith-engine</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AudioSmith records your voice for voice cloning, transcription and dictation. Audio stays on this Mac.</string>
+</dict>
+</plist>

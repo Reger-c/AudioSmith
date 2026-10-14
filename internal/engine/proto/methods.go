@@ -1,5 +1,7 @@
 package proto
 
+import "strings"
+
 // Role is what an engine process is for; one Swift binary runs as any of
 // them (audiosmith-engine --role gpu|listen|media).
 type Role string
@@ -46,6 +48,7 @@ const (
 
 	MethodMediaProbe  = "media.probe"  // request (media)
 	MethodMediaDecode = "media.decode" // request, job (media): any audio/video → WAV
+	MethodMediaEncode = "media.encode" // request, job (media): WAV → M4B/M4A (AAC) with chapters, tags, cover (M3)
 
 	MethodCaptureDevices = "capture.devices" // request (listen)
 	MethodCaptureStart   = "capture.start"   // request, job (listen): records until capture.stop
@@ -60,8 +63,38 @@ var Reserved = []string{
 	"stt.stream.open", "stt.stream.push", "stt.stream.close", "stt.partial", "stt.final",
 	"diarize.run", "lid.detect", "separate.run",
 	"llm.generate", "translate.run",
-	"media.encode", "media.mux", "media.timePitch", "media.thumbnail", "media.ocr", "doc.extractText",
+	"media.mux", "media.timePitch", "media.thumbnail", "media.ocr", "doc.extractText",
 	"capture.pcm",
+}
+
+// ListenServes reports whether the listen worker also serves method: it
+// keeps one small speech-to-text model of its own, so dictation does not
+// wait behind the gpu worker's renders.
+func ListenServes(method string) bool {
+	switch method {
+	case MethodSTTTranscribe, MethodModelsLoad, MethodModelsUnload, MethodModelsLoaded:
+		return true
+	}
+	return false
+}
+
+// KindFor is the job kind (and executor) that runs method on the worker of
+// role: the method itself on its usual worker (RoleOf), else "role:method"
+// ("listen:stt.transcribe"). A role that does not serve method gets the
+// usual worker's kind.
+func KindFor(role Role, method string) string {
+	if role == "" || role == RoleOf(method) || role == RoleListen && !ListenServes(method) {
+		return method
+	}
+	return string(role) + ":" + method
+}
+
+// SplitKind is the inverse of KindFor: the role and method of a job kind.
+func SplitKind(kind string) (Role, string) {
+	if r, m, ok := strings.Cut(kind, ":"); ok {
+		return Role(r), m
+	}
+	return RoleOf(kind), kind
 }
 
 // RoleOf is the role whose worker serves method: the app sends it there,
@@ -70,7 +103,7 @@ var Reserved = []string{
 // models.* go to whichever worker holds the model (gpu in M1).
 func RoleOf(method string) Role {
 	switch method {
-	case MethodMediaProbe, MethodMediaDecode:
+	case MethodMediaProbe, MethodMediaDecode, MethodMediaEncode:
 		return RoleMedia
 	case MethodCaptureDevices, MethodCaptureStart, MethodCaptureStop:
 		return RoleListen
@@ -303,6 +336,8 @@ func ParamsFor(method string) any {
 		return new(ProbeParams)
 	case MethodMediaDecode:
 		return new(DecodeParams)
+	case MethodMediaEncode:
+		return new(EncodeParams)
 	case MethodCaptureDevices:
 		return new(Empty)
 	case MethodCaptureStart:
@@ -350,6 +385,8 @@ func ResultFor(method string) any {
 		return new(ProbeResult)
 	case MethodMediaDecode:
 		return new(DecodeResult)
+	case MethodMediaEncode:
+		return new(EncodeResult)
 	case MethodCaptureDevices:
 		return new(DevicesResult)
 	case MethodCaptureStart:
@@ -381,7 +418,7 @@ func IsJob(method string) bool {
 	switch method {
 	case MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
 		MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
-		MethodMediaDecode, MethodCaptureStart:
+		MethodMediaDecode, MethodMediaEncode, MethodCaptureStart:
 		return true
 	}
 	return false
@@ -391,5 +428,5 @@ func IsJob(method string) bool {
 var JobMethods = []string{
 	MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
 	MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
-	MethodMediaDecode, MethodCaptureStart,
+	MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
 }

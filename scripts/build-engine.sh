@@ -23,6 +23,7 @@ if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
   exit 1
 fi
 
+"$ROOT/scripts/fetch-engine-deps.sh"
 PRODUCTS="$DERIVED/Build/Products/$CONFIG"
 rm -f "$PRODUCTS/audiosmith-engine"
 mkdir -p "$DERIVED"
