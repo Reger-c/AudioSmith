@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
@@ -38,5 +40,21 @@ func TestRenderWatermarks(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("warnings %+v", tk.Render.Warnings)
+	}
+}
+
+// A dub marks its final tracks (mix and speech stem) after fitting, not
+// its lines.
+func TestDubWatermarksTracks(t *testing.T) {
+	e := newDubEnv(t, 3)
+	p := e.create(t, func(p *dub.Project) { p.Targets = []string{"es"} })
+	p = e.run(t, p.ID, RunRequest{Through: dub.StageMix})
+	tr := p.Track("es")
+	e.mu.Lock()
+	marked := slices.Clone(e.marked)
+	e.mu.Unlock()
+	want := []string{e.dubs.Path(p.ID, tr.File), e.dubs.Path(p.ID, tr.Speech)}
+	if tr.File == "" || !slices.Equal(marked, want) {
+		t.Fatalf("marked %q, want %q", marked, want)
 	}
 }

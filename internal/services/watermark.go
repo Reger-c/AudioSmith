@@ -44,3 +44,17 @@ func (r *renderer) watermarkOutput(ctx context.Context, path string, bits int) (
 	}
 	return ok, nil
 }
+
+// watermarkTracks marks a dub's final mix and speech stem (24-bit) after
+// fitting and mixing, where per-line marks would have been stretched.
+// A failure is a warning of the stage, never its error.
+func (s *Dubs) watermarkTracks(ctx context.Context, sc *stageCtx, paths ...string) {
+	if s.cfg.Render == nil || s.cfg.Render.render == nil {
+		return
+	}
+	for _, p := range paths {
+		if _, notice := s.cfg.Render.render.watermarkOutput(ctx, p, 24); notice != nil {
+			sc.warn(NoticeWatermarkFailed)
+		}
+	}
+}

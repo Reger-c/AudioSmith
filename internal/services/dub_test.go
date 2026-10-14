@@ -69,6 +69,7 @@ type dubEnv struct {
 	ytdlp   dub.YtDlp
 	mu      sync.Mutex
 	changes int
+	marked  []string // files the watermark hook marked (watermark_test.go)
 }
 
 func newDubEnv(t *testing.T, lines int) *dubEnv {
@@ -89,6 +90,12 @@ func newDubEnv(t *testing.T, lines int) *dubEnv {
 		Synth:     func() jobs.Executor { return e.eng.Executor(proto.MethodTTSSynthesize) },
 		ModelPath: func(_ context.Context, m string) (string, error) { return "/models/" + m, nil },
 		Models:    models,
+		Watermark: func(_ context.Context, path string, _ int) (bool, error) {
+			e.mu.Lock()
+			e.marked = append(e.marked, path)
+			e.mu.Unlock()
+			return true, nil
+		},
 	})
 	e.dubs = NewDubs(DubsConfig{
 		Store: st.Dubs(), Bus: e.bus, Scheduler: e.sched, Render: e.svc.Render,
