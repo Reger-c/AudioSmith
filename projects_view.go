@@ -244,7 +244,7 @@ func (a *app) itemActions(c *ui.Context, it store.LibraryItem) {
 	s := &a.projects
 	key := libKey(it)
 	switch it.Source {
-	case "dub", "workflow": // M4 (thread #19), M6 (thread #21)
+	case "dub", "workflow", "call": // M4 (thread #19), M6 (thread #21), M6b (thread #23)
 		if ui.Button(c.Key("open"), i18n.T("Open")).Clicked() {
 			a.openItem(it)
 		}

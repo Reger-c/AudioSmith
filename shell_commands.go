@@ -42,6 +42,7 @@ func (a *app) commands() []command {
 	a.dubCommands(nav, add)      // M4: Dub, Batch (dub_pages.go, thread #19)
 	a.m5Commands(nav, add)       // M5: Tools, Integrations, API reference (api_pages.go, thread #20)
 	a.wfCommands(nav, add)       // M6: Workflows (workflow_pages.go, thread #21)
+	a.callsCommands(nav, add)    // M6b: Calls (calls_pages.go, thread #23)
 	add("go/settings", nav, i18n.T("Settings"), "Settings", "⌘,", true, func() { a.navigate("/settings") })
 	for _, s := range settingsSections() {
 		add("go/settings/"+s.id, i18n.T("Settings"), s.title, s.en, "", true, func() { a.navigate("/settings/" + s.id) })

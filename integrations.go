@@ -66,6 +66,7 @@ var integrations = []integration{
 	{Slug: "openai-sdk", Name: "OpenAI SDK", Kind: "Developer tools", Caps: []string{"Speech API", "Transcription API"}, URL: "https://platform.openai.com/docs/api-reference/audio", Blocks: openAISDKBlocks},
 	{Slug: "openai-agents", Name: "OpenAI Agents SDK", Kind: "Agents", Caps: []string{"Speech API", "Transcription API"}, URL: "https://openai.github.io/openai-agents-python/voice/quickstart/", Blocks: agentsBlocks},
 	{Slug: "n8n", Name: "n8n", Kind: "Automation", Caps: []string{"Speech API", "Workflow template"}, URL: "https://n8n.io", Blocks: n8nBlocks},
+	{Slug: "twilio", Name: "Twilio", Kind: "Automation", Caps: []string{"Phone calls"}, URL: "https://www.twilio.com/docs/voice/media-streams", Blocks: twilioBlocks}, // M6b: calls_pages.go, its page twilio_view.go (thread #23)
 }
 
 // integrationBySlug finds a card.
@@ -355,6 +356,8 @@ func integCaption(s string) string {
 		return i18n.T("Transcription API")
 	case "Workflow template":
 		return i18n.T("Workflow template")
+	case "Phone calls": // M6b (thread #23)
+		return i18n.T("Phone calls")
 	}
 	return s
 }
@@ -376,6 +379,8 @@ func integAbout(slug string) string {
 		return i18n.T("A voice agent whose ears and voice run on this Mac.")
 	case "n8n":
 		return i18n.T("A workflow that turns text into speech.")
+	case "twilio": // M6b (thread #23)
+		return i18n.T("An AI agent that places and answers phone calls in your voice.")
 	}
 	return ""
 }

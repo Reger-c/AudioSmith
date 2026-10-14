@@ -26,6 +26,7 @@ func (a *app) wfSidebar(c *ui.Context) {
 			done, _, total := a.wfRun.Counts()
 			item.Children(func() { ui.Badge(c, itoa(done)+"/"+itoa(total)) })
 		}
+		a.callsSidebarItem(c) // M6b: Calls (calls_pages.go, thread #23)
 	})
 }
 

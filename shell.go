@@ -203,6 +203,9 @@ func pageTitle(path string) string {
 	if t, ok := wfPageTitle(path); ok { // M6: workflow_pages.go (thread #21)
 		return t
 	}
+	if t, ok := callsPageTitle(path); ok { // M6b: calls_pages.go (thread #23)
+		return t
+	}
 	return path
 }
 
@@ -350,6 +353,7 @@ func (a *app) pages(c *ui.Context) {
 			a.transcribePage(c)
 		case a.longformRoute(c, r): // M3: /stories, /audiobook, /projects (longform_pages.go, thread #18)
 		case a.dubRoute(c, r): // M4: /dub, /batch (dub_pages.go, thread #19)
+		case a.callsRoute(c, r): // M6b: /calls, /calls/setup, /integrations/twilio (calls_pages.go, thread #23)
 		case a.m5Route(c, r): // M5: /tools, /integrations, /api-reference (api_pages.go, thread #20)
 		case a.wfRoute(c, r): // M6: /workflows (workflow_pages.go, thread #21)
 		case r.Match("/settings/{section...}"):
