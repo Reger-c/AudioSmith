@@ -17,6 +17,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/gallery"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -78,8 +79,7 @@ func (a *app) dubbingSettings(c *ui.Context) {
 	t := c.Theme()
 	d := a.prefs.Dubbing
 	sectionTitle(c, i18n.T("Import from links"))
-	ui.Text(c, i18n.T("Paste a YouTube (or other) link on the Dub page to dub the video. This needs yt-dlp, a free downloader (about 35 MB), which AudioSmith downloads from GitHub and checks before using. Links to this Mac or the local network, live streams and playlists are refused.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
+	caption(c, i18n.T("Paste a YouTube (or other) link on the Dub page to dub the video. This needs yt-dlp, a free downloader (about 35 MB), which AudioSmith downloads from GitHub and checks before using. Links to this Mac or the local network, live streams and playlists are refused."))
 	y := &a.ytdlp
 	switch {
 	case y.installing:
@@ -89,7 +89,7 @@ func (a *app) dubbingSettings(c *ui.Context) {
 				frac = float64(y.done) / float64(y.size)
 			}
 			ui.Progress(c, frac).Grow(1)
-			ui.Text(c, i18n.T("%.0f of %.0f MB", float64(y.done)/1e6, float64(y.size)/1e6)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("%.0f of %.0f MB", float64(y.done)/1e6, float64(y.size)/1e6)).SingleLine()
 			if ui.Button(c.Key("ytdlp-cancel"), i18n.T("Cancel")).Clicked() && y.cancel != nil {
 				y.cancel()
 			}
@@ -108,7 +108,10 @@ func (a *app) dubbingSettings(c *ui.Context) {
 		})
 	}
 	if y.err != "" {
-		ui.Text(c, y.err).FontSize(px(t, 12)).TextColor(t.Danger)
+		ui.Row(c).Gap(px(t, 6)).Children(func() {
+			statusMark(c, icons.DangerCircle, t.Danger)
+			caption(c, y.err).TextColor(t.Danger).Grow(1).MinWidth(0)
+		})
 	}
 
 	sectionTitle(c, i18n.T("New dubs"))

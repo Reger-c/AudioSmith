@@ -158,8 +158,9 @@ const (
 
 // notice is a one-line note on the page (a step's result, a warning):
 // a coloured icon, the text (cut with "…", all of it as the tooltip), an
-// ⓘ with more when there is more to say, and × when onClose is set.
-func notice(c *ui.Context, key string, kind noticeKind, text, more string, onClose func()) {
+// ⓘ with more when there is more to say, the actions (buttons), and ×
+// when onClose is set.
+func notice(c *ui.Context, key string, kind noticeKind, text, more string, actions, onClose func()) {
 	t := c.Theme()
 	k := tok(t)
 	ic, col := icons.InfoCircle, k.Text2
@@ -172,11 +173,14 @@ func notice(c *ui.Context, key string, kind noticeKind, text, more string, onClo
 		ic, col = icons.DangerCircle, k.Danger
 	}
 	ui.Row(c.Key(key)).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, 4), px(t, 4), px(t, 4), px(t, 10)).
-		Radius(px(t, radiusControl)).Background(k.Subtle).MinHeight(px(t, 36)).Children(func() {
+		Radius(px(t, radiusControl)).Background(k.Subtle).MinHeight(px(t, 36)).Shrink(0).Children(func() {
 		statusMark(c, ic, col)
 		ui.Text(c, text).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").MinWidth(0).Grow(1).Tooltip(text)
 		if more != "" {
 			infoTip(c.Key("more"), more)
+		}
+		if actions != nil {
+			actions()
 		}
 		if onClose != nil && iconButton(c.Key("close"), icons.Close, i18n.T("Dismiss")).Clicked() {
 			onClose()

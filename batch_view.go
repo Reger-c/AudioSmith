@@ -140,7 +140,7 @@ func (a *app) batchSetup(c *ui.Context) {
 		}
 	})
 	keep := s.KeepBackground
-	if dubSwitch(c, "batch-bg", i18n.T("Keep background (music and effects)"), &keep, false) {
+	if dubSwitch(c, "batch-bg", i18n.T("Keep background (music and effects)"), "", &keep, false) {
 		a.batchSetSettings(func(s *services.BatchSettings) { s.KeepBackground = keep })
 	}
 	if ok, name := a.dubTranslatorReady(dub.Settings{Translator: s.Translator}); ok {

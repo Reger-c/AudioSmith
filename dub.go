@@ -98,6 +98,9 @@ type dubState struct {
 	dubAudition dubAuditionState
 	dubVideo    dubVideoState
 	dubNotice   string // a one-time message under the toolbar ("Imported 12 cues…")
+	dubSide     sidePanel // the step's panel: beside the workspace, or a drawer
+	dubNarrow   bool      // the workspace is narrow: toolbars show icons, rows fold actions
+	dubVoiceCtl bool      // the Generate step's voice controls are open
 
 	ytdlp ytdlpState
 	batch batchState

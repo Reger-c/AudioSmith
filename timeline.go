@@ -22,6 +22,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 )
 
 // Timeline limits.
@@ -140,26 +141,27 @@ func timelineLane(c *ui.Context, key string, s *timelineState, m tlModel, ev tlE
 		s.zoom = 1
 	}
 	s.clampOffset(d)
-	ui.Row(c.Key(key + "-tools")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-		if ui.Button(c.Key("zoom-out"), "−").Label(i18n.T("Zoom out")).Tooltip(i18n.T("Zoom out")).Disabled(s.zoom <= 1).Clicked() {
+	k := tok(t)
+	ui.Row(c.Key(key + "-tools")).Gap(px(t, 2)).AlignItems(ui.Center).Shrink(0).Children(func() {
+		if iconButton(c.Key("zoom-out"), icons.MagniferZoomOut, i18n.T("Zoom out")).Disabled(s.zoom <= 1).Clicked() {
 			s.setZoom(s.zoom/2, s.offset+s.span(d)/2, d)
 		}
-		if ui.Button(c.Key("zoom-in"), "+").Label(i18n.T("Zoom in")).Tooltip(i18n.T("Zoom in")).Disabled(s.zoom >= tlMaxZoom).Clicked() {
+		if iconButton(c.Key("zoom-in"), icons.MagniferZoomIn, i18n.T("Zoom in")).Disabled(s.zoom >= tlMaxZoom).Clicked() {
 			at := s.offset + s.span(d)/2
 			if m.Playhead >= 0 {
 				at = m.Playhead
 			}
 			s.setZoom(s.zoom*2, at, d)
 		}
-		if ui.Button(c.Key("zoom-fit"), i18n.T("Fit all")).Disabled(s.zoom <= 1).Clicked() {
+		if ghostButton(c.Key("zoom-fit"), i18n.T("Fit all")).Disabled(s.zoom <= 1).Shrink(0).Clicked() {
 			s.zoom, s.offset = 1, 0
 		}
-		ui.Text(c, strconv.Itoa(int(s.zoom))+"×").FontSize(px(t, 11)).TextColor(t.TextMuted)
+		ui.Text(c, strconv.Itoa(int(s.zoom))+"×").FontSize(px(t, fsMicro)).TextColor(k.Text3).Shrink(0)
 		ui.Spacer(c)
 		if s.edit {
-			ui.Badge(c, i18n.T("Precise editing: ←/→ nudge · ⇧ end · ⌥ move · S snap · Esc"))
+			chip(c, i18n.T("Precise editing: ←/→ nudge · ⇧ end · ⌥ move · S snap · Esc")).Shrink(1).MinWidth(0).Ellipsis("…")
 		}
-		ui.Text(c, tlClock(s.offset)+" – "+tlClock(min(s.offset+s.span(d), d))+" / "+tlClock(d)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		ui.Text(c, tlClock(s.offset)+" – "+tlClock(min(s.offset+s.span(d), d))+" / "+tlClock(d)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Shrink(0)
 	})
 	if s.zoom > 1 {
 		// Panning.
@@ -169,9 +171,9 @@ func timelineLane(c *ui.Context, key string, s *timelineState, m tlModel, ev tlE
 			s.clampOffset(d)
 		}
 	}
-	accent, danger, muted := t.Accent, t.Danger, t.TextMuted
-	surface, border, text := t.Surface, t.Border, t.Text
-	lane := ui.Box(c.Key(key)).Height(px(t, 86)).Radius(6).Background(surface).Border(1, border).Focusable().Bind(&s.focus).
+	accent, danger, muted := k.Accent, k.Danger, k.Text3
+	surface, border, text := k.Subtle, k.Line, k.Text
+	lane := ui.Box(c.Key(key)).Height(px(t, 86)).Shrink(0).Radius(px(t, radiusControl)).Background(surface).Border(1, border).Focusable().Bind(&s.focus).
 		Label(i18n.T("Timeline"))
 	lane.Draw(func(p *ui.Painter, r ui.Rect) {
 		s.width = r.W
@@ -214,23 +216,29 @@ func timelineLane(c *ui.Context, key string, s *timelineState, m tlModel, ev tlE
 				continue
 			}
 			bx, bw := x(start), max(x(end)-x(start), 1)
-			col := accent
-			if b.Overlap {
-				col = danger
-			}
-			alpha := float32(0.28)
+			// Lines are grey blocks; the chosen one is in the accent,
+			// overlaps in the danger colour.
+			col, fill := text, float32(0.08)
 			if b.Muted {
-				alpha = 0.12
+				fill = 0.04
+			}
+			if b.ID == s.sel {
+				col, fill = accent, 0.18
+			}
+			if b.Overlap {
+				col, fill = danger, 0.16
 			}
 			rect := ui.Rect{X: bx, Y: r.Y + 10, W: bw, H: r.H - 20}
-			p.Fill(rect, col.Alpha(alpha), 3)
+			p.Fill(rect, col.Alpha(fill), 3)
 			if b.ID == s.sel {
 				p.Stroke(rect, col, 3, 2)
 				if s.edit {
 					p.Line(bx, rect.Y-4, bx, rect.Y+rect.H+4, 2, col)
 				}
 			} else if b.Flag {
-				p.Stroke(rect, t.Warning, 3, 1)
+				p.Stroke(rect, k.Warning, 3, 1)
+			} else {
+				p.Stroke(rect, text.Alpha(0.14), 3, 1)
 			}
 			if bw >= 18 && b.Label != "" {
 				p.Text(bx+3, rect.Y+2, b.Label, 10, text.Alpha(0.8))
