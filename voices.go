@@ -567,6 +567,9 @@ func designTextLang(lang string) string {
 
 // voiceUsable reports whether model e can speak with v, and why not.
 func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
+	if e.NeedsReference && !voiceHasReference(v) {
+		return false, i18n.T("%s only clones voices, and this voice has no reference clip.", e.Label)
+	}
 	switch {
 	case v.Kind == core.VoiceBuiltin:
 		if v.Model == "" || v.Model == e.Repo {
@@ -590,6 +593,21 @@ func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 		return false, i18n.T("%s can't design voices. Choose a model that can, such as OmniVoice.", e.Label)
 	}
 	return false, ""
+}
+
+// voiceHasReference reports whether fillVoice gives a clone of v a
+// reference clip: a cloned voice's reference, or the sample of a locked
+// or designed voice (what models that only clone can speak with).
+func voiceHasReference(v *core.Voice) bool {
+	switch {
+	case v.Kind == core.VoiceBuiltin:
+		return false
+	case v.Sample != "" && (v.Locked || v.Kind == core.VoiceDesigned):
+		return true
+	case v.Kind == core.VoiceCloned:
+		return v.RefAudio != ""
+	}
+	return false
 }
 
 // studioVoiceOptions are the picker's choices for model e: labels and the

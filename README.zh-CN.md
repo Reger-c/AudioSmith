@@ -57,7 +57,7 @@ ad-hoc 签名的版本每次更新后，macOS 会忘掉辅助功能授权，需�
 
 | 任务 | 默认 | 其他 | 许可 |
 |---|---|---|---|
-| 语音合成 | Kokoro 82M | Qwen3-TTS 0.6B/1.7B、Chatterbox、MOSS-Nano、Kitten、Pocket、Soprano、Marvis | Apache-2.0 / MIT / CC-BY-4.0 |
+| 语音合成 | Kokoro 82M | Qwen3-TTS 0.6B/1.7B、Chatterbox、MOSS-Nano（仅克隆）、Kitten、Pocket、Soprano、Marvis | Apache-2.0 / MIT / CC-BY-4.0 |
 | 646 种语言合成 | — | **OmniVoice**（克隆、音色设计、精确时长） | **CC-BY-NC-4.0，禁止商用**，使用前需确认许可 |
 | 转写 | Whisper large-v3 turbo | Qwen3-ASR 0.6B（听写默认）、Parakeet v3 | MIT / Apache-2.0 / CC-BY-4.0 |
 | 分离 / 说话人 | HTDemucs、Sortformer | Mel-RoFormer | MIT / NVIDIA Open Model |

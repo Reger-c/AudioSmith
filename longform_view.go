@@ -114,7 +114,9 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 	ui.Field(c, label, func() {
 		a.lfVoiceSelect(c, "lf-voice", &d.Voice, e, i18n.T("None"), locked)
 	})
-	if len(a.lfVoices(e)) == 0 {
+	if e.NeedsReference {
+		caption(c.Key("lf-needs-ref"), i18n.T("%s only clones voices: each line needs a saved cloned voice.", e.Label))
+	} else if len(a.lfVoices(e)) == 0 {
 		caption(c, i18n.T("No voices for this model yet: clone or design one first."))
 	}
 	if e.Has(catalog.CapSpeed) {

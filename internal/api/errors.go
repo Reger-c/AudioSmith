@@ -51,7 +51,19 @@ const (
 	CodeTranslationNotReady = "translation_unavailable" // no language model for /v1/audio/translations
 	CodePathNotAllowed      = "path_not_allowed"
 	CodeTooLarge            = "too_large"
+	// CodeNeedsReference: the model only clones voices (MOSS-TTS-Nano)
+	// and the request gave no reference (ref_audio, or a saved voice
+	// cloned from a clip). 400.
+	CodeNeedsReference = core.CodeNeedsReference
 )
+
+// errNeedsReference is the 400 of a request without a reference for a
+// model that only clones voices.
+func errNeedsReference(model string) *Error {
+	return &Error{Status: http.StatusBadRequest, Code: CodeNeedsReference, Param: "voice",
+		Message: model + " only clones voices: give a reference clip (ref_audio) or a saved voice cloned from one (voice).",
+		Data:    map[string]any{"model": model}}
+}
 
 func errInvalid(param, format string, args ...any) *Error {
 	return &Error{Status: http.StatusBadRequest, Code: CodeInvalid, Param: param, Message: fmt.Sprintf(format, args...)}
@@ -77,6 +89,10 @@ func errorOf(err error) *Error {
 		return &Error{Status: http.StatusForbidden, Code: CodeLicenceRequired,
 			Message: fmt.Sprintf("The licence of %s (%s) must be accepted first: open AudioSmith → Models.", lic.Model, lic.Name),
 			Data:    map[string]any{"model": lic.Model, "licence": lic.Licence, "licenceName": lic.Name, "licenceURL": lic.URL}}
+	}
+	var nr *core.NeedsReferenceError
+	if errors.As(err, &nr) {
+		return errNeedsReference(nr.Model)
 	}
 	var je *jobs.Error
 	if errors.As(err, &je) {
@@ -130,7 +146,7 @@ func jobErrorOf(je *jobs.Error) *Error {
 			e.Message = "The job was cancelled."
 		}
 	case proto.CodeBadRequest, proto.CodeUnsupported, proto.CodeInputTooLong, proto.CodeFileNotFound,
-		proto.CodeUnsupportedMedia, services.CodeNothingToSay:
+		proto.CodeUnsupportedMedia, services.CodeNothingToSay, CodeNeedsReference:
 		e.Status = http.StatusBadRequest
 	case proto.CodeModelLoadFailed:
 		e.Status = http.StatusUnprocessableEntity

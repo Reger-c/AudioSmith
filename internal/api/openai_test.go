@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -263,6 +264,8 @@ func TestSpeechErrors(t *testing.T) {
 		{"licence", `{"model":"omnivoice-bf16","input":"hi"}`, 403, CodeLicenceRequired},
 		{"not downloaded", `{"model":"kitten-tts-mini-0.8","input":"hi"}`, 409, CodeNotDownloaded},
 		{"bad json", `{"model":`, 400, CodeInvalid},
+		{"clone-only, no reference", `{"model":"moss-tts-nano-100m","input":"hi"}`, 400, CodeNeedsReference},
+		{"clone-only, OpenAI voice", `{"model":"moss-tts-nano-100m","input":"hi","voice":"alloy"}`, 400, CodeNeedsReference},
 	} {
 		resp := sdkSpeech(t, ts, c.body)
 		var e apiErr
@@ -477,5 +480,31 @@ func TestModelsOpenAI(t *testing.T) {
 	resp := do(t, ts, "GET", "/v1/models/nope", nil, nil)
 	if resp.StatusCode != 404 {
 		t.Fatal(resp.StatusCode)
+	}
+}
+
+// A model that only clones speaks with a saved cloned voice; the services'
+// refusal (core.NeedsReferenceError) is a 400 needs_reference too.
+func TestSpeechNeedsReference(t *testing.T) {
+	f := newFake(t)
+	f.voices = []core.Voice{{ID: "v1", Name: "Ana", Kind: core.VoiceCloned}}
+	_, ts := f.server()
+	resp := sdkSpeech(t, ts, `{"model":"moss-tts-nano-100m","input":"hi","voice":"Ana","response_format":"wav"}`)
+	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != 200 || resp.Header.Get("X-AudioSmith-Model") != "moss-tts-nano-100m" {
+		t.Fatalf("%d %v", resp.StatusCode, resp.Header)
+	}
+	resp = sdkSpeech(t, ts, `{"model":"moss-tts-nano-100m","input":"hi"}`)
+	var e apiErr
+	json.NewDecoder(resp.Body).Decode(&e)
+	if resp.StatusCode != 400 || e.Error.Code != CodeNeedsReference || !strings.Contains(e.Error.Message, "MOSS-TTS-Nano only clones voices") {
+		t.Fatalf("%d %+v", resp.StatusCode, e)
+	}
+	ae := errorOf(fmt.Errorf("generate: %w", &core.NeedsReferenceError{Model: "MOSS-TTS-Nano"}))
+	if ae.Status != 400 || ae.Code != CodeNeedsReference {
+		t.Fatalf("errorOf: %+v", ae)
+	}
+	if je := jobErrorOf(&jobs.Error{Code: core.CodeNeedsReference, Message: "x"}); je.Status != 400 {
+		t.Fatalf("jobErrorOf: %+v", je)
 	}
 }

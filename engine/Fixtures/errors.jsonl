@@ -20,3 +20,5 @@
 {"to":"app","msg":{"id":"j7","error":{"code":"internal","message":"Could not write /nonexistent/dir/j7.wav: No such file or directory"}}}
 {"to":"engine","msg":{"id":"j8","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","text":"A very long paragraph …","voice":"af_heart","output":{"path":"/tmp/j8.wav"}}}}
 {"to":"app","msg":{"id":"j8","error":{"code":"input_too_long","message":"The text is 731 phonemes; Kokoro-82M-bf16 takes at most 510 per request","data":{"limit":510,"actual":731,"unit":"phonemes"}}}}
+{"to":"engine","msg":{"id":"j9","method":"tts.synthesize","params":{"model":"mlx-community/MOSS-TTS-Nano-100M","text":"Hi","output":{"path":"/tmp/j9.wav"}}}}
+{"to":"app","msg":{"id":"j9","error":{"code":"bad_request","message":"MOSS-TTS-Nano-100M only clones voices: give it a reference clip (refAudio)"}}}

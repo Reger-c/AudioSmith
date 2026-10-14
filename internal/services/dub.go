@@ -107,6 +107,10 @@ type DubModels struct {
 // DubModelCaps are what a TTS model can do, as the pipeline needs it.
 type DubModelCaps struct {
 	Clone, Duration, Instruct, Speed, Steps, Guidance bool
+	// NeedsReference: the model only clones (MOSS-TTS-Nano): lines cast
+	// with a voice that carries no reference (the default voice, a
+	// design) clone their speaker instead.
+	NeedsReference bool
 	// Languages maps BCP-47 codes to the model's language values
 	// ("zh" → "Chinese"); nil = it takes codes, or has no language.
 	Languages map[string]string

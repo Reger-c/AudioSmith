@@ -176,6 +176,10 @@ func modelInfo(repo string) services.ModelInfo {
 	}
 	info := services.ModelInfo{Traits: services.TraitsFor(e.Family, caps).WithCatalog(e.MaxChars, e.NonVerbal), Revision: e.Revision,
 		Languages: map[string]string{}, VoiceLanguages: map[string]string{}}
+	info.NeedsReference = e.NeedsReference
+	if e.ID != "custom" {
+		info.Label = e.Label
+	}
 	for _, l := range e.Languages {
 		if l.Value != "" {
 			info.Languages[l.Value] = l.Code

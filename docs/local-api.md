@@ -32,7 +32,7 @@ Point any OpenAI SDK at `base_url="http://127.0.0.1:3901/v1"` with any `api_key`
 
 **Translations** (speech → English): the transcript is translated by Settings → Writing help's language model (no catalogue model translates speech yet); without one, 501 `translation_unavailable`. English speech comes back as transcribed.
 
-**Errors** use OpenAI's shape, `{"error":{"message","type","param","code"}}`, plus data: 403 `licence_required` (with `model`, `licence`, `licenceName`, `licenceURL`), 409 `model_not_downloaded`, 404 `model_not_found`, 400 `voice_not_found` / `unsupported_format` / `unsupported_model`, 503 `engine_unavailable` (engine down or restarting) and `queue_timeout` (waited > 120 s behind other work; Settings `api.queueSeconds`), both with `Retry-After`. A client that disconnects cancels its job.
+**Errors** use OpenAI's shape, `{"error":{"message","type","param","code"}}`, plus data: 403 `licence_required` (with `model`, `licence`, `licenceName`, `licenceURL`), 409 `model_not_downloaded`, 404 `model_not_found`, 400 `voice_not_found` / `unsupported_format` / `unsupported_model` / `needs_reference` (a model that only clones voices, MOSS-TTS-Nano, without `ref_audio` or a saved cloned voice; `GET /v1/models` marks such models `"needs_reference": true`), 503 `engine_unavailable` (engine down or restarting) and `queue_timeout` (waited > 120 s behind other work; Settings `api.queueSeconds`), both with `Retry-After`. A client that disconnects cancels its job.
 
 ## Native API notes
 

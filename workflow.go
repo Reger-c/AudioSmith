@@ -545,6 +545,9 @@ func (a *app) wfCheck(n *workflow.Node, _ workflow.Type) []workflow.Diagnostic {
 		if ready, known := a.modelOnDisk(e); known && !ready {
 			add(workflow.Warning, wfCodeNotDownloaded, i18n.T("%s is not downloaded yet.", e.Label))
 		}
+		if e.NeedsReference && (n.P.Voice == "" || strings.Contains(n.P.Voice, ":")) {
+			add(workflow.Error, wfCodeVoice, i18n.T("%s only clones voices: choose a saved cloned voice.", e.Label))
+		}
 		if ref := n.P.Voice; ref != "" && !strings.Contains(ref, ":") {
 			v := a.findVoice(ref)
 			switch {
@@ -857,6 +860,8 @@ func wfErrorText(code, msg string) string {
 		return i18n.T("No speech was found.")
 	case services.WorkflowCodeVoice:
 		return i18n.T("The voice can't be used: %s", msg)
+	case core.CodeNeedsReference:
+		return needsReferenceText(modelInMessage(msg))
 	case services.WorkflowCodeEncode:
 		return i18n.T("This engine can't write M4A: choose WAV.")
 	case services.WorkflowCodeFile:

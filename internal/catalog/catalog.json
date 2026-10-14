@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "entries": [
     {
       "id": "kokoro-82m-bf16",
@@ -331,6 +331,7 @@
       "revision": "229a9c51bb0ffff6fd0dbe53b5bf0c441e438a79",
       "tasks": ["tts"],
       "about": "A very small voice-cloning model (needs a reference clip), 48 kHz.",
+      "needsReference": true,
       "capabilities": ["sampling", "clone", "seed"],
       "sampleRate": 48000,
       "maxChars": 400,

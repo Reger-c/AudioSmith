@@ -97,11 +97,14 @@ type ModelJSON struct {
 	RTF          float64       `json:"rtf,omitempty"`
 	Size         int64         `json:"size"`
 	MinMemoryGB  float64       `json:"min_memory_gb,omitempty"`
-	Downloaded   bool          `json:"downloaded"`
-	Default      bool          `json:"default,omitempty"` // what OpenAI's names map to
-	Hidden       bool          `json:"hidden,omitempty"`
-	About        string        `json:"about,omitempty"`
-	Licence      LicenceJSON   `json:"licence"`
+	// NeedsReference: the model only clones voices; speech requests need
+	// ref_audio or a saved cloned voice (else 400 needs_reference).
+	NeedsReference bool        `json:"needs_reference,omitempty"`
+	Downloaded     bool        `json:"downloaded"`
+	Default        bool        `json:"default,omitempty"` // what OpenAI's names map to
+	Hidden         bool        `json:"hidden,omitempty"`
+	About          string      `json:"about,omitempty"`
+	Licence        LicenceJSON `json:"licence"`
 }
 
 // SpeakerJSON is a built-in speaker.
@@ -125,7 +128,7 @@ type LicenceJSON struct {
 func modelJSON(m Model, isDefault bool) ModelJSON {
 	e := m.Entry
 	j := ModelJSON{ID: e.ID, Object: "model", Label: e.Label, Repo: e.Repo, Family: e.Family, SampleRate: e.SampleRate,
-		MaxChars: e.MaxChars, RTF: e.RTF, Size: e.Size, MinMemoryGB: e.MinMemoryGB, Downloaded: m.Downloaded,
+		MaxChars: e.MaxChars, RTF: e.RTF, Size: e.Size, MinMemoryGB: e.MinMemoryGB, Downloaded: m.Downloaded, NeedsReference: e.NeedsReference,
 		Default: isDefault, Hidden: e.Hidden, About: e.About, Tasks: []string{}, Capabilities: []string{},
 		Licence: LicenceJSON{ID: e.Licence.ID, Name: e.Licence.Name, URL: e.Licence.URL, Commercial: e.Licence.Commercial, Needed: m.LicenceNeeded}}
 	for _, t := range e.Tasks {

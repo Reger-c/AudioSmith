@@ -168,6 +168,31 @@ public struct RPCError: Codable, Error, Sendable {
     }
 }
 
+/// The text of an error for the app: the error's own words. A Swift error
+/// that is not a LocalizedError has only Cocoa's generic
+/// localizedDescription ("The operation couldn’t be completed. (Module.Type
+/// error 0.)"), which loses its message: take errorDescription, else
+/// description (CustomStringConvertible), else String(describing:); a real
+/// NSError keeps its localizedDescription.
+public func errorMessage(_ error: Error) -> String {
+    if let e = error as? LocalizedError, let d = e.errorDescription, !d.isEmpty {
+        return d
+    }
+    if type(of: error) is NSError.Type {
+        return (error as NSError).localizedDescription
+    }
+    let ns = error as NSError
+    if let d = ns.userInfo[NSLocalizedDescriptionKey] as? String, !d.isEmpty {
+        return d
+    }
+    if let e = error as? CustomStringConvertible {
+        let d = e.description
+        if !d.isEmpty { return d }
+    }
+    let d = String(describing: error)
+    return d.isEmpty ? ns.localizedDescription : d
+}
+
 /// A decoded line. Params and result stay raw JSON until the method is known.
 public struct Incoming: Sendable {
     public var id: String?

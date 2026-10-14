@@ -241,7 +241,25 @@ func (a *app) modelChanged() {
 
 func (a *app) canGenerate() bool {
 	return a.engState == engineReady && a.job == nil &&
-		strings.TrimSpace(a.text) != "" && a.preset().Repo != ""
+		strings.TrimSpace(a.text) != "" && a.preset().Repo != "" && !a.studioMissingReference()
+}
+
+// studioMissingReference is true when the Studio's model only clones
+// voices (catalog NeedsReference) and nothing gives it a reference clip:
+// no clip chosen, no unsaved clip, no saved voice that carries one.
+func (a *app) studioMissingReference() bool {
+	p := a.preset()
+	if !p.NeedsReference {
+		return false
+	}
+	if a.studioVoice == "" && a.studioClip != nil {
+		return false
+	}
+	if v := a.findVoice(a.studioVoice); v != nil {
+		ok, _ := voiceUsable(v, p)
+		return !ok
+	}
+	return strings.TrimSpace(a.refAudio) == ""
 }
 
 // generate makes a take of the form: TakeService checks the licence and

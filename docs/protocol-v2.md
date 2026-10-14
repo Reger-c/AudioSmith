@@ -170,7 +170,7 @@ What `voice`, `instruct` and the clone fields mean, by model (catalogue capabili
 | `instruct` | A style or emotion instruction [`instruct`]. CustomVoice appends it to the speaker (`Vivian` + `用非常开心的语气说`); design models use it as the description when `voice` is empty. |
 | OmniVoice `voice` | Its attribute tags, normalised by the engine as OmniVoice's own Python does: items split on `,`/`，`; a Chinese dialect makes every item Chinese and an English accent every item English, otherwise Chinese text makes them Chinese (`female, young adult` + Chinese text → `女，青年`). Unknown items and a second item of one category are dropped with a `log` warning instead of failing the take. |
 | `language` | The catalogue's `Language.Value` for the model ("Chinese", "en"…). |
-| `refAudio`, `refText` | Clone reference and its transcript [`clone`]. Any format AVFoundation reads. |
+| `refAudio`, `refText` | Clone reference and its transcript [`clone`]. Any format AVFoundation reads. A model that only clones (catalogue `needsReference`: MOSS-TTS-Nano) fails without `refAudio` with `bad_request` ("MOSS-TTS-Nano-100M only clones voices: give it a reference clip (refAudio)"); the app does not send such a request (`core.NeedsReferenceError`, render jobs fail with `needs_reference`). |
 | `voicePrompt` | A file `tts.encodeVoice` wrote for this model [`voicePrompt`]. It wins over `refAudio`. If it cannot be used (made for another model, an older format), the engine logs a warning and uses `refAudio`; without `refAudio` it fails with `bad_request`. The app therefore sends both. |
 | `guidance` | Classifier-free guidance scale [`guidance`]: OmniVoice `guidance_scale`, Chatterbox `cfg_weight`. |
 | `exaggeration` | Chatterbox's emotion exaggeration [`exaggeration`]. |
@@ -475,6 +475,8 @@ At 24 kHz mono, PCM16 in base64 is about 64 KB/s. If profiling ever shows that t
 | `permission_denied` (M1) | macOS refused a permission | `{"permission":"microphone"}` | point to System Settings → Privacy & Security |
 | `device_unavailable` (M1) | The capture device is unknown, gone or busy | `{"device"}` | refresh the device list |
 | `context_too_long` | `llm.generate`: prompt + reply over the context the engine allows | `{"limit","actual","unit":"tokens"}` | split the work |
+
+Messages are the error's own words: the engine takes a Swift error's `errorDescription` (LocalizedError), else its `description` (CustomStringConvertible), else `String(describing:)` (`errorMessage` in Wire.swift), never Cocoa's generic "The operation couldn’t be completed. (… error 0.)". A model's invalid-input errors (`AudioGenerationError.invalidInput`, `MossTTSNanoError.invalidInput`) are `bad_request`.
 
 The app treats an unknown code as `internal` (so an older app reads the M1 codes as `internal`). `proto.Codes` lists them all; `proto.Retryable(code)` the retryable ones, and the job scheduler uses it. `jobErrorText` (enginelink.go) translates them for the UI.
 

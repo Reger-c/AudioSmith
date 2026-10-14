@@ -9,7 +9,7 @@ Golden transcripts of the engine protocol: the contract between the Go app and t
 | `tts_clone.jsonl` | cloning with sampling parameters and a seed |
 | `cancel.jsonl` | `job.cancel` of a running job, and of a finished one |
 | `models.jsonl` | `models.load` / `loaded` / `unload`, `engine.stats`, `flush`, `shutdown` |
-| `errors.jsonl` | the M0 error codes, and `input_too_long` |
+| `errors.jsonl` | the M0 error codes, `input_too_long`, and a model that only clones (MOSS-TTS-Nano) without a reference (`bad_request`) |
 | `voice.jsonl` | `tts.encodeVoice`, a take from a voice prompt, VoiceDesign, CustomVoice + instruct, Chatterbox parameters |
 | `stt.jsonl` | `stt.transcribe` (auto language, word timings, translate refused, missing file), `stt.align` |
 | `analysis.jsonl` | `vad.detect`, `enhance.run`, `unsupported_media` |

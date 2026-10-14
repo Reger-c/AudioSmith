@@ -426,6 +426,9 @@ func (a *app) modelInfo(c *ui.Context, e catalog.Entry, m *modelState, loaded bo
 		if e.Hidden {
 			tagChip(c, i18n.T("Preview"))
 		}
+		if e.NeedsReference {
+			tagChip(c, i18n.T("Needs a reference clip"))
+		}
 		if loaded {
 			ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 				statusDot(c, t.Success)

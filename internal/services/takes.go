@@ -150,6 +150,9 @@ func (s *Takes) check(ctx context.Context, r core.Take) (core.Take, error) {
 	if s.sched == nil {
 		return r, fmt.Errorf("generate: no job scheduler: %w", core.ErrUnsupported)
 	}
+	if err := checkReference(r, s.model(r.Model)); err != nil {
+		return r, err
+	}
 	if s.licences != nil {
 		if err := s.licences.Check(ctx, r.Model); err != nil {
 			return r, err
@@ -161,6 +164,23 @@ func (s *Takes) check(ctx context.Context, r core.Take) (core.Take, error) {
 		}
 	}
 	return r, nil
+}
+
+// checkReference refuses a recipe for a model that only clones voices
+// (ModelInfo.NeedsReference) when it has neither a reference clip nor a
+// voice prompt: the engine would fail it.
+func checkReference(t core.Take, info ModelInfo) error {
+	if !info.NeedsReference || strings.TrimSpace(t.RefAudio) != "" || strings.TrimSpace(t.VoicePrompt) != "" {
+		return nil
+	}
+	name := info.Label
+	if name == "" {
+		name = t.Model
+		if i := strings.LastIndex(name, "/"); i >= 0 {
+			name = name[i+1:]
+		}
+	}
+	return &core.NeedsReferenceError{Model: name}
 }
 
 // renderRecipe is the recipe part of a take's render options (results

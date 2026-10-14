@@ -125,6 +125,8 @@ func (RenderProgress) Topic() string { return "render.progress" }
 // catalogue, which they do not import).
 type ModelInfo struct {
 	Traits
+	// Label is the model's name in the UI (the catalogue's label).
+	Label    string
 	Revision string
 	// Languages maps the values the language parameter takes to BCP-47
 	// tags ("Chinese" → "zh"); VoiceLanguages built-in voices to theirs.
@@ -219,6 +221,10 @@ func (r *renderer) Run(ctx context.Context, job jobs.Job, report func(jobs.Progr
 		modelPath = dir
 	}
 	info := r.model(t.Model)
+	if err := checkReference(t, info); err != nil {
+		data, _ := json.Marshal(map[string]string{"model": t.Model})
+		return nil, &jobs.Error{Code: core.CodeNeedsReference, Message: err.Error(), Data: data}
+	}
 	var seed *int64
 	if opts.SeedPinned && t.Seed != 0 {
 		seed = &t.Seed

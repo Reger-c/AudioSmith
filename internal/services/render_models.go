@@ -32,6 +32,10 @@ type Traits struct {
 	// MaxCharsCJK for scripts mostly in Han, kana or Hangul.
 	MaxChars    int `json:"maxChars"`
 	MaxCharsCJK int `json:"maxCharsCJK"`
+	// NeedsReference: the model only clones (catalog
+	// Entry.NeedsReference): a recipe without a reference clip or a voice
+	// prompt is refused before it reaches the engine.
+	NeedsReference bool `json:"needsReference,omitempty"`
 	// NonVerbalTags are the tags the model renders ("laughter"…, without
 	// brackets); nil with NonVerbal = every tag markup knows.
 	NonVerbalTags []string `json:"nonVerbalTags,omitempty"`

@@ -190,6 +190,23 @@ func (e *LicenceRequiredError) Error() string {
 
 func (e *LicenceRequiredError) Unwrap() error { return ErrLicenceRequired }
 
+// NeedsReferenceError: the model only clones voices (catalog
+// Entry.NeedsReference, MOSS-TTS-Nano) and the recipe has no reference
+// clip. It wraps ErrInvalid (the Local API answers 400).
+type NeedsReferenceError struct {
+	Model string // the model's name as the UI shows it, or its repo
+}
+
+func (e *NeedsReferenceError) Error() string {
+	return fmt.Sprintf("%s only clones voices: give it a reference clip, or a saved voice cloned from one", e.Model)
+}
+
+func (e *NeedsReferenceError) Unwrap() error { return ErrInvalid }
+
+// CodeNeedsReference is the jobs.Error code of a render refused for the
+// same reason (Data: {"model": repo}).
+const CodeNeedsReference = "needs_reference"
+
 // NotificationService is the notification centre. Post never blocks.
 type NotificationService interface {
 	Post(n Notification)
