@@ -31,6 +31,10 @@ type app struct {
 	takesState
 	engineLink
 	voicesState // voices.go (thread V): voice library, design, gallery
+	// M2 (thread #17): transcribe*.go, dictation*.go, permissions.go.
+	transcribeState
+	dictationState
+	llmState
 }
 
 func newApp(eng *engineHost, lib *library) *app {
@@ -42,6 +46,10 @@ func newApp(eng *engineHost, lib *library) *app {
 	a.openShell(lib)
 	a.openTakes(lib)
 	a.openVoices(lib) // voices.go (thread V)
+	// M2 (thread #17).
+	a.openTranscripts(lib) // transcribe.go
+	a.openLLM()            // transcribe_llm.go
+	a.openDictation()      // dictation.go
 	return a
 }
 
@@ -76,6 +84,7 @@ func (a *app) toast(msg string) {
 // quit releases what the app holds; it runs in App.OnQuit.
 func (a *app) quit() {
 	a.pl.Stop()
+	a.closeDictation() // M2: dictation.go
 	a.eng.Stop()
 	a.closeShell()
 }
