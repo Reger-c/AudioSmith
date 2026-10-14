@@ -273,6 +273,10 @@ const (
 	// speakers).
 	DefaultSeparate = "htdemucs"
 	DefaultDiarize  = "sortformer-4spk-v2.1"
+	// DefaultLLM is the local language model (llm.generate) for offline
+	// translation and writing help: Qwen3 4B Instruct 2507, 4-bit
+	// (Apache-2.0); Qwen3 1.7B is the light one for 8 GB Macs.
+	DefaultLLM = "qwen3-4b-instruct-2507-4bit"
 )
 
 // TextLength measures text against Entry.MaxChars: one per character,
