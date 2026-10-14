@@ -317,3 +317,31 @@ func TestTranscriptCleanUpWithLLM(t *testing.T) {
 		t.Errorf("failed clean-up applied: %q", a.trDetail.Clean)
 	}
 }
+
+func TestTranscriptLongPages(t *testing.T) {
+	m := newM2Test(t)
+	a, tt := m.a, m.tt
+	tr := sampleTranscript("long", time.Now())
+	tr.Segments = nil
+	for i := range 450 {
+		tr.Segments = append(tr.Segments, core.TranscriptSegment{Start: float64(i), End: float64(i) + 0.9, Text: "Sentence " + itoa(i) + "."})
+	}
+	tr.Duration = 450
+	putTranscript(t, a, tr)
+	a.navigate("/transcripts")
+	a.selectTranscript("long")
+	tt.Frame()
+	if !tt.HasText("Show 200 more segments") || !tt.HasText("Sentence 199.") {
+		t.Fatalf("first page: %q", tt.Texts())
+	}
+	tt.Click("Show 200 more segments")
+	tt.Frame()
+	if !tt.HasText("Show 50 more segments") {
+		t.Errorf("second page")
+	}
+	tt.Click("Show 50 more segments")
+	tt.Frame()
+	if tt.HasText("Show 50 more segments") {
+		t.Errorf("all shown")
+	}
+}

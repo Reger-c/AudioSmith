@@ -69,7 +69,11 @@ type transcribeState struct {
 	trExport  bool   // the export menu is open
 	trConfirm string // id the delete confirmation asks about
 	trDevice  string // the recorder's device label (bound to its Select)
+	trShown   int    // segments shown (long transcripts show more on demand)
 }
+
+// trPage is how many more segments "Show more" shows.
+const trPage = 200
 
 // trJob is the transcription the page follows.
 type trJob struct {
@@ -232,6 +236,7 @@ func (a *app) selectTranscript(id string) {
 	}
 	a.stopTranscriptPlayback()
 	a.trSel, a.trDetail, a.trEdit, a.trOrig, a.trExport, a.trWarn = id, nil, -1, false, false, ""
+	a.trShown = trPage
 	if id == "" {
 		return
 	}

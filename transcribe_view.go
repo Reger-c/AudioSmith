@@ -508,7 +508,21 @@ func (a *app) transcriptSegments(c *ui.Context, tr *core.Transcript) {
 		ui.Text(c, i18n.T("No speech was found.")).TextColor(t.TextMuted)
 		return
 	}
+	shown := max(a.trShown, trPage)
+	// The sentence playing shows, however far it is.
 	for i, s := range tr.Segments {
+		if pos >= s.Start && pos < s.End && i >= shown {
+			shown = (i/trPage + 1) * trPage
+		}
+	}
+	for i, s := range tr.Segments {
+		if i >= shown {
+			rest := len(tr.Segments) - shown
+			if ui.Button(c.Key("tr-more"), i18n.N(min(rest, trPage), "Show %d more segment", "Show %d more segments", min(rest, trPage))).Clicked() {
+				a.trShown = shown + trPage
+			}
+			break
+		}
 		playing := pos >= 0 && pos >= s.Start && pos < s.End
 		row := ui.Row(c.Key(fmt.Sprintf("tr-seg-%d", i))).Gap(px(t, 10)).AlignItems(ui.Start).Padding(px(t, 6), px(t, 8)).Radius(8)
 		if playing {
