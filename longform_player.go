@@ -269,7 +269,7 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 				}
 				start := para.Start
 				if ui.ButtonBase(c.Key("ra-p-"+strconv.Itoa(pi))).Label(i18n.T("Play from here")).Children(func() {
-					ui.Text(c, b.String()).TextColor(t.TextMuted).FontSize(px(t, 14)).MaxLines(3).Ellipsis("…")
+					ui.Text(c, b.String()).TextColor(t.TextMuted).FontSize(px(t, 14)).MaxLines(3).Ellipsis("…").Grow(1).MinWidth(0)
 				}).Clicked() {
 					seek(start)
 				}

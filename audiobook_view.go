@@ -75,7 +75,7 @@ func (a *app) lfToasts(c *ui.Context) {
 func (a *app) manuscriptToolbar(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
 	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
-		if ui.Button(c.Key("mk-pause"), i18n.T("Pause")).Tooltip(i18n.T("Insert [pause 500ms]")).Disabled(locked).Clicked() {
+		if ui.Button(c.Key("mk-pause"), i18n.X("markup", "Pause")).Tooltip(i18n.T("Insert [pause 500ms]")).Disabled(locked).Clicked() {
 			a.insertMarkup(p, "[pause 500ms]")
 		}
 		if ui.Button(c.Key("mk-voice"), i18n.T("Voice")).Tooltip(i18n.T("Switch voice: [voice:NAME] until the next switch or chapter")).Disabled(locked).Clicked() {
@@ -196,7 +196,7 @@ func (a *app) manuscriptWarnings(c *ui.Context, p *lfPage) {
 			if pr.Span.End > pr.Span.Start {
 				start := pr.Span.Start
 				if ui.ButtonBase(c.Key("w-"+strconv.Itoa(i))).Label(msg).Children(func() {
-					ui.Text(c, "• "+msg).FontSize(px(t, 12))
+					ui.Text(c, "• "+msg).FontSize(px(t, 12)).Grow(1).MinWidth(0)
 				}).Clicked() {
 					p.ed.Select(start, pr.Span.End)
 				}

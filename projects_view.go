@@ -233,7 +233,7 @@ func (a *app) itemTitle(c *ui.Context, it store.LibraryItem) {
 		title = i18n.T("Untitled")
 	}
 	if ui.ButtonBase(c.Key("title")).Label(i18n.T("Open %s", title)).Children(func() {
-		ui.Text(c, title).Bold().MaxLines(2).Ellipsis("…")
+		ui.Text(c, title).Bold().MaxLines(2).Ellipsis("…").Grow(1).MinWidth(0)
 	}).Clicked() {
 		a.openItem(it)
 	}

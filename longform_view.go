@@ -260,7 +260,7 @@ func (a *app) lfBookCard(c *ui.Context, p *lfPage, locked bool) {
 		})
 	}
 	ui.Field(c, i18n.T("Description"), func() {
-		ui.TextArea(c.Key("book-desc"), &b.Description).Label(i18n.T("Description")).Height(px(t, 64)).Disabled(locked)
+		ui.TextArea(c.Key("book-desc"), &b.Description).Label(i18n.T("Description")).Lines(2, 6).MinHeight(0).Disabled(locked)
 	})
 	ui.Row(c.Key("book-cover")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 		if bmp := a.coverBitmap(b.Cover); bmp != nil {
@@ -496,7 +496,7 @@ func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 				}
 				ui.Text(c.Key("lf-blocker"), msg).FontSize(px(t, 12)).TextColor(color).Grow(1).MinWidth(0)
 				if r != nil && (r.rec.State == core.RenderFailed || r.rec.State == core.RenderStopped) {
-					if ui.Button(c.Key("lf-resume"), i18n.T("Resume")).Tooltip(i18n.T("Render what is missing: finished chapters are kept")).
+					if ui.Button(c.Key("lf-resume"), i18n.X("render", "Resume")).Tooltip(i18n.T("Render what is missing: finished chapters are kept")).
 						Disabled(a.activeRender() != nil).Clicked() {
 						a.resumeLf(p, r.rec.ID)
 					}
@@ -662,7 +662,7 @@ func (a *app) interruptedRenders(c *ui.Context, p *lfPage) {
 				ui.Text(c, i18n.T("Interrupted: %s", r.rec.Title)).SingleLine().Ellipsis("…")
 				ui.Text(c, i18n.T("%d of %d chapters are made", r.body.Done(), len(r.body.Chapters))).FontSize(px(t, 11)).TextColor(t.TextMuted)
 			})
-			if ui.Button(c.Key("resume"), i18n.T("Resume")).Disabled(a.activeRender() != nil).Clicked() {
+			if ui.Button(c.Key("resume"), i18n.X("render", "Resume")).Disabled(a.activeRender() != nil).Clicked() {
 				a.resumeLf(p, r.rec.ID)
 			}
 			if ui.Button(c.Key("show"), i18n.T("Show")).Clicked() {
@@ -805,7 +805,11 @@ func (a *app) loudnessReport(c *ui.Context, p *lfPage, r *lfRender) {
 						bad = append(bad, checkText(k.Code))
 					}
 				}
-				text := fmt.Sprintf("%s · %.1f LUFS · %.1f dBTP · RMS %.1f dB · %s %.0f dB", title, ch.Report.Integrated, ch.Report.TruePeak, ch.Report.RMS, i18n.T("floor"), ch.Report.NoiseFloor)
+				floor := fmt.Sprintf("%.0f dB", ch.Report.NoiseFloor)
+				if ch.Report.NoiseFloor <= -119 {
+					floor = i18n.T("digital silence")
+				}
+				text := fmt.Sprintf("%s · %.1f LUFS · %.1f dBTP · RMS %.1f dB · %s %s", title, ch.Report.Integrated, ch.Report.TruePeak, ch.Report.RMS, i18n.T("floor"), floor)
 				if len(bad) > 0 {
 					text += " · " + strings.Join(bad, ", ")
 				}

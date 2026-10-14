@@ -203,8 +203,12 @@ func (a *app) setLfDoc(p *lfPage, d services.LongformDoc, project, saved string)
 	p.ra = readAlong{}
 }
 
+// docJSON is a document as compared for unsaved changes: the render it
+// last made is not a change.
 func docJSON(d *services.LongformDoc) string {
-	b, _ := json.Marshal(d)
+	c := *d
+	c.Render = ""
+	b, _ := json.Marshal(c)
 	return string(b)
 }
 
@@ -218,7 +222,7 @@ func (a *app) autosaveLf(p *lfPage) {
 	p.fp = fp
 	a.compileLf(p)
 	d := lfDraft{Version: 1, Doc: p.doc, Project: p.project, Saved: p.savedJSON, Render: p.render}
-	if js := docJSON(&p.doc) + "|" + p.project + "|" + p.render; js != p.draftJSON {
+	if js := docJSON(&p.doc) + "|" + p.doc.Render + "|" + p.project + "|" + p.render; js != p.draftJSON {
 		p.draftJSON = js
 		a.lib.svc.Drafts.Save(p.draftKey(), d)
 	}
@@ -927,7 +931,7 @@ func (a *app) projectUsageLink(c *ui.Context, u core.VoiceProjectUsage) {
 		return
 	}
 	if ui.ButtonBase(c.Key("usage-"+u.ID)).Label(label).Children(func() {
-		ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.Accent)
+		ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.Accent).Grow(1).MinWidth(0)
 	}).Clicked() {
 		a.askOpenProject(u.ID, u.Kind, u.Title)
 	}

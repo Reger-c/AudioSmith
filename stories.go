@@ -57,6 +57,7 @@ func (a *app) splitStory(p *lfPage) {
 		p.doc.Lines = append(p.doc.Lines, l)
 	}
 	p.doc.ImportText = ""
+	p.open["review"] = false
 	a.toast(i18n.N(n, "%d line", "%d lines", n))
 }
 
@@ -121,6 +122,7 @@ func (a *app) autoCastStory(p *lfPage) {
 		p.doc.Lines = append(p.doc.Lines, line)
 	}
 	p.doc.ImportText = ""
+	p.open["review"] = false
 	n := len(speakers) + 1
 	a.toast(i18n.N(len(res.Lines), "Auto-cast %[1]d line across %[2]d voices", "Auto-cast %[1]d lines across %[2]d voices", len(res.Lines), n))
 	p.open["cast"] = true
@@ -274,5 +276,5 @@ func (a *app) loadSampleStory(p *lfPage) {
 	}
 	p.doc.Lines[7].PauseAfter = 800
 	p.project, p.savedJSON, p.sel = "", "", -1
-	p.open["cast"] = true
+	p.open["cast"], p.open["review"] = true, false
 }

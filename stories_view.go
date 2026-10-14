@@ -80,7 +80,7 @@ func (a *app) reviewBuffer(c *ui.Context, p *lfPage, locked bool) {
 	ui.Collapsible(c.Key("st-review"), i18n.T("Paste or import text"), &open, func() {
 		ui.Column(c).Gap(px(t, 6)).Children(func() {
 			box := ui.TextArea(c.Key("st-buffer"), &p.doc.ImportText).Placeholder(i18n.T("Paste a story. Auto-cast finds who speaks — [Name] tags, NAME: lines, or quoted dialogue — and casts a voice for each; Split makes one line per sentence, paragraph or chapter.")).
-				Label(i18n.T("Text to review")).Height(px(t, 110)).Disabled(locked)
+				Label(i18n.T("Text to review")).Lines(3, 12).MinHeight(0).Disabled(locked)
 			if files := box.DroppedFiles(); len(files) > 0 && !locked {
 				a.importStoryFrom(p, files[0])
 			}
@@ -215,7 +215,7 @@ func (a *app) storyLine(c *ui.Context, p *lfPage, i int, l *services.StoryLine, 
 			return
 		}
 		ui.TextArea(c.Key("text"), &l.Text).Placeholder(i18n.T("Dialogue or narration… [pause 500ms] for a silent break")).
-			Label(i18n.T("Line %d", a.lineNumber(p, i))).Disabled(locked)
+			Label(i18n.T("Line %d", a.lineNumber(p, i))).Lines(1, 10).MinHeight(0).Disabled(locked)
 		if sel {
 			a.lineOptions(c, p, l, locked)
 		}
