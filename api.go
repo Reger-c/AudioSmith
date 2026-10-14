@@ -52,11 +52,12 @@ type apiState struct {
 	apiShare  *api.Share // LAN sharing while on
 	apiShareE string
 
-	apiForm    apiForm
-	apiClients []mcpsrv.Client // agents seen, for the bindings
-	apiDocs    *mygo.WebView   // the reference viewer, while its page shows
-	apiDocsErr string
-	integQuery string // the Integrations page's search
+	apiForm     apiForm
+	apiClients  []mcpsrv.Client // agents seen, for the bindings
+	apiDocs     *mygo.WebView   // the reference viewer, while its page shows
+	apiDocsErr  string
+	integQuery  string // the Integrations page's search
+	integManual bool   // thread #33: an agent page's Manual setup is open
 }
 
 // apiForm is what the settings page's controls bind to.
