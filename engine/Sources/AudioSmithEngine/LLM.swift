@@ -211,7 +211,10 @@ extension Analyzer {
         var constrained = false
         let decodeStart = Date()
         var freeRun = true
-        if p.json == true || p.schema != nil {
+        // AUDIOSMITH_LLM_GRAMMAR=0 turns the JSON grammar off (the prompt
+        // and the app's validation remain).
+        let grammarOn = ProcessInfo.processInfo.environment["AUDIOSMITH_LLM_GRAMMAR"] != "0"
+        if (p.json == true || p.schema != nil) && grammarOn {
             do {
                 let gt = try llm.grammarTokenizer()
                 let schema: String
