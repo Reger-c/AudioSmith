@@ -181,8 +181,11 @@ func itemIcon(it store.LibraryItem) icons.Icon {
 		return historyIcon
 	case "export":
 		return exportIcon
-	case "render":
-		return renderIcon
+	case "render": // its kind's icon: the row's play button plays it
+		if it.Category == store.LibAudiobook {
+			return audiobookIcon
+		}
+		return storiesIcon
 	case "dub": // M4 (thread #19)
 		return dubIcon
 	case "workflow": // M6 (thread #21)
