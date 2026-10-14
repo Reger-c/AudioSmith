@@ -379,9 +379,13 @@ func iconMark(c *ui.Context, ic icons.Icon, col ui.Color, tip string) ui.Element
 // pageHeader is a page's title bar, which drags the window: its title,
 // then on the right what trailing builds (the page's one primary action,
 // icon buttons, moreMenu).
+// headerInset is the room page titles leave on their left for the window
+// controls: set each frame by sidebarFrame, non-zero beside the icon rail.
+var headerInset float32
+
 func pageHeader(c *ui.Context, title string, trailing func()) {
 	t := c.Theme()
-	ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, px(t, sp4), 0, px(t, sp6)).Gap(px(t, sp2)).DragWindow().Children(func() {
+	ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, px(t, sp4), 0, px(t, sp6)+headerInset).Gap(px(t, sp2)).DragWindow().Children(func() {
 		ui.Text(c, title).FontSize(px(t, fsTitle)).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Grow(1)
 		if trailing != nil {
 			trailing()

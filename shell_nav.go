@@ -65,7 +65,11 @@ func (a *app) saveClosedSections() {
 func (a *app) sidebarFrame(c *ui.Context, page func()) {
 	t := c.Theme()
 	k := tok(t)
+	headerInset = 0
 	if a.railMode() {
+		// The window controls (the traffic lights) reach past the rail:
+		// page titles move over to keep clear of them.
+		headerInset = max(0, c.TitleBar().Left-px(t, railWidth)-px(t, sp6)+px(t, sp3))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 			ui.Column(c).Width(px(t, railWidth)).Shrink(0).Background(k.Sidebar).Children(func() { a.navRail(c) })
 			ui.Box(c).Width(1).Background(k.Line)
@@ -109,11 +113,22 @@ func (a *app) sidebarFrame(c *ui.Context, page func()) {
 func (a *app) navRail(c *ui.Context) {
 	t := c.Theme()
 	k := tok(t)
-	ui.Row(c).Height(titleBarHeight).Shrink(0).DragWindow().AlignItems(ui.End).Justify(ui.Center).Padding(0, 0, px(t, sp1), 0).Children(func() {
-		if iconButton(c.Key("rail-off"), icons.SidebarMinimalistic, i18n.T("Show the sidebar")).Clicked() {
-			a.setRail(false)
-		}
-	})
+	if bar := c.TitleBar(); bar.Left > 0 {
+		// The traffic lights sit at the top of the rail: the button goes
+		// under them, in a row of its own.
+		ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
+		ui.Row(c).Shrink(0).Justify(ui.Center).Children(func() {
+			if iconButton(c.Key("rail-off"), icons.SidebarMinimalistic, i18n.T("Show the sidebar")).Clicked() {
+				a.setRail(false)
+			}
+		})
+	} else {
+		ui.Row(c).Height(titleBarHeight).Shrink(0).DragWindow().AlignItems(ui.End).Justify(ui.Center).Padding(0, 0, px(t, sp1), 0).Children(func() {
+			if iconButton(c.Key("rail-off"), icons.SidebarMinimalistic, i18n.T("Show the sidebar")).Clicked() {
+				a.setRail(false)
+			}
+		})
+	}
 	ui.Column(c).AlignItems(ui.Center).Padding(px(t, sp1), 0).Shrink(0).Children(func() {
 		a.railButton(c, "rail-search", icons.Magnifer, i18n.T("Command palette"), i18n.T("Command palette")+" (⌘K)", false, "", a.openPalette)
 	})
