@@ -31,6 +31,12 @@ func TestRealEngineConformance(t *testing.T) {
 	}
 	const kokoro = "mlx-community/Kokoro-82M-bf16"
 	dir := t.TempDir()
+	// A model folder of an unknown type: refused without the engine
+	// resolving the made-up repo id in the HF cache (which left a
+	// mlx-audio/someone_not-a-model-type folder in the user's cache).
+	badModel := filepath.Join(dir, "bad-model")
+	os.MkdirAll(badModel, 0o755)
+	os.WriteFile(filepath.Join(badModel, "config.json"), []byte(`{"model_type":"not-a-model-type"}`), 0o644)
 
 	e := startRaw(t, bin)
 	// Before hello.
@@ -64,7 +70,7 @@ func TestRealEngineConformance(t *testing.T) {
 		"no model":  {proto.MethodTTSSynthesize, proto.SynthesizeParams{Text: "Hi", Output: proto.Output{Path: dir + "/x.wav"}}, proto.CodeBadRequest},
 		"relative":  {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Hi", Output: proto.Output{Path: "x.wav"}}, proto.CodeBadRequest},
 		"clone":     {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Hi", RefAudio: "/tmp/ref.wav", Output: proto.Output{Path: dir + "/c.wav"}}, proto.CodeUnsupported},
-		"bad model": {proto.MethodModelsLoad, proto.LoadParams{Model: "someone/not-a-model-type"}, proto.CodeModelLoadFailed},
+		"bad model": {proto.MethodModelsLoad, proto.LoadParams{Model: "someone/not-a-model-type", Path: badModel}, proto.CodeModelLoadFailed},
 		"unwritable": {proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: kokoro, Text: "Hi", Voice: "af_heart",
 			Output: proto.Output{Path: "/nonexistent-root-dir/x.wav"}}, proto.CodeInternal},
 	}

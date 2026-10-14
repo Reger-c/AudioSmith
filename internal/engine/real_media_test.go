@@ -189,6 +189,33 @@ func TestRealEngineMedia(t *testing.T) {
 			t.Errorf("m4b as ffprobe reads it: chapters %+v, tags %v, streams %v", probe.Chapters, probe.Format.Tags, codecs)
 		}
 	}
+	// A book of a few minutes, as the assembler writes it (24 kHz mono
+	// float), chapters a minute apart: the writer must not stall between
+	// the audio and the chapter track (it hung for good in v0.2's check).
+	long := filepath.Join(dir, "long.wav")
+	samples := make([]float64, 24000*190)
+	for i := range samples {
+		samples[i] = 0.2 * math.Sin(2*math.Pi*220*float64(i)/24000) * (0.5 + 0.5*math.Sin(float64(i)/24000))
+	}
+	if err := enginetest.WriteWAV(long, enginetest.Audio{Rate: 24000, Channels: 1, Samples: samples, Float: true}, 32); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	lctx, lcancel := context.WithTimeout(ctx, 2*time.Minute)
+	res, err = runJob(lctx, enc, proto.EncodeParams{Input: long, Output: proto.Output{Path: filepath.Join(dir, "long.m4b"), Format: "m4b"},
+		Chapters: []proto.EncodeChapter{{Title: "One", Start: 0, End: 47}, {Title: "Two", Start: 47, End: 120}, {Title: "Three", Start: 120, End: 190}},
+		Metadata: proto.EncodeMetadata{Title: "Long Book"}, Cover: coverPath})
+	lcancel()
+	t.Logf("long encode: %v in %.1f s", err, time.Since(started).Seconds())
+	if err != nil {
+		t.Errorf("long book: %v", err)
+	} else if fp := tool("ffprobe"); fp != "" {
+		out, _ := exec.Command(fp, "-v", "error", "-show_chapters", "-of", "json", filepath.Join(dir, "long.m4b")).Output()
+		if n := strings.Count(string(out), `"start_time"`); n != 3 {
+			t.Errorf("long book chapters: %s", out)
+		}
+	}
+
 	if _, err := runJob(ctx, enc, proto.EncodeParams{Input: speech, Output: proto.Output{Path: filepath.Join(dir, "b.mp3"), Format: "mp3"}}); !errors.As(err, new(*jobs.Error)) {
 		t.Errorf("mp3: %v", err)
 	}

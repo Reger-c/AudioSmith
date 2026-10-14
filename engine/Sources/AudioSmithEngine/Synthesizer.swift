@@ -33,7 +33,9 @@ final class Synthesizer: @unchecked Sendable {
                                              sampleRate: { $0.sampleRate }) {
             if let path, !path.isEmpty {
                 do {
-                    return try await TTS.loadModel(modelRepo: path, hfToken: token)
+                    let m = try await TTS.loadModel(modelRepo: path, hfToken: token)
+                    dropEngineCopy(model)
+                    return m
                 } catch TTSModelError.unsupportedModelType(let type) where (type ?? "").hasSuffix("from local directory") {
                     // Families without a directory loader in mlx-audio-swift
                     // (Marvis, OmniVoice, Spark, Dia) resolve the repo id in

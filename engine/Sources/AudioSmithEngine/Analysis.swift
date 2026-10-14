@@ -88,7 +88,12 @@ final class Analyzer: @unchecked Sendable {
         let (m, _) = try await store.acquire(model, task: "stt", job: job, as: (any STTGenerationModel).self,
                                              sampleRate: { _ in 16000 }) {
             if model.lowercased().contains("whisper"), let dir {
-                return try await WhisperModel.fromDirectory(dir)
+                let m = try await WhisperModel.fromDirectory(dir)
+                dropEngineCopy(model)
+                return m
+            }
+            if let dir, modelType(dir) == "qwen3_asr" {
+                return try await Qwen3ASRModel.fromModelDirectory(linkedModelDirectory(model, snapshot: dir))
             }
             return try await STT.loadModel(modelRepo: model)
         }
@@ -105,11 +110,9 @@ final class Analyzer: @unchecked Sendable {
         case "stt":
             _ = try await sttModel(p.model, path: p.path, job: job, offline: offline)
         case "align":
-            if offline, (p.path ?? "").isEmpty, let missing = missingFromCache(p.model) {
-                throw EngineError.notDownloaded(model: p.model, missing: missing)
-            }
+            let dir = try modelDirectory(p.model, path: p.path, offline: offline)
             _ = try await store.acquire(p.model, task: "align", job: job, as: Qwen3ForcedAlignerModel.self, sampleRate: { _ in 16000 }) {
-                try await Qwen3ForcedAlignerModel.fromPretrained(p.model)
+                try await loadAligner(p.model, dir: dir)
             }
         case "vad":
             let dir = try modelDirectory(p.model, path: p.path, offline: offline)
@@ -161,14 +164,10 @@ final class Analyzer: @unchecked Sendable {
     func align(_ p: AlignParams, job: String, offline: Bool) async throws -> AlignResult {
         guard !p.model.isEmpty else { throw EngineError.badRequest("Missing model") }
         guard let text = nonEmpty(p.text) else { throw EngineError.badRequest("Missing text") }
-        if offline, let missing = missingFromCache(p.model), (p.modelPath ?? "").isEmpty {
-            throw EngineError.notDownloaded(model: p.model, missing: missing)
-        }
-        // By repo id: the loader writes a tokenizer.json beside the weights,
-        // which belongs in the engine's own copy, not in the app's snapshot.
+        let dir = try modelDirectory(p.model, path: p.modelPath, offline: offline)
         let (model, _) = try await store.acquire(p.model, task: "align", job: job, as: Qwen3ForcedAlignerModel.self,
                                                  sampleRate: { _ in 16000 }) {
-            try await Qwen3ForcedAlignerModel.fromPretrained(p.model)
+            try await loadAligner(p.model, dir: dir)
         }
         defer { store.release(p.model) }
         let samples = try await decodeMono(p.audio, sampleRate: 16000)
@@ -185,6 +184,14 @@ final class Analyzer: @unchecked Sendable {
         MLX.Memory.clearCache()
         let words = result.items.map { Word(text: $0.text, start: round3($0.startTime), end: round3($0.endTime)) }
         return AlignResult(model: p.model, words: words, audioSeconds: audioSeconds, seconds: Date().timeIntervalSince(started))
+    }
+
+    /// The forced aligner from the app's snapshot through a folder of links
+    /// (its loader writes a tokenizer.json beside the weights, which must
+    /// not go into the snapshot); by repo id when there is no snapshot.
+    private func loadAligner(_ model: String, dir: URL?) async throws -> Qwen3ForcedAlignerModel {
+        if let dir { return try await Qwen3ForcedAlignerModel.fromModelDirectory(linkedModelDirectory(model, snapshot: dir)) }
+        return try await Qwen3ForcedAlignerModel.fromPretrained(model)
     }
 
     // MARK: vad.detect

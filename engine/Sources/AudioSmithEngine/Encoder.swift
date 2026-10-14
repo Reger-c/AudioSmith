@@ -70,21 +70,43 @@ extension MediaWorker {
         }
         writer.startSession(atSourceTime: .zero)
 
-        // Chapters are appended as the audio passes their starts, so the
-        // writer can interleave; the last runs to the end of the book.
+        // AVAssetWriter interleaves its tracks: past a point it stops taking
+        // audio until the chapter track has a sample further on, and the
+        // other way round. So chapters are appended as soon as the writer
+        // takes them (never blocking on the text track while audio waits),
+        // and every wait gives up when the writer makes no progress for a
+        // minute instead of spinning forever (books of a few minutes with
+        // chapters 45 s apart hung here: v0.2 verification).
         var next = 0
+        func appendChapter() throws {
+            guard let textFormat, let text else { return }
+            let c = chapters[next]
+            let end = next + 1 < chapters.count ? chapters[next + 1].start : max(c.end, duration)
+            let sample = try Self.chapterSample(c.title, start: c.start, end: max(end, c.start + 0.001), format: textFormat)
+            guard text.append(sample) else { throw RPCError(Code.internal, "Could not write chapter \(next + 1): \(describeError(writer.error))") }
+            next += 1
+        }
+        /// Appends the chapters starting by t that the writer takes now.
         func feedChapters(upTo t: Double) throws {
-            guard let text, let textFormat else { return }
-            while next < chapters.count, chapters[next].start <= t {
-                let c = chapters[next]
-                let end = next + 1 < chapters.count ? chapters[next + 1].start : max(c.end, duration)
-                let sample = try Self.chapterSample(c.title, start: c.start, end: max(end, c.start + 0.001), format: textFormat)
-                while !text.isReadyForMoreMediaData {
-                    if Task.isCancelled { throw CancellationError() }
-                    Thread.sleep(forTimeInterval: 0.002)
+            guard let text else { return }
+            while next < chapters.count, chapters[next].start <= t, text.isReadyForMoreMediaData {
+                try appendChapter()
+            }
+        }
+        /// Waits until input takes more data; while audio waits, the writer
+        /// may want the next chapter first.
+        func waitReady(_ input: AVAssetWriterInput, what: String) throws {
+            var since = Date()
+            var fed = next
+            while !input.isReadyForMoreMediaData {
+                if Task.isCancelled { throw CancellationError() }
+                if writer.status == .failed { throw RPCError(Code.internal, "Encoding failed: \(describeError(writer.error))") }
+                if input === audio { try feedChapters(upTo: .infinity) }
+                if next != fed { fed = next; since = Date() }
+                if Date().timeIntervalSince(since) > 60 {
+                    throw RPCError(Code.internal, "The encoder stopped taking \(what) (chapter \(next) of \(chapters.count))")
                 }
-                guard text.append(sample) else { throw RPCError(Code.internal, "Could not write chapter \(next + 1): \(describeError(writer.error))") }
-                next += 1
+                Thread.sleep(forTimeInterval: 0.002)
             }
         }
 
@@ -101,10 +123,7 @@ extension MediaWorker {
                 if Task.isCancelled { throw CancellationError() }
                 let t = CMSampleBufferGetPresentationTimeStamp(buffer).seconds
                 try feedChapters(upTo: t)
-                while !audio.isReadyForMoreMediaData {
-                    if Task.isCancelled { throw CancellationError() }
-                    Thread.sleep(forTimeInterval: 0.002)
-                }
+                try waitReady(audio, what: "audio")
                 guard audio.append(buffer) else { throw RPCError(Code.internal, "AAC encoding failed: \(describeError(writer.error))") }
                 if duration > 0 {
                     progress.fraction = min(t / duration, 1)
@@ -112,9 +131,14 @@ extension MediaWorker {
                 }
             }
             if reader.status == .failed { throw EngineError.unsupportedMedia(media.url.path, reader.error?.localizedDescription ?? "reading failed") }
-            try feedChapters(upTo: .infinity)
             audio.markAsFinished()
-            text?.markAsFinished()
+            if let text {
+                while next < chapters.count {
+                    try waitReady(text, what: "chapters")
+                    try appendChapter()
+                }
+                text.markAsFinished()
+            }
             progress.fraction = 1
             progress.send("writing", force: true)
             await writer.finishWriting()

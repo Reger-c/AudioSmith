@@ -174,6 +174,62 @@ func missingFromCache(_ model: String) -> [String]? {
     return ["config.json"]
 }
 
+/// mlx-audio-swift's own folder for a repo: <hub>/mlx-audio/<owner>_<name>.
+func engineCopyDirectory(_ model: String) -> URL {
+    hubCacheDirectory().appendingPathComponent("mlx-audio").appendingPathComponent(model.replacingOccurrences(of: "/", with: "_"))
+}
+
+/// The model_type of a snapshot's config.json, nil when unreadable.
+func modelType(_ dir: URL) -> String? {
+    guard let data = try? Data(contentsOf: dir.appendingPathComponent("config.json")),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return json["model_type"] as? String
+}
+
+/// The engine's folder for a model whose loader writes beside the weights
+/// (Qwen3-ASR and its forced aligner add a tokenizer.json): symbolic links
+/// to the snapshot's files, so the app's snapshot stays as downloaded and
+/// nothing is copied. Loading these by repo id made mlx-audio-swift copy
+/// the whole model there, doubling its disk use; a copy left from that is
+/// replaced by links here.
+func linkedModelDirectory(_ model: String, snapshot: URL) throws -> URL {
+    let fm = FileManager.default
+    let dir = engineCopyDirectory(model)
+    try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    for name in try fm.contentsOfDirectory(atPath: snapshot.path) where !name.hasPrefix(".") {
+        let link = dir.appendingPathComponent(name).path
+        let target = snapshot.appendingPathComponent(name).path
+        if (try? fm.destinationOfSymbolicLink(atPath: link)) == target { continue }
+        try? fm.removeItem(atPath: link)
+        do {
+            try fm.createSymbolicLink(atPath: link, withDestinationPath: target)
+        } catch {
+            // Another worker linked it at the same moment.
+            guard (try? fm.destinationOfSymbolicLink(atPath: link)) == target else { throw error }
+        }
+    }
+    return dir
+}
+
+/// Removes mlx-audio-swift's full copy of a model that has just loaded
+/// from the app's snapshot (older engines and the MVP loaded by repo id,
+/// which copied the model): the copy is never read again. Folders of
+/// links (linkedModelDirectory) are kept.
+func dropEngineCopy(_ model: String) {
+    let fm = FileManager.default
+    let dir = engineCopyDirectory(model)
+    guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
+    let copied = names.contains { name in
+        let path = dir.appendingPathComponent(name).path
+        guard name.hasSuffix(".safetensors"), (try? fm.destinationOfSymbolicLink(atPath: path)) == nil else { return false }
+        return true
+    }
+    if copied {
+        try? fm.removeItem(at: dir)
+        log("\(model): removed the engine's old copy (it loads from the app's snapshot)")
+    }
+}
+
 /// The Hugging Face hub cache (HF_HUB_CACHE, set from hello.cacheDir).
 func hubCacheDirectory() -> URL {
     let env = ProcessInfo.processInfo.environment
