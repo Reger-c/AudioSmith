@@ -78,3 +78,17 @@ pen-new-round           # writing help
 text-square             # pronunciation
 cloud-download          # models and downloads
 case-round              # audio tools
+
+# Phase B2 pages (Voices, Gallery, History, Workflows, Calls, Models, …).
+pen                     # edit
+trash-bin-minimalistic  # delete
+stop                    # stop playing
+verified-check          # a verified voice
+lock-keyhole            # a locked voice
+magnifier-zoom-in       # workflow canvas zoom
+magnifier-zoom-out
+full-screen-square      # fit the canvas
+end-call-rounded        # hang up
+square-arrow-right-up   # open externally
+upload-minimalistic     # drop or choose a file
+code                    # code snippets

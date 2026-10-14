@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/gallery"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 )
 
 // clonePage is /voices/new: a voice from a clip.
@@ -19,8 +20,8 @@ func (a *app) clonePage(c *ui.Context) {
 	if v := a.findVoice(s.replaceFor); v != nil {
 		title = i18n.T("Replace the reference of “%s”", v.Name)
 	}
-	header(c, title, func() {
-		if ui.Button(c.Key("clone-back"), i18n.T("Cancel")).Clicked() {
+	pageHeader(c, title, func() {
+		if ghostButton(c.Key("clone-back"), i18n.T("Cancel")).Clicked() {
 			a.micCancel(&s.mic)
 			a.navigate("/voices")
 		}
@@ -33,7 +34,7 @@ func (a *app) clonePage(c *ui.Context) {
 		a.cloneDropped(files)
 	}
 	page.Children(func() {
-		ui.Column(c).Padding(px(t, 20), px(t, 24)).Gap(px(t, 16)).MaxWidth(px(t, 780)).Children(func() {
+		ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp4)).MaxWidth(px(t, 780)).Children(func() {
 			if !s.hasClip() {
 				a.cloneSources(c)
 			} else {
@@ -49,42 +50,46 @@ func (a *app) clonePage(c *ui.Context) {
 func (a *app) cloneSources(c *ui.Context) {
 	t := c.Theme()
 	s := &a.clone
-	ui.Text(c, i18n.T("Use 5–15 seconds of clean speech: one speaker, no music, little room echo.")).TextColor(t.TextMuted)
+	k := tok(t)
+	caption(c, i18n.T("Use 5–15 seconds of clean speech: one speaker, no music, little room echo."))
 	if s.busy != "" {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c)
 			ui.Text(c, s.busy)
 		})
 		return
 	}
-	ui.Row(c).Gap(px(t, 16)).AlignItems(ui.Stretch).Children(func() {
+	ui.Row(c).Wrap().Gap(px(t, sp4)).AlignItems(ui.Stretch).Children(func() {
 		// Upload zone.
-		zone := ui.ButtonBase(c.Key("clone-upload")).Grow(1).Basis(0).MinHeight(px(t, 160)).Padding(px(t, 16)).
-			Radius(12).Border(1, t.Border).BorderStyle(ui.BorderDashed).Label(i18n.T("Choose a file"))
+		zone := ui.ButtonBase(c.Key("clone-upload")).Grow(1).Basis(px(t, 260)).MinHeight(px(t, 180)).Padding(px(t, sp4)).
+			Radius(px(t, radiusCard)).Border(1, k.G[5]).BorderStyle(ui.BorderDashed).Label(i18n.T("Choose a file"))
 		if files := zone.DroppedFiles(); files != nil {
 			a.cloneDropped(files)
 		}
-		if zone.FileDragOver() {
-			zone.Border(2, t.Accent).Background(t.SurfaceHover)
+		switch {
+		case zone.FileDragOver():
+			zone.Border(2, k.Accent).Background(k.AccentSoft)
+		case zone.Hovered():
+			zone.Background(k.Subtle)
 		}
 		if zone.Clicked() {
 			a.chooseCloneFile()
 		}
 		zone.Children(func() {
-			ui.Column(c).Grow(1).Center().Gap(px(t, 6)).Children(func() {
-				ui.Text(c, i18n.T("Drop a clip here, or click to choose")).Bold()
-				hint := i18n.T("WAV, MP3, M4A, FLAC, OGG, AAC — or a video")
-				ui.Text(c, hint).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.Center)
+			ui.Column(c).Grow(1).Center().Gap(px(t, sp2)).Children(func() {
+				ui.Icon(c, icons.UploadMinimalistic.Linear).Size(px(t, 32), px(t, 32)).TextColor(k.Text3)
+				ui.Text(c, i18n.T("Drop a clip here, or click to choose")).FontWeight(600).TextAlign(ui.Center)
+				caption(c, i18n.T("WAV, MP3, M4A, FLAC, OGG, AAC — or a video")).TextAlign(ui.Center)
 			})
 		})
 		// Record zone.
-		ui.Column(c.Key("clone-record")).Grow(1).Basis(0).MinHeight(px(t, 160)).Padding(px(t, 16)).Gap(px(t, 8)).
-			Radius(12).Border(1, t.Border).AlignItems(ui.Center).Children(func() {
+		ui.Column(c.Key("clone-record")).Grow(1).Basis(px(t, 260)).MinHeight(px(t, 180)).Padding(px(t, sp4)).Gap(px(t, sp2)).
+			Radius(px(t, radiusCard)).Border(1, k.Line).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 			a.micControls(c, &s.mic, func(path string) { a.cloneLoad(path, i18n.T("Recording"), true) })
 		})
 	})
 	if s.err != "" {
-		ui.Text(c, s.err).TextColor(t.Danger).FontSize(px(t, 12)).Selectable()
+		ui.Text(c, s.err).TextColor(t.Danger).FontSize(px(t, fsCaption)).Selectable()
 	}
 }
 
@@ -95,15 +100,15 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 	switch m.phase {
 	case "recording":
 		secs := time.Since(m.started).Seconds()
-		if primaryButton(c.Key("mic-stop"), i18n.T("Stop recording")).Background(t.Danger).Clicked() {
+		if recordButton(c.Key("mic-stop"), i18n.T("Stop recording")).Clicked() {
 			a.micStop(m)
 		}
-		ui.Text(c, i18n.T("%.1f s", secs)).FontSize(px(t, 18)).Bold()
+		ui.Text(c, i18n.T("%.1f s", secs)).FontSize(px(t, fsTitle)).FontWeight(600)
 		ui.Meter(c, float64(levelFraction(m.level)), 0, 1, nil).Width(px(t, 160)).Label(i18n.T("Input level"))
 		if inputDetected(m.level) {
-			ui.Text(c, i18n.T("Input detected")).FontSize(px(t, 12)).TextColor(t.Success)
+			statusMark(c, icons.CheckCircle, t.Success, i18n.T("Input detected"))
 		} else {
-			ui.Text(c, i18n.T("No input detected")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("No input detected"))
 		}
 	case "starting", "stopping":
 		ui.Spinner(c)
@@ -111,21 +116,21 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 		if m.phase == "stopping" {
 			label = i18n.T("Finishing…")
 		}
-		ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, label)
 	default:
-		if primaryButton(c.Key("mic-start"), i18n.T("Record")).Clicked() {
+		if recordButton(c.Key("mic-start"), i18n.T("Record")).Clicked() {
 			a.micStart(m, done)
 		}
-		ui.Text(c, i18n.T("Your microphone is never played back.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Your microphone is never played back.")).TextAlign(ui.Center)
 	}
 	busy := m.phase != ""
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Wrap().Justify(ui.Center).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 		labels, ids := []string{i18n.T("System default")}, []string{""}
 		for _, d := range a.clone.devices {
 			labels, ids = append(labels, d.Name), append(ids, d.ID)
 		}
 		dev := labels[max(slices.Index(ids, m.device), 0)]
-		if ui.Select(c.Key("mic-device"), &dev, labels).Label(i18n.T("Input device")).Disabled(busy).Changed() {
+		if ui.Select(c.Key("mic-device"), &dev, labels).Label(i18n.T("Input device")).Disabled(busy).MaxWidth(px(t, 220)).Changed() {
 			if i := slices.Index(labels, dev); i >= 0 {
 				m.device = ids[i]
 			}
@@ -136,9 +141,9 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 		}
 	})
 	if m.err != "" {
-		ui.Text(c, m.err).FontSize(px(t, 12)).TextColor(t.Danger).TextAlign(ui.Center)
+		ui.Text(c, m.err).FontSize(px(t, fsCaption)).TextColor(t.Danger).TextAlign(ui.Center)
 	} else if a.clone.devicesErr != "" && m.phase == "" {
-		ui.Text(c, a.clone.devicesErr).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.Center)
+		caption(c, a.clone.devicesErr).TextAlign(ui.Center)
 	}
 }
 
@@ -146,11 +151,11 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 func (a *app) cloneClip(c *ui.Context) {
 	t := c.Theme()
 	s := &a.clone
-	ui.Column(c.Key("clone-clip")).Gap(px(t, 10)).Padding(px(t, 14)).Radius(10).Border(1, t.Border).Background(t.Surface).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, s.srcName).Bold().SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
-			ui.Text(c, i18n.T("%.1f s", s.seconds)).TextColor(t.TextMuted)
-			if ui.Button(c.Key("clone-change"), i18n.T("Change clip")).Clicked() {
+	card(c.Key("clone-clip")).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, s.srcName).FontWeight(600).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).Tooltip(s.srcName)
+			caption(c, i18n.T("%.1f s", s.seconds)).SingleLine()
+			if ghostButton(c.Key("clone-change"), i18n.T("Change clip")).Clicked() {
 				a.pl.Stop()
 				s.gen++
 				s.work, s.original, s.peaks, s.err, s.busy = "", "", nil, "", ""
@@ -158,13 +163,12 @@ func (a *app) cloneClip(c *ui.Context) {
 		})
 		a.trimWave(c, s)
 		ui.RangeSlider(c.Key("clone-trim"), &s.selLo, &s.selHi, 0, s.seconds, 0.1).Label(i18n.T("Part kept"))
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("%.1f–%.1f s · %.1f s kept", s.selLo, s.selHi, s.sel().Len())).FontSize(px(t, 12)).Grow(1)
-			label := i18n.T("Play the part kept")
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Wrap().Children(func() {
+			label, ic := i18n.T("Play the part kept"), icons.Play
 			if a.pl.Playing("clone-sel") {
-				label = i18n.T("Stop")
+				label, ic = i18n.T("Stop"), icons.Stop
 			}
-			if ui.Button(c.Key("clone-play"), label).Clicked() {
+			if iconButton(c.Key("clone-play"), ic, label).Clicked() {
 				if a.pl.Playing("clone-sel") {
 					a.pl.Stop()
 				} else {
@@ -175,39 +179,40 @@ func (a *app) cloneClip(c *ui.Context) {
 					})
 				}
 			}
-			if ui.Button(c.Key("clone-best"), i18n.T("Best part")).Tooltip(i18n.T("Keep the 15 seconds with the most speech")).Clicked() {
+			ui.Text(c, i18n.T("%.1f–%.1f s · %.1f s kept", s.selLo, s.selHi, s.sel().Len())).FontSize(px(t, fsCaption)).SingleLine().Grow(1)
+			if ghostButton(c.Key("clone-best"), i18n.T("Best part")).Tooltip(i18n.T("Keep the 15 seconds with the most speech")).Clicked() {
 				w := bestWindow(s.speech, s.seconds, refIdealHigh)
 				s.selLo, s.selHi = w.Start, w.End
 			}
-			if ui.Button(c.Key("clone-all"), i18n.T("Keep all")).Clicked() {
+			if ghostButton(c.Key("clone-all"), i18n.T("Keep all")).Clicked() {
 				s.selLo, s.selHi = 0, s.seconds
 			}
 		})
 		note, tone := refAdvice(s.sel().Len(), s.transcript != "")
-		color := t.TextMuted
 		switch tone {
 		case "warning":
-			color = t.Warning
+			statusMark(c, icons.DangerTriangle, t.Warning, note).Tooltip(note)
 		case "danger":
-			color = t.Danger
+			statusMark(c, icons.DangerCircle, t.Danger, note).Tooltip(note)
+		default:
+			caption(c, note)
 		}
-		ui.Text(c, note).FontSize(px(t, 12)).TextColor(color)
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 			switch {
 			case s.busy != "":
 				ui.Spinner(c)
-				ui.Text(c, s.busy).FontSize(px(t, 12))
+				ui.Text(c, s.busy).FontSize(px(t, fsCaption))
 			case s.cleaned:
-				ui.Text(c, i18n.T("Noise cleaned")).FontSize(px(t, 12)).TextColor(t.Success)
-				if ui.Button(c.Key("clone-unclean"), i18n.T("Undo")).Clicked() {
+				statusMark(c, icons.CheckCircle, t.Success, i18n.T("Noise cleaned"))
+				if ghostButton(c.Key("clone-unclean"), i18n.T("Undo")).Clicked() {
 					a.cloneUndoClean()
 				}
 			default:
-				if ui.Button(c.Key("clone-clean"), i18n.T("Clean reference noise")).Tooltip(i18n.T("Remove background noise and room echo")).Clicked() {
+				if ghostIconButton(c.Key("clone-clean"), icons.MagicStick3, i18n.T("Clean reference noise")).Label(i18n.T("Clean reference noise")).Tooltip(i18n.T("Remove background noise and room echo")).Clicked() {
 					a.cloneClean(false)
 				}
 				if s.cleanErr != "" {
-					ui.Text(c, i18n.T("Could not clean the clip: %s", s.cleanErr)).FontSize(px(t, 12)).TextColor(t.Danger).Grow(1).MinWidth(0)
+					ui.Text(c, i18n.T("Could not clean the clip: %s", s.cleanErr)).FontSize(px(t, fsCaption)).TextColor(t.Danger).Grow(1).MinWidth(0)
 				}
 			}
 		})
@@ -268,26 +273,26 @@ func (a *app) cloneDetails(c *ui.Context) {
 		ui.TextArea(c.Key("clone-transcript"), &s.transcript).Lines(2, 6).
 			Placeholder(i18n.T("(Optional) What the clip says. Leave it empty to let the engine listen.")).Label(i18n.T("Transcript"))
 	})
-	ui.Row(c.Key("clone-asr")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("clone-asr")).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
 		switch s.asr {
 		case "running":
 			ui.Spinner(c)
-			ui.Text(c, i18n.T("Transcribing…")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("Transcribing…"))
 		case "noasr":
-			ui.Text(c, i18n.T("No speech-to-text model is installed: transcribing needs one.")).FontSize(px(t, 12)).TextColor(t.Warning).Grow(1)
-			if ui.Button(c.Key("asr-models"), i18n.T("Models")).Clicked() {
+			ui.Text(c, i18n.T("No speech-to-text model is installed: transcribing needs one.")).FontSize(px(t, fsCaption)).TextColor(t.Warning).Grow(1).Basis(px(t, 200))
+			if ghostButton(c.Key("asr-models"), i18n.T("Models")).Clicked() {
 				a.navigate("/models")
 			}
-			if ui.Button(c.Key("asr-retry"), i18n.T("Retry transcription")).Clicked() {
+			if ghostIconButton(c.Key("asr-retry"), icons.Restart, i18n.T("Retry transcription")).Label(i18n.T("Retry transcription")).Clicked() {
 				a.cloneTranscribe()
 			}
 		case "failed":
-			ui.Text(c, i18n.T("Transcription failed")).FontSize(px(t, 12)).TextColor(t.Danger).Grow(1).Tooltip(s.asrErr)
-			if ui.Button(c.Key("asr-retry"), i18n.T("Retry transcription")).Clicked() {
+			statusMark(c, icons.DangerCircle, t.Danger, i18n.T("Transcription failed")).Grow(1).Tooltip(s.asrErr)
+			if ghostIconButton(c.Key("asr-retry"), icons.Restart, i18n.T("Retry transcription")).Label(i18n.T("Retry transcription")).Clicked() {
 				a.cloneTranscribe()
 			}
 		default:
-			if ui.Button(c.Key("asr-run"), i18n.T("Transcribe the part kept")).Clicked() {
+			if ghostIconButton(c.Key("asr-run"), icons.Subtitles, i18n.T("Transcribe the part kept")).Label(i18n.T("Transcribe the part kept")).Clicked() {
 				a.cloneTranscribe()
 			}
 		}
@@ -305,7 +310,7 @@ func (a *app) styleField(c *ui.Context, key string, style *string) {
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 			ui.TextInput(c.Key(key), style).Placeholder(i18n.T("e.g. whisper, or calm and slow")).Label(i18n.T("Style")).Grow(1)
 			loc := i18n.Locale()
-			ui.MenuButton(c.Key(key+"-presets"), i18n.T("Presets"), func(m *ui.Menu) {
+			dropButton(c.Key(key+"-presets"), icons.Tuning2, i18n.T("Presets")).Shrink(0).Menu(func(m *ui.Menu) {
 				for _, p := range gallery.Presets() {
 					hint := p.StyleHint.In(loc)
 					if hint != "" && m.Item(p.Name.In(loc)+" — "+hint).Checked(*style == hint).Chosen() {
@@ -322,13 +327,12 @@ func (a *app) cloneSaveForm(c *ui.Context) {
 	t := c.Theme()
 	s := &a.clone
 	problem := a.cloneProblem()
-	ui.Divider(c)
+	ui.Box(c).Height(1).Background(tok(t).Line)
 	if s.replaceFor != "" {
-		ui.Text(c, i18n.T("Saving replaces this voice's reference. Its lock and its ownership verification are cleared, because the new clip may be another speaker.")).
-			FontSize(px(t, 12)).TextColor(t.TextMuted)
-		ui.Row(c).Gap(px(t, 8)).Justify(ui.End).AlignItems(ui.Center).Children(func() {
+		banner(c, icons.InfoCircle, tok(t).Text2, i18n.T("Saving replaces this voice's reference. Its lock and its ownership verification are cleared, because the new clip may be another speaker."), nil)
+		ui.Row(c).Gap(px(t, sp2)).Justify(ui.End).AlignItems(ui.Center).Children(func() {
 			if problem != "" {
-				ui.Text(c, problem).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
+				caption(c, problem).Grow(1).MinWidth(0)
 			}
 			if primaryButton(c.Key("clone-replace"), i18n.T("Replace reference")).Disabled(problem != "" || s.saving).Clicked() {
 				a.cloneSave()
@@ -336,16 +340,16 @@ func (a *app) cloneSaveForm(c *ui.Context) {
 		})
 		return
 	}
-	ui.Text(c, i18n.T("Save as voice profile")).Bold()
-	ui.Row(c).Gap(px(t, 14)).AlignItems(ui.Center).Children(func() {
+	sectionHeading(c, i18n.T("Save as voice profile"))
+	ui.Row(c).Gap(px(t, sp4)).AlignItems(ui.Center).Children(func() {
 		a.portraitPicker(c, "clone-portrait", s.name, s.portraitBmp, a.clonePortrait, func() { s.portrait, s.portraitBmp = nil, nil })
 		ui.Field(c, i18n.T("Profile name"), func() {
 			ui.TextInput(c.Key("clone-name"), &s.name).Placeholder(i18n.T("e.g. My narrator voice")).Label(i18n.T("Profile name"))
 		}).Grow(1)
 	})
-	ui.Row(c).Gap(px(t, 8)).Justify(ui.End).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Gap(px(t, sp2)).Justify(ui.End).AlignItems(ui.Center).Wrap().Children(func() {
 		if problem != "" {
-			ui.Text(c, problem).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
+			caption(c, problem).Grow(1).Basis(px(t, 200))
 		}
 		if ui.Button(c.Key("clone-once"), i18n.T("Use without saving")).Disabled(problem != "").
 			Tooltip(i18n.T("Use the clip in the Studio once, without adding it to your voices")).Clicked() {
@@ -368,7 +372,7 @@ func (a *app) portraitPicker(c *ui.Context, key, name string, bmp *ui.Bitmap, us
 			use(files[0])
 		}
 		if b.FileDragOver() {
-			b.Border(2, t.Accent)
+			b.Border(2, tok(t).Accent)
 		}
 		if b.Clicked() {
 			a.choosePortrait(use)
@@ -380,12 +384,12 @@ func (a *app) portraitPicker(c *ui.Context, key, name string, bmp *ui.Bitmap, us
 			if bmp != nil {
 				ui.Image(c, bmp).Size(px(t, 64), px(t, 64)).Fit(ui.Cover).Radius(px(t, 32))
 			} else {
-				ui.Column(c).Size(px(t, 64), px(t, 64)).Radius(px(t, 32)).Background(t.SurfaceHover).Border(1, t.Border).Center().Children(func() {
-					ui.Text(c, initials(name)).FontSize(px(t, 20)).Bold().TextColor(t.TextMuted)
+				ui.Column(c).Size(px(t, 64), px(t, 64)).Radius(px(t, 32)).Background(tok(t).Hover).Center().Children(func() {
+					ui.Text(c, initials(name)).FontSize(px(t, fsTitle)).FontWeight(600).TextColor(tok(t).Text2)
 				})
 			}
 		})
-		if bmp != nil && ui.Button(c.Key(key+"-remove"), i18n.T("Remove")).FontSize(px(t, 11)).Tooltip(i18n.T("Remove photo")).Clicked() {
+		if bmp != nil && ghostButton(c.Key(key+"-remove"), i18n.T("Remove")).FontSize(px(t, fsMicro)).Tooltip(i18n.T("Remove photo")).Clicked() {
 			remove()
 		}
 	})
