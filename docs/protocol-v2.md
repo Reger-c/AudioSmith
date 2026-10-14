@@ -301,6 +301,68 @@ Returns `{devices:[{id, name, channels, sampleRate, default?, transport?}]}`, th
 - **Result.** The `proto.AudioOut` fields, the `device` used, the loudest `peak` (dBFS) and `clipped`, the number of samples at full scale.
 - **In the app**, `engine.StartCapture` returns once `recording` arrives; `Recording.Stop` sends `capture.stop` and returns the job's result; `Recording.Cancel` cancels.
 
+## 5.3 Methods added in M4 (dubbing)
+
+Types: [`m4.go`](../internal/engine/proto/m4.go) (Go; `internal/dub/engineapi.go` aliases them), [`WireM4.swift`](../engine/Sources/AudioSmithProtocol/WireM4.swift). Fixtures: `separate.jsonl`, `diarize.jsonl`, `mux.jsonl`, `thumbnail.jsonl`, `transcode.jsonl`. The §5.2 shared rules apply (absolute paths, `file_not_found` / `unsupported_media`, temporary name + rename, BCP-47, model jobs). New progress stages: `separating`, `diarizing`, `muxing`, `transcoding`.
+
+### `separate.run` (job, gpu)
+
+```json
+→ {"id":"01JC…","method":"separate.run","params":{"model":"iky1e/demucs-mlx","modelPath":"/…","audio":"/…/dubs/01JC/audio.wav",
+   "vocals":{"path":"/…/vocals.wav","bits":16},"background":{"path":"/…/background.wav","bits":16},"shifts":1,"overlap":0.25}}
+← job.progress {stage:"loading"} … {stage:"separating", fraction, audioSeconds} … {stage:"writing"}
+← {"id":"01JC…","result":{"vocals":"/…/vocals.wav","background":"/…/background.wav","sampleRate":44100,"channels":2,"frames":2646000,"audioSeconds":60,"model":"iky1e/demucs-mlx","seconds":8.6}}
+```
+
+- **Models** (catalogue task `separate`; the dub pipeline takes the first): HTDemucs (`htdemucs`, the default: [demucs-mlx-swift](https://github.com/kylehowells/demucs-mlx-swift), MIT; `htdemucs_ft` / `htdemucs_6s` checkpoints in the same folder also load) and Mel-RoFormer (`mel-roformer-kim-vocal-2`, the quality option: [mel-roformer-mlx-swift](https://github.com/xocialize/mel-roformer-mlx-swift), MIT). The engine picks the family by the snapshot's files.
+- **Stems:** `vocals` is the voices; `background` is everything else (HTDemucs: drums + bass + other; RoFormer: the mix minus vocals). A `path` of `""` skips that stem (it is then absent from the result). Stems are WAV at 44.1 kHz stereo, as many frames as the input; mono inputs are duplicated.
+- **Long inputs** are separated in 60 s windows joined with a 2 s linear crossfade and streamed to the files, so memory stays flat. `shifts` (HTDemucs' random shifts, 0 = 1) trade time for quality; `overlap` is HTDemucs' segment overlap (0 = 0.25). RoFormer ignores both.
+- **Speed on an M-series Air (24 GB):** HTDemucs ~10× real time, RoFormer ~1.5×. On a 25 s two-speaker clip with music: vocals vs. clean speech SI-SDR 18.3 dB (HTDemucs) / 16.1 dB (RoFormer); background vs. music 14.0 / 12.9 dB (mix: 2.6 dB).
+
+### `diarize.run` (job, gpu)
+
+```json
+→ {"id":"01JC…","method":"diarize.run","params":{"model":"mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16","modelPath":"/…","audio":"/…/vocals.wav"}}
+← job.progress {stage:"loading"} … {stage:"diarizing", fraction:1, audioSeconds}
+← {"id":"01JC…","result":{"turns":[{"start":0.52,"end":3.1,"speaker":"0"},{"start":3.4,"end":6.02,"speaker":"1"},{"start":5.9,"end":7.25,"speaker":"0"}],"speakers":2,"model":"…","audioSeconds":60,"seconds":1.9}}
+```
+
+- **Model:** Sortformer 4spk v2.1 (catalogue task `diarize`; NVIDIA Open Model License, commercial use allowed), from the pinned mlx-audio-swift. The audio is decoded to 16 kHz mono; threshold 0.5, turns under 0.25 s dropped, gaps under 0.5 s merged.
+- **Turns** are in time order and may overlap (crosstalk). Labels are the model's (`"0"`…`"3"`), stable within one result; `speakers` counts the labels used.
+- **Speaker counts:** the model finds how many speakers there are by itself. `speakers` or `minSpeakers` over 4 fails with `unsupported`, `data:{"capability":"speakers","max":4}`; otherwise the hints (and `maxSpeakers`) are accepted and ignored. More speakers need another model (FluidAudio, later).
+- Run it on the separated vocals: music confuses it less. Mac check: 2 speakers, 99 % of frames agree with the script, 0.6 s for 25 s.
+
+### `media.mux` (job, media)
+
+```json
+→ {"id":"01JC…","method":"media.mux","params":{"video":"/Users/me/Movies/interview.mov","keepAudio":true,
+   "audio":[{"path":"/…/tracks/es.wav","language":"es","title":"Español","default":true,"bitrate":192000},{"path":"/…/tracks/fr.wav","language":"fr","title":"Français"}],
+   "subtitles":[{"path":"/…/subs-es.srt","language":"es","title":"Español","default":true},{"path":"/…/subs-en.vtt","language":"en","title":"English"}],
+   "output":{"path":"/Users/me/Movies/Interview.mp4","format":"mp4"}}}
+← job.progress {stage:"muxing", fraction} …
+← {"id":"01JC…","result":{"output":"/Users/me/Movies/Interview.mp4","bytes":182733112,"duration":754.32,"tracks":3}}
+```
+
+- **Video** is the first video track of `video`, copied as it is (no re-encode; its orientation kept). An input without one fails with `unsupported_media`. The file runs as long as the video.
+- **Audio tracks,** in this order: with `keepAudio`, the source's own (copied if AAC, ALAC or AC-3, else encoded to AAC), then each of `audio` encoded to AAC-LC 48 kHz stereo at `bitrate` (0 = 192 kb/s), cut or padded with silence to the video's length. `tracks` counts them.
+- **Subtitles** are soft text tracks (`tx3g`, which ffprobe calls `mov_text`) from SRT or WebVTT files (tags stripped, gaps written as empty samples).
+- **Languages** (BCP-47 → ISO 639-2/T, e.g. `es` → `spa`) are written on every track; a track without one is `und`. Audio tracks form one alternate group and subtitles another; `default` picks the track players start with (one per group: the first with `default`; for audio, else the first dubbed track; subtitles stay off unless one is `default`). `forced` is accepted but not written yet.
+- **Titles** are written into MOV files (`output.format` `"mov"`); AVFoundation does not write track names into MP4, so MP4 players show the language. Checked with ffprobe (languages, `default` dispositions) and AVFoundation (`languageCode`, `isEnabled`) on the Mac.
+- `retime` (slowing parts of the video) is not implemented: `unsupported`, `data:{"capability":"retime"}`.
+- Written to a temporary name and renamed; `job.cancel` removes it.
+
+### `media.thumbnail` (job, media)
+
+`{input, times:[s…], outputs:[path…], width?}` → `{frames:[{time, path, width, height}]}`. One image per time, JPEG (quality 0.8) or PNG by the output's extension, `width` wide (0 = the video's) in proportion, display orientation applied. The frame is the one nearest each time within ±0.5 s (fast: no exact-frame decode); times past the end give the last frame (`time` says which). `times` and `outputs` must be the same length (`bad_request`); no video track → `unsupported_media`.
+
+### `media.transcode` (job, media)
+
+`{input, output:{path, format:"mp4"}, maxHeight?, noAudio?}` → `{output, bytes, duration, width, height}`. An H.264 + AAC MP4 that fits an AVFoundation preset (`maxHeight` 0 = 720; under 540 → 640×480, under 720 → 960×540, under 1080 → 1280×720, else 1920×1080; aspect kept, never upscaled) for the web view's preview, through AVAssetExportSession (VideoToolbox; a 1080p HEVC clip of 25 s takes 0.3 s). `noAudio` drops the audio. AVFoundation reads H.264, HEVC, ProRes and (macOS 15 on M3+) AV1 in MP4/MOV; WebM, MKV and VP9 fail with `unsupported_media`. Progress stage `transcoding`.
+
+### `media.timePitch` (not implemented)
+
+Stays reserved: the app stretches with WSOLA in Go (`internal/dsp/stretch`). `TimePitchParams` (`input`, `output`, `rate`, `pitch?`) is kept in `m4.go` should a listening test prefer AVAudioUnitTimePitch.
+
 ## 6. Notifications (engine → app)
 
 | Method | Params | Notes |
@@ -344,12 +406,12 @@ These names are taken; `proto.Reserved` lists them. An engine that does not impl
 |---|---|---|---|
 | TTS | `tts.batch` (many segments, one warm model) | gpu | M3 |
 | STT | streaming `stt.stream.open/push/close` → `stt.partial` / `stt.final` | listen | later (feasible: Qwen3-ASR and Nemotron have streaming sessions in the pin; partials would come from VAD-cut windows of a `capture.start` job, without `capture.pcm` round-trips) |
-| Analysis | `diarize.run`, `lid.detect`, `separate.run` | gpu | M2–M4 |
+| Analysis | `lid.detect` | gpu | later |
 | LLM | `llm.generate`, `translate.run` | gpu | M2 / M4 |
-| Media | `media.mux`, `media.timePitch`, `media.thumbnail`, `media.ocr`, `doc.extractText` | media | M3 / M4 |
+| Media | `media.timePitch`, `media.ocr`, `doc.extractText` | media | later |
 | Capture | `capture.pcm` (raw input for streaming ASR) | listen | M2 |
 
-M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2).
+M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2); M3 `media.encode`; M4 `separate.run`, `diarize.run`, `media.mux`, `media.thumbnail` and `media.transcode` (§5.3).
 
 ## 9. Versions and compatibility
 

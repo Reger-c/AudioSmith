@@ -133,9 +133,9 @@ final class Server: @unchecked Sendable {
         switch role {
         case .gpu:
             m += [Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.ttsSynthesize, Method.ttsEncodeVoice,
-                  Method.sttTranscribe, Method.sttAlign, Method.vadDetect, Method.enhanceRun]
+                  Method.sttTranscribe, Method.sttAlign, Method.vadDetect, Method.enhanceRun, Method.separateRun, Method.diarizeRun]
         case .media:
-            m += [Method.mediaProbe, Method.mediaDecode, Method.mediaEncode]
+            m += [Method.mediaProbe, Method.mediaDecode, Method.mediaEncode, Method.mediaMux, Method.mediaThumbnail, Method.mediaTranscode]
         case .listen:
             m += [Method.captureDevices, Method.captureStart, Method.captureStop,
                   Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.sttTranscribe]
@@ -255,6 +255,28 @@ final class Server: @unchecked Sendable {
                 let p = try msg.decodeParams(DecodeParams.self)
                 guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
                 startJob(id) { try await media.decode(p, job: id) }
+            case Method.separateRun:
+                let p = try msg.decodeParams(SeparateParams.self)
+                guard let analyzer, role == .gpu else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let offline = self.offline
+                startJob(id) { try await analyzer.separate(p, job: id, offline: offline) }
+            case Method.diarizeRun:
+                let p = try msg.decodeParams(DiarizeParams.self)
+                guard let analyzer, role == .gpu else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let offline = self.offline
+                startJob(id) { try await analyzer.diarize(p, job: id, offline: offline) }
+            case Method.mediaMux:
+                let p = try msg.decodeParams(MuxParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await media.mux(p, job: id) }
+            case Method.mediaThumbnail:
+                let p = try msg.decodeParams(ThumbnailParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await media.thumbnail(p, job: id) }
+            case Method.mediaTranscode:
+                let p = try msg.decodeParams(TranscodeParams.self)
+                guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                startJob(id) { try await media.transcode(p, job: id) }
             case Method.mediaEncode:
                 let p = try msg.decodeParams(EncodeParams.self)
                 guard let media else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
@@ -323,7 +345,7 @@ final class Server: @unchecked Sendable {
         out.result(id, HelloResult(
             protocol: protocolVersion, version: engineVersion, role: role, pid: Int(getpid()),
             concurrency: concurrency, methods: methods,
-            families: role == .gpu ? Synthesizer.families + Analyzer.families : role == .listen ? Analyzer.listenFamilies : [],
+            families: role == .gpu ? Synthesizer.families + Analyzer.families + Analyzer.m4Families : role == .listen ? Analyzer.listenFamilies : [],
             device: deviceInfo()))
     }
 

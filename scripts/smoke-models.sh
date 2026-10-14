@@ -7,6 +7,7 @@
 #   scripts/smoke-models.sh kokoro-82m-bf16,omnivoice-bf16
 #
 # AUDIOSMITH_SMOKE_CACHE (model folder, default the HF cache),
+# AUDIOSMITH_SMOKE_SANDBOX=1 (the engine under sandbox-exec, no network),
 # AUDIOSMITH_SMOKE_KEEP=1 (keep what it downloaded), AUDIOSMITH_SMOKE_REPORT
 # (default /tmp/audiosmith-smoke/report.md) tune it. Set SKIP_BUILD=1 to
 # use the staged engine as it is.

@@ -100,8 +100,9 @@ func TestDubPageEndToEnd(t *testing.T) {
 	a.dubStart()
 	tt.Frame()
 	p := a.dub
-	// The catalogue has no diarization model yet: one speaker.
-	if len(p.Segments) != 6 || len(p.References) != 1 || len(p.Tracks) != 0 {
+	// The catalogue's diarization model (dubtest's fake) finds the two
+	// speakers of dubtest.Speech.
+	if len(p.Segments) != 6 || len(p.References) != 2 || len(p.Tracks) != 0 {
 		t.Fatalf("after transcribing: %d segments, %d references, tracks %v", len(p.Segments), len(p.References), p.Tracks)
 	}
 	if !tt.HasText("Hello there.") || !tt.HasText("Translate →") {
@@ -218,7 +219,7 @@ func TestDubPageEndToEnd(t *testing.T) {
 	}
 	// Create Story.
 	a.dubAskStory()
-	if a.currentPage() != "stories" || len(a.lfStories.doc.Lines) == 0 || len(a.lfStories.doc.Cast) != 1 {
+	if a.currentPage() != "stories" || len(a.lfStories.doc.Lines) == 0 || len(a.lfStories.doc.Cast) != 2 {
 		t.Errorf("story: page %s, %d lines, cast %+v", a.currentPage(), len(a.lfStories.doc.Lines), a.lfStories.doc.Cast)
 	}
 }

@@ -268,6 +268,11 @@ const (
 	// on a MacBook Air M4 it transcribes 5 s of speech in 0.2–0.33 s warm
 	// (Whisper turbo: 1.2–1.3 s) and Chinese exactly (TestDictationLatency).
 	DefaultDictation = "qwen3-asr-0.6b-4bit"
+	// DefaultSeparate and DefaultDiarize serve dubbing (M4): HTDemucs
+	// (fast; Mel-RoFormer is the quality option) and Sortformer (≤ 4
+	// speakers).
+	DefaultSeparate = "htdemucs"
+	DefaultDiarize  = "sortformer-4spk-v2.1"
 )
 
 // TextLength measures text against Entry.MaxChars: one per character,
