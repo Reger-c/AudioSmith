@@ -238,7 +238,7 @@ func (a *app) readiness(st scriptStats) (msg string, warn bool) {
 	if a.studioMissingReference() {
 		return studioNeedsReferenceText(p), true
 	}
-	if p.Has(catalog.CapClone) && len(p.Voices) == 0 && !p.Has(catalog.CapVoiceStyle) && a.refAudio == "" && a.voice == "" {
+	if a.studioDefaultVoice() {
 		return i18n.T("No reference clip: the model speaks in its default voice."), false
 	}
 	return "", false
