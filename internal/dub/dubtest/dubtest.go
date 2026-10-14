@@ -9,7 +9,8 @@
 //	media.decode      WAV inputs converted; others read "<input>.wav" (a video's audio)
 //	separate.run      vocals = the input, background = the input × 0.1
 //	diarize.run       energy VAD regions, speakers taking turns (Speakers, default 2)
-//	stt.transcribe    one segment per VAD region, its text from Script (or "Line N."), with word times
+//	stt.transcribe    one segment per VAD region, its text from Script (or "Line N."), with word times;
+//	                  a file with a "<audio>.txt" beside it (a rendered line) says that text, or Heard[text]
 //	stt.align         the text's words spread over the audio
 //	vad.detect        the energy VAD
 //	enhance.run       a copy
@@ -351,11 +352,10 @@ func (e *Engine) transcribe(p proto.TranscribeParams) (proto.TranscribeResult, e
 	}
 	res := proto.TranscribeResult{Model: p.Model, Language: lang, AudioSeconds: b.Seconds(), Seconds: 0.01, RTF: 100}
 	regions := analysis.VAD(b, analysis.VADOptions{})
-	if strings.HasPrefix(p.Prompt, "expect:") {
-		// A check of one dubbed line: it heard what it was told to.
-		want := strings.TrimPrefix(p.Prompt, "expect:")
-		got := want
-		if h, ok := heard[want]; ok {
+	if said, err := os.ReadFile(p.Audio + ".txt"); err == nil {
+		// A rendered line (its text beside it): heard as said, or as Heard says.
+		got := string(said)
+		if h, ok := heard[got]; ok {
 			got = h
 		}
 		res.Text = got

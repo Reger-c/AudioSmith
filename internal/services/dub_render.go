@@ -1,0 +1,740 @@
+package services
+
+// The dub stages after the transcript: translate, synthesize, mix, qc.
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp"
+	"github.com/hehehai/AudioSmith/internal/dsp/dynamics"
+	"github.com/hehehai/AudioSmith/internal/dsp/edit"
+	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
+	"github.com/hehehai/AudioSmith/internal/dsp/stretch"
+	"github.com/hehehai/AudioSmith/internal/dsp/wav"
+	"github.com/hehehai/AudioSmith/internal/dub"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/lang"
+	"github.com/hehehai/AudioSmith/internal/translate"
+)
+
+// More codes of the dub stages.
+const (
+	DubWarnTranslateFailed = "dub.translate_failed" // some lines failed (Line.Err): retry them
+	DubWarnLinesFailed     = "dub.lines_failed"     // some lines could not be rendered (Render.Err)
+	DubCodeNoModel         = "dub.no_model"         // no TTS model chosen
+	// LineLoudness is the level every dubbed line is brought to (LUFS).
+	LineLoudness = -20.0
+)
+
+// translateBatch is how many lines a translation saves at a time (a run
+// stopped halfway keeps what was translated).
+const translateBatch = 60
+
+// translateSet lists the segments the translate stage for lang does:
+// lines whose language is lang, with source text, without a translation
+// (all of them with force, but not those written by hand).
+func translateSet(p *dub.Project, l string, force bool) []int {
+	var out []int
+	src := p.SourceLanguage()
+	for i, s := range p.Segments {
+		if (s.Lang != "" && s.Lang != l) || strings.TrimSpace(s.Text) == "" {
+			continue
+		}
+		if src != "" && dub.LangFor(s, l) != "" && strings.EqualFold(lang.Canonical(src), lang.Canonical(l)) && !strings.Contains(l, "-") {
+			continue // the source language: nothing to translate
+		}
+		line := s.Lines[l]
+		if line.Skipped && !force {
+			continue
+		}
+		if strings.TrimSpace(line.Text) == "" || (force && !line.Edited) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// translate translates the lines of one language, a batch at a time.
+func (s *Dubs) translate(ctx context.Context, sc *stageCtx) error {
+	p := sc.p
+	l := sc.params.Lang
+	idx := translateSet(p, l, sc.params.Force)
+	if len(idx) == 0 {
+		return nil
+	}
+	if s.cfg.Translator == nil {
+		return stageErr(DubCodeNoTranslator, "No translation engine is set up.")
+	}
+	tr, err := s.cfg.Translator(ctx, p.Settings)
+	if err != nil {
+		return translatorErr(err)
+	}
+	// Auto glossary: terms the LLM finds, once per project.
+	glossary := p.Glossary
+	if p.Settings.AutoGlossary && s.cfg.Extractor != nil && !slices.ContainsFunc(glossary, func(t translate.Term) bool { return t.Auto }) {
+		if x := s.cfg.Extractor(); x != nil {
+			sc.progress("glossary", -1, "")
+			var segs []translate.Segment
+			for _, i := range idx {
+				segs = append(segs, translate.Segment{ID: p.Segments[i].ID, Text: p.Segments[i].Text})
+			}
+			cands, _, err := x.Extract(ctx, p.SourceLanguage(), l, segs, glossary, p.Settings.Style)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if err == nil && len(cands) > 0 {
+				var auto translate.Glossary
+				for _, c := range cands {
+					t := c.Term
+					t.Auto = true
+					auto = append(auto, t)
+				}
+				glossary = glossary.Merge(auto)
+				if err := sc.save(ctx, func(p *dub.Project) { p.Glossary = p.Glossary.Merge(auto) }); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	failed := 0
+	for start := 0; start < len(idx); start += translateBatch {
+		part := idx[start:min(start+translateBatch, len(idx))]
+		req := translate.Request{
+			Source: p.SourceLanguage(), Target: l, Quality: p.Settings.Quality, Glossary: glossary,
+			Style: p.Settings.Style, Formality: p.Settings.Formality, Context: p.Title,
+			SuggestShorter: p.Settings.SuggestShorter, Speed: p.Settings.Speed,
+		}
+		done := start
+		total := len(idx)
+		req.Progress = func(pr translate.Progress) {
+			if pr.Total > 0 {
+				sc.progress("translating", (float64(done)+float64(pr.Done)/float64(pr.Total)*float64(len(part)))/float64(total), pr.Stage)
+			}
+		}
+		for _, i := range part {
+			seg := p.Segments[i]
+			req.Segments = append(req.Segments, translate.Segment{ID: seg.ID, Text: seg.Text, Speaker: p.SpeakerName(seg.Speaker),
+				Slot: seg.Duration(), Note: seg.Direction})
+		}
+		res, err := tr.Translate(ctx, req)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return translatorErr(err)
+		}
+		failed += res.Failed
+		err = sc.save(ctx, func(p *dub.Project) {
+			for _, t := range res.Segments {
+				seg, ok := p.Segment(t.ID)
+				if !ok {
+					continue
+				}
+				old := seg.Lines[l]
+				if old.Edited && !sc.params.Force {
+					continue // written by hand meanwhile
+				}
+				line := dub.Line{Text: t.Text, Draft: t.Draft, Shorter: t.Shorter, Fit: t.Fit, Warnings: t.Warnings}
+				if t.Err != nil {
+					line.Err = t.Err.Code
+				}
+				if seg.Lines == nil {
+					seg.Lines = map[string]dub.Line{}
+				}
+				seg.Lines[l] = line
+			}
+		})
+		if err != nil {
+			return err
+		}
+	}
+	if failed > 0 {
+		sc.warn(DubWarnTranslateFailed)
+	}
+	return nil
+}
+
+// translatorErr explains a translator that cannot run.
+func translatorErr(err error) error {
+	c := translate.Code(err)
+	switch c {
+	case translate.CodeNoLLM, translate.CodeNoKey, translate.CodeUnsupported:
+		return &jobs.Error{Code: DubCodeNoTranslator, Message: err.Error()}
+	case "":
+		c = DubCodeFailed
+	}
+	return &jobs.Error{Code: c, Message: err.Error(), Retryable: c == translate.CodeQuota || c == translate.CodeNetwork}
+}
+
+// --- lines ------------------------------------------------------------------------------
+
+// langValue is the model's language value for a BCP-47 code.
+func langValue(caps DubModelCaps, l string) string {
+	if len(caps.Languages) == 0 {
+		return l
+	}
+	if v, ok := caps.Languages[l]; ok {
+		return v
+	}
+	codes := make([]string, 0, len(caps.Languages))
+	for c := range caps.Languages {
+		codes = append(codes, c)
+	}
+	slices.Sort(codes)
+	if m, ok := lang.Match(codes, l); ok {
+		return caps.Languages[m]
+	}
+	return ""
+}
+
+// voiceFor resolves the voice segment i speaks with in lang, and why it
+// fell back to the default voice ("" when it did not).
+func (s *Dubs) voiceFor(ctx context.Context, p *dub.Project, seg dub.Segment, l string, caps DubModelCaps, cache map[string]dub.VoiceSpec) (dub.VoiceSpec, string) {
+	ref := p.VoiceOf(seg)
+	switch ref {
+	case "", dub.VoiceAuto:
+		if !caps.Clone {
+			return dub.VoiceSpec{}, ""
+		}
+		if p.Settings.VoiceMatch == dub.MatchLine {
+			name := filepath.Join("refs", "line-"+seg.ID+".wav")
+			return dub.VoiceSpec{RefAudio: s.Path(p.ID, name), RefText: seg.Text, Auto: true}, ""
+		}
+		r, ok := p.References[seg.Speaker]
+		if !ok {
+			return dub.VoiceSpec{}, DubWarnNoReference
+		}
+		return dub.VoiceSpec{RefAudio: s.Path(p.ID, r.File), RefText: r.Text, Auto: true}, ""
+	case dub.VoiceDefault:
+		return dub.VoiceSpec{}, ""
+	}
+	if v, ok := cache[ref]; ok {
+		return v, ""
+	}
+	if s.cfg.Voice == nil {
+		return dub.VoiceSpec{}, DubWarnVoice
+	}
+	v, err := s.cfg.Voice(ctx, ref, p.Settings.Model, l)
+	if err != nil {
+		return dub.VoiceSpec{}, DubWarnVoice
+	}
+	cache[ref] = v
+	return v, ""
+}
+
+// LineTake is the recipe of a dubbed line: what the synthesize stage
+// renders (and the workspace's audition plays).
+func LineTake(p *dub.Project, seg dub.Segment, l string, v dub.VoiceSpec, caps DubModelCaps) core.Take {
+	st := p.Settings
+	t := core.Take{
+		Text: p.TextFor(seg, l), Model: dubFirst(v.Model, st.Model), Voice: v.Voice, RefAudio: v.RefAudio, RefText: v.RefText,
+		VoicePrompt: v.VoicePrompt, Seed: v.Seed, Language: dubFirst(v.Language, langValue(caps, dub.LangFor(seg, l))),
+		Render: &core.TakeRender{Bits: 32, SeedPinned: v.Seed != 0},
+	}
+	if caps.Steps {
+		t.Steps = st.Steps
+	}
+	if caps.Guidance {
+		t.Guidance = st.Guidance
+	}
+	speed := st.Speed
+	if seg.Speed > 0 {
+		speed = seg.Speed
+	}
+	if speed <= 0 {
+		speed = 1
+	}
+	if v.Speed > 0 {
+		speed *= v.Speed
+	}
+	if caps.Speed && speed > 0 && speed != 1 {
+		t.Speed = speed
+	}
+	instruct := strings.Trim(strings.Join(slices.DeleteFunc([]string{v.Instruct, st.Instruct, seg.Direction}, func(s string) bool { return strings.TrimSpace(s) == "" }), ", "), ", ")
+	if caps.Instruct && instruct != "" && t.RefAudio == "" {
+		if t.Voice != "" {
+			t.Voice += ", " + instruct
+		} else {
+			t.Voice = instruct
+		}
+	}
+	if caps.Duration && (st.Timing == dub.TimingLipSync || st.Timing == "") && seg.Duration() > 0.3 {
+		t.Duration = math.Round(seg.Duration()*100) / 100
+	}
+	return t
+}
+
+// LineRecipe is the recipe of segment id in lang as the pipeline would
+// render it, with the reason its voice fell back to the default ("").
+func (s *Dubs) LineRecipe(ctx context.Context, p *dub.Project, id, l string) (core.Take, string, error) {
+	seg, ok := p.Segment(id)
+	if !ok {
+		return core.Take{}, "", fmt.Errorf("dub: no line %s: %w", id, core.ErrNotFound)
+	}
+	if p.Settings.Model == "" {
+		return core.Take{}, "", stageErr(DubCodeNoModel, "Choose a voice model.")
+	}
+	caps := s.cfg.Caps(p.Settings.Model)
+	v, warn := s.voiceFor(ctx, p, *seg, l, caps, map[string]dub.VoiceSpec{})
+	if v.Auto && p.Settings.VoiceMatch == dub.MatchLine {
+		if err := s.lineClip(p, *seg); err != nil {
+			return core.Take{}, "", err
+		}
+	}
+	return LineTake(p, *seg, l, v, caps), warn, nil
+}
+
+// lineClip cuts a line's own source clip (Voice match: per line), at
+// least 3 s around it.
+func (s *Dubs) lineClip(p *dub.Project, seg dub.Segment) error {
+	name := filepath.Join("refs", "line-"+seg.ID+".wav")
+	if _, err := os.Stat(s.Path(p.ID, name)); err == nil {
+		return nil
+	}
+	src := dubAudio
+	if p.Media.Vocals != "" {
+		src = dubVocals
+	}
+	start, end := seg.Start, seg.End
+	if d := end - start; d < 3 {
+		start, end = max(start-(3-d)/2, 0), end+(3-d)/2
+	}
+	if err := os.MkdirAll(s.Path(p.ID, "refs"), 0o755); err != nil {
+		return err
+	}
+	return cutClip(s.Path(p.ID, src), s.Path(p.ID, name), start, end)
+}
+
+// fatal reports render errors that stop the whole stage (the next line
+// would fail the same way).
+func fatal(err error) bool {
+	switch code(err) {
+	case proto.CodeModelNotDownloaded, proto.CodeLicenceRequired, CodeEngineUnavailable, proto.CodeOOM,
+		jobs.CodeInterrupted, jobs.CodeShutdown, proto.CodeCancelled, proto.CodeModelLoadFailed, DubCodeNoModel:
+		return true
+	}
+	return !errors.As(err, new(*jobs.Error))
+}
+
+// synthesize renders the lines of one language that are stale (or the
+// ones asked for), fits each to its slot, and records them in the track.
+func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
+	p := sc.p
+	l := sc.params.Lang
+	if p.Settings.Model == "" {
+		return stageErr(DubCodeNoModel, "Choose a voice model for the dub.")
+	}
+	if s.cfg.Render == nil || s.cfg.Render.render == nil {
+		return stageErr(CodeEngineUnavailable, "The render pipeline is not connected.")
+	}
+	caps := s.cfg.Caps(p.Settings.Model)
+	cache := map[string]dub.VoiceSpec{}
+	dir := filepath.Join("renders", dub.SafeName(l))
+	if err := os.MkdirAll(sc.path(dir), 0o755); err != nil {
+		return err
+	}
+	type todo struct {
+		i    int
+		key  string
+		take core.Take
+	}
+	var work []todo
+	keys := map[string]string{}
+	track := p.Track(l)
+	track.Lang = l
+	for i, seg := range p.Segments {
+		if strings.TrimSpace(p.TextFor(seg, l)) == "" {
+			continue
+		}
+		v, warn := s.voiceFor(ctx, p, seg, l, caps, cache)
+		if warn != "" {
+			sc.warn(warn)
+		}
+		key := p.Fingerprint(seg, l, v)
+		keys[seg.ID] = key
+		r, ok := track.Lines[seg.ID]
+		fresh := ok && r.Key == key && r.Err == "" && r.File != "" && fileExists(sc.path(r.File))
+		if len(sc.params.Only) > 0 {
+			fresh = fresh && !slices.Contains(sc.params.Only, seg.ID)
+		} else if sc.params.Force {
+			fresh = false
+		}
+		if fresh {
+			continue
+		}
+		if v.Auto && p.Settings.VoiceMatch == dub.MatchLine {
+			if err := s.lineClip(p, seg); err != nil {
+				return err
+			}
+		}
+		work = append(work, todo{i, key, LineTake(p, seg, l, v, caps)})
+	}
+	if len(work) == 0 {
+		return sc.save(ctx, func(q *dub.Project) { q.PutTrack(mergeTrack(q.Track(l), track, keys, l)) })
+	}
+	rendered := map[string]dub.Render{}
+	failed := 0
+	flush := func() error {
+		if len(rendered) == 0 {
+			return nil
+		}
+		batch := rendered
+		rendered = map[string]dub.Render{}
+		return sc.save(context.WithoutCancel(ctx), func(q *dub.Project) {
+			t := q.Track(l)
+			t.Lang = l
+			if t.Lines == nil {
+				t.Lines = map[string]dub.Render{}
+			}
+			for id, r := range batch {
+				t.Lines[id] = r
+			}
+			t.QC = nil
+			q.PutTrack(t)
+		})
+	}
+	for n, w := range work {
+		if err := ctx.Err(); err != nil {
+			flush()
+			return err
+		}
+		seg := p.Segments[w.i]
+		sc.progress("generating", float64(n)/float64(len(work)), fmt.Sprintf("%d/%d", n+1, len(work)))
+		r, err := s.renderLine(ctx, sc, p, w.i, l, w.key, w.take, dir)
+		if err != nil {
+			if ctx.Err() != nil {
+				flush()
+				return ctx.Err()
+			}
+			if fatal(err) {
+				flush()
+				return err
+			}
+			failed++
+			r = dub.Render{Key: w.key, Start: seg.Start, Err: err.Error(), Text: w.take.Text}
+		}
+		rendered[seg.ID] = r
+		if len(rendered) >= 10 {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+	if failed > 0 {
+		sc.warn(DubWarnLinesFailed)
+	}
+	return nil
+}
+
+// mergeTrack keeps t's lines, dropping those of segments gone.
+func mergeTrack(cur, _ dub.Track, keys map[string]string, l string) dub.Track {
+	cur.Lang = l
+	for id := range cur.Lines {
+		if _, ok := keys[id]; !ok {
+			delete(cur.Lines, id)
+		}
+	}
+	return cur
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// renderLine renders one line through the take pipeline and fits it.
+func (s *Dubs) renderLine(ctx context.Context, sc *stageCtx, p *dub.Project, i int, l, key string, t core.Take, dir string) (dub.Render, error) {
+	seg := p.Segments[i]
+	raw := sc.path(filepath.Join(dir, seg.ID+".raw.wav"))
+	defer os.Remove(raw)
+	params, err := json.Marshal(RenderParams{Take: t, Lang: dub.LangFor(seg, l), Output: raw})
+	if err != nil {
+		return dub.Render{}, err
+	}
+	sub := jobs.Job{ID: sc.job.ID + "." + seg.ID, Spec: jobs.Spec{Kind: KindRender, Lane: jobs.LaneGPU, Params: params, Owner: sc.job.Owner}}
+	if _, err := s.cfg.Render.render.Run(ctx, sub, func(jobs.Progress) {}, nil); err != nil {
+		return dub.Render{}, err
+	}
+	buf, _, err := wav.ReadFile(raw)
+	if err != nil {
+		return dub.Render{}, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
+	}
+	buf = dsp.Remix(buf, 1)
+	trimmed := edit.Trim(buf, edit.TrimOptions{})
+	if trimmed.Frames() == 0 {
+		return dub.Render{}, &jobs.Error{Code: NoticeChunkSilent, Message: "The model made no sound for this line."}
+	}
+	plan := dub.Plan(dub.FitIn{Rendered: trimmed.Seconds(), Slot: seg.Duration(), Room: dub.Room(p.Segments, i, p.Source.Duration), Timing: p.Settings.Timing})
+	out := trimmed
+	if plan.Ratio != 1 {
+		out = stretch.Stretch(out, plan.Ratio, stretch.Options{})
+	}
+	if plan.Cut {
+		n := min(dsp.FramesAt(plan.Length, out.Rate), out.Frames())
+		out = out.Slice(0, n).Clone()
+		dsp.FadeOut(out, dsp.FramesAt(0.05, out.Rate), dsp.EqualPower)
+	}
+	if lufs := loudness.Integrated(out); !math.IsInf(lufs, 0) && !math.IsNaN(lufs) && lufs > -70 {
+		dsp.Gain(out.Samples, float32(dsp.Amp(min(max(LineLoudness-lufs, -12), 12))))
+	}
+	speed := t.Speed
+	if speed <= 0 {
+		speed = 1
+	}
+	if t.Duration == 0 {
+		translate.DefaultPredictor.Calibrate(t.Text, dub.LangFor(seg, l), trimmed.Seconds(), speed)
+	}
+	name := filepath.Join(dir, seg.ID+"-"+key[:10]+".wav")
+	if err := writeWAVFloat(sc.path(name), out); err != nil {
+		return dub.Render{}, err
+	}
+	os.WriteFile(sc.path(name)+".txt", []byte(t.Text), 0o644)
+	// Older renders of the line go.
+	if old, _ := filepath.Glob(sc.path(filepath.Join(dir, seg.ID+"-*.wav"))); len(old) > 1 {
+		for _, f := range old {
+			if filepath.Base(f) != filepath.Base(name) {
+				os.Remove(f)
+				os.Remove(f + ".txt")
+			}
+		}
+	}
+	return dub.Render{Key: key, File: name, Raw: round3(trimmed.Seconds()), Length: round3(out.Seconds()), Ratio: plan.Ratio,
+		Start: seg.Start, Verdict: plan.Verdict, Over: plan.Over, Text: t.Text}, nil
+}
+
+// writeWAVFloat writes b as 32-bit float through a temporary file.
+func writeWAVFloat(path string, b dsp.Buffer) error {
+	tmp := path + ".tmp"
+	if err := wav.WriteFile(tmp, b, wav.Float32, wav.Options{}); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// --- the mix ----------------------------------------------------------------------------
+
+// trackMixer prepares lang's mix: the background (separated, or the
+// original ducked) and the rendered lines. withBackground false mixes
+// the speech alone. The caller closes it.
+func (s *Dubs) trackMixer(p *dub.Project, l string, withBackground bool) (*dub.TrackMixer, string, error) {
+	audio := s.Path(p.ID, p.Media.Audio)
+	if p.Media.Audio == "" {
+		return nil, "", dub.ErrNoAudio
+	}
+	probe, err := dub.OpenWAV(audio, 0, 0)
+	if err != nil {
+		return nil, "", err
+	}
+	rate, _ := probe.Format()
+	length := float64(probe.Frames()) / float64(rate)
+	probe.Close()
+	o := dub.MixOptions{Rate: rate, Channels: 2, Seconds: length}
+	kind := ""
+	if withBackground && p.Settings.KeepBackground {
+		src, duck := audio, float64(dub.DuckOriginalDB)
+		kind = dub.BackgroundDucked
+		if p.Media.Background != "" {
+			src, duck, kind = s.Path(p.ID, p.Media.Background), dub.DuckStemDB, dub.BackgroundStem
+		}
+		bg, err := dub.OpenWAV(src, rate, 2)
+		if err != nil {
+			return nil, "", err
+		}
+		o.Background, o.DuckDB = bg, duck
+	}
+	t := p.Track(l)
+	var lines []dub.MixLine
+	for _, seg := range p.Segments {
+		r, ok := t.Lines[seg.ID]
+		if !ok || r.File == "" || r.Err != "" {
+			continue
+		}
+		path := s.Path(p.ID, r.File)
+		lines = append(lines, dub.MixLine{ID: seg.ID, Start: seg.Start, Length: r.Length, Volume: seg.Volume, Load: func() (dsp.Buffer, error) {
+			b, _, err := wav.ReadFile(path)
+			return b, err
+		}})
+	}
+	return dub.NewTrackMixer(lines, o), kind, nil
+}
+
+// TrackMixer is a project's live mix of lang (the A/B player): what the
+// track would be with the lines as rendered now.
+func (s *Dubs) TrackMixer(p *dub.Project, l string) (*dub.TrackMixer, error) {
+	m, _, err := s.trackMixer(p, l, true)
+	return m, err
+}
+
+// mix writes lang's dubbed track and its speech alone.
+func (s *Dubs) mix(ctx context.Context, sc *stageCtx) error {
+	p := sc.p
+	l := sc.params.Lang
+	if len(p.Track(l).Lines) == 0 {
+		return stageErr(DubCodeNoLines, "Nothing was rendered in this language.")
+	}
+	if err := os.MkdirAll(sc.path("tracks"), 0o755); err != nil {
+		return err
+	}
+	name := filepath.Join("tracks", dub.SafeName(l)+".wav")
+	speech := filepath.Join("tracks", dub.SafeName(l)+".speech.wav")
+	m, kind, err := s.trackMixer(p, l, true)
+	if err != nil {
+		return err
+	}
+	if p.Settings.KeepBackground && kind == dub.BackgroundDucked {
+		sc.warn(DubWarnNoSeparation)
+	}
+	sc.progress("mixing", 0, "")
+	frames, err := renderMix(ctx, m, sc.path(name), true, func(f float64) { sc.progress("mixing", f*0.7, "") })
+	m.Close()
+	if err != nil {
+		return err
+	}
+	sm, _, err := s.trackMixer(p, l, false)
+	if err != nil {
+		return err
+	}
+	_, err = renderMix(ctx, sm, sc.path(speech), true, func(f float64) { sc.progress("mixing", 0.7+f*0.3, "") })
+	sm.Close()
+	if err != nil {
+		return err
+	}
+	if m.Err != nil {
+		return &jobs.Error{Code: CodeRenderFailed, Message: m.Err.Error()}
+	}
+	return sc.save(ctx, func(q *dub.Project) {
+		t := q.Track(l)
+		t.Lang, t.File, t.Speech, t.Background = l, name, speech, kind
+		t.Seconds = round3(float64(frames) / float64(m.SampleRate()))
+		t.Mixed = s.cfg.Now()
+		q.PutTrack(t)
+	})
+}
+
+// renderMix writes a mix to path (24-bit), under a −1 dBFS limiter.
+func renderMix(ctx context.Context, m *dub.TrackMixer, path string, limit bool, progress func(float64)) (int64, error) {
+	rate, ch := m.SampleRate(), m.Channels()
+	out, err := wav.Create(path, wav.Format{Rate: rate, Channels: ch, Encoding: wav.PCM24}, wav.Options{Large: true})
+	if err != nil {
+		return 0, err
+	}
+	var lim *dynamics.Limiter
+	if limit {
+		lim = dynamics.NewLimiter(rate, ch, dynamics.LimiterParams{CeilingDB: -1})
+	}
+	buf := make([]float32, 8192*ch)
+	var lb []float32
+	total := max(m.Len(), 1)
+	for {
+		if err := ctx.Err(); err != nil {
+			out.Abort()
+			return 0, err
+		}
+		n, rerr := m.Read(buf)
+		if n > 0 {
+			block := buf[:n]
+			if lim != nil {
+				lb = lim.Process(lb[:0], block)
+				block = lb
+			}
+			if err := out.Write(block); err != nil {
+				out.Abort()
+				return 0, err
+			}
+			if progress != nil {
+				progress(float64(m.Position()) / float64(total))
+			}
+		}
+		if rerr == io.EOF || n == 0 {
+			break
+		}
+		if rerr != nil {
+			out.Abort()
+			return 0, rerr
+		}
+	}
+	if lim != nil {
+		if err := out.Write(lim.Flush(lb[:0])); err != nil {
+			out.Abort()
+			return 0, err
+		}
+	}
+	frames := out.Frames()
+	return frames, out.Close()
+}
+
+// --- the check ----------------------------------------------------------------------------
+
+// qc listens to every rendered line of a track again (speech to text)
+// and flags the lines that do not say their text, and lines that run
+// into the next.
+func (s *Dubs) qc(ctx context.Context, sc *stageCtx) error {
+	p := sc.p
+	l := sc.params.Lang
+	m := s.cfg.Models()
+	if m.STT == "" {
+		return stageErr(proto.CodeModelNotDownloaded, "No speech-to-text model.")
+	}
+	t := p.Track(l)
+	rep := &dub.QCReport{At: s.cfg.Now(), Keys: dub.QCKeys{}, Model: m.STT}
+	type placed struct {
+		id         string
+		start, end float64
+	}
+	var spans []placed
+	ids := make([]string, 0, len(t.Lines))
+	for _, seg := range p.Segments {
+		if r, ok := t.Lines[seg.ID]; ok && r.File != "" && r.Err == "" {
+			ids = append(ids, seg.ID)
+		}
+	}
+	for n, id := range ids {
+		seg, _ := p.Segment(id)
+		r := t.Lines[id]
+		sc.progress("transcribing", float64(n)/float64(max(len(ids), 1)), fmt.Sprintf("%d/%d", n+1, len(ids)))
+		tp := proto.TranscribeParams{Model: m.STT, Audio: sc.path(r.File), Language: baseLang(dub.LangFor(*seg, l))}
+		var tr proto.TranscribeResult
+		if err := sc.call(ctx, proto.MethodSTTTranscribe, m.STT, &tp, &tp.ModelPath, &tr, nil); err != nil {
+			return err
+		}
+		q := dub.CheckLine(id, r.Text, tr.Text, r.Length, seg.Duration())
+		q.MeasuredAt = r.Start
+		rep.Lines = append(rep.Lines, q)
+		rep.Keys[id] = r.Key
+		if q.Flagged {
+			rep.Flagged++
+		}
+		spans = append(spans, placed{id, r.Start, r.Start + r.Length})
+	}
+	for k := 0; k+1 < len(spans); k++ {
+		if spans[k].end > spans[k+1].start+0.05 {
+			rep.Overlap = append(rep.Overlap, spans[k].id)
+		}
+	}
+	return sc.save(ctx, func(q *dub.Project) {
+		tr := q.Track(l)
+		tr.QC = rep
+		q.PutTrack(tr)
+	})
+}
+
+// baseLang is a tag's language ("pt-BR" → "pt").
+func baseLang(tag string) string {
+	b, _, _ := strings.Cut(tag, "-")
+	return b
+}

@@ -62,8 +62,8 @@ type Project struct {
 	References map[string]Reference `json:"references,omitempty"`
 	// RefTried are the speakers the last pick of references considered
 	// (a speaker added since needs one picked).
-	RefTried []string `json:"refTried,omitempty"`
-	Glossary   translate.Glossary   `json:"glossary,omitempty"`
+	RefTried []string           `json:"refTried,omitempty"`
+	Glossary translate.Glossary `json:"glossary,omitempty"`
 
 	Settings Settings `json:"settings"`
 	Media    Media    `json:"media"`
@@ -507,13 +507,21 @@ func (p *Project) SpeakerName(label string) string {
 }
 
 // VoiceOf is the VoiceRef a segment speaks with: its own, else its
-// speaker's cast ("" = the speaker's automatic clone).
+// speaker's cast, else the cast of every speaker (CastAll), else ""
+// (the speaker's automatic clone).
 func (p *Project) VoiceOf(s Segment) string {
 	if s.Voice != "" {
 		return s.Voice
 	}
-	return p.Cast[s.Speaker]
+	if v, ok := p.Cast[s.Speaker]; ok {
+		return v
+	}
+	return p.Cast[CastAll]
 }
+
+// CastAll in Cast casts every speaker without a voice of their own (the
+// batch queue's one voice).
+const CastAll = "*"
 
 // LangFor is the language segment s speaks in track lang.
 func LangFor(s Segment, lang string) string {
