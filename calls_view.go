@@ -680,7 +680,7 @@ func (a *app) callDialogs(c *ui.Context) {
 			ui.Column(c.Key("ci")).Width(px(t, 460)).Gap(px(t, 10)).Padding(px(t, 18)).Children(func() {
 				sectionHeading(c, i18n.T("Incoming calls"))
 				caption(c, i18n.T("Choose what happens when someone calls your Twilio number.")).Wrap()
-				ui.Segmented(c.Key("ci-mode"), &a.callInMode, i18n.T("Greeting"), i18n.T("AI agent")).Label(i18n.T("When someone calls"))
+				segmentedFit(c.Key("ci-mode"), &a.callInMode, i18n.T("Greeting"), i18n.T("AI agent")).Label(i18n.T("When someone calls"))
 				if a.callInMode == 0 {
 					ui.Text(c, i18n.T("Play your greeting, then hang up.")).FontSize(px(t, 12)).Wrap()
 				} else {

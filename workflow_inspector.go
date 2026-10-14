@@ -422,7 +422,7 @@ func (a *app) wfNormalizePanel(c *ui.Context, n *workflow.Node) {
 		mode = 1
 	}
 	ui.Field(c, i18n.T("Level"), func() {
-		if ui.Segmented(c.Key("wf-norm-mode-"+id), &mode, i18n.T("Loudness"), i18n.T("Peak")).Label(i18n.T("Level")).Disabled(locked).Changed() {
+		if segmentedFit(c.Key("wf-norm-mode-"+id), &mode, i18n.T("Loudness"), i18n.T("Peak")).Label(i18n.T("Level")).Disabled(locked).Changed() {
 			m := mode
 			a.wfEdit(func(w *workflow.Workflow) {
 				p := &w.Node(id).P

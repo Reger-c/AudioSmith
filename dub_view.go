@@ -1036,7 +1036,7 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 		quals := []translate.Quality{translate.Fast, translate.Autofit, translate.Cinematic}
 		qi := max(slices.Index(quals, p.Settings.Quality), 0)
 		fieldInfo(c, i18n.T("Quality"), i18n.T("Fast is one literal pass; Autofit rewrites lines that would not fit their time; Cinematic drafts, critiques and adapts for natural phrasing."), func() {
-			if ui.Segmented(c.Key("tl-quality"), &qi, i18n.T("Fast"), i18n.T("Autofit"), i18n.T("Cinematic")).Label(i18n.T("Quality")).Disabled(locked).Changed() {
+			if segmentedFit(c.Key("tl-quality"), &qi, i18n.T("Fast"), i18n.T("Autofit"), i18n.T("Cinematic")).Label(i18n.T("Quality")).Disabled(locked).Changed() {
 				q := quals[qi]
 				a.dubSettings(func(s *dub.Settings) { s.Quality = q })
 			}
@@ -1157,7 +1157,7 @@ func (a *app) dubCastPanel(c *ui.Context) {
 		match = 1
 	}
 	fieldInfo(c, i18n.T("Voice match"), i18n.T("Consistent clones each speaker from one sample; Per line clones each line from its own audio (follows the delivery, less stable)."), func() {
-		if ui.Segmented(c.Key("cast-match"), &match, i18n.T("Consistent"), i18n.T("Per line")).Label(i18n.T("Voice match")).Changed() {
+		if segmentedFit(c.Key("cast-match"), &match, i18n.T("Consistent"), i18n.T("Per line")).Label(i18n.T("Voice match")).Changed() {
 			m := dub.MatchConsistent
 			if match == 1 {
 				m = dub.MatchLine

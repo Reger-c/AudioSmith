@@ -155,7 +155,7 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 		f = 1
 	}
 	ui.Field(c, i18n.T("Format"), func() {
-		if ui.Segmented(c.Key("lf-format"), &f, formats...).Label(i18n.T("Format")).Disabled(locked).Changed() {
+		if segmentedFit(c.Key("lf-format"), &f, formats...).Label(i18n.T("Format")).Disabled(locked).Changed() {
 			d.Format = services.FormatWAV
 			if f == 1 {
 				d.Format = services.FormatM4B
@@ -327,7 +327,7 @@ func (a *app) lfBookCard(c *ui.Context, p *lfPage, locked bool) {
 		note = i18n.T("Podcast: −16 LUFS, peaks under −1.5 dBTP.")
 	}
 	fieldInfo(c, i18n.T("Loudness"), note, func() {
-		if ui.Segmented(c.Key("book-loud"), &li, i18n.T("Off"), i18n.T("ACX"), i18n.T("Podcast")).Label(i18n.T("Loudness")).Disabled(locked).Changed() {
+		if segmentedFit(c.Key("book-loud"), &li, i18n.T("Off"), i18n.T("ACX"), i18n.T("Podcast")).Label(i18n.T("Loudness")).Disabled(locked).Changed() {
 			b.Loudness = lfLoudness[li]
 		}
 	})

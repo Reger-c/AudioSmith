@@ -219,7 +219,7 @@ func (a *app) dubExportPanel(c *ui.Context) {
 	}
 	if ex.format == dub.ExportWAV {
 		ui.Field(c, i18n.T("Bit depth"), func() {
-			ui.Segmented(c.Key("dx-bits"), &ex.bits, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float"))
+			segmentedFit(c.Key("dx-bits"), &ex.bits, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float"))
 		})
 	}
 	k := tok(t)

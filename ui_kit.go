@@ -140,6 +140,20 @@ func dropText(c *ui.Context, label string, on bool) ui.Element {
 	return b
 }
 
+// quietButton is an action in a row of dropText filters (Reset): the
+// same size, type and colour as they are, so the row keeps its height
+// when it appears.
+func quietButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
+	t := c.Theme()
+	k := tok(t)
+	b := ghostBase(c).Padding(px(t, 4), px(t, 10), px(t, 4), px(t, 8)).Gap(px(t, sp1)).AlignItems(ui.Center).Label(label).Shrink(0)
+	b.Children(func() {
+		ui.Icon(c, ic.Linear).Size(px(t, 12), px(t, 12)).TextColor(k.Text3)
+		ui.Text(c, label).FontSize(px(t, fsCaption)).TextColor(k.Text2).SingleLine()
+	})
+	return b
+}
+
 // ghostBase is the face of ghost and icon buttons.
 func ghostBase(c *ui.Context) ui.Element {
 	t := c.Theme()
@@ -680,4 +694,11 @@ func (sp *panelState) view(c *ui.Context, key, label string, inline, shown, left
 			hide()
 		}
 	})
+}
+
+// segmentedFit is ui.Segmented as wide as its segments, for a form's
+// column: there a plain Segmented stretches across, its segments keeping
+// their width and leaving the rest of the track empty.
+func segmentedFit(c *ui.Context, selected *int, labels ...string) ui.Element {
+	return ui.Segmented(c, selected, labels...).AlignSelf(ui.Start)
 }

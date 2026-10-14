@@ -198,3 +198,32 @@ func TestGalleryPreviewFailure(t *testing.T) {
 		t.Errorf("open in design: %+v", a.design)
 	}
 }
+
+// TestGalleryFiltersKeepTheirPlace: Reset appearing with a filter (or
+// Favorites) does not make the filter row taller and push the cards down.
+func TestGalleryFiltersKeepTheirPlace(t *testing.T) {
+	a, _, _ := newTestAppIn(t, t.TempDir())
+	tt := ui.NewTester(a.view, 1200, 900)
+	g := &a.gallery
+	a.navigate("/gallery")
+	tt.Frame()
+	tt.Frame()
+	first := gallery.Default().All()[0].Name.En
+	before, ok := tt.Find(first)
+	if !ok {
+		t.Fatalf("no %q", first)
+	}
+	g.filters[gallery.FacetGender] = gallery.Default().All()[0].Attrs.Gender
+	tt.Frame()
+	tt.Frame()
+	if !tt.HasText("Reset") {
+		t.Fatal("no Reset with a filter on")
+	}
+	after, ok := tt.Find(first)
+	if !ok {
+		t.Fatalf("no %q with the filter", first)
+	}
+	if after.Y != before.Y {
+		t.Errorf("cards moved from y=%.1f to %.1f when Reset appeared", before.Y, after.Y)
+	}
+}

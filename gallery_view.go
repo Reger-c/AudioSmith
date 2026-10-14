@@ -68,12 +68,12 @@ func (a *app) galleryPage(c *ui.Context) {
 				g.limit = galleryPageSize
 			}
 		})
-		ui.Row(c.Key("gallery-facets")).Gap(px(t, sp1)).Wrap().Children(func() {
+		ui.Row(c.Key("gallery-facets")).Gap(px(t, sp1)).Wrap().AlignItems(ui.Center).Children(func() {
 			for _, f := range galleryFacets {
 				a.facetMenu(c, f, page.Facets[f])
 			}
 			if len(g.filters) > 0 || g.text != "" || g.tab != 0 || g.favOnly {
-				if ghostIconButton(c.Key("gallery-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
+				if quietButton(c.Key("gallery-reset"), icons.Restart, i18n.T("Reset")).Clicked() {
 					g.text, g.tab, g.favOnly, g.limit = "", 0, false, galleryPageSize
 					clear(g.filters)
 				}

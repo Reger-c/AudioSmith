@@ -336,7 +336,7 @@ func (a *app) qualityPopover(c *ui.Context) {
 		ui.Scroll(c.Key("quality-pop-scroll")).MaxHeight(px(t, 300)).Children(func() {
 			ui.Column(c.Key("quality-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
 				ui.Text(c, i18n.T("WAV precision")).FontWeight(600)
-				ui.Segmented(c.Key("bits"), &a.bitsIndex, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float")).Label(i18n.T("WAV precision"))
+				segmentedFit(c.Key("bits"), &a.bitsIndex, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float")).Label(i18n.T("WAV precision"))
 				desc := []string{i18n.T("Standard: plays everywhere."), i18n.T("For editing: more headroom."), i18n.T("Original: the model's own samples.")}
 				bits := bitDepths[min(max(a.bitsIndex, 0), 2)]
 				caption(c, desc[min(max(a.bitsIndex, 0), 2)]+" "+i18n.T("About %.1f MB a minute.", mbPerMinute(bits, p.SampleRate)))
@@ -348,7 +348,7 @@ func (a *app) qualityPopover(c *ui.Context) {
 					}
 					ui.Text(c, i18n.T("Voice refinement  %d steps", int(steps))).FontWeight(600)
 					tier := slices.Index(tierSteps, steps)
-					if ui.Segmented(c.Key("tier"), &tier, i18n.T("Fast"), i18n.T("Balanced"), i18n.T("Quality")).Label(i18n.T("Performance")).Changed() && tier >= 0 {
+					if segmentedFit(c.Key("tier"), &tier, i18n.T("Fast"), i18n.T("Balanced"), i18n.T("Quality")).Label(i18n.T("Performance")).Changed() && tier >= 0 {
 						a.steps = tierSteps[tier]
 					}
 					if ui.StepSlider(c.Key("steps"), &steps, 8, 64, 4).Label(i18n.T("Refinement steps")).Changed() {
