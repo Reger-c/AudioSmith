@@ -17,24 +17,24 @@ const (
 
 // Diagnostic codes.
 const (
-	CodeEmpty         = "graph.empty"        // no steps
-	CodeNoInput       = "graph.no_input"     // no Start or Source step
-	CodeNoSteps       = "graph.no_steps"     // only the input step
-	CodeExtraInput    = "node.extra_input"   // a second Start or Source step
-	CodeUnconnected   = "node.unconnected"   // its input has no link
-	CodeUnreachable   = "node.unreachable"   // no path from the input step
-	CodeCycle         = "edge.cycle"         // the link closes a loop
-	CodeType          = "edge.type"          // the link carries a type the input does not take (Arg: the type)
-	CodeMergeTypes    = "edge.merge_types"   // links into one input carry different types
-	CodeMerge         = "edge.merge"         // links into one input that are not alternative branches of a condition
-	CodeStartEmpty    = "start.empty"        // no script
-	CodeStartTooMany  = "start.too_many"     // more than MaxScripts items (Arg: the count)
-	CodeStartTooLong  = "start.too_long"     // an item over MaxScriptChars (Arg: its number, 1-based)
-	CodeSourceEmpty   = "source.empty"       // no clip
-	CodeSourceTooMany = "source.too_many"    // more than MaxClips
-	CodeSourceLarge   = "source.too_large"   // a clip over MaxClipBytes (Arg: its name)
-	CodeSourceZero    = "source.empty_file"  // a clip of 0 bytes (Arg: its name)
-	CodeNoModel       = "speak.no_model"     // Speak/Convert without a model
+	CodeEmpty         = "graph.empty"       // no steps
+	CodeNoInput       = "graph.no_input"    // no Start or Source step
+	CodeNoSteps       = "graph.no_steps"    // only the input step
+	CodeExtraInput    = "node.extra_input"  // a second Start or Source step
+	CodeUnconnected   = "node.unconnected"  // its input has no link
+	CodeUnreachable   = "node.unreachable"  // no path from the input step
+	CodeCycle         = "edge.cycle"        // the link closes a loop
+	CodeType          = "edge.type"         // the link carries a type the input does not take (Arg: the type)
+	CodeMergeTypes    = "edge.merge_types"  // links into one input carry different types
+	CodeMerge         = "edge.merge"        // links into one input that are not alternative branches of a condition
+	CodeStartEmpty    = "start.empty"       // no script
+	CodeStartTooMany  = "start.too_many"    // more than MaxScripts items (Arg: the count)
+	CodeStartTooLong  = "start.too_long"    // an item over MaxScriptChars (Arg: its number, 1-based)
+	CodeSourceEmpty   = "source.empty"      // no clip
+	CodeSourceTooMany = "source.too_many"   // more than MaxClips
+	CodeSourceLarge   = "source.too_large"  // a clip over MaxClipBytes (Arg: its name)
+	CodeSourceZero    = "source.empty_file" // a clip of 0 bytes (Arg: its name)
+	CodeNoModel       = "speak.no_model"    // Speak/Convert without a model
 	CodeNoTarget      = "translate.no_target"
 	CodeSameLanguage  = "translate.same"
 	CodeNoMatchText   = "condition.no_text"
