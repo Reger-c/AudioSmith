@@ -47,7 +47,10 @@ func TestRealEngineConformance(t *testing.T) {
 	if m.Error == nil || m.Error.Code != proto.CodeProtocolMismatch || string(m.Error.Data) != `{"supported":[2]}` {
 		t.Fatalf("hello 3: %+v", m)
 	}
-	m = e.ask(t, "c3", proto.MethodHello, proto.HelloParams{Protocol: 2, App: "test", Role: proto.RoleGPU})
+	// A model folder linked to the real one: loading Kokoro by repo id
+	// makes mlx-audio-swift copy it into <cache>/mlx-audio, which must
+	// not be the user's cache.
+	m = e.ask(t, "c3", proto.MethodHello, proto.HelloParams{Protocol: 2, App: "test", Role: proto.RoleGPU, CacheDir: linkedCache(t, kokoro)})
 	var hello proto.HelloResult
 	if err := m.DecodeResult(&hello); err != nil || hello.Protocol != 2 || hello.Role != proto.RoleGPU || hello.Concurrency != 1 {
 		t.Fatalf("hello: %+v %v", m, err)

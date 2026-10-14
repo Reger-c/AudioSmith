@@ -85,6 +85,10 @@ extension MediaWorker {
             let sample = try Self.chapterSample(c.title, start: c.start, end: max(end, c.start + 0.001), format: textFormat)
             guard text.append(sample) else { throw RPCError(Code.internal, "Could not write chapter \(next + 1): \(describeError(writer.error))") }
             next += 1
+            // Finished as soon as the last chapter is in: until then the
+            // writer holds the audio back a few seconds past the last
+            // chapter start, waiting for more text.
+            if next == chapters.count { text.markAsFinished() }
         }
         /// Appends the chapters starting by t that the writer takes now.
         func feedChapters(upTo t: Double) throws {
@@ -122,7 +126,7 @@ extension MediaWorker {
             while let buffer = output.copyNextSampleBuffer() {
                 if Task.isCancelled { throw CancellationError() }
                 let t = CMSampleBufferGetPresentationTimeStamp(buffer).seconds
-                try feedChapters(upTo: t)
+                try feedChapters(upTo: .infinity) // all of them, as soon as the writer takes them
                 try waitReady(audio, what: "audio")
                 guard audio.append(buffer) else { throw RPCError(Code.internal, "AAC encoding failed: \(describeError(writer.error))") }
                 if duration > 0 {
@@ -137,7 +141,6 @@ extension MediaWorker {
                     try waitReady(text, what: "chapters")
                     try appendChapter()
                 }
-                text.markAsFinished()
             }
             progress.fraction = 1
             progress.send("writing", force: true)

@@ -96,7 +96,7 @@ func TestRealEngineLoadsInPlace(t *testing.T) {
 
 	wav := filepath.Join(dir, "hello.wav")
 	aiff := filepath.Join(dir, "hello.aiff")
-	if out, err := exec.Command("say", "-o", aiff, "Hello from the engine test.").CombinedOutput(); err != nil {
+	if out, err := exec.Command("say", "-v", "Samantha", "-o", aiff, "Hello from the engine test.").CombinedOutput(); err != nil {
 		t.Fatalf("say: %v %s", err, out)
 	}
 	if out, err := exec.Command("afconvert", "-f", "WAVE", "-d", "LEI16@16000", "-c", "1", aiff, wav).CombinedOutput(); err != nil {
@@ -148,4 +148,27 @@ func TestRealEngineLoadsInPlace(t *testing.T) {
 		}
 		t.Logf("%s: %v", repo, listing(d))
 	}
+}
+
+// linkedCache is a temporary HF cache whose repos link to the real
+// cache's (and the engine's phonemizer copies too), so an engine that
+// copies or writes into its cache does it there, not in the user's.
+func linkedCache(t *testing.T, repos ...string) string {
+	t.Helper()
+	real := os.Getenv("HF_HUB_CACHE")
+	if real == "" {
+		home, _ := os.UserHomeDir()
+		real = filepath.Join(home, ".cache", "huggingface", "hub")
+	}
+	cache := t.TempDir()
+	for _, repo := range repos {
+		d := "models--" + strings.ReplaceAll(repo, "/", "--")
+		os.Symlink(filepath.Join(real, d), filepath.Join(cache, d))
+	}
+	os.MkdirAll(filepath.Join(cache, "mlx-audio"), 0o755)
+	aux, _ := filepath.Glob(filepath.Join(real, "mlx-audio", "beshkenadze_*"))
+	for _, d := range aux {
+		os.Symlink(d, filepath.Join(cache, "mlx-audio", filepath.Base(d)))
+	}
+	return cache
 }
