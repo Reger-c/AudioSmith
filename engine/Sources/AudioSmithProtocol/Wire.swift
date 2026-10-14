@@ -39,6 +39,12 @@ public enum Method {
     public static let mediaProbe = "media.probe"
     public static let mediaDecode = "media.decode"
     public static let mediaEncode = "media.encode"
+    // M4 (docs/protocol-v2.md §5.3).
+    public static let separateRun = "separate.run"
+    public static let diarizeRun = "diarize.run"
+    public static let mediaMux = "media.mux"
+    public static let mediaThumbnail = "media.thumbnail"
+    public static let mediaTranscode = "media.transcode"
     public static let captureDevices = "capture.devices"
     public static let captureStart = "capture.start"
     public static let captureStop = "capture.stop"
@@ -52,7 +58,7 @@ public enum Method {
     public static func isJob(_ method: String) -> Bool {
         switch method {
         case modelsLoad, ttsSynthesize, ttsEncodeVoice, sttTranscribe, sttAlign, vadDetect, enhanceRun,
-             mediaDecode, mediaEncode, captureStart:
+             mediaDecode, mediaEncode, captureStart, separateRun, diarizeRun, mediaMux, mediaThumbnail, mediaTranscode:
             return true
         default:
             return false
@@ -62,7 +68,7 @@ public enum Method {
     /// The role whose worker serves method (engine.*, job.cancel: every role).
     public static func role(of method: String) -> Role {
         switch method {
-        case mediaProbe, mediaDecode, mediaEncode: return .media
+        case mediaProbe, mediaDecode, mediaEncode, mediaMux, mediaThumbnail, mediaTranscode: return .media
         case captureDevices, captureStart, captureStop: return .listen
         default: return .gpu
         }
@@ -518,6 +524,11 @@ public func paramsType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.mediaProbe: ProbeParams.self
     case Method.mediaDecode: DecodeParams.self
     case Method.mediaEncode: EncodeParams.self
+    case Method.separateRun: SeparateParams.self
+    case Method.diarizeRun: DiarizeParams.self
+    case Method.mediaMux: MuxParams.self
+    case Method.mediaThumbnail: ThumbnailParams.self
+    case Method.mediaTranscode: TranscodeParams.self
     case Method.captureDevices: Empty.self
     case Method.captureStart: CaptureParams.self
     case Method.captureStop: CaptureStopParams.self
@@ -545,6 +556,11 @@ public func resultType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.mediaProbe: ProbeResult.self
     case Method.mediaDecode: DecodeResult.self
     case Method.mediaEncode: EncodeResult.self
+    case Method.separateRun: SeparateResult.self
+    case Method.diarizeRun: DiarizeResult.self
+    case Method.mediaMux: MuxResult.self
+    case Method.mediaThumbnail: ThumbnailResult.self
+    case Method.mediaTranscode: TranscodeResult.self
     case Method.captureDevices: DevicesResult.self
     case Method.captureStart: CaptureResult.self
     case Method.captureStop: CaptureStopResult.self

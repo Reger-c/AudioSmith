@@ -1,0 +1,5 @@
+{"to":"engine","msg":{"id":"01JC0V1000000000000000000A","method":"media.transcode","params":{"input":"/Users/me/Movies/clip.mov","output":{"path":"/Users/me/Library/Application Support/AudioSmith/dubs/01JC/preview.mp4","format":"mp4"},"maxHeight":720}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JC0V1000000000000000000A","stage":"transcoding","fraction":0.5}}}
+{"to":"app","msg":{"id":"01JC0V1000000000000000000A","result":{"output":"/Users/me/Library/Application Support/AudioSmith/dubs/01JC/preview.mp4","bytes":48211002,"duration":754.32,"width":1280,"height":720}}}
+{"to":"engine","msg":{"id":"01JC0V2000000000000000000A","method":"media.transcode","params":{"input":"/Users/me/Movies/clip.webm","output":{"path":"/Users/me/Library/Application Support/AudioSmith/dubs/01JC/preview2.mp4"},"noAudio":true}}}
+{"to":"app","msg":{"id":"01JC0V2000000000000000000A","error":{"code":"unsupported_media","message":"AVFoundation cannot read /Users/me/Movies/clip.webm","data":{"path":"/Users/me/Movies/clip.webm"}}}}

@@ -15,6 +15,11 @@ Golden transcripts of the engine protocol: the contract between the Go app and t
 | `analysis.jsonl` | `vad.detect`, `enhance.run`, `unsupported_media` |
 | `media.jsonl` | a `media` worker: hello, `media.probe` (video, WAV, unreadable), `media.decode` of a window, `media.encode` of an M4B (and MP3 refused), `file_not_found`, a gpu method refused |
 | `capture.jsonl` | a `listen` worker: its own speech-to-text model (`models.load`, `stt.transcribe`), `capture.devices`, a recording with its meter stopped by `capture.stop`, refusals (device, permission), cancel, `maxSeconds` |
+| `separate.jsonl` | `separate.run`: both stems, one stem only, `file_not_found` |
+| `diarize.jsonl` | `diarize.run` (overlapping turns), more than 4 speakers refused (`unsupported`, `max`) |
+| `mux.jsonl` | `media.mux`: source audio + 2 dubbed tracks + 2 subtitle tracks; an input without video (`unsupported_media`) |
+| `thumbnail.jsonl` | `media.thumbnail` (JPEG and PNG); no video track |
+| `transcode.jsonl` | `media.transcode` to a 720p preview; WebM refused |
 | `logs.jsonl` | structured `log` notifications |
 | `legacy_v1.jsonl` | the first line of a protocol-1 engine (detected, refused) |
 

@@ -145,8 +145,9 @@ type Checker struct {
 	peak         float64
 	dcSum        []float64
 	clickPrev    [][2]float32 // per channel, last two samples
-	clickAvg     []float64    // per channel, running mean |second difference|
-	clickA       float64
+	clickW       int64        // frames in each side window (5 ms)
+	clickSum     [][]float64  // per channel, ring of running sums of |second difference|
+	clickD       [][]float64  // per channel, ring of |second difference|
 	clicks       runs
 	clickHoldoff []int64
 }
@@ -165,9 +166,13 @@ func NewChecker(rate, channels int, o Options) *Checker {
 		silStart:     0,
 		dcSum:        make([]float64, channels),
 		clickPrev:    make([][2]float32, channels),
-		clickAvg:     make([]float64, channels),
-		clickA:       math.Exp(-1 / (0.005 * float64(rate))),
+		clickW:       max(int64(rate/200), 2),
 		clickHoldoff: make([]int64, channels),
+	}
+	ring := 2*c.clickW + 4
+	for range channels {
+		c.clickSum = append(c.clickSum, make([]float64, ring))
+		c.clickD = append(c.clickD, make([]float64, ring))
 	}
 	for i := range c.clipStart {
 		c.clipStart[i] = -1
@@ -228,21 +233,39 @@ func (c *Checker) endClip(k int, end int64) {
 	c.clipStart[k] = -1
 }
 
-// click flags an isolated sharp discontinuity: a second difference over 12×
-// its recent average and over 0.05.
+// click flags an isolated sharp discontinuity: a second difference over
+// 0.05 and over 12× the mean second difference of the 5 ms before it and
+// of the 5 ms after it (skipping the two samples the spike itself
+// disturbs). Judging against both sides is what keeps speech onsets out:
+// a plosive after silence is sharp against the silence before it, but the
+// speech after it is just as busy, while a click stands alone. Candidates
+// are judged 5 ms late, once the window after them has arrived.
 func (c *Checker) click(k int, f int64, v float32) {
 	p := &c.clickPrev[k]
 	d := math.Abs(float64(v - 2*p[1] + p[0]))
 	p[0], p[1] = p[1], v
-	avg := c.clickAvg[k]
-	if f >= 2 && d > 0.05 && d > 12*avg && f >= c.clickHoldoff[k] && avg > 0 {
-		c.clicks.add(f, f+1, d)
-		c.clickHoldoff[k] = f + int64(c.rate/100)
+	if f < 2 {
+		d = 0
 	}
-	if f >= 2 {
-		c.clickAvg[k] = c.clickA*avg + (1-c.clickA)*d
-	} else {
-		c.clickAvg[k] = d
+	sum, ds := c.clickSum[k], c.clickD[k]
+	L := int64(len(sum))
+	prev := 0.0
+	if f > 0 {
+		prev = sum[(f-1)%L]
+	}
+	sum[f%L] = prev + d
+	ds[f%L] = d
+	w := c.clickW
+	m := f - w - 2 // the candidate: its window after is m+3 … f
+	if m < w+2 {
+		return
+	}
+	before := (sum[(m-1)%L] - sum[(m-w-1)%L]) / float64(w)
+	after := (sum[f%L] - sum[(m+2)%L]) / float64(w)
+	dm := ds[m%L]
+	if dm > 0.05 && dm > 12*max(before, after) && m >= c.clickHoldoff[k] {
+		c.clicks.add(m, m+1, dm)
+		c.clickHoldoff[k] = m + int64(c.rate/100)
 	}
 }
 

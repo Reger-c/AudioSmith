@@ -6,6 +6,7 @@ package main
 //	AUDIOSMITH_E2E=1 AUDIOSMITH_SMOKE=all go test -run TestModelSmoke -v -timeout 4h .
 //	AUDIOSMITH_E2E=1 AUDIOSMITH_SMOKE=kokoro-82m-bf16,omnivoice-bf16 go test -run TestModelSmoke -v -timeout 1h .
 //	scripts/smoke-models.sh [ids]      (the same, building the engine first)
+//	AUDIOSMITH_SMOKE_SANDBOX=1 …       (the engine under sandbox-exec, network denied)
 //
 // For each entry it downloads the model with the app's downloader (the
 // system proxy, pinned revisions) into the model folder
@@ -31,6 +32,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode"
@@ -75,6 +77,9 @@ func TestModelSmoke(t *testing.T) {
 	bin := engine.Find("resources")
 	if bin == "" {
 		t.Fatal("no engine: run scripts/build-engine.sh")
+	}
+	if os.Getenv("AUDIOSMITH_SMOKE_SANDBOX") != "" {
+		bin = offlineEngine(t, bin)
 	}
 	cat := catalog.Builtin()
 	var entries []catalog.Entry
@@ -228,6 +233,9 @@ func TestModelSmoke(t *testing.T) {
 		return tr.Text, err
 	}
 
+	// Two speakers over music, for separation and diarization.
+	clip := sync.OnceValues(func() (smokeClip, error) { return makeSmokeClip(outDir, ref, call, kokoro, kokoroPath) })
+
 	var rows []smokeRow
 	defer func() { writeSmokeReport(t, report, rows) }()
 
@@ -338,6 +346,10 @@ func TestModelSmoke(t *testing.T) {
 					r.Note = fmt.Sprintf("%d regions, %.2f–%.2f s", len(vr.Regions), vr.Regions[0].Start, vr.Regions[len(vr.Regions)-1].End)
 				}
 				add(r)
+			case "separate":
+				smokeSeparate(e, snap, outDir, clip, call, add)
+			case "diarize":
+				smokeDiarize(e, snap, clip, call, add)
 			case "enhance":
 				out := filepath.Join(outDir, e.ID+"-clean.wav")
 				var er proto.EnhanceResult
