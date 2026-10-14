@@ -141,6 +141,11 @@ func TestFixtures(t *testing.T) {
 							t.Fatalf("%s: chunk %+v (want seq %d)", where, v, nextSeq[job])
 						}
 						nextSeq[job]++
+					case *LLMTokenParams:
+						job = v.Job
+						if pending[job] != MethodLLMGenerate || v.Text == "" {
+							t.Fatalf("%s: token %+v of %s", where, v, pending[job])
+						}
 					case *LevelParams:
 						job = v.Job
 						if pending[job] != MethodCaptureStart || v.RMS < -120 || v.Peak < v.RMS || v.Peak > 0 {
@@ -290,7 +295,7 @@ func TestFixturesCoverMethods(t *testing.T) {
 		}
 	}
 	all := append(slices.Clone(JobMethods), MethodHello, MethodStats, MethodFlush, MethodShutdown, MethodModelsUnload, MethodModelsLoaded,
-		MethodJobCancel, MethodJobProgress, MethodTTSChunk, MethodLog, MethodMediaProbe, MethodCaptureDevices, MethodCaptureStop, MethodCaptureLevel)
+		MethodJobCancel, MethodJobProgress, MethodTTSChunk, MethodLog, MethodMediaProbe, MethodCaptureDevices, MethodCaptureStop, MethodCaptureLevel, MethodLLMToken)
 	for _, m := range all {
 		if !seen[m] {
 			t.Errorf("no fixture shows %s", m)

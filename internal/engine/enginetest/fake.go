@@ -86,7 +86,7 @@ func Methods(role proto.Role) []string {
 	}
 	return append(common, proto.MethodModelsLoad, proto.MethodModelsUnload, proto.MethodModelsLoaded,
 		proto.MethodTTSSynthesize, proto.MethodTTSEncodeVoice, proto.MethodSTTTranscribe, proto.MethodSTTAlign,
-		proto.MethodVADDetect, proto.MethodEnhanceRun, proto.MethodSeparateRun, proto.MethodDiarizeRun)
+		proto.MethodVADDetect, proto.MethodEnhanceRun, proto.MethodSeparateRun, proto.MethodDiarizeRun, proto.MethodLLMGenerate)
 }
 
 // Concurrency is the jobs an engine of role runs at once: gpu 1, listen 2
@@ -316,6 +316,8 @@ func (f *fakeEngine) startJob(m proto.Message) {
 			f.separate(m)
 		case proto.MethodDiarizeRun:
 			f.diarize(m)
+		case proto.MethodLLMGenerate:
+			f.generate(m)
 		case proto.MethodMediaMux:
 			f.mux(m)
 		case proto.MethodMediaThumbnail:
@@ -349,7 +351,7 @@ func (f *fakeEngine) handleHello(m proto.Message) {
 		families = []string{"whisper", "qwen3_asr", "parakeet"}
 	}
 	if role == proto.RoleGPU {
-		families = []string{"kokoro", "qwen3_tts", "omnivoice", "chatterbox", "whisper", "qwen3_asr", "qwen3_forced_aligner", "silero_vad", "deepfilternet", "htdemucs", "mel_roformer", "sortformer"}
+		families = []string{"kokoro", "qwen3_tts", "omnivoice", "chatterbox", "whisper", "qwen3_asr", "qwen3_forced_aligner", "silero_vad", "deepfilternet", "htdemucs", "mel_roformer", "sortformer", "qwen3", "gemma4"}
 	}
 	res := proto.HelloResult{
 		Protocol: proto.Version, Version: "fake", Role: role, PID: os.Getpid(), Concurrency: Concurrency(role),
@@ -397,6 +399,8 @@ func taskOf(model string) string {
 		return "vad"
 	case strings.Contains(l, "deepfilter"):
 		return "enhance"
+	case strings.Contains(l, "gemma"), strings.Contains(l, "qwen3-") && !strings.Contains(l, "tts"):
+		return "llm"
 	}
 	return "tts"
 }

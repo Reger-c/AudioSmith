@@ -71,7 +71,7 @@ var Reserved = []string{
 	"tts.batch",
 	"stt.stream.open", "stt.stream.push", "stt.stream.close", "stt.partial", "stt.final",
 	"lid.detect",
-	"llm.generate", "translate.run",
+	"translate.run",
 	"media.timePitch", "media.ocr", "doc.extractText",
 	"capture.pcm",
 }
@@ -365,6 +365,10 @@ func ParamsFor(method string) any {
 		return new(CaptureStopParams)
 	case MethodCaptureLevel:
 		return new(LevelParams)
+	case MethodLLMGenerate:
+		return new(LLMGenerateParams)
+	case MethodLLMToken:
+		return new(LLMTokenParams)
 	case MethodHello:
 		return new(HelloParams)
 	case MethodStats, MethodFlush, MethodShutdown, MethodModelsLoaded:
@@ -416,6 +420,8 @@ func ResultFor(method string) any {
 		return new(ThumbnailResult)
 	case MethodMediaTranscode:
 		return new(TranscodeResult)
+	case MethodLLMGenerate:
+		return new(LLMGenerateResult)
 	case MethodCaptureDevices:
 		return new(DevicesResult)
 	case MethodCaptureStart:
@@ -448,7 +454,8 @@ func IsJob(method string) bool {
 	case MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
 		MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
 		MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
-		MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode:
+		MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode,
+		MethodLLMGenerate:
 		return true
 	}
 	return false
@@ -460,4 +467,5 @@ var JobMethods = []string{
 	MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
 	MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
 	MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode,
+	MethodLLMGenerate,
 }
