@@ -67,6 +67,11 @@ func TestDictationToggle(t *testing.T) {
 	if !pill.HasText("Listening…") || !pill.HasText("Stop") {
 		t.Errorf("pill: %q", pill.Texts())
 	}
+	// Only the pill shows: its window's corners stay clear, though Stop
+	// (an ink button) swaps the theme, which resets the root's background.
+	if _, _, _, alpha := pill.Image().At(2, 2).RGBA(); alpha != 0 {
+		t.Errorf("the pill's window is painted at its corner (alpha %d): a dark box round the pill", alpha>>8)
+	}
 
 	keys.press(t, defaultAcc) // toggle: stop
 	if s.phase != dictTranscribing {

@@ -76,7 +76,10 @@ func (a *app) pillView(c *ui.Context) {
 	c.SetTheme(&th)
 	// The root draws the theme's background unless told not to: in this
 	// transparent window only the pill may show (MyGo docs/ui/windows.md).
-	c.Root().Background(ui.Transparent)
+	// Last, once the view is built: every SetTheme sets the root's
+	// background again, and the kit's ink and record buttons (Stop) swap
+	// the theme while they build.
+	defer c.Root().Background(ui.Transparent)
 	if a.win == nil {
 		c.DisableAnimations()
 	}
