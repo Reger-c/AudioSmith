@@ -15,6 +15,10 @@ import (
 )
 
 func main() {
+	// M5 (thread #20): "AudioSmith --mcp-stdio" relays an MCP client to the running app (api_stdio.go).
+	if runMCPStdio() {
+		return
+	}
 	// Dev builds are "AudioSmith Dev"; share data with the installed app.
 	mygo.App.SetName("AudioSmith")
 	// M2 (thread #17): one AudioSmith at a time (one library, one
@@ -44,6 +48,7 @@ func main() {
 	mygo.App.WhenReady(func() {
 		a.openWindow() // shell.go
 		a.startEngine()
+		a.startAPI(dataDir)  // M5: api.go — the Local API and MCP (thread #20)
 		a.connectDictation() // M2: dictation.go (shortcut, menu bar icon, close to tray)
 		mygo.App.OnSecondInstance(func([]string, string) { a.post(a.showMainWindow) })
 	})
