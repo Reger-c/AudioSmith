@@ -97,10 +97,16 @@ func ghostButton(c *ui.Context, label string) ui.Element {
 
 // ghostIconButton is a ghost button with an icon before its label.
 func ghostIconButton(c *ui.Context, ic icons.Icon, label string) ui.Element {
+	return ghostIconButtonSized(c, ic, label, labelIcon(c.Theme()))
+}
+
+// ghostIconButtonSized is ghostIconButton with its icon at size: smaller
+// for glyphs that fill their box (Play, Stop).
+func ghostIconButtonSized(c *ui.Context, ic icons.Icon, label string, size float32) ui.Element {
 	t := c.Theme()
 	b := ghostBase(c).Padding(t.Space(1.5), t.Space(2.5)).Gap(t.Space(1.5))
 	b.Children(func() {
-		ui.Icon(c, ic.Linear).Size(labelIcon(t), labelIcon(t)).TextColor(tok(t).Text2)
+		ui.Icon(c, ic.Linear).Size(size, size).TextColor(tok(t).Text2)
 		ui.Text(c, label).SingleLine()
 	})
 	return b

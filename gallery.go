@@ -38,8 +38,7 @@ type galleryState struct {
 	limit     int
 	moreAsked bool    // the next page was asked for in this frame (infinite scroll)
 	tagH      float32 // a card's tag, as last laid out: its tags show two rows
-	headH     float32 // a card's header and footer, as last laid out (cardHeight)
-	footH     float32
+	contentH  float32 // a card's top to its footer's bottom, as last laid out (cardHeight)
 
 	page    gallery.Page
 	pageFor string // the query page answers
