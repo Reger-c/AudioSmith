@@ -60,6 +60,9 @@ type Project struct {
 	Cast map[string]string `json:"cast,omitempty"`
 	// References are the clips each speaker's automatic clone uses.
 	References map[string]Reference `json:"references,omitempty"`
+	// RefTried are the speakers the last pick of references considered
+	// (a speaker added since needs one picked).
+	RefTried []string `json:"refTried,omitempty"`
 	Glossary   translate.Glossary   `json:"glossary,omitempty"`
 
 	Settings Settings `json:"settings"`
@@ -68,6 +71,8 @@ type Project struct {
 	Stages map[string]StageState `json:"stages,omitempty"`
 	// Tracks are the dubbed tracks, by language.
 	Tracks map[string]Track `json:"tracks,omitempty"`
+	// Run is the run asked for last, until it ends (Resume).
+	Run *Run `json:"run,omitempty"`
 }
 
 // Source is what is dubbed.
@@ -77,8 +82,10 @@ type Source struct {
 	Path string `json:"path,omitempty"`
 	URL  string `json:"url,omitempty"`
 	Name string `json:"name"` // shown: the file's name, or the video's title
-	// Captions is a caption file downloaded with a URL ("" = none).
-	Captions string `json:"captions,omitempty"`
+	// Captions is a caption file downloaded with a URL ("" = none);
+	// WantCaptions asks the download for the source language's.
+	Captions     string `json:"captions,omitempty"`
+	WantCaptions bool   `json:"wantCaptions,omitempty"`
 
 	Size     int64      `json:"size,omitempty"`
 	Duration float64    `json:"duration,omitempty"`
@@ -575,6 +582,7 @@ func (p *Project) Clone() *Project {
 	q.Names = maps.Clone(p.Names)
 	q.Cast = maps.Clone(p.Cast)
 	q.References = maps.Clone(p.References)
+	q.RefTried = slices.Clone(p.RefTried)
 	q.Glossary = slices.Clone(p.Glossary)
 	q.Settings.Export.Tracks = slices.Clone(p.Settings.Export.Tracks)
 	q.Media.Onsets = slices.Clone(p.Media.Onsets)
@@ -583,6 +591,11 @@ func (p *Project) Clone() *Project {
 		q.Source.Video = &v
 	}
 	q.Stages = maps.Clone(p.Stages)
+	if p.Run != nil {
+		r := *p.Run
+		r.Langs = slices.Clone(p.Run.Langs)
+		q.Run = &r
+	}
 	if p.Tracks != nil {
 		q.Tracks = make(map[string]Track, len(p.Tracks))
 		for k, t := range p.Tracks {
