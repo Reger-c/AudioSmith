@@ -92,6 +92,9 @@ type RenderParams struct {
 	// Stream sends the audio joined so far as the job's chunks
 	// (proto.ChunkParams, pcm16le) for the streaming preview.
 	Stream bool `json:"stream,omitempty"`
+	// NoWatermark leaves the file unmarked: an intermediate render that
+	// is watermarked later as part of something else (a dub's track).
+	NoWatermark bool `json:"noWatermark,omitempty"`
 }
 
 // RenderResult is a take.render job's result.
@@ -374,7 +377,11 @@ func (r *renderer) renderOnce(ctx context.Context, job jobs.Job, pp *RenderParam
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
 	r.pruneCache()
-	marked, notice := r.watermarkOutput(ctx, p.Output, opts.Bits) // watermark.go
+	var marked bool
+	var notice *core.TakeNotice
+	if !p.NoWatermark {
+		marked, notice = r.watermarkOutput(ctx, p.Output, opts.Bits) // watermark.go
+	}
 	if notice != nil {
 		warnings = append(warnings, *notice)
 	}

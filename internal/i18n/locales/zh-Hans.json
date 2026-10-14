@@ -1732,6 +1732,7 @@
   "The first target language of a new dub.": "新建配音的首个目标语言。",
   "The imported file says the speaker consented. It is not verified here.": "导入的文件声称说话人已授权，但未在本机验证。",
   "The imported file says the speaker consented. Record the statement yourself to verify the voice here.": "导入的文件声称说话人已授权。请亲自录下声明，在本机验证这个音色。",
+  "The invisible watermark could not be added to the dubbed track.": "无法为配音音轨添加隐形水印。",
   "The invisible watermark could not be added: %s": "无法添加隐形水印：%s",
   "The job failed": "任务失败",
   "The language model did not answer: nothing was cleaned up. Check it in Settings → Writing help.": "语言模型没有回答：没有清理任何内容。请在“设置 → 写作助手”中检查。",

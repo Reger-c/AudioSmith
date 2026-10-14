@@ -1102,6 +1102,8 @@ func dubWarningText(code string) string {
 	switch code {
 	case services.DubWarnNoSeparation:
 		return i18n.T("Voices and music could not be separated (the engine cannot yet): the original audio plays quietly under the dub.")
+	case services.NoticeWatermarkFailed: // thread #14
+		return i18n.T("The invisible watermark could not be added to the dubbed track.")
 	case services.DubWarnNoDiarization:
 		return i18n.T("Speakers could not be told apart (the engine cannot yet): every line is one speaker's. Set speakers by hand.")
 	case services.DubWarnTooManySpk:

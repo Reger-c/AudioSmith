@@ -461,7 +461,9 @@ func (s *Dubs) renderLine(ctx context.Context, sc *stageCtx, p *dub.Project, i i
 	seg := p.Segments[i]
 	raw := sc.path(filepath.Join(dir, seg.ID+".raw.wav"))
 	defer os.Remove(raw)
-	params, err := json.Marshal(RenderParams{Take: t, Lang: dub.LangFor(seg, l), Output: raw})
+	// Not watermarked here: fitting stretches the line; the final track
+	// is marked instead (mix, watermark.go).
+	params, err := json.Marshal(RenderParams{Take: t, Lang: dub.LangFor(seg, l), Output: raw, NoWatermark: true})
 	if err != nil {
 		return dub.Render{}, err
 	}
@@ -617,6 +619,8 @@ func (s *Dubs) mix(ctx context.Context, sc *stageCtx) error {
 	if m.Err != nil {
 		return &jobs.Error{Code: CodeRenderFailed, Message: m.Err.Error()}
 	}
+	// The invisible watermark goes on the final, fitted tracks (thread #14).
+	s.watermarkTracks(ctx, sc, sc.path(name), sc.path(speech))
 	return sc.save(ctx, func(q *dub.Project) {
 		t := q.Track(l)
 		t.Lang, t.File, t.Speech, t.Background = l, name, speech, kind
