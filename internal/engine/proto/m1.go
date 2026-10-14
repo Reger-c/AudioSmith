@@ -242,7 +242,7 @@ type DecodeResult struct {
 // same JSON.
 type EncodeParams struct {
 	Input  string `json:"input"`
-	Output Output `json:"output"` // path; format "m4b" or "m4a" ("mp3": unsupported, capability "mp3")
+	Output Output `json:"output"`          // path; format "m4b" or "m4a" ("mp3": unsupported, capability "mp3")
 	Codec  string `json:"codec,omitempty"` // "aac" (default, the only one)
 	// Bitrate in bits per second; 0 = 64 kb/s mono, 96 kb/s stereo.
 	Bitrate    int             `json:"bitrate,omitempty"`

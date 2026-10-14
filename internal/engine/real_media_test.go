@@ -3,15 +3,15 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/png"
-	"slices"
-	"strings"
-	"errors"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
