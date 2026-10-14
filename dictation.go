@@ -341,7 +341,7 @@ func (a *app) dictPreload() {
 	params, _ := json.Marshal(proto.LoadParams{Model: e.Repo, Task: "stt"})
 	sched := a.lib.sched
 	a.async(func() {
-		sched.Submit(context.Background(), jobs.Spec{Kind: proto.MethodModelsLoad, Lane: jobs.LaneGPU, Priority: jobs.PriorityInteractive,
+		sched.Submit(context.Background(), jobs.Spec{Kind: proto.KindFor(proto.RoleListen, proto.MethodModelsLoad), Lane: jobs.LaneListen, Priority: jobs.PriorityInteractive,
 			Params: params, Title: i18n.T("Load model"), Owner: "dictation:load"})
 	})
 }
@@ -399,7 +399,8 @@ func (a *app) dictTranscribe(s *dictSession, path string) {
 	e := a.dictModel()
 	s.trID = core.NewID(time.Now())
 	req := services.TranscribeRequest{ID: s.trID, Input: path, Source: core.SourceDictation, RemoveInput: true,
-		Mode: settings.TranscribeFast, Model: e.Repo, Language: d.Language, Prompt: d.Vocabulary, App: s.target.Name}
+		Mode: settings.TranscribeFast, Model: e.Repo, Language: d.Language, Prompt: d.Vocabulary, App: s.target.Name,
+		Role: proto.RoleListen} // the listen worker's own model: not behind renders
 	svc := a.trSvc
 	a.async(func() {
 		_, id, err := svc.Transcribe(context.Background(), req)
