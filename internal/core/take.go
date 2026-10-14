@@ -38,6 +38,12 @@ type Take struct {
 	VoiceID   string `json:"voiceId,omitempty"`   // Voice profile it was spoken with
 	ProjectID string `json:"projectId,omitempty"` // project (story, audiobook, dub) it belongs to
 	JobID     string `json:"jobId,omitempty"`     // job that produced it
+	// Origin is where the take was asked for: TakeStudio (also ""),
+	// TakeVoice (a voice page's preview or sample), TakeConvert (Tools →
+	// change the voice) or TakeAPI (the Local API or MCP, Client naming
+	// the agent when it said). The Export dialog offers per origin.
+	Origin string `json:"origin,omitempty"`
+	Client string `json:"client,omitempty"`
 
 	// Library state (M1+).
 	Starred bool `json:"starred,omitempty"`
@@ -52,6 +58,14 @@ type Take struct {
 	AudioSeconds float64 `json:"audioSeconds"`
 	GenSeconds   float64 `json:"genSeconds"`
 }
+
+// Take origins (Take.Origin).
+const (
+	TakeStudio  = "studio"
+	TakeVoice   = "voice"
+	TakeConvert = "convert"
+	TakeAPI     = "api"
+)
 
 // TakeRender is a take's render: the output options of its recipe (which
 // Reuse restores) and what the render found.

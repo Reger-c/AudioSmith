@@ -259,6 +259,9 @@ func (a *app) startTake(t core.Take) {
 	if a.loadedModel != t.Model {
 		status = i18n.T("Loading model…")
 	}
+	if t.Origin == "" {
+		t.Origin = core.TakeStudio
+	}
 	owner := takeOwner + t.ID
 	a.jobError, a.needDownload = "", nil
 	a.awaitTake = t.ID

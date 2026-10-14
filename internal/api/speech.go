@@ -130,7 +130,7 @@ func (s *Server) prepare(ctx context.Context, p SpeechParams) (SpeakRequest, []s
 		Instructions: strings.TrimSpace(p.Instructions), Language: strings.TrimSpace(p.Language),
 		RefAudio: p.RefAudio, RefText: p.RefText,
 		Speed: p.Speed, Temperature: p.Temperature, TopP: p.TopP, Guidance: p.Guidance, Exaggeration: p.Exaggeration,
-		Duration: p.Duration, Seed: p.Seed, Steps: p.Steps, Normalize: p.Normalize, Bits: p.Bits, Background: p.Background}
+		Duration: p.Duration, Seed: p.Seed, Steps: p.Steps, Normalize: p.Normalize, Bits: p.Bits, Background: p.Background, Client: p.Client}
 	name := vc.Speaker
 	switch {
 	case vc.Saved != nil:

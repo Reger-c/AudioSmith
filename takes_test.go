@@ -121,10 +121,16 @@ func TestEmptyHistory(t *testing.T) {
 }
 
 func TestExportNames(t *testing.T) {
-	if got := exportName(&core.Take{Text: "What: a/test? of the export name, really long"}); got != "What- a-test- of the export name,.wav" {
-		t.Errorf("export name %q", got)
-	}
-	if got := exportName(&core.Take{Text: "你好，世界"}); got != "你好，世界.wav" {
-		t.Errorf("export name %q", got)
+	for text, want := range map[string]string{
+		"What: a/test of the export name, really long": "What- a-test of the export name.wav",
+		"Hello there. And more.":                       "Hello there.wav",
+		"你好，世界":                                        "你好，世界.wav",
+		"最后一班渡轮在十一点离港。[pause 500ms] 雾像羊毛一样铺在水面上。": "最后一班渡轮在十一点离港.wav",
+		"[pause 1s]":         "AudioSmith.wav",
+		"Version 1.5 is out": "Version 1.5 is out.wav",
+	} {
+		if got := exportName(&core.Take{Text: text}); got != want {
+			t.Errorf("export name of %q: %q, want %q", text, got, want)
+		}
 	}
 }

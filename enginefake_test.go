@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -268,6 +269,17 @@ func (s fakeSup) Call(ctx context.Context, _ proto.Role, id, method string, para
 			info = proto.ProbeResult{Format: "wav", Duration: 3, HasAudio: true, AudioTracks: 1, Codec: "lpcm", SampleRate: 48000, Channels: 1, Bits: 16}
 		}
 		return answer(info)
+	case proto.MethodMediaEncode:
+		// "Encodes" to M4A/M4B: the output holds "FAKE-M4A" and the
+		// params, so tests can read back what was asked (export_dialog_test.go).
+		var p proto.EncodeParams
+		json.Unmarshal(raw, &p)
+		if p.Output.Path != "" {
+			if err := os.WriteFile(p.Output.Path, append([]byte("FAKE-M4A\n"), raw...), 0o644); err != nil {
+				return nil, &proto.Error{Code: proto.CodeInternal, Message: err.Error()}
+			}
+		}
+		return answer(proto.EncodeResult{Output: p.Output.Path, Format: p.Output.Format, Bitrate: p.Bitrate})
 	case proto.MethodCaptureDevices:
 		return answer(proto.DevicesResult{Devices: enginetest.FakeDevices()})
 	case proto.MethodCaptureStop:

@@ -228,8 +228,10 @@ func (a *app) toolModelFor(v *core.Voice) (catalog.Entry, bool) {
 
 // toolRecipe is the recipe of text in a choice's voice.
 func (a *app) toolRecipe(ch toolChoice, text string) core.Take {
-	return apiRecipe(api.SpeakRequest{ID: core.NewID(timeNow()), Text: text, Model: ch.model, Voice: ch.voice, Speaker: ch.spk, Normalize: true},
+	t := apiRecipe(api.SpeakRequest{ID: core.NewID(timeNow()), Text: text, Model: ch.model, Voice: ch.voice, Speaker: ch.spk, Normalize: true},
 		a.fillVoice, a.lib.svc.Voices.FilePath)
+	t.Origin = core.TakeConvert // the take Convert keeps (History, the Export dialog)
+	return t
 }
 
 // preview renders a recipe without keeping it, into run.

@@ -309,6 +309,7 @@ func (a *app) voiceGenerate(purpose, voiceID string, t core.Take, retry func()) 
 	}
 	now := time.Now()
 	t.ID = core.NewID(now)
+	t.Origin = core.TakeVoice // a preview or a sample (History, the Export dialog)
 	j := &voiceJob{takeID: t.ID, purpose: purpose, voiceID: voiceID, model: t.Model, fraction: -1,
 		status: i18n.T("Starting…"), started: now}
 	a.voiceJobs[t.ID] = j
