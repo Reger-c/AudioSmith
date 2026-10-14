@@ -11,4 +11,7 @@ require (
 	golang.org/x/text v0.42.0
 )
 
-require github.com/go-text/typesetting v0.3.5 // indirect
+require (
+	github.com/go-text/typesetting v0.3.5 // indirect
+	github.com/modelcontextprotocol/go-sdk v1.8.0 // indirect
+)
