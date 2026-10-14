@@ -7,6 +7,7 @@ package main
 // AUDIOSMITH_API_KEY environment variable.
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -100,9 +101,15 @@ var appExecutable = func() string {
 // mcpURL is the MCP endpoint.
 func (e integEnv) mcpURL() string { return e.Base + "/mcp" }
 
+// jsonText is v as indented JSON, with <, > and & as they are (snippets
+// show placeholders like <your-name>).
 func jsonText(v any) string {
-	b, _ := json.MarshalIndent(v, "", "  ")
-	return string(b)
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	enc.Encode(v)
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 // obj is a JSON object that keeps its keys in order (configurations read
@@ -120,17 +127,28 @@ func (o obj) MarshalJSON() ([]byte, error) {
 		if i > 0 {
 			b = append(b, ',')
 		}
-		k, err := json.Marshal(x.K)
+		k, err := marshalPlain(x.K)
 		if err != nil {
 			return nil, err
 		}
-		v, err := json.Marshal(x.V)
+		v, err := marshalPlain(x.V)
 		if err != nil {
 			return nil, err
 		}
 		b = append(append(append(b, k...), ':'), v...)
 	}
 	return append(b, '}'), nil
+}
+
+// marshalPlain is json.Marshal without HTML escapes.
+func marshalPlain(v any) ([]byte, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(b.Bytes(), []byte("\n")), nil
 }
 
 // headersObj is a client's headers: its name, then the key when sent.
@@ -164,14 +182,18 @@ func cursorBlocks(e integEnv) []integBlock {
 
 func codexBlocks(e integEnv) []integBlock {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[mcp_servers.audiosmith]\nurl = %q\nhttp_headers = { %q = \"codex-cli\" }\n", e.mcpURL(), api.HeaderClient)
-	switch {
-	case e.Key != "":
-		fmt.Fprintf(&b, "bearer_token = %q\n", e.Key)
-	case e.NeedKey:
+	// Codex reads no bearer_token (only bearer_token_env_var): a key the
+	// user put in the setups goes in the headers. tool_timeout_sec: Codex
+	// stops a tool after 60 s by default, too short for long speech.
+	headers := fmt.Sprintf("%q = \"codex-cli\"", api.HeaderClient)
+	if e.Key != "" {
+		headers += fmt.Sprintf(", \"Authorization\" = %q", "Bearer "+e.Key)
+	}
+	fmt.Fprintf(&b, "[mcp_servers.audiosmith]\nurl = %q\nhttp_headers = { %s }\ntool_timeout_sec = 600\n", e.mcpURL(), headers)
+	if e.Key == "" && e.NeedKey {
 		fmt.Fprintf(&b, "bearer_token_env_var = %q\n", integKeyEnv)
 	}
-	stdio := fmt.Sprintf("[mcp_servers.audiosmith]\ncommand = %q\nargs = [\"--mcp-stdio\", \"--client\", \"codex-cli\"]\n", e.Exe)
+	stdio := fmt.Sprintf("[mcp_servers.audiosmith]\ncommand = %q\nargs = [\"--mcp-stdio\", \"--client\", \"codex-cli\"]\ntool_timeout_sec = 600\n", e.Exe)
 	if e.Key != "" {
 		stdio += fmt.Sprintf("env = { %q = %q }\n", integKeyEnv, e.Key)
 	}

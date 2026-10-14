@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -131,8 +132,16 @@ func (a *app) integrationPage(c *ui.Context, slug string) {
 					ui.Switch(c.Key("integ-key-switch"), &a.apiForm.keyIncl).Label(i18n.T("Put my API key in the setups"))
 				})
 			}
-			for i, blk := range in.Blocks(a.integEnvOf()) {
-				a.codeBlock(c, in.Slug+"-"+itoa(i), blk)
+			blocks := func() {
+				for i, blk := range in.Blocks(a.integEnvOf()) {
+					a.codeBlock(c, in.Slug+"-"+itoa(i), blk)
+				}
+			}
+			if _, ok := promptAgents[in.Slug]; ok { // thread #33: the agent setup prompt, the manual setup folded below it
+				a.agentPromptCard(c, in)
+				collapsible(c.Key("integ-manual"), i18n.T("Manual setup"), &a.integManual, nil, blocks)
+			} else {
+				blocks()
 			}
 			if slices.Contains(in.Caps, "MCP server") {
 				ui.Column(c.Key("integ-voices")).Children(func() {
@@ -173,8 +182,69 @@ func (a *app) codeBlock(c *ui.Context, key string, blk integBlock) {
 	})
 }
 
+// agentPromptCard is the agent setup prompt of a page (thread #33): what
+// it does, the text, Copy prompt and Save as .txt….
+func (a *app) agentPromptCard(c *ui.Context, in integration) {
+	t := c.Theme()
+	k := tok(t)
+	p := a.promptEnvOf()
+	text := agentPrompt(in.Slug, p)
+	name := promptAgents[in.Slug].Name
+	if promptAgents[in.Slug].Client == "" {
+		name = i18n.T("your agent")
+	}
+	card(c.Key("integ-prompt")).Children(func() {
+		ui.Column(c).Gap(px(t, sp1)).Children(func() {
+			sectionHeading(c, i18n.T("Agent setup prompt"))
+			caption(c, i18n.T("Copy this text and paste it into %s: it checks that AudioSmith runs, adds AudioSmith's MCP server to its configuration, tests it and tells you what it changed. Nothing to set up by hand.", name)).Wrap()
+		})
+		note := func(ic icons.Icon, col ui.Color, s string) {
+			ui.Row(c.Key("integ-prompt-key")).Gap(px(t, 6)).AlignItems(ui.Start).Children(func() {
+				ui.Icon(c, ic.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0).Margin(px(t, 1), 0, 0, 0)
+				ui.Text(c, s).FontSize(px(t, fsCaption)).TextColor(col).Wrap().Grow(1).MinWidth(0)
+			})
+		}
+		switch p.keyMode() {
+		case keyIncluded:
+			note(icons.DangerTriangle, k.Warning, i18n.T("The prompt contains your API key: paste it only into an agent you trust."))
+		case keyKeychain:
+			note(icons.ShieldCheck, k.Text2, i18n.T("AudioSmith requires its key: the agent reads it from the Keychain (macOS may ask you to allow it) and keeps it out of shared files."))
+		}
+		// The actions above the text, so that they show without scrolling
+		// in a small window.
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
+			copyL := i18n.T("Copy prompt")
+			if primaryIconButton(c.Key("integ-prompt-copy"), icons.Copy, copyL).Label(copyL).Clicked() {
+				c.Services().WriteClipboard(text)
+				a.toast(i18n.T("Copied: paste it into %s", name))
+			}
+			save := i18n.T("Save as .txt…")
+			if secondaryIconButton(c.Key("integ-prompt-save"), icons.Export, save).Label(save).Clicked() {
+				a.saveBlock(integBlock{Code: text, File: agentPromptFile(in.Slug)})
+			}
+		})
+		_, h := c.Size()
+		ui.Scroll(c.Key("integ-prompt-text")).MaxHeight(max(px(t, 120), min(px(t, 240), h*0.35))).Radius(px(t, radiusControl)).Background(k.Subtle).Children(func() {
+			ui.Text(c, text).Font(monoFont).FontSize(px(t, fsCaption)).Wrap().Selectable().Padding(px(t, sp3))
+		})
+	})
+}
+
+// integSaveDir is where tests save blocks (no save panel).
+var integSaveDir string
+
 // saveBlock writes a block to a file.
 func (a *app) saveBlock(blk integBlock) {
+	if a.win == nil {
+		if integSaveDir != "" {
+			if err := saveSnippet(filepath.Join(integSaveDir, blk.File), blk.Code); err != nil {
+				a.toast(i18n.T("Could not save: %v", err))
+				return
+			}
+			a.toast(i18n.T("Saved"))
+		}
+		return
+	}
 	go func() {
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: a.win, Title: i18n.T("Save…"), DefaultPath: blk.File})
 		if err != nil || path == "" {
