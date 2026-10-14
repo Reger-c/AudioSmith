@@ -31,10 +31,10 @@ extension MediaWorker {
         let bitrate = (p.bitrate ?? 0) > 0 ? p.bitrate! : (channels == 1 ? 64000 : 96000)
         let duration = media.probe.duration
 
-        let out = URL(fileURLWithPath: p.output.path)
-        let dir = out.deletingLastPathComponent()
+        let dest = URL(fileURLWithPath: p.output.path)
+        let dir = dest.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let tmp = dir.appendingPathComponent(".\(out.deletingPathExtension().lastPathComponent).\(getpid()).m4a")
+        let tmp = dir.appendingPathComponent(".\(dest.deletingPathExtension().lastPathComponent).\(getpid()).m4a")
         try? FileManager.default.removeItem(at: tmp)
         let writer = try AVAssetWriter(outputURL: tmp, fileType: .m4a)
         writer.metadata = Self.tags(p.metadata, cover: cover?.0)
@@ -123,14 +123,14 @@ extension MediaWorker {
             try? FileManager.default.removeItem(at: tmp)
             throw error
         }
-        guard rename(tmp.path, out.path) == 0 else {
+        guard rename(tmp.path, dest.path) == 0 else {
             let e = String(cString: strerror(errno))
             try? FileManager.default.removeItem(at: tmp)
-            throw RPCError(Code.internal, "Could not write \(out.path): \(e)")
+            throw RPCError(Code.internal, "Could not write \(dest.path): \(e)")
         }
-        let bytes = ((try? FileManager.default.attributesOfItem(atPath: out.path)[.size]) as? NSNumber)?.int64Value ?? 0
+        let bytes = ((try? FileManager.default.attributesOfItem(atPath: dest.path)[.size]) as? NSNumber)?.int64Value ?? 0
         _ = started
-        return EncodeResult(output: out.path, format: format, bytes: bytes, duration: (duration * 1000).rounded() / 1000, bitrate: bitrate)
+        return EncodeResult(output: dest.path, format: format, bytes: bytes, duration: (duration * 1000).rounded() / 1000, bitrate: bitrate)
     }
 
     /// The iTunes tags: ©nam, ©alb = title; ©ART, aART = author; ©wrt =
