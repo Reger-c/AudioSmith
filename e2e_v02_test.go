@@ -549,7 +549,8 @@ func (v *v02) design(t *testing.T) string {
 	a := v.a
 	id := firstOf(os.Getenv("AUDIOSMITH_V02_DESIGN"), "qwen3-tts-1.7b-voicedesign-4bit")
 	e := v.model(t, id)
-	a.openDesignFor(nil)
+	a.design.reset()
+	a.navigate("/design")
 	v.drain()
 	d := &a.design
 	d.model = e.Label
