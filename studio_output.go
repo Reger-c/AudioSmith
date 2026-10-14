@@ -129,6 +129,9 @@ func (a *app) saveAs(t *core.Take, bits int) {
 			dst += ".wav"
 		}
 		err = svc.ExportAs(context.Background(), id, dst, bits)
+		if err == nil {
+			a.recordTakeExport(id, dst) // M3: the Projects page's Exports (projects.go, thread #18)
+		}
 		a.post(func() {
 			if err != nil {
 				a.toast(i18n.T("Export failed: %v", err))

@@ -156,6 +156,9 @@ func (a *app) exportVoice(id string, includeRef bool, licence string) {
 			dst += persona.Ext
 		}
 		err = svc.Export(context.Background(), id, dst, core.VoiceExport{IncludeReference: includeRef, Licence: licence, AppVersion: version})
+		if err == nil {
+			a.recordVoiceExport(id, dst) // M3: the Projects page's Exports (projects.go, thread #18)
+		}
 		a.post(func() {
 			switch {
 			case errors.Is(err, services.ErrNoPreview):

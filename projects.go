@@ -295,6 +295,40 @@ func (a *app) openItem(it store.LibraryItem) {
 	}
 }
 
+// recordTakeExport records that a take was saved to dst (from any
+// goroutine): the Projects page lists it under Exports.
+func (a *app) recordTakeExport(id, dst string) {
+	lib := a.lib.svc.Library
+	title := id
+	a.post(func() {
+		if t := a.findTake(id); t != nil {
+			title = strings.Join(strings.Fields(t.Text), " ")
+			if r := []rune(title); len(r) > 80 {
+				title = string(r[:80]) + "…"
+			}
+		}
+		a.background(func() {
+			if _, err := lib.RecordExport(context.Background(), core.Export{Kind: "take", SourceID: id, Title: title, Path: dst, Format: "wav"}); err != nil {
+				a.post(func() { a.toast(i18n.T("Could not record the export: %v", err)) })
+			}
+		})
+	})
+}
+
+// recordVoiceExport records that a voice was exported to dst.
+func (a *app) recordVoiceExport(id, dst string) {
+	lib := a.lib.svc.Library
+	a.post(func() {
+		title := id
+		if v := a.findVoice(id); v != nil {
+			title = v.Name
+		}
+		a.background(func() {
+			lib.RecordExport(context.Background(), core.Export{Kind: "voice", SourceID: id, Title: title, Path: dst, Format: "asvoice"})
+		})
+	})
+}
+
 // renameItem renames a project.
 func (a *app) renameItem(it store.LibraryItem, title string) {
 	lib := a.lib.svc.Library

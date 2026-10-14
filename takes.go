@@ -498,6 +498,9 @@ func (a *app) export(t *core.Take) {
 			return
 		}
 		err = svc.Export(context.Background(), id, dst)
+		if err == nil {
+			a.recordTakeExport(id, dst) // M3: the Projects page's Exports (projects.go, thread #18)
+		}
 		a.post(func() {
 			if err != nil {
 				a.toast(i18n.T("Export failed: %v", err))

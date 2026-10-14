@@ -227,6 +227,11 @@ func (s *Longform) Start(ctx context.Context, spec LongformSpec) (core.Render, e
 	for _, ch := range spec.Chapters {
 		body.Chapters = append(body.Chapters, RenderChapter{Title: ch.Title, Chars: chapterChars(ch), Lines: len(ch.Lines), State: ChapterPending})
 	}
+	if !spec.Audition {
+		if title, busy := s.busy(ctx, ""); busy {
+			return core.Render{}, fmt.Errorf("longform: %q is rendering: %w", title, core.ErrBusy)
+		}
+	}
 	s.mu.Lock()
 	if !spec.Audition {
 		for _, l := range s.live {
@@ -256,6 +261,32 @@ func (s *Longform) Start(ctx context.Context, spec LongformSpec) (core.Render, e
 	}
 	out, _ := s.snapshot(id)
 	return out, nil
+}
+
+// busy finds a full render other than except recorded as running: one
+// the scheduler resumes after a restart is in the store before its first
+// update brings it into memory.
+func (s *Longform) busy(ctx context.Context, except string) (string, bool) {
+	running, err := s.renders.List(ctx, store.RenderQuery{States: []core.RenderState{core.RenderRunning}})
+	if err != nil {
+		return "", false
+	}
+	for _, r := range running {
+		if r.ID == except {
+			continue
+		}
+		s.mu.Lock()
+		lr := s.live[r.ID]
+		state := r.State
+		if lr != nil {
+			state = lr.rec.State
+		}
+		s.mu.Unlock()
+		if state == core.RenderRunning {
+			return r.Title, true
+		}
+	}
+	return "", false
 }
 
 // checkSpec validates a manifest.
@@ -444,6 +475,11 @@ func (s *Longform) Resume(ctx context.Context, id string) (core.Render, error) {
 	}
 	if rec.State == core.RenderRunning {
 		return rec, fmt.Errorf("longform: %q is rendering: %w", rec.Title, core.ErrBusy)
+	}
+	if !rec.Audition {
+		if title, busy := s.busy(ctx, id); busy {
+			return core.Render{}, fmt.Errorf("longform: %q is rendering: %w", title, core.ErrBusy)
+		}
 	}
 	now := s.now()
 	s.mu.Lock()
@@ -761,6 +797,13 @@ func (s *Longform) apply(j jobs.Job) {
 	b := &lr.body
 	before := lr.rec.State
 	durable := false
+	revive := func() {
+		if lr.rec.State != core.RenderRunning && !j.State.Terminal() && j.State != jobs.StateInterrupted {
+			// The scheduler runs a job of a render recorded as ended (re-run
+			// after a restart): it renders again.
+			lr.rec.State, b.Finished, b.Error = core.RenderRunning, time.Time{}, nil
+		}
+	}
 	switch j.Kind {
 	case KindChapter:
 		i := s.chapterOf(b, j)
@@ -768,6 +811,7 @@ func (s *Longform) apply(j jobs.Job) {
 			s.mu.Unlock()
 			return
 		}
+		revive()
 		durable = applyChapter(&b.Chapters[i], j, s.now())
 	case KindAssemble:
 		if b.AssembleJob == "" {
@@ -777,6 +821,7 @@ func (s *Longform) apply(j jobs.Job) {
 			s.mu.Unlock()
 			return
 		}
+		revive()
 		switch j.State {
 		case jobs.StateRunning:
 			durable = !b.Assembling
@@ -873,6 +918,9 @@ func applyChapter(c *RenderChapter, j jobs.Job, now time.Time) bool {
 		c.Finished = now
 	case jobs.StateInterrupted:
 		c.State = ChapterStopped
+		if j.Idempotent && j.Err != nil && j.Err.Code == jobs.CodeShutdown {
+			c.State = ChapterPending // the app quits: it runs again at the next start
+		}
 	}
 	return c.State != old
 }

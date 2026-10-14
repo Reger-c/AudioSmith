@@ -261,6 +261,7 @@
   "Could not read the pronunciation dictionary: %v": "无法读取发音词典：%v",
   "Could not read the renders: %v": "无法读取渲染记录：%v",
   "Could not read the voices: %v": "无法读取音色库：%v",
+  "Could not record the export: %v": "无法记录这次导出：%v",
   "Could not rename: %v": "无法重命名：%v",
   "Could not resume: %v": "无法继续：%v",
   "Could not save the acceptance: %v": "无法保存许可接受记录：%v",
