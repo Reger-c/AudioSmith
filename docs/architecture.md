@@ -1,6 +1,6 @@
 # AudioSmith architecture
 
-*State at the end of M0 (2026-10-13). M0a wrote the skeleton and the contracts; threads A (services + SQLite), B (protocol 2, supervisor, jobs), C (shell, catalogue, hub, i18n), #9 (text, document and language libraries), #11 (DSP), #12 (voice design, gallery) and #13 (LLM, translation) built them; the integration thread (#10) wired them together (§5). Product plan: `plan/parity-plan.md` §3–§4. Wire format: [protocol-v2.md](protocol-v2.md).*
+*Sections 1–4 and 6 are kept current (v0.2.0, 2026-10-14: M0–M7a, local LLM, watermark, AI calls); §5 records how M0 was built (2026-10-13). M0a wrote the skeleton and the contracts; threads A (services + SQLite), B (protocol 2, supervisor, jobs), C (shell, catalogue, hub, i18n), #9 (text, document and language libraries), #11 (DSP), #12 (voice design, gallery) and #13 (LLM, translation) built them; the integration thread (#10) wired them together (§5). Product plan: `plan/parity-plan.md` §3–§4. Wire format: [protocol-v2.md](protocol-v2.md).*
 
 ## 1. Package map
 
@@ -36,6 +36,14 @@ github.com/hehehai/AudioSmith
 │   ├── translate/       translation over LLMs and MT services, glossaries (M4; not wired yet)
 │   ├── voicedesign/     Voice Design: description ⇄ attributes, recipes per model (M1; not wired yet)
 │   ├── ffmpeg/          the optional ffmpeg (M7a): inspect, pinned download, probe/decode/encode/transcode/mux/burn (leaf)
+│   ├── dub/             dubbing's pure parts (M4): project document, segments, timing fit, mixer, peaks, exports, yt-dlp, watch folder
+│   ├── dictation/       system-wide dictation (M2): hotkey, pill, paste into the front app, clipboard restore (purego/objc)
+│   ├── api/             the Local API (M5): OpenAI /v1, native /api, SSE, WebSocket, auth, OpenAPI + viewer
+│   ├── mcp/             the MCP server (M5) over api, and the stdio shim
+│   ├── workflow/        WorkflowStudio's graph (M6): typed ports, Validate, Plan/StepKeys, templates
+│   ├── telephony/       AI phone calls (M6b): Twilio REST, signed webhooks, TwiML, gateway, Media Streams WebSocket, μ-law, endpointer, agent loop
+│   ├── watermark/       AudioSeal message and weight conversion for the engine (over torchpt)
+│   ├── torchpt/         a reader of PyTorch .pt/.pth checkpoints (pure Go)                (leaf)
 │   └── gallery/         the Voice Gallery: ~1,100 archetypes, facets, presets, preview planner (M1; not wired yet)
 │       └── persona/     the .asvoice voice file (and VoiceStudio .ovsvoice import)
 └── engine/              the Swift helper (audiosmith-engine), Fixtures/, Tests/
@@ -61,6 +69,9 @@ mcp ──▶ api, core, settings, voicedesign + modelcontextprotocol/go-sdk (M5
 main ──▶ api, mcp
 dictation ──▶ (nothing internal; mygo/transfer, purego, purego/objc)
 main ──▶ ffmpeg (M7a; ffmpeg imports nothing internal)
+workflow ──▶ i18n                services ──▶ workflow (M6)
+telephony ──▶ dsp, dsp/resample  services ──▶ telephony (M6b); main ──▶ telephony
+watermark ──▶ torchpt            main ──▶ watermark
 store ──▶ core, jobs            store/sqlitestore ──▶ core, jobs, store, store/historyjson
 engine ──▶ core, engine/proto, jobs (its executors)        engine/enginetest ──▶ engine/proto
 hub ──▶ catalog, jobs (the download executor)              catalog ──▶ lang
@@ -163,6 +174,9 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | Settings pages (M7a): `settingsSections()` + `m7SettingsRoute` (settings_pages.go): audio-tools, network, privacy (holds #14's `watermarkSettings`), storage, usage, about; the wizard `a.openOnboarding()` (onboarding.go; model packs = catalogue ids) | shell_settings.go, settings_*.go, onboarding.go | palette, Settings → General |
 | ffmpeg (M7a): `a.mediaTool()` (`*ffmpeg.Tool`, nil = none); the engine supervisor is wrapped (`withMediaTools`, ffmpeg_engine.go): media.probe/decode/thumbnail/transcode/mux fall back to ffmpeg on `unsupported_media`, media.encode to mp3/opus/flac/ogg runs on ffmpeg, app-level `media.burn` (`services.MethodBurn`); without ffmpeg `unsupported {capability:"ffmpeg"}`; `api.FormatEncoder` for the API's formats | ffmpeg_*.go, internal/ffmpeg | dub exports, books, Studio Save as…, API |
 | Data folder (M7a): `resolveDataDir(home)` in main finishes a pending move or erase before the library opens; `location.json` in the default folder points to a moved one (`dataFolder` for the MCP stdio shim) | storage_move.go | main.go, api_stdio.go |
+| AI calls (M6b): `a.callSvc` (`*services.Calls`: Place/Get/List/Delete/Hangup/Takeover/Say/PhonePreview/Reconcile), event `services.CallChanged`; `telephony.Gateway` on 127.0.0.1:3950 (only when `settings.Calls.Enabled`; Twilio webhooks + Media Streams WebSocket), `telephony.Agent` per live call; speech through the queue: `listen:stt.transcribe` (listen lane) and `take.render` jobs owned by `call:<id>/<n>` (no take saved, no watermark); LLM skill `call_agent`; table `calls` (migration 007); Keychain `twilio.token`; Projects category Calls; badge `a.callsBadge` | calls*.go, twilio*.go, internal/telephony, internal/services/calls*.go | integrations (`/integrations/twilio` → `/calls/setup`), projects, sidebar (Automate) |
+| Watermark: `services.Config.Watermark` (`l.watermarkRender`) marks every finished `take.render` (24-bit in place, `watermark.embed` on the media worker with AudioSeal); dub marks the final mixed track and its speech stem (`Dubs.watermarkTracks`), not lines; `l.detectWatermark` for Tools → Watermark; per-install message id `settings.Privacy.WatermarkID`; off with `Privacy.NoWatermark` | watermark_app.go, internal/services/watermark.go, internal/watermark | studio, dub, tools, settings → privacy |
+| First run (M7a): `a.openOnboarding()` — steps Mac check (`loadSysInfo`: sw_vers/sysctl, disk, network/mirror, engine, ffmpeg, permissions), model pack (`modelPacks`: fast/balanced/quality/max, each adds catalogue ids to the smaller ones; `recommendPack(memGB)`, `packSizes`), privacy, dictation; `settings.Setup` records it; the welcome line plays when Kokoro is ready (`resources/demo/welcome-<locale>.wav` may be shipped to play earlier) | onboarding.go, sysinfo.go | main (first launch), Settings → General |
 | Catalogue fields (M1-E, measured on M4 by the smoke suite): `rtf`, `maxChars` (hard limit for Kokoro/Kitten, recommended chunk size otherwise), `deterministic` (chunk cache ignores seed), `nonVerbal` (OmniVoice tags), `stream` (Qwen3-TTS only), `guidance`/`exaggeration` (Chatterbox) | internal/catalog/catalog.json | render, studio, dictation |
 
 ## 4. Contracts (summary)
@@ -237,9 +251,14 @@ Rules that stay:
 | Dubs | `…/AudioSmith/dubs/<id>/` (audio.wav, speech.wav, stems, peaks, poster.jpg, preview.mp4, refs/, renders/<lang>/<seg>-<fp>.wav, tracks/<lang>.wav, download/); table `dubs` (migration 005); documents `dub:batch`, `dub:watch`; yt-dlp in `…/AudioSmith/tools/`; video served on `asmedia://localhost/<id>/video` |
 | Chunk cache | `~/Library/Caches/AudioSmith/chunks/<text.Key>.wav` (float32, pruned to 2 GB LRU) |
 | Gallery previews | `~/Library/Caches/AudioSmith/voice-previews/<key>.wav` (job owner `archetype:<id>`; voice jobs use owner `voicework:`) |
+| Workflows | `…/AudioSmith/workflows/<id>/{items,out}`; table `workflows` (migration 006) |
+| Calls | `…/AudioSmith/calls/<id>.wav` (recordings, only when on and disclosed); table `calls` (migration 007) |
+| Local API | `…/AudioSmith/api.json` (port file while running), `api-tmp/` (wiped at start), `mcp/` (MCP output folder) |
+| Tools | `…/AudioSmith/tools/` (yt-dlp; an ffmpeg chosen in Settings is used where it is) |
 | Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app, rotated at 5 MB) and `engine-gpu.log` (engine stderr) |
 | Models | the Hugging Face cache, `~/.cache/huggingface/hub` (`HF_HUB_CACHE`/`HF_HOME`, or Settings → Models → Model folder) |
-| Secrets | the login Keychain, service "AudioSmith": account "huggingface-token" (HF token; or `$HF_TOKEN`, or huggingface-cli's token file), later "llm.<provider>", "mt.<service>" |
+| Secrets | the login Keychain, service "AudioSmith": account "huggingface-token" (HF token; or `$HF_TOKEN`, or huggingface-cli's token file), "llm.<provider>", "mt.<service>", "api.key", "twilio.token" |
+| Engine model copies | `<HF cache>/mlx-audio/<owner>_<name>/`: mlx-audio-swift's own copy, made only for repos it resolves by id (auxiliary g2p repos; families without a directory loader such as OmniVoice and Marvis); deleted with the model (`hub.Delete`) |
 
 ### Engine dependencies (M1-E)
 
