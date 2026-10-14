@@ -42,17 +42,17 @@ func (a *app) galleryPage(c *ui.Context) {
 	pageHeader(c, i18n.T("Discover voices"), func() {
 		caption(c, i18n.N(page.Total, "%d voice", "%d voices", page.Total)).SingleLine()
 		if ms := designModels(); len(ms) > 1 {
-			labels := make([]string, len(ms))
-			for i, m := range ms {
-				labels[i] = m.Label
-			}
-			if g.model == "" {
-				g.model = labels[0]
-			}
-			dropButton(c.Key("gallery-model"), icons.Soundwave, g.model).Tooltip(i18n.T("Preview with")).MaxWidth(px(t, 200)).Menu(func(m *ui.Menu) {
-				for _, l := range labels {
-					if m.Item(l).Checked(l == g.model).Chosen() {
-						g.model = l
+			// The model previews use; models not downloaded say so, and
+			// are not chosen unless asked for (previewModel).
+			cur, _ := a.previewModel()
+			dropButton(c.Key("gallery-model"), icons.Soundwave, cur.Label).Tooltip(i18n.T("Preview with")).MaxWidth(px(t, 220)).Menu(func(m *ui.Menu) {
+				for _, e := range ms {
+					label := e.Label
+					if ok, known := a.modelOnDisk(e); known && !ok {
+						label = i18n.T("%s (not downloaded)", e.Label)
+					}
+					if m.Item(label).Checked(e.Label == cur.Label).Chosen() {
+						g.model = e.Label
 					}
 				}
 			})

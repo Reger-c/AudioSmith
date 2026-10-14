@@ -10,6 +10,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/gallery"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
@@ -250,5 +251,38 @@ func TestGalleryLoadsMoreAtTheEnd(t *testing.T) {
 	}
 	if got := len(g.page.Items); got <= start {
 		t.Errorf("scrolled to the end: still %d items", got)
+	}
+}
+
+// TestGalleryPreviewModelDownloaded: previews use a model that is
+// downloaded (OmniVoice comes first in the catalogue but often isn't);
+// the menu says which are not downloaded; asking for one of those says
+// what to do instead of failing.
+func TestGalleryPreviewModelDownloaded(t *testing.T) {
+	a, eng, _ := newTestAppIn(t, t.TempDir())
+	tt := ui.NewTester(a.view, 1200, 900)
+	ms := designModels()
+	if len(ms) < 2 {
+		t.Skip("one design model")
+	}
+	first, second := ms[0], ms[1]
+	a.model(first).known, a.model(first).local.State = true, hub.Missing
+	a.model(second).known, a.model(second).local.State = true, hub.Downloaded
+	a.navigate("/gallery")
+	tt.Frame()
+	if e, _ := a.previewModel(); e.ID != second.ID {
+		t.Fatalf("previews use %s, not the downloaded %s", e.Label, second.Label)
+	}
+	if !tt.HasText(second.Label) {
+		t.Errorf("header does not name %s: %q", second.Label, tt.Texts())
+	}
+	// Choosing the one not downloaded: Preview explains, sends no job.
+	a.gallery.model = first.Label
+	tt.Frame()
+	before := len(eng.sent)
+	a.toasts = nil
+	a.previewArchetype(gallery.Default().All()[0])
+	if len(eng.sent) != before || len(a.toasts) != 1 || !strings.Contains(a.toasts[0], "not downloaded") {
+		t.Errorf("preview with a missing model: sent %d, toasts %q", len(eng.sent)-before, a.toasts)
 	}
 }

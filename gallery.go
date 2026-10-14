@@ -128,11 +128,19 @@ func (a *app) toggleFavorite(id string) {
 	})
 }
 
-// previewModel is the model gallery previews render with.
+// previewModel is the model gallery previews render with: the one chosen
+// at the top of the page, else the first that can design and is
+// downloaded (OmniVoice comes first in the catalogue, but few have it),
+// else the first that can design.
 func (a *app) previewModel() (catalog.Entry, bool) {
 	ms := designModels()
 	for _, e := range ms {
 		if e.Label == a.gallery.model {
+			return e, true
+		}
+	}
+	for _, e := range ms {
+		if ok, _ := a.modelOnDisk(e); ok {
 			return e, true
 		}
 	}
@@ -167,6 +175,11 @@ func (a *app) previewArchetype(arch gallery.Archetype) {
 	e, ok := a.previewModel()
 	if !ok {
 		a.toast(i18n.T("No model that can design voices is available."))
+		return
+	}
+	if ok, known := a.modelOnDisk(e); known && !ok {
+		// Not a failed render: say what to do instead.
+		a.toast(i18n.T("Previews use %s, which is not downloaded: choose a downloaded model at the top right, or download it on the Models page.", e.Label))
 		return
 	}
 	if licence.Required(e) != nil && !licence.Covers(a.accepted, e) {
