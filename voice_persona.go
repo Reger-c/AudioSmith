@@ -113,7 +113,7 @@ func (a *app) personaDialogs(c *ui.Context) {
 				ui.Text(c, "• "+w).FontSize(px(t, 12)).Selectable()
 			}
 			ui.Row(c).Justify(ui.End).Children(func() {
-				if ui.PrimaryButton(c.Key("persona-ok"), i18n.T("OK")).Clicked() {
+				if primaryButton(c.Key("persona-ok"), i18n.T("OK")).Clicked() {
 					p.reportOpen = false
 				}
 			})

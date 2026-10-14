@@ -14,6 +14,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/workflow"
 )
 
@@ -30,7 +31,7 @@ func (a *app) wfInspector(c *ui.Context) {
 	changed := func() { a.wfEdit(func(*workflow.Workflow) {}) }
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 		ui.Box(c).Size(px(t, 26), px(t, 26)).Radius(6).Background(wfKindColor(n.Kind)).Center().Shrink(0).Children(func() {
-			ui.Icon(c, wfKindIcons[n.Kind]).Size(px(t, 16), px(t, 16)).TextColor(ui.RGB(255, 255, 255))
+			ui.Icon(c, wfKindIcons[n.Kind].Linear).Size(px(t, 16), px(t, 16)).TextColor(ui.RGB(255, 255, 255))
 		})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			ui.Text(c, n.Kind.Label()).Bold()
@@ -163,7 +164,7 @@ func (a *app) wfScriptsPanel(c *ui.Context, n *workflow.Node) {
 					col = t.Danger
 				}
 				ui.Text(c, fmt.Sprintf("%d / %d", chars, workflow.MaxScriptChars)).FontSize(px(t, 11)).TextColor(col)
-				if len(n.P.Scripts) > 1 && ui.Button(c.Key("x"), "×").Label(i18n.T("Remove %s", name)).Disabled(locked).Clicked() {
+				if len(n.P.Scripts) > 1 && iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", name)).Disabled(locked).Clicked() {
 					a.wfEdit(func(w *workflow.Workflow) {
 						p := &w.Node(id).P
 						p.Scripts = slices.Delete(p.Scripts, jj, jj+1)
@@ -206,7 +207,7 @@ func (a *app) wfClipsPanel(c *ui.Context, n *workflow.Node) {
 				ui.Text(c, cl.Name).FontSize(px(t, 12.5)).SingleLine().Ellipsis("…")
 				ui.Text(c, fmt.Sprintf("%.1f MB", float64(cl.Size)/1e6)).FontSize(px(t, 11)).TextColor(t.TextMuted)
 			})
-			if ui.Button(c.Key("x"), "×").Label(i18n.T("Remove %s", cl.Name)).Disabled(locked).Clicked() {
+			if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", cl.Name)).Disabled(locked).Clicked() {
 				a.wfEdit(func(w *workflow.Workflow) {
 					p := &w.Node(id).P
 					p.Clips = slices.Delete(p.Clips, jj, jj+1)

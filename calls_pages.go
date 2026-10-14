@@ -8,12 +8,13 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/telephony"
 )
 
-var callsIcon = icon(`<path d="M4.2 1.8 6 4.6 4.8 6a7.6 7.6 0 0 0 5.2 5.2l1.4-1.2 2.8 1.8-.8 2.2c-.2.5-.7.8-1.2.7A11.6 11.6 0 0 1 1.3 3.8c-.1-.5.2-1 .7-1.2z"/>`)
+var callsIcon = icons.PhoneCallingRounded
 
 // callsPageTitle translates the M6b pages' titles.
 func callsPageTitle(path string) (string, bool) {

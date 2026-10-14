@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
 	"github.com/hehehai/AudioSmith/internal/telephony"
@@ -107,7 +108,7 @@ func (a *app) callHistory(c *ui.Context) {
 		}
 		ui.Text(c, i18n.T("Recent calls")).Bold().Grow(1)
 		ui.Text(c, i18n.T("%d of %d lines in use", live, max)).FontSize(px(t, 11)).TextColor(t.TextMuted)
-		if ui.Button(c.Key("calls-refresh"), "↻").Label(i18n.T("Refresh")).Tooltip(i18n.T("Refresh")).Clicked() {
+		if iconButton(c.Key("calls-refresh"), icons.Refresh, i18n.T("Refresh")).Tooltip(i18n.T("Refresh")).Clicked() {
 			a.loadCalls()
 		}
 	})
@@ -204,7 +205,7 @@ func (a *app) callView(c *ui.Context) {
 		a.callBadge(c, call.Phase, call.Outcome)
 		ui.Spacer(c)
 		if call.Live() {
-			if ui.PrimaryButton(c.Key("cv-hangup"), i18n.T("Hang up")).Background(t.Danger).Clicked() {
+			if primaryButton(c.Key("cv-hangup"), i18n.T("Hang up")).Background(t.Danger).Clicked() {
 				a.hangupCall(call.ID)
 			}
 		}
@@ -291,7 +292,7 @@ func (a *app) callLiveControls(c *ui.Context, call *services.Call) {
 		if call.Takeover {
 			ui.Row(c.Key("cv-say")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 				in := ui.TextInput(c.Key("cv-say-text"), &a.callSay).Placeholder(i18n.T("What to say next")).Label(i18n.T("What to say next")).Grow(1).AutoFocus()
-				if in.Submitted() || ui.PrimaryButton(c.Key("cv-say-go"), i18n.T("Say")).Disabled(strings.TrimSpace(a.callSay) == "").Clicked() {
+				if in.Submitted() || primaryButton(c.Key("cv-say-go"), i18n.T("Say")).Disabled(strings.TrimSpace(a.callSay) == "").Clicked() {
 					a.sayInCall(call.ID)
 				}
 			})
@@ -561,7 +562,7 @@ func (a *app) newCallForm(c *ui.Context) {
 		label = i18n.T("Starting call…")
 	}
 	ui.Row(c.Key("nc-go")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if ui.PrimaryButton(c.Key("nc-call"), label).Disabled(!ready || problem != "" || a.callBusy).Clicked() {
+		if primaryButton(c.Key("nc-call"), label).Disabled(!ready || problem != "" || a.callBusy).Clicked() {
 			a.callAsk = true
 		}
 		if a.callBusy {
@@ -607,7 +608,7 @@ func (a *app) callDialogs(c *ui.Context) {
 					if ui.Button(c.Key("cc-cancel"), i18n.T("Cancel")).AutoFocus().Clicked() {
 						a.callAsk = false
 					}
-					if ui.PrimaryButton(c.Key("cc-call"), i18n.T("Call")).Clicked() {
+					if primaryButton(c.Key("cc-call"), i18n.T("Call")).Clicked() {
 						a.placeCall()
 					}
 				})
@@ -639,7 +640,7 @@ func (a *app) callDialogs(c *ui.Context) {
 					if ui.Button(c.Key("ci-cancel"), i18n.T("Cancel")).Clicked() {
 						a.callInOpen = false
 					}
-					if ui.PrimaryButton(c.Key("ci-save"), i18n.T("Save")).Clicked() {
+					if primaryButton(c.Key("ci-save"), i18n.T("Save")).Clicked() {
 						a.saveInbound()
 					}
 				})

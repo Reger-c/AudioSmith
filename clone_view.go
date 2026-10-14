@@ -95,7 +95,7 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 	switch m.phase {
 	case "recording":
 		secs := time.Since(m.started).Seconds()
-		if ui.PrimaryButton(c.Key("mic-stop"), i18n.T("Stop recording")).Background(t.Danger).Clicked() {
+		if primaryButton(c.Key("mic-stop"), i18n.T("Stop recording")).Background(t.Danger).Clicked() {
 			a.micStop(m)
 		}
 		ui.Text(c, i18n.T("%.1f s", secs)).FontSize(px(t, 18)).Bold()
@@ -113,7 +113,7 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 		}
 		ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted)
 	default:
-		if ui.PrimaryButton(c.Key("mic-start"), i18n.T("Record")).Clicked() {
+		if primaryButton(c.Key("mic-start"), i18n.T("Record")).Clicked() {
 			a.micStart(m, done)
 		}
 		ui.Text(c, i18n.T("Your microphone is never played back.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
@@ -330,7 +330,7 @@ func (a *app) cloneSaveForm(c *ui.Context) {
 			if problem != "" {
 				ui.Text(c, problem).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
 			}
-			if ui.PrimaryButton(c.Key("clone-replace"), i18n.T("Replace reference")).Disabled(problem != "" || s.saving).Clicked() {
+			if primaryButton(c.Key("clone-replace"), i18n.T("Replace reference")).Disabled(problem != "" || s.saving).Clicked() {
 				a.cloneSave()
 			}
 		})
@@ -351,7 +351,7 @@ func (a *app) cloneSaveForm(c *ui.Context) {
 			Tooltip(i18n.T("Use the clip in the Studio once, without adding it to your voices")).Clicked() {
 			a.cloneUseOnce()
 		}
-		if ui.PrimaryButton(c.Key("clone-save"), i18n.T("Save voice")).Disabled(problem != "" || s.saving).Clicked() {
+		if primaryButton(c.Key("clone-save"), i18n.T("Save voice")).Disabled(problem != "" || s.saving).Clicked() {
 			a.cloneSave()
 		}
 	})

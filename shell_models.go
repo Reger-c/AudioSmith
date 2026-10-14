@@ -396,11 +396,11 @@ func (a *app) modelActions(c *ui.Context, e catalog.Entry, m *modelState, loaded
 			a.cancelDownload(e)
 		}
 	case st == hub.Partial:
-		if ui.PrimaryButton(c.Key("download"), i18n.T("Resume")).Clicked() {
+		if primaryButton(c.Key("download"), i18n.T("Resume")).Clicked() {
 			a.download(e)
 		}
 	case st != hub.Downloaded:
-		if ui.PrimaryButton(c.Key("download"), i18n.T("Download")).Disabled(!m.known).Clicked() {
+		if primaryButton(c.Key("download"), i18n.T("Download")).Disabled(!m.known).Clicked() {
 			a.download(e)
 		}
 	}
@@ -492,7 +492,7 @@ func (a *app) licenceModal(c *ui.Context) {
 				if ui.Button(c.Key("licence-cancel"), i18n.T("Cancel")).Clicked() {
 					a.licenceOpen, a.licenceThen = false, nil
 				}
-				if ui.PrimaryButton(c.Key("licence-accept"), i18n.T("Accept")).Disabled(!a.licenceAgree).Clicked() {
+				if primaryButton(c.Key("licence-accept"), i18n.T("Accept")).Disabled(!a.licenceAgree).Clicked() {
 					a.acceptLicence(e, a.licenceThen)
 					a.licenceOpen, a.licenceThen = false, nil
 				}

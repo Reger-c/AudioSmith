@@ -77,7 +77,7 @@ func (a *app) apiSettings(c *ui.Context) {
 	if a.apiHasKey {
 		keyDesc = i18n.T("A key is saved in the Keychain. OpenAI SDKs send it as their api_key.")
 	}
-	settingRow(c, "api-key", i18n.T("API key"), keyDesc, func() {
+	settingRowNote(c, "api-key", i18n.T("API key"), keyDesc, func() {
 		label := i18n.T("Generate")
 		if a.apiHasKey {
 			label = i18n.T("Replace")
@@ -165,7 +165,7 @@ func (a *app) apiSettings(c *ui.Context) {
 			a.updateSettings(func(s *settings.Settings) { s.API.MCPOutput = mode })
 		}
 	})
-	settingRow(c, "api-mcp-dir", i18n.T("Folder for agents' audio"), a.apiSandbox(), func() {
+	settingRowNote(c, "api-mcp-dir", i18n.T("Folder for agents' audio"), a.apiSandbox(), func() {
 		if ui.Button(c.Key("api-dir-choose"), i18n.T("Choose…")).Clicked() {
 			a.chooseAPIDir()
 		}

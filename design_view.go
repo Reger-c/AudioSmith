@@ -295,7 +295,7 @@ func (a *app) designScript(c *ui.Context) {
 		}).Width(px(t, 160))
 		ui.Box(c).Grow(1)
 		_, ok := voiceCatalog().ByLabel(d.model)
-		if ui.PrimaryButton(c.Key("design-generate"), i18n.T("Generate preview")).
+		if primaryButton(c.Key("design-generate"), i18n.T("Generate preview")).
 			Disabled(!ok || j.running() || strings.TrimSpace(d.script) == "").Clicked() {
 			a.designGenerate()
 		}
@@ -329,7 +329,7 @@ func (a *app) designSaveForm(c *ui.Context) {
 		if v := a.findVoice(d.linked); v != nil && v.Name == strings.TrimSpace(d.saveName) {
 			label = i18n.T("Update voice")
 		}
-		if ui.PrimaryButton(c.Key("design-save"), label).Disabled(strings.TrimSpace(d.saveName) == "").Clicked() {
+		if primaryButton(c.Key("design-save"), label).Disabled(strings.TrimSpace(d.saveName) == "").Clicked() {
 			a.designSave()
 		}
 	})

@@ -121,7 +121,7 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	if !tt.HasText("Speed  1.00×") || !tt.HasText("Pin the seed") || tt.HasText("Use the model's sampling defaults") {
 		t.Errorf("Kokoro's voice controls: %q", tt.Texts())
 	}
-	if tt.HasText("Auto-detect ▾") {
+	if tt.HasText("Auto-detect") {
 		t.Error("Kokoro's language follows the voice: no picker")
 	}
 	tt.Key(0, ui.KeyEscape)
@@ -132,7 +132,7 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	if a.voice != "" || a.language != "Chinese" {
 		t.Errorf("voice %q language %q after switching", a.voice, a.language)
 	}
-	if !tt.HasText("Voice cloning") || !tt.HasText("🇨🇳 Chinese ▾") {
+	if !tt.HasText("Voice cloning") || !tt.HasText("🇨🇳 Chinese") {
 		t.Errorf("controls for Qwen Base: %q", tt.Texts())
 	}
 	tt.Click("Voice controls")

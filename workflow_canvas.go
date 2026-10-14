@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/workflow"
 )
 
@@ -54,16 +55,16 @@ type wfCanvasState struct {
 }
 
 // Kind icons.
-var wfKindIcons = map[workflow.Kind]*ui.SVG{
-	workflow.KindStart:      icon(`<path d="M4 2.5h6l2.5 2.5v8.5h-8.5z"/><path d="M6 7h4.5M6 9.5h4.5M6 12h3"/>`),
-	workflow.KindSource:     icon(`<path d="M2 8h1.5M5 5v6M8 3v10M11 5.5v5M14 8h-1"/>`),
-	workflow.KindSpeak:      icon(`<path d="M3 6v4h2.5L9 13V3L5.5 6z"/><path d="M11 6a3 3 0 0 1 0 4M12.5 4.5a5 5 0 0 1 0 7"/>`),
-	workflow.KindTranscribe: icon(`<rect x="6" y="1.5" width="4" height="8" rx="2"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2.5"/>`),
-	workflow.KindTranslate:  icon(`<path d="M2 3.5h6M5 2v1.5M3.5 3.5c.5 2.5 2 4 4 5M6.5 3.5c-.5 2.5-2 4-4 5"/><path d="M8.5 14l2.5-6 2.5 6M9.3 12h3.4"/>`),
-	workflow.KindConvert:    icon(`<path d="M3 5.5h9l-2.5-2.5M13 10.5H4l2.5 2.5"/>`),
-	workflow.KindNormalize:  icon(`<path d="M2 12V9M5 12V5M8 12V7M11 12V4M14 12V8"/><path d="M1.5 3h13" stroke-dasharray="1.5 1.5"/>`),
-	workflow.KindCondition:  icon(`<path d="M8 2l5.5 6L8 14 2.5 8z"/><path d="M8 6v3M8 11v.1"/>`),
-	workflow.KindExport:     icon(`<path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 11v2.5h10V11"/>`),
+var wfKindIcons = map[workflow.Kind]icons.Icon{
+	workflow.KindStart:      icons.FileText,
+	workflow.KindSource:     icons.Soundwave,
+	workflow.KindSpeak:      icons.VolumeLoud,
+	workflow.KindTranscribe: icons.Microphone3,
+	workflow.KindTranslate:  icons.Global,
+	workflow.KindConvert:    icons.TransferHorizontal,
+	workflow.KindNormalize:  icons.Pulse2,
+	workflow.KindCondition:  icons.BranchingPathsUp,
+	workflow.KindExport:     icons.Export,
 }
 
 // wfKindColor is a kind's color, the same in light and dark.
@@ -586,7 +587,7 @@ func (a *app) wfCard(c *ui.Context, n *workflow.Node, rep *workflow.Report) {
 	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Box(c).Size(24, 24).Radius(6).Background(kc).Center().Shrink(0).Children(func() {
-				ui.Icon(c, wfKindIcons[n.Kind]).Size(15, 15).TextColor(ui.RGB(255, 255, 255))
+				ui.Icon(c, wfKindIcons[n.Kind].Linear).Size(15, 15).TextColor(ui.RGB(255, 255, 255))
 			})
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				ui.Text(c, name).Bold().FontSize(13).SingleLine().Ellipsis("…")

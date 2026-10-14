@@ -103,10 +103,8 @@ func TestSnapshotsM7(t *testing.T) {
 		shot(tall, "settings-usage")
 		a.navigate("/settings/privacy")
 		shot(tall, "settings-privacy")
-		a.updateSettings(func(s *settings.Settings) { s.Appearance.Palette = "violet" })
 		a.navigate("/settings/appearance")
-		save("settings-appearance-violet")
-		a.updateSettings(func(s *settings.Settings) { s.Appearance.Palette = "" })
+		save("settings-appearance-m7")
 
 		// The first-run wizard, each step.
 		a.navigate("/studio")

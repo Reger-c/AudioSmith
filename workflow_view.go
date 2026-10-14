@@ -10,11 +10,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/store"
 	"github.com/hehehai/AudioSmith/internal/workflow"
 )
 
-var workflowsIcon = icon(`<rect x="1.5" y="2.5" width="4.5" height="3.5" rx="1"/><rect x="10" y="10" width="4.5" height="3.5" rx="1"/><rect x="10" y="2.5" width="4.5" height="3.5" rx="1"/><path d="M6 4.2h4M12.2 6v4"/>`)
+var workflowsIcon = icons.Structure
 
 // wfRailWidth is the library rail's width.
 const wfRailWidth = 220
@@ -78,7 +79,7 @@ func (a *app) wfHeaderActions(c *ui.Context) {
 	if a.wfResumable() {
 		label = i18n.T("Resume")
 	}
-	if ui.PrimaryButton(c.Key("wf-run"), label).Tooltip(i18n.T("Run every item through the steps")).Clicked() {
+	if primaryButton(c.Key("wf-run"), label).Tooltip(i18n.T("Run every item through the steps")).Clicked() {
 		a.wfStart(false)
 	}
 }
@@ -103,7 +104,7 @@ func (a *app) wfResumable() bool {
 func (a *app) wfEmpty(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c.Key("wf-empty-page")).Grow(1).Center().Gap(px(t, 12)).Padding(px(t, 24)).Children(func() {
-		ui.Icon(c, workflowsIcon).Size(px(t, 40), px(t, 40)).TextColor(t.TextMuted)
+		ui.Icon(c, workflowsIcon.Linear).Size(px(t, 40), px(t, 40)).TextColor(t.TextMuted)
 		ui.Text(c, i18n.T("Design a voice workflow")).FontSize(px(t, 18)).Bold()
 		ui.Text(c, i18n.T("Chain steps — speak, transcribe, translate, convert, normalize, export — and run up to 50 scripts or clips through them. Steps save as you go; a run you stop resumes where it stopped.")).
 			TextColor(t.TextMuted).MaxWidth(px(t, 520)).TextAlign(ui.Center)
@@ -111,7 +112,7 @@ func (a *app) wfEmpty(c *ui.Context) {
 			return
 		}
 		ui.Row(c).Gap(px(t, 8)).Wrap().Justify(ui.Center).MaxWidth(px(t, 640)).Children(func() {
-			if ui.PrimaryButton(c.Key("wf-empty-new"), i18n.T("New workflow")).Clicked() {
+			if primaryButton(c.Key("wf-empty-new"), i18n.T("New workflow")).Clicked() {
 				a.wfNew("")
 			}
 			for _, tp := range workflow.Templates {
@@ -165,7 +166,7 @@ func (a *app) wfRail(c *ui.Context) {
 			}
 			b.Children(func() {
 				ui.Box(c).Size(px(t, 20), px(t, 20)).Radius(5).Background(wfKindColor(kk)).Center().Shrink(0).Children(func() {
-					ui.Icon(c, wfKindIcons[kk]).Size(px(t, 13), px(t, 13)).TextColor(ui.RGB(255, 255, 255))
+					ui.Icon(c, wfKindIcons[kk].Linear).Size(px(t, 13), px(t, 13)).TextColor(ui.RGB(255, 255, 255))
 				})
 				ui.Text(c, kk.Label()).FontSize(px(t, 13)).SingleLine().Grow(1).MinWidth(0)
 			})

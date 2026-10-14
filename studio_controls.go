@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/lang"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/text/markup"
@@ -28,6 +29,10 @@ type composerState struct {
 	langList    ui.ListState
 	// undoToast, when set, is shown as a toast with Undo (an import).
 	undoToast string
+	// panel: the inspector shown or hidden by its toggle; panelAuto
+	// while the toggle was not used (shown when the window is wide
+	// enough).
+	panel, panelSet bool
 }
 
 // insertItem is an entry of the insert menu.
@@ -78,23 +83,30 @@ func nonVerbalLabel(tag string) string {
 	return tag
 }
 
-// insertMenu is the "+ Insert" button and its popover.
+// insertMenu is the Insert button and its menu of markup.
 func (a *app) insertMenu(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	tr := a.traits()
-	btn := ui.Button(c.Key("insert"), i18n.T("+ Insert")).Tooltip(i18n.T("Insert a pause, a delivery change or an expression (⌥/)"))
+	var btn ui.Element
+	if a.studioNarrow(c) {
+		btn = iconButton(c.Key("insert"), icons.AddCircle, i18n.T("Insert"))
+	} else {
+		btn = dropButton(c.Key("insert"), icons.AddCircle, i18n.T("Insert"))
+	}
+	btn.Tooltip(i18n.T("Insert a pause, a delivery change or an expression (⌥/)"))
 	if btn.Clicked() {
 		a.composer.insertOpen = !a.composer.insertOpen
 	}
 	ui.Popover(c, btn, &a.composer.insertOpen, func() {
 		ui.Column(c.Key("insert-menu")).Width(px(t, 260)).Gap(px(t, 2)).Padding(px(t, 4)).Children(func() {
 			section := func(title string) {
-				ui.Text(c, title).FontSize(px(t, 11)).Bold().TextColor(t.TextMuted).Padding(px(t, 6), px(t, 8), px(t, 2))
+				ui.Text(c, title).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Padding(px(t, sp2), px(t, sp2), px(t, 2))
 			}
 			item := func(it insertItem, disabled bool) {
-				row := ui.ButtonBase(c.Key("ins-"+it.key)).Padding(px(t, 5), px(t, 8)).Radius(5).Label(it.label).Disabled(disabled)
+				row := ui.ButtonBase(c.Key("ins-"+it.key)).Padding(px(t, 5), px(t, sp2)).Radius(px(t, radiusControl)).Label(it.label).Disabled(disabled)
 				if row.Hovered() && !disabled {
-					row.Background(t.SurfaceHover)
+					row.Background(k.Hover)
 				}
 				if row.Clicked() && !disabled {
 					a.composer.insertOpen = false
@@ -105,16 +117,16 @@ func (a *app) insertMenu(c *ui.Context) {
 					}
 				}
 				row.Children(func() {
-					color := t.Text
+					color := k.Text
 					if disabled {
-						color = t.TextMuted
+						color = k.Text3
 					}
-					ui.Text(c, it.label).TextColor(color).Grow(1)
+					ui.Text(c, it.label).TextColor(color).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
 					hint := it.hint
 					if hint == "" {
 						hint = it.open
 					}
-					ui.Text(c, hint).FontSize(px(t, 11)).TextColor(t.TextMuted)
+					ui.Text(c, hint).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.Text3).SingleLine()
 				})
 			}
 			section(i18n.T("Pauses"))
@@ -129,7 +141,7 @@ func (a *app) insertMenu(c *ui.Context) {
 			section(i18n.T("Expressions"))
 			if !tr.NonVerbal {
 				ui.Text(c, i18n.T("%s cannot voice expressions; they are left out.", a.preset().Label)).
-					FontSize(px(t, 11)).TextColor(t.TextMuted).Padding(0, px(t, 8), px(t, 4))
+					FontSize(px(t, fsMicro)).TextColor(k.Text3).Padding(0, px(t, sp2), px(t, 4))
 			}
 			ui.Scroll(c).MaxHeight(px(t, 220)).Children(func() {
 				ui.Column(c).Children(func() {
@@ -211,7 +223,7 @@ func (a *app) languagePicker(c *ui.Context) {
 	if !p.Has(catalog.CapLanguage) && p.ID != "custom" {
 		return
 	}
-	btn := ui.Button(c.Key("language"), a.languageLabel()+" ▾").Tooltip(i18n.T("Language of the script"))
+	btn := dropButton(c.Key("language"), icons.Global, a.languageLabel()).Tooltip(i18n.T("Language of the script"))
 	if btn.Clicked() {
 		a.composer.langOpen = !a.composer.langOpen
 	}
@@ -316,26 +328,25 @@ func (a *app) qualityPopover(c *ui.Context) {
 	t := c.Theme()
 	p := a.preset()
 	tr := a.traits()
-	btn := ui.Button(c.Key("quality"), i18n.T("Audio quality")).Tooltip(i18n.T("Bit depth, refinement and volume"))
+	btn := a.composerButton(c, "quality", icons.TuningSquare2, i18n.T("Audio quality")).Tooltip(i18n.T("Bit depth, refinement and volume"))
 	if btn.Clicked() {
 		a.composer.qualityOpen = !a.composer.qualityOpen
 	}
 	ui.Popover(c, btn, &a.composer.qualityOpen, func() {
 		ui.Scroll(c.Key("quality-pop-scroll")).MaxHeight(px(t, 300)).Children(func() {
 			ui.Column(c.Key("quality-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
-				ui.Text(c, i18n.T("WAV precision")).Bold()
+				ui.Text(c, i18n.T("WAV precision")).FontWeight(600)
 				ui.Segmented(c.Key("bits"), &a.bitsIndex, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float")).Label(i18n.T("WAV precision"))
 				desc := []string{i18n.T("Standard: plays everywhere."), i18n.T("For editing: more headroom."), i18n.T("Original: the model's own samples.")}
 				bits := bitDepths[min(max(a.bitsIndex, 0), 2)]
-				ui.Text(c, desc[min(max(a.bitsIndex, 0), 2)]+" "+i18n.T("About %.1f MB a minute.", mbPerMinute(bits, p.SampleRate))).
-					FontSize(px(t, 12)).TextColor(t.TextMuted)
+				caption(c, desc[min(max(a.bitsIndex, 0), 2)]+" "+i18n.T("About %.1f MB a minute.", mbPerMinute(bits, p.SampleRate)))
 				if tr.Steps {
 					ui.Divider(c)
 					steps := a.steps
 					if steps == 0 {
 						steps = services.StepsBalanced
 					}
-					ui.Text(c, i18n.T("Voice refinement  %d steps", int(steps))).Bold()
+					ui.Text(c, i18n.T("Voice refinement  %d steps", int(steps))).FontWeight(600)
 					tier := slices.Index(tierSteps, steps)
 					if ui.Segmented(c.Key("tier"), &tier, i18n.T("Fast"), i18n.T("Balanced"), i18n.T("Quality")).Label(i18n.T("Performance")).Changed() && tier >= 0 {
 						a.steps = tierSteps[tier]
@@ -343,24 +354,16 @@ func (a *app) qualityPopover(c *ui.Context) {
 					if ui.StepSlider(c.Key("steps"), &steps, 8, 64, 4).Label(i18n.T("Refinement steps")).Changed() {
 						a.steps = steps
 					}
-					ui.Text(c, i18n.T("More steps sound cleaner and take longer.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					caption(c, i18n.T("More steps sound cleaner and take longer."))
 				}
 				ui.Divider(c)
-				ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-					ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
-						ui.Text(c, i18n.T("Even out volume"))
-						ui.Text(c, i18n.T("Masters the take to broadcast loudness (−18 LUFS).")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-					})
+				formRow(c, "even-out-row", i18n.T("Even out volume"), i18n.T("Masters the take to broadcast loudness (−18 LUFS)."), func() {
 					ui.Switch(c.Key("even-out"), &a.evenOut).Label(i18n.T("Even out volume"))
 				})
-				ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-					ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
-						ui.Text(c, i18n.T("Read numbers as words"))
-						ui.Text(c, i18n.T("Numbers, times, dates, money and abbreviations, before the model reads them.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-					})
+				formRow(c, "normalize-row", i18n.T("Read numbers as words"), i18n.T("Numbers, times, dates, money and abbreviations, before the model reads them."), func() {
 					ui.Switch(c.Key("normalize"), &a.normalize).Label(i18n.T("Read numbers as words"))
 				})
-				if ui.Button(c.Key("quality-reset"), i18n.T("Reset")).Clicked() {
+				if ghostIconButton(c.Key("quality-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
 					a.bitsIndex, a.steps, a.evenOut, a.normalize = 0, 0, true, true
 				}
 			})
@@ -372,7 +375,7 @@ func (a *app) qualityPopover(c *ui.Context) {
 func (a *app) voicePopover(c *ui.Context) {
 	t := c.Theme()
 	p := a.preset()
-	btn := ui.Button(c.Key("voice-controls"), i18n.T("Voice controls")).Tooltip(i18n.T("Speed, length, seed and sampling"))
+	btn := a.composerButton(c, "voice-controls", icons.Tuning2, i18n.T("Voice controls")).Tooltip(i18n.T("Speed, length, seed and sampling"))
 	if btn.Clicked() {
 		a.composer.voiceOpen = !a.composer.voiceOpen
 	}
@@ -389,14 +392,10 @@ func (a *app) voicePopover(c *ui.Context) {
 						ui.NumberInput(c.Key("duration"), &a.duration, 0, 600, 0.5).Label(i18n.T("Duration"))
 					})
 					if a.duration > 0 && p.Has(catalog.CapSpeed) {
-						ui.Text(c, i18n.T("A duration overrides the speed.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+						caption(c, i18n.T("A duration overrides the speed."))
 					}
 				}
-				ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-					ui.Column(c).Grow(1).Gap(px(t, 2)).Children(func() {
-						ui.Text(c, i18n.T("Pin the seed"))
-						ui.Text(c, i18n.T("The same seed and settings make the same take.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-					})
+				formRow(c, "seed-pin-row", i18n.T("Pin the seed"), i18n.T("The same seed and settings make the same take."), func() {
 					ui.Switch(c.Key("seed-pin"), &a.seedPinned).Label(i18n.T("Pin the seed"))
 				})
 				if a.seedPinned {
@@ -444,7 +443,7 @@ func (a *app) voicePopover(c *ui.Context) {
 						})
 					}
 				}
-				if ui.Button(c.Key("voice-reset"), i18n.T("Reset")).Clicked() {
+				if ghostIconButton(c.Key("voice-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
 					a.speed, a.duration, a.seedPinned, a.modelDefaults = 1, 0, false, true
 					a.guidance, a.exaggeration = 0, 0
 					a.temperature, a.topP, a.maxTokens = 0.7, 0.9, 1200
@@ -467,4 +466,13 @@ func (a *app) voiceControlsSummary() string {
 		parts = append(parts, i18n.T("seed %d", int64(a.seed)))
 	}
 	return strings.Join(parts, " · ")
+}
+
+// composerButton is a button of the composer that opens a popover: its
+// icon and label, or its icon alone when the composer is narrow.
+func (a *app) composerButton(c *ui.Context, key string, ic icons.Icon, label string) ui.Element {
+	if a.studioNarrow(c) {
+		return iconButton(c.Key(key), ic, label)
+	}
+	return secondaryIconButton(c.Key(key), ic, label).Label(label)
 }

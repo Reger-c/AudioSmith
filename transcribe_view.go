@@ -11,14 +11,15 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dictation"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/lang"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 var (
-	transcribeIcon = icon(`<path d="M3 4h10M3 7h7M3 10h9M3 13h5"/><circle cx="12.5" cy="12" r="1.8"/>`)
-	micIcon        = icon(`<rect x="6" y="2" width="4" height="8" rx="2"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5V14.5"/>`)
+	transcribeIcon = icons.Subtitles
+	micIcon        = icons.Microphone3
 )
 
 // clock shows seconds as "1:05" or "1:02:05".
@@ -210,7 +211,7 @@ func (a *app) transcriptHistory(c *ui.Context) {
 				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 					ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 						if tr.Source == core.SourceDictation {
-							ui.Icon(c, micIcon).TextColor(t.TextMuted)
+							ui.Icon(c, micIcon.Linear).TextColor(t.TextMuted)
 						}
 						ui.Text(c, transcriptTitle(tr)).FontSize(px(t, 12)).Bold().SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
 					})
@@ -265,7 +266,7 @@ func (a *app) transcriptStatus(c *ui.Context) {
 					if m.downloading {
 						label = i18n.T("Downloading…")
 					}
-					if ui.PrimaryButton(c.Key("tr-download"), label).Disabled(m.downloading).Clicked() {
+					if primaryButton(c.Key("tr-download"), label).Disabled(m.downloading).Clicked() {
 						a.download(*e)
 					}
 				}
@@ -417,7 +418,7 @@ func (a *app) transcriptPlayer(c *ui.Context, tr *core.Transcript) {
 		if a.pl.Playing(id) {
 			label = i18n.T("Pause")
 		}
-		if ui.PrimaryButton(c.Key("tr-play"), label).Width(px(t, 72)).Clicked() {
+		if primaryButton(c.Key("tr-play"), label).Width(px(t, 72)).Clicked() {
 			a.toggleTranscriptPlayback()
 		}
 		seek := pos
@@ -550,7 +551,7 @@ func (a *app) transcriptSegments(c *ui.Context, tr *core.Transcript) {
 						a.saveSegmentEdit()
 					}
 					ui.Row(c).Gap(px(t, 6)).Children(func() {
-						if ui.PrimaryButton(c.Key("edit-save"), i18n.T("Save")).Clicked() {
+						if primaryButton(c.Key("edit-save"), i18n.T("Save")).Clicked() {
 							a.saveSegmentEdit()
 						}
 						if ui.Button(c.Key("edit-cancel"), i18n.T("Cancel")).Clicked() {
@@ -613,7 +614,7 @@ func (a *app) trRecorder(c *ui.Context, busy bool) {
 	switch m.phase {
 	case "recording":
 		c.After(100 * time.Millisecond)
-		if ui.PrimaryButton(c.Key("tr-rec-stop"), i18n.T("Stop recording")).Background(t.Danger).Clicked() {
+		if primaryButton(c.Key("tr-rec-stop"), i18n.T("Stop recording")).Background(t.Danger).Clicked() {
 			a.trRecStop()
 		}
 		ui.Text(c, clock(time.Since(m.started).Seconds())).FontSize(px(t, 18)).Bold().Font("monospace")
@@ -633,7 +634,7 @@ func (a *app) trRecorder(c *ui.Context, busy bool) {
 		ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		return
 	}
-	if ui.PrimaryButton(c.Key("tr-rec-start"), i18n.T("Record")).Disabled(busy).Clicked() {
+	if primaryButton(c.Key("tr-rec-start"), i18n.T("Record")).Disabled(busy).Clicked() {
 		a.trRecStart()
 	}
 	ui.Text(c, i18n.T("Record a meeting, a lecture or a voice memo.")).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.Center)

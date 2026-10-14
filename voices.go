@@ -26,6 +26,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
@@ -257,9 +258,9 @@ func voicePageTitle(path string) (string, bool) {
 }
 
 var (
-	voicesIcon  = icon(`<circle cx="6" cy="5.5" r="2.5"/><path d="M1.8 13.5c.6-2.4 2.2-3.8 4.2-3.8s3.6 1.4 4.2 3.8"/><path d="M11 4.2c1 .6 1.5 1.5 1.5 2.5s-.5 1.9-1.5 2.5M12.8 2.6c1.5 1.1 2.3 2.5 2.3 4.1s-.8 3-2.3 4.1"/>`)
-	designIcon  = icon(`<path d="m3 13 7.5-7.5M9 4l3 3"/><path d="M12.5 1.5v2M11.5 2.5h2M3.5 2v2M2.5 3h2M13 10v2M12 11h2"/>`)
-	galleryIcon = icon(`<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>`)
+	voicesIcon  = icons.UserSpeakRounded
+	designIcon  = icons.MagicStick3
+	galleryIcon = icons.Widget
 )
 
 // --- takes the voice pages generate -------------------------------------

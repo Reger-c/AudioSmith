@@ -20,6 +20,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/text/lexicon"
 	"github.com/hehehai/AudioSmith/internal/text/plan"
 )
@@ -322,7 +323,7 @@ func (a *app) pronunciationSettings(c *ui.Context) {
 				if ui.Switch(c.Key("on"), &e.Enabled).Label(i18n.T("On")).Changed() {
 					changed = true
 				}
-				if ui.Button(c.Key("remove"), "✕").Label(i18n.T("Remove")).Tooltip(i18n.T("Remove")).Shrink(0).Clicked() {
+				if iconButton(c.Key("remove"), icons.Close, i18n.T("Remove")).Tooltip(i18n.T("Remove")).Shrink(0).Clicked() {
 					remove = i
 				}
 			})

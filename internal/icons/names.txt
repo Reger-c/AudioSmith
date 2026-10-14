@@ -1,0 +1,80 @@
+# The Solar icons AudioSmith uses (base names; the generator writes the
+# -linear and -bold variants of each). Keep it sorted by use.
+
+# Sidebar pages.
+soundwave               # Studio
+dialog-2                # Stories
+notebook-minimalistic   # Audiobook
+video-frame-play-horizontal # Dub
+user-speak-rounded      # Voices
+magic-stick-3           # Design
+widget                  # Gallery
+folder-with-files       # Projects
+history                 # History
+subtitles               # Transcribe
+structure               # Workflows
+layers-minimalistic     # Batch
+phone-calling-rounded   # Calls
+ruler-cross-pen         # Tools
+plug-circle             # Integrations
+box                     # Models
+cpu-bolt                # Engine
+clipboard-list          # Logs
+settings                # Settings
+
+# Shell.
+bell                    # notifications
+magnifer                # search, palette
+sidebar-minimalistic    # collapse / expand the sidebar
+command                 # palette
+keyboard                # shortcuts
+programming             # API reference
+
+# Actions. (Add the icons a page needs here; see research/ui-design-spec.md §5.)
+menu-dots               # overflow "⋯"
+close-circle            # dismiss
+close                   # close, remove
+add-circle              # insert, add
+info-circle             # ⓘ info tooltip
+danger-triangle         # warning
+danger-circle           # error
+check-circle            # success
+play
+pause
+star
+export                  # save as, export
+import                  # import
+download-minimalistic   # download
+folder-open             # show in Finder
+copy
+restart                 # restart, retry
+refresh
+alt-arrow-down          # chevrons
+alt-arrow-left
+alt-arrow-right
+alt-arrow-up
+check
+tuning-2                # voice controls
+tuning-square-2         # audio quality
+panel-right             # inspector toggle
+
+# Workflow step kinds and media.
+file-text               # start (script)
+microphone-3            # transcribe, dictation, record
+global                  # translate, language, network
+transfer-horizontal     # convert
+volume-loud             # speak
+branching-paths-up      # condition
+pulse-2                 # normalize
+
+# Settings sections.
+pallete-2               # appearance
+shield-check            # privacy
+database                # storage
+chart-2                 # usage
+wi-fi-router-minimalistic # network
+lock-keyhole-minimalistic # permissions
+pen-new-round           # writing help
+text-square             # pronunciation
+cloud-download          # models and downloads
+case-round              # audio tools

@@ -367,12 +367,12 @@ func (a *app) obFooter(c *ui.Context) {
 			a.obStep--
 		}
 		if a.obStep < 3 {
-			if ui.PrimaryButton(c.Key("ob-next"), i18n.T("Continue")).Clicked() {
+			if primaryButton(c.Key("ob-next"), i18n.T("Continue")).Clicked() {
 				a.obStep++
 			}
 			return
 		}
-		if ui.PrimaryButton(c.Key("ob-finish"), i18n.T("Start using AudioSmith")).Clicked() {
+		if primaryButton(c.Key("ob-finish"), i18n.T("Start using AudioSmith")).Clicked() {
 			a.finishOnboarding()
 		}
 	})
@@ -577,20 +577,20 @@ func (a *app) obPrivacy(c *ui.Context) {
 	t := c.Theme()
 	ui.Text(c, i18n.T("Everything you write, record and generate stays on this Mac. AudioSmith has no analytics and no account.")).Bold()
 	local := a.prefs.Privacy.LocalOnlyLLM
-	settingRow(c, "ob-local", i18n.T("Local language models only"), i18n.T("Writing help and translation never use a cloud provider, even one you add later."), func() {
+	settingRowNote(c, "ob-local", i18n.T("Local language models only"), i18n.T("Writing help and translation never use a cloud provider, even one you add later."), func() {
 		if ui.Switch(c.Key("ob-local"), &local).Label(i18n.T("Keep text on this Mac")).Changed() {
 			on := local
 			a.updateSettings(func(s *settings.Settings) { s.Privacy.LocalOnlyLLM = on })
 		}
 	})
 	wm := !a.prefs.Privacy.NoWatermark
-	settingRow(c, "ob-watermark", i18n.T("Invisible watermark"), i18n.T("Marks generated audio so it can be recognised as made by AudioSmith. Needs the small AudioSeal model."), func() {
+	settingRowNote(c, "ob-watermark", i18n.T("Invisible watermark"), i18n.T("Marks generated audio so it can be recognised as made by AudioSmith. Needs the small AudioSeal model."), func() {
 		if ui.Switch(c.Key("ob-watermark"), &wm).Label(i18n.T("Add an invisible watermark to generated audio")).Changed() {
 			on := wm
 			a.updateSettings(func(s *settings.Settings) { s.Privacy.NoWatermark = !on })
 		}
 	})
-	settingRow(c, "ob-keep", i18n.T("History"), i18n.T("Older takes that are not starred are deleted beyond the limit."), func() {
+	settingRowNote(c, "ob-keep", i18n.T("History"), i18n.T("Older takes that are not starred are deleted beyond the limit."), func() {
 		ui.Segmented(c.Key("ob-keep"), &a.obKeep, i18n.T("Keep every take"), i18n.T("Last 1000"), i18n.T("Last 200")).Label(i18n.T("History"))
 	})
 	ui.Text(c, i18n.T("Settings → Privacy says exactly what may use the network, and when.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
@@ -603,7 +603,7 @@ func (a *app) obDictation(c *ui.Context) {
 		FontSize(px(t, 12)).TextColor(t.TextMuted)
 	f := &a.dictSet
 	f.enabled = a.prefs.Dictation.Enabled
-	settingRow(c, "ob-dict", i18n.T("Dictation shortcut"), i18n.T("Works in every app while AudioSmith runs."), func() {
+	settingRowNote(c, "ob-dict", i18n.T("Dictation shortcut"), i18n.T("Works in every app while AudioSmith runs."), func() {
 		if ui.Switch(c.Key("ob-dict-switch"), &f.enabled).Label(i18n.T("Dictation shortcut")).Changed() {
 			on := f.enabled
 			a.updateSettings(func(s *settings.Settings) { s.Dictation.Enabled = on })

@@ -95,14 +95,14 @@ func (a *app) dubbingSettings(c *ui.Context) {
 			}
 		})
 	case d.URLImport && d.YtDlp != "":
-		settingRow(c, "ytdlp-on", i18n.T("Importing from links is on"), i18n.T("yt-dlp %s · %s", dub.YtDlpVersion, shortPath(d.YtDlp)), func() {
+		settingRowNote(c, "ytdlp-on", i18n.T("Importing from links is on"), i18n.T("yt-dlp %s · %s", dub.YtDlpVersion, shortPath(d.YtDlp)), func() {
 			if ui.Button(c.Key("ytdlp-remove"), i18n.T("Turn off and remove")).Clicked() {
 				a.removeYtDlp()
 			}
 		})
 	default:
 		settingRow(c, "ytdlp-off", i18n.T("Importing from links is off"), i18n.T("Turning it on downloads yt-dlp %s.", dub.YtDlpVersion), func() {
-			if ui.PrimaryButton(c.Key("ytdlp-install"), i18n.T("Turn on")).Clicked() {
+			if primaryButton(c.Key("ytdlp-install"), i18n.T("Turn on")).Clicked() {
 				a.installYtDlp()
 			}
 		})

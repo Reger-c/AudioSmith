@@ -17,6 +17,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -168,7 +169,7 @@ func (a *app) takeRow(c *ui.Context, cl *core.Take) {
 			if a.pl.Playing(cl.ID) {
 				label = i18n.T("Pause")
 			}
-			if ui.PrimaryButton(c.Key("play"), label).Width(px(t, 72)).Clicked() {
+			if primaryButton(c.Key("play"), label).Width(px(t, 72)).Clicked() {
 				a.play(cl)
 			}
 			a.waveform(c, cl)
@@ -260,13 +261,13 @@ func (a *app) takeDetails(c *ui.Context, tk *core.Take) {
 	ui.Column(c.Key("details-" + tk.ID)).Padding(px(t, 16)).Gap(px(t, 12)).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, i18n.T("Take details")).FontSize(px(t, 14)).Bold().Grow(1)
-			if ui.Button(c.Key("close-details"), "✕").Label(i18n.T("Close")).Clicked() {
+			if iconButton(c.Key("close-details"), icons.Close, i18n.T("Close")).Clicked() {
 				a.history.selected = ""
 			}
 		})
 		a.outputPanel(c, tk, false)
 		ui.Row(c).Gap(px(t, 8)).Children(func() {
-			if ui.PrimaryButton(c.Key("details-reuse"), i18n.T("Reuse")).Tooltip(i18n.T("Load the whole recipe into the studio, seed included")).Clicked() {
+			if primaryButton(c.Key("details-reuse"), i18n.T("Reuse")).Tooltip(i18n.T("Load the whole recipe into the studio, seed included")).Clicked() {
 				a.reuse(tk)
 			}
 		})

@@ -56,7 +56,7 @@ func (a *app) voicesPage(c *ui.Context) {
 		if ui.Button(c.Key("voices-design"), i18n.T("Design a voice")).Clicked() {
 			a.navigate("/design")
 		}
-		if ui.PrimaryButton(c.Key("voices-new"), i18n.T("New voice from a clip")).Clicked() {
+		if primaryButton(c.Key("voices-new"), i18n.T("New voice from a clip")).Clicked() {
 			a.startClone("")
 		}
 	})
@@ -111,7 +111,7 @@ func (a *app) voicesGrid(c *ui.Context) {
 					if ui.Button(c.Key("empty-design"), i18n.T("Design a voice")).Clicked() {
 						a.navigate("/design")
 					}
-					if ui.PrimaryButton(c.Key("empty-clone"), i18n.T("New voice from a clip")).Clicked() {
+					if primaryButton(c.Key("empty-clone"), i18n.T("New voice from a clip")).Clicked() {
 						a.startClone("")
 					}
 				})

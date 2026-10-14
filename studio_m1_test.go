@@ -123,7 +123,7 @@ func TestInsertMenuIsModelAware(t *testing.T) {
 
 	a.selectModel(entry(t, "omnivoice-bf16"))
 	tt.Frame()
-	tt.Click("+ Insert")
+	tt.Click("Insert")
 	tt.Frame()
 	tt.Click("Laughter")
 	tt.Frame()
@@ -141,7 +141,7 @@ func TestLanguagePicker(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	a.selectModel(entry(t, "qwen3-tts-0.6b-customvoice-8bit"))
 	tt.Frame()
-	tt.Click("🇨🇳 Chinese ▾")
+	tt.Click("🇨🇳 Chinese")
 	tt.Frame()
 	if !tt.HasText("Auto-detect") || !tt.HasText("Not supported by Qwen3-TTS 0.6B CustomVoice") {
 		t.Fatalf("picker: %q", tt.Texts())
@@ -154,7 +154,7 @@ func TestLanguagePicker(t *testing.T) {
 		t.Fatalf("language %q recent %v open %v", a.language, a.recentLangs, a.composer.langOpen)
 	}
 	// An unsupported language cannot be chosen.
-	tt.Click("🇯🇵 Japanese ▾")
+	tt.Click("🇯🇵 Japanese")
 	a.composer.langQuery = "arabic"
 	tt.Frame()
 	tt.Click("Arabic · العربية")
@@ -168,7 +168,7 @@ func TestLanguagePicker(t *testing.T) {
 	if a.language != "" {
 		t.Errorf("auto: %q", a.language)
 	}
-	tt.Click("Auto-detect ▾")
+	tt.Click("Auto-detect")
 	tt.Frame()
 	tt.Click("🇯🇵 Japanese")
 	if a.language != "Japanese" {
@@ -177,7 +177,7 @@ func TestLanguagePicker(t *testing.T) {
 	// OmniVoice takes codes from its long list.
 	a.selectModel(entry(t, "omnivoice-bf16"))
 	tt.Frame()
-	tt.Click("Auto-detect ▾")
+	tt.Click("Auto-detect")
 	a.composer.langQuery = "swahili"
 	tt.Frame()
 	tt.Click("Swahili · Kiswahili")
@@ -194,7 +194,13 @@ func TestScriptStatsAndDiagnostics(t *testing.T) {
 	if st.chunks < 3 || st.seconds < 30 || len(st.diags) != 2 {
 		t.Fatalf("stats %+v", st)
 	}
-	if !tt.HasText("2 notes about the markup: This model cannot voice [laughter]; it is left out.") {
+	// The notes are a short warning (0.3): its tooltip lists them, a click
+	// shows them as a toast.
+	if err := tt.Click("2 notes about the markup"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !strings.Contains(strings.Join(tt.Texts(), "|"), "2 notes about the markup: This model cannot voice [laughter]; it is left out.") {
 		t.Errorf("diagnostics: %q", tt.Texts())
 	}
 	a.text = ""
@@ -317,9 +323,9 @@ func TestOutputPanel(t *testing.T) {
 	addTake(t, a, tk, 1)
 	a.lastClipID = "T1"
 	tt.Frame()
-	for _, want := range []string{"Latest take", "1.0 s · rendered in 0.4 s · 72 KB · 24 kHz · 24-bit · mono",
+	for _, want := range []string{"Latest take", "2.5× realtime", "72 KB · 24 kHz · 24-bit · mono",
 		"Chunk 2 is 0.2 s long where its text needs about 2.5 s: words may be missing.", "Check audio", "Save as…"} {
-		if !tt.HasText(want) {
+		if !strings.Contains(strings.Join(tt.Texts(), "|"), want) {
 			t.Errorf("lacks %q: %q", want, tt.Texts())
 		}
 	}
@@ -335,7 +341,7 @@ func TestOutputPanel(t *testing.T) {
 	if got.Render == nil || !got.Render.QCDone || !a.checkOpen["T1"] {
 		t.Fatalf("check: %+v", got.Render)
 	}
-	if !tt.HasText("✓ No problems found: no clipping, silences or sudden jumps in loudness.") && !strings.Contains(strings.Join(tt.Texts(), "|"), "Check audio found") {
+	if !tt.HasText("No problems found: no clipping, silences or sudden jumps in loudness.") && !strings.Contains(strings.Join(tt.Texts(), "|"), "Check audio found") {
 		t.Errorf("results: %q", tt.Texts())
 	}
 	stored, _ := a.lib.svc.Takes.Get(context.Background(), "T1")

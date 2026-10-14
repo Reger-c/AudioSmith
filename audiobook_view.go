@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/text"
 	"github.com/hehehai/AudioSmith/internal/text/markup"
@@ -182,7 +183,7 @@ func (a *app) manuscriptWarnings(c *ui.Context, p *lfPage) {
 	ui.Column(c.Key("ab-warn")).Gap(px(t, 4)).Padding(px(t, 10)).Radius(8).Background(t.Warning.Alpha(0.12)).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, i18n.T("Before you create")).Bold().Grow(1)
-			if ui.Button(c.Key("ab-warn-x"), "✕").Label(i18n.T("Dismiss")).Clicked() {
+			if iconButton(c.Key("ab-warn-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
 				p.dismissed = p.fp
 			}
 		})
@@ -297,7 +298,7 @@ func (a *app) lexiconCard(c *ui.Context, p *lfPage, locked bool) {
 			ui.TextInput(c.Key("w"), &e.Word).Placeholder(i18n.T("Word")).Label(i18n.T("Word")).Grow(1).MinWidth(0).Disabled(locked)
 			ui.Text(c, "→").TextColor(t.TextMuted)
 			ui.TextInput(c.Key("s"), &e.Say).Placeholder(i18n.T("Say it as…")).Label(i18n.T("Say it as…")).Grow(1).MinWidth(0).Disabled(locked)
-			if ui.Button(c.Key("x"), "✕").Label(i18n.T("Remove")).Disabled(locked).Clicked() {
+			if iconButton(c.Key("x"), icons.Close, i18n.T("Remove")).Disabled(locked).Clicked() {
 				remove = i
 			}
 		})

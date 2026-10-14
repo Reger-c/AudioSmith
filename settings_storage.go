@@ -401,14 +401,14 @@ func (a *app) storageSettings(c *ui.Context) {
 		}
 	})
 	if l := a.stLoc; l.Previous != "" {
-		settingRow(c, "st-prev", i18n.T("The previous data folder is still there"), shortPath(l.Previous), func() {
+		settingRowNote(c, "st-prev", i18n.T("The previous data folder is still there"), shortPath(l.Previous), func() {
 			if ui.Button(c.Key("st-prev-rm"), i18n.T("Remove it")).Clicked() {
 				a.removePrevious()
 			}
 		})
 	}
 	if l := a.stLoc; l.Failed != "" {
-		settingRow(c, "st-failed", i18n.T("The last move did not happen"), l.Failed, func() {
+		settingRowNote(c, "st-failed", i18n.T("The last move did not happen"), l.Failed, func() {
 			if ui.Button(c.Key("st-failed-ok"), i18n.T("Dismiss")).Clicked() {
 				a.dismissMoveFailure()
 			}

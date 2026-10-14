@@ -59,12 +59,12 @@ func TestStoragePage(t *testing.T) {
 	}
 	// The look, then every setting.
 	a.updateSettings(func(s *settings.Settings) {
-		s.Appearance.Palette, s.Appearance.Rail, s.Studio.Autoplay = "violet", true, false
+		s.Appearance.Theme, s.Appearance.Rail, s.Studio.Autoplay = "dark", true, false
 	})
 	tt.Frame()
 	a.resetLook()
 	tt.Frame()
-	if p := a.settings.Get(); p.Appearance.Palette != "" || p.Appearance.Rail || p.Studio.Autoplay {
+	if p := a.settings.Get(); p.Appearance.Theme != "system" || p.Appearance.Rail || p.Studio.Autoplay {
 		t.Errorf("after resetting the look %+v %+v", p.Appearance, p.Studio)
 	}
 	a.navigate("/settings/storage")
@@ -357,13 +357,6 @@ func TestNetworkUsagePrivacyAppearance(t *testing.T) {
 
 	a.navigate("/settings/appearance")
 	tt.Frame()
-	if err := tt.Click("Violet"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.settings.Get().Appearance.Palette != "violet" {
-		t.Error("palette not saved")
-	}
 	if err := tt.Click("Icons only"); err != nil {
 		t.Fatal(err)
 	}

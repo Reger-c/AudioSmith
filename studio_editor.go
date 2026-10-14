@@ -127,6 +127,26 @@ func tokenizeScript(line string, state uint64, tokens []editor.Token) ([]editor.
 	return tokens, state
 }
 
+// scriptTheme colours the script's markup with the design's few colours:
+// the accent for timing and delivery, greys for expressions and what the
+// model ignores, the warning colour for what belongs elsewhere.
+func scriptTheme(t *ui.Theme) *editor.Theme {
+	k := tok(t)
+	th := editor.DefaultTheme(t)
+	th.Cursor = k.Text
+	for kind, col := range map[editor.TokenKind]ui.Color{
+		editor.TokenKeyword:  k.AccentInk,
+		editor.TokenType:     k.AccentInk,
+		editor.TokenFunction: k.AccentInk,
+		editor.TokenString:   k.Text2,
+		editor.TokenInvalid:  t.Warning,
+		editor.TokenComment:  k.Text3,
+	} {
+		th.Tokens[kind].Color = col
+	}
+	return th
+}
+
 // tagKind is how a tag is coloured.
 func tagKind(tag string) editor.TokenKind {
 	if strings.HasPrefix(tag, "[[") {
@@ -199,10 +219,15 @@ func (a *app) scriptView(c *ui.Context) {
 	a.syncScript()
 	st := a.script.st
 	st.Font = ui.Font{Family: "system-ui", Size: px(t, 15)}
+	st.Theme = scriptTheme(t)
 	st.Placeholder = i18n.T("Type or paste the text to speak…")
 	st.Label = i18n.T("Script")
-	ui.Column(c.Key("script-box")).Grow(1).MinHeight(px(t, 140)).Radius(8).Border(1, t.Border).Background(editor.DefaultTheme(t).Background).
-		Padding(px(t, 6), px(t, 4)).Children(func() {
+	box := ui.Column(c.Key("script-box")).Grow(1).MinHeight(px(t, 120)).Radius(px(t, radiusCard)).Border(1, tok(t).Line).Background(editor.DefaultTheme(t).Background).
+		Padding(px(t, sp2), px(t, sp1))
+	if box.FocusWithin() {
+		box.Border(1, tok(t).G[5])
+	}
+	box.Children(func() {
 		editor.View(c.Key("script"), st).Grow(1).MinHeight(0)
 	})
 	a.syncScript()

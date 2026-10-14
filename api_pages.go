@@ -8,11 +8,12 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 )
 
 var (
-	toolsIcon        = icon(`<path d="M10.5 2.5a3 3 0 0 0-2.9 3.8L2.8 11.1a1.4 1.4 0 0 0 2 2l4.8-4.8a3 3 0 0 0 3.8-2.9l-1.7 1.1-1.6-.4-.4-1.6z"/>`)
-	integrationsIcon = icon(`<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/><path d="M7 4.5h2.5a2 2 0 0 1 2 2V9M9 11.5H6.5a2 2 0 0 1-2-2V7"/>`)
+	toolsIcon        = icons.RulerCrossPen
+	integrationsIcon = icons.PlugCircle
 )
 
 // m5PageTitle translates the M5 pages' titles.

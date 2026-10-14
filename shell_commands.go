@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -161,20 +162,51 @@ func (a *app) shortcuts(c *ui.Context) {
 	}
 }
 
+// commandIcon is a command's icon in the palette: its page's for "Go
+// to" commands, a settings section's, or nil.
+func commandIcon(id string) *icons.Icon {
+	if rest, ok := strings.CutPrefix(id, "go/settings"); ok {
+		ic := icons.Settings
+		if sec := strings.TrimPrefix(rest, "/"); sec != "" {
+			ic = settingsSectionIcon(sec)
+		}
+		return &ic
+	}
+	if rest, ok := strings.CutPrefix(id, "go"); ok {
+		for _, p := range pages {
+			if p.path == rest {
+				ic := p.icon
+				return &ic
+			}
+		}
+	}
+	return nil
+}
+
+// kbd shows a shortcut as a key cap.
+func kbd(c *ui.Context, keys string) ui.Element {
+	t := c.Theme()
+	k := tok(t)
+	return ui.Text(c, keys).FontSize(px(t, fsMicro)).TextColor(k.Text2).Padding(px(t, 1), px(t, 5)).Radius(px(t, 4)).
+		Background(k.Subtle).Border(1, k.Line).SingleLine().Shrink(0)
+}
+
 // palette is the ⌘K command palette.
 func (a *app) palette(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
+	_, h := c.Size()
 	ui.DialogBase(c, &a.paletteOpen, func(backdrop, panel ui.Element) {
-		backdrop.Background(ui.RGBA(0, 0, 0, 0.2)).Justify(ui.Start).Padding(px(t, 90), 0, 0, 0)
-		panel.Width(px(t, 560)).Radius(12).Background(t.Background).Border(1, t.Border).
-			Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.25)).Label(i18n.T("Command palette"))
+		backdrop.Background(ui.RGBA(0, 0, 0, 0.2)).Justify(ui.Start).Padding(min(px(t, 90), h*0.12), px(t, sp6), 0)
+		panel.Width(px(t, 560)).MaxWidth(px(t, 560)).Radius(px(t, radiusCard)).Background(k.Bg).Border(1, k.Line).Clip().
+			Shadow(0, 16, 40, 0, ui.RGBA(0, 0, 0, 0.22)).Label(i18n.T("Command palette"))
 		items := a.paletteItems()
 		a.paletteSel = max(0, min(a.paletteSel, len(items)-1))
-		ui.Row(c).Padding(px(t, 10), px(t, 12)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, searchIcon).TextColor(t.TextMuted)
+		ui.Row(c).Padding(px(t, 10), px(t, 14)).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, searchIcon.Linear).Size(px(t, 18), px(t, 18)).TextColor(k.Text3)
 			// A text input rather than ui.SearchField, whose placeholder
 			// is not translated; Escape closes the palette.
-			search := ui.TextInput(c.Key("palette-search"), &a.paletteQuery).AutoFocus().Grow(1).
+			search := ui.TextInputBase(c.Key("palette-search"), &a.paletteQuery).AutoFocus().Grow(1).FontSize(px(t, 15)).
 				Placeholder(i18n.T("Type a command or a page…")).Label(i18n.T("Search commands"))
 			if search.Changed() {
 				a.paletteSel = 0
@@ -188,24 +220,36 @@ func (a *app) palette(c *ui.Context) {
 			if search.Submitted() && len(items) > 0 {
 				a.runCommand(items[a.paletteSel])
 			}
+			kbd(c, "Esc")
 		})
 		ui.Divider(c)
-		ui.Scroll(c).MaxHeight(px(t, 360)).Children(func() {
+		ui.Scroll(c).MaxHeight(min(px(t, 380), h*0.6)).Children(func() {
 			ui.Column(c).Padding(px(t, 6)).Children(func() {
 				if len(items) == 0 {
-					ui.Text(c, i18n.T("No matching commands")).TextColor(t.TextMuted).Padding(px(t, 10))
+					ui.Text(c, i18n.T("No matching commands")).TextColor(k.Text2).Padding(px(t, 10))
 				}
+				group := ""
 				for i, cmd := range items {
-					row := ui.ButtonBase(c.Key("cmd-"+cmd.id)).Padding(px(t, 7), px(t, 10)).Radius(6).Label(cmd.title)
+					if cmd.group != group {
+						group = cmd.group
+						ui.Text(c, group).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Padding(px(t, sp2), px(t, 10), px(t, 4))
+					}
+					row := ui.ButtonBase(c.Key("cmd-"+cmd.id)).Padding(px(t, 7), px(t, 10)).Radius(px(t, radiusControl)).Label(cmd.title)
 					if i == a.paletteSel {
-						row.Background(t.Accent.Alpha(0.15))
+						row.Background(k.Pressed)
+					} else if row.Hovered() {
+						row.Background(k.Hover)
 					}
 					row.Children(func() {
 						ui.Row(c).Grow(1).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-							ui.Text(c, cmd.title).Grow(1).SingleLine().Ellipsis("…")
-							ui.Text(c, cmd.group).FontSize(px(t, 11)).TextColor(t.TextMuted)
+							ic := icons.Command
+							if p := commandIcon(cmd.id); p != nil {
+								ic = *p
+							}
+							ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)
+							ui.Text(c, cmd.title).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
 							if cmd.keys != "" {
-								ui.Text(c, cmd.keys).FontSize(px(t, 11)).TextColor(t.TextMuted).Width(px(t, 36))
+								kbd(c, cmd.keys)
 							}
 						})
 					})
@@ -221,8 +265,12 @@ func (a *app) palette(c *ui.Context) {
 // shortcutSheet lists the keyboard shortcuts ("?").
 func (a *app) shortcutSheet(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	ui.Modal(c, &a.sheetOpen, func() {
-		ui.Text(c, i18n.T("Keyboard shortcuts")).FontSize(px(t, 15)).Bold()
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, icons.Keyboard.Linear).Size(px(t, 18), px(t, 18)).TextColor(k.Text2)
+			sectionHeading(c, i18n.T("Keyboard shortcuts")).Grow(1)
+		})
 		groups := []struct {
 			title string
 			rows  [][2]string
@@ -243,12 +291,12 @@ func (a *app) shortcutSheet(c *ui.Context) {
 				{"⌘↩", i18n.T("Generate")},
 			}},
 		}
-		ui.Column(c).Gap(px(t, 12)).Width(px(t, 420)).Children(func() {
+		ui.Column(c).Gap(px(t, sp3)).Width(px(t, 420)).MaxWidth(px(t, 420)).Children(func() {
 			for _, g := range groups {
-				ui.Text(c, g.title).FontSize(px(t, 12)).Bold().TextColor(t.TextMuted)
-				ui.Grid(c).ColumnTracks(ui.Fixed(px(t, 90)), ui.Fr(1)).GapX(px(t, 12)).GapY(px(t, 6)).Children(func() {
+				sectionTitle(c, g.title)
+				ui.Grid(c).ColumnTracks(ui.Fixed(px(t, 90)), ui.Fr(1)).GapX(px(t, sp3)).GapY(px(t, 6)).AlignItems(ui.Center).Children(func() {
 					for _, r := range g.rows {
-						ui.Text(c, r[0]).Font("monospace").FontSize(px(t, 12))
+						ui.Row(c).Children(func() { kbd(c, r[0]) })
 						ui.Text(c, r[1])
 					}
 				})

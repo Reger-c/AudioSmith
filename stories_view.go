@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/services"
 )
 
@@ -85,7 +86,7 @@ func (a *app) reviewBuffer(c *ui.Context, p *lfPage, locked bool) {
 			}
 			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
 				empty := strings.TrimSpace(p.doc.ImportText) == ""
-				if ui.PrimaryButton(c.Key("st-autocast"), i18n.T("Auto-cast")).Tooltip(i18n.T("Find who speaks and give each a voice")).
+				if primaryButton(c.Key("st-autocast"), i18n.T("Auto-cast")).Tooltip(i18n.T("Find who speaks and give each a voice")).
 					Disabled(locked || empty).Clicked() {
 					a.autoCastStory(p)
 				}
@@ -133,7 +134,7 @@ func (a *app) storyLines(c *ui.Context, p *lfPage, locked bool) {
 				if ui.Button(c.Key("st-empty-sample"), i18n.T("Load sample")).Disabled(locked).Clicked() {
 					a.loadSampleStory(p)
 				}
-				if ui.PrimaryButton(c.Key("st-empty-add"), i18n.T("Add first line")).Disabled(locked).Clicked() {
+				if primaryButton(c.Key("st-empty-add"), i18n.T("Add first line")).Disabled(locked).Clicked() {
 					a.addLine(p, false)
 				}
 			})
@@ -193,20 +194,20 @@ func (a *app) storyLine(c *ui.Context, p *lfPage, i int, l *services.StoryLine, 
 			if l.Chapter {
 				ui.Spacer(c)
 			}
-			if ui.Button(c.Key("more"), "⋯").Label(i18n.T("Line options")).Tooltip(i18n.T("Line options")).Disabled(l.Chapter).Clicked() {
+			if iconButton(c.Key("more"), icons.MenuDots, i18n.T("Line options")).Tooltip(i18n.T("Line options")).Disabled(l.Chapter).Clicked() {
 				if sel {
 					p.sel = -1
 				} else {
 					p.sel = i
 				}
 			}
-			if ui.Button(c.Key("up"), "↑").Label(i18n.T("Move up")).Disabled(locked || i == 0).Clicked() {
+			if iconButton(c.Key("up"), icons.AltArrowUp, i18n.T("Move up")).Disabled(locked || i == 0).Clicked() {
 				after = func() { a.moveLine(p, i, -1) }
 			}
-			if ui.Button(c.Key("down"), "↓").Label(i18n.T("Move down")).Disabled(locked || i == len(p.doc.Lines)-1).Clicked() {
+			if iconButton(c.Key("down"), icons.AltArrowDown, i18n.T("Move down")).Disabled(locked || i == len(p.doc.Lines)-1).Clicked() {
 				after = func() { a.moveLine(p, i, 1) }
 			}
-			if ui.Button(c.Key("del"), "✕").Label(i18n.T("Remove line")).Tooltip(i18n.T("Remove line")).Disabled(locked).Clicked() {
+			if iconButton(c.Key("del"), icons.Close, i18n.T("Remove line")).Tooltip(i18n.T("Remove line")).Disabled(locked).Clicked() {
 				after = func() { a.deleteLine(p, i) }
 			}
 		})
@@ -320,7 +321,7 @@ func (a *app) storyCast(c *ui.Context, p *lfPage, locked bool) {
 					}
 				}
 				ui.Text(c, i18n.N(n, "%d line", "%d lines", n)).FontSize(px(t, 11)).TextColor(t.TextMuted)
-				if ui.Button(c.Key("x"), "✕").Label(i18n.T("Remove character")).Tooltip(i18n.T("Remove character: its lines go to the narrator")).Disabled(locked).Clicked() {
+				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove character")).Tooltip(i18n.T("Remove character: its lines go to the narrator")).Disabled(locked).Clicked() {
 					remove = m.ID
 				}
 			})

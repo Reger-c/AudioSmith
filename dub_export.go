@@ -231,7 +231,7 @@ func (a *app) dubExportPanel(c *ui.Context) {
 	blocked := a.dubExportBlocked(ex.format)
 	ready := a.dubExportReady()
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if ui.PrimaryButton(c.Key("dx-go"), i18n.T("Export…")).Disabled(blocked != "" || ready != "" || ex.job != "").Clicked() {
+		if primaryButton(c.Key("dx-go"), i18n.T("Export…")).Disabled(blocked != "" || ready != "" || ex.job != "").Clicked() {
 			a.dubDoExport()
 		}
 		if ex.job != "" {

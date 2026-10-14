@@ -1,7 +1,7 @@
 package settings
 
 // M7a sections (thread #22): the first-run setup, the media tools
-// (ffmpeg), and the appearance fields the sidebar and palettes use.
+// (ffmpeg), and the appearance fields the sidebar uses.
 
 import (
 	"encoding/json"
@@ -39,10 +39,6 @@ const (
 	MediaCustom     = "custom"   // a file the user chose
 )
 
-// Palettes are the values of Appearance.Palette: "" follows the system's
-// accent colour.
-var Palettes = []string{"", "ocean", "violet", "forest", "sunset", "graphite"}
-
 // Sidebar width bounds, DIPs at 100 %.
 const (
 	MinSidebarWidth = 170
@@ -51,9 +47,6 @@ const (
 
 func normalizeM7(s *Settings) {
 	ap := &s.Appearance
-	if !slices.Contains(Palettes, ap.Palette) {
-		ap.Palette = ""
-	}
 	if ap.SidebarWidth != 0 {
 		ap.SidebarWidth = min(max(ap.SidebarWidth, MinSidebarWidth), MaxSidebarWidth)
 	}

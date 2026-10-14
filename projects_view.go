@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
 )
@@ -204,7 +205,7 @@ func (a *app) itemAvatar(c *ui.Context, it store.LibraryItem) {
 		}
 	}
 	ui.Column(c).Width(px(t, 32)).Height(px(t, 32)).Center().Radius(16).Background(t.Accent.Alpha(0.12)).Children(func() {
-		ui.Icon(c, itemIcon(it)).TextColor(t.Accent)
+		ui.Icon(c, itemIcon(it).Linear).TextColor(tok(t).Text2)
 	})
 }
 
@@ -297,7 +298,7 @@ func (a *app) itemActions(c *ui.Context, it store.LibraryItem) {
 			mygo.Shell.ShowItemInFolder(path)
 		}
 	}
-	if ui.Button(c.Key("delete"), "✕").Label(i18n.T("Delete")).Tooltip(i18n.T("Delete")).Clicked() {
+	if iconButton(c.Key("delete"), icons.Close, i18n.T("Delete")).Tooltip(i18n.T("Delete")).Clicked() {
 		clear(s.selected)
 		s.selected[key] = true
 		s.deleteOpen = true
@@ -428,7 +429,7 @@ func (a *app) libraryDialogs(c *ui.Context) {
 					if len(s.errors) > 0 {
 						label = i18n.T("Retry")
 					}
-					if ui.PrimaryButton(c.Key("del-ok"), label).Background(t.Danger).Clicked() {
+					if primaryButton(c.Key("del-ok"), label).Background(t.Danger).Clicked() {
 						a.deleteItems(items)
 					}
 				})

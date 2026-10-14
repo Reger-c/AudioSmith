@@ -61,10 +61,10 @@ type Appearance struct {
 	Theme        string  `json:"theme"`        // "system" | "light" | "dark"
 	Scale        float64 `json:"scale"`        // UI scale, 0.9–1.25 (1 = 100 %)
 	ReduceMotion bool    `json:"reduceMotion"` // in addition to the system setting
-	// M7a (m7.go): the accent palette (Palettes; "" = the system's
-	// accent), the sidebar as icons only, its width in DIPs at 100 %
-	// (0 = the default) and the sidebar sections the user closed.
-	Palette        string   `json:"palette,omitempty"`
+	// M7a (m7.go): the sidebar as icons only, its width in DIPs at 100 %
+	// (0 = the default) and the sidebar sections the user closed. (0.3
+	// dropped M7a's accent palette: a stored "palette" is ignored, and
+	// gone after the next save.)
 	Rail           bool     `json:"rail,omitempty"`
 	SidebarWidth   float64  `json:"sidebarWidth,omitempty"`
 	ClosedSections []string `json:"closedSections,omitempty"`
