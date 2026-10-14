@@ -474,7 +474,22 @@ func settingRowNote(c *ui.Context, key, title, note string, control func()) {
 // sectionTitle heads a group of settings.
 func sectionTitle(c *ui.Context, title string) {
 	t := c.Theme()
-	ui.Text(c, title).FontSize(px(t, fsCaption)).FontWeight(600).TextColor(tok(t).Text2).Margin(px(t, sp2), 0, 0, 0)
+	sectionTitleText(c, title).Margin(px(t, sp2), 0, 0, 0)
+}
+
+func sectionTitleText(c *ui.Context, title string) ui.Element {
+	t := c.Theme()
+	return ui.Text(c, title).FontSize(px(t, fsCaption)).FontWeight(600).TextColor(tok(t).Text2)
+}
+
+// sectionTitleTip is sectionTitle with a ⓘ beside it: the margin goes on
+// the row, so the title and the ⓘ share one centre line.
+func sectionTitleTip(c *ui.Context, title, tip string) {
+	t := c.Theme()
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Margin(px(t, sp2), 0, 0, 0).Children(func() {
+		sectionTitleText(c, title)
+		infoTip(c, tip)
+	})
 }
 
 func (a *app) generalSettings(c *ui.Context) {
