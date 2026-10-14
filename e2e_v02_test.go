@@ -43,6 +43,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
@@ -1241,3 +1242,124 @@ func (v *v02) crashFlow(t *testing.T) string {
 }
 
 var _ = io.Discard
+
+// TestV02FirstRun is a first launch on a fresh Mac without the network:
+// an empty model folder, downloads through a dead proxy, the engine
+// sandboxed. The app must start, every page must draw, and each main
+// action must say which model to download instead of failing obscurely.
+//
+//	AUDIOSMITH_E2E=1 go test -run TestV02FirstRun -v .
+func TestV02FirstRun(t *testing.T) {
+	if os.Getenv("AUDIOSMITH_E2E") == "" {
+		t.Skip("set AUDIOSMITH_E2E=1 to run the real engine")
+	}
+	bin := engine.Find("resources")
+	if bin == "" {
+		t.Fatal("no engine: run scripts/build-engine.sh")
+	}
+	bin = offlineEngine(t, bin)
+	dir := t.TempDir()
+	data, models := filepath.Join(dir, "data"), filepath.Join(dir, "models")
+	os.MkdirAll(models, 0o755)
+	lib := openTestLibraryWith(t, data, libraryOptions{})
+	lib.settings.Update(t.Context(), func(s *settings.Settings) {
+		s.Models.CacheDir, s.Models.Proxy = models, "http://127.0.0.1:9"
+	})
+	h := &engineHost{bin: bin, logDir: filepath.Join(dir, "logs")}
+	a := newApp(h, lib)
+	a.autoplay = false
+	v := &v02{a: a, h: h, events: make(chan func(), 1<<16), dir: dir}
+	a.enginePost = func(fn func()) { v.events <- fn }
+	a.postQueue = a.enginePost
+	h.sup = engine.NewSupervisor(engine.Config{Bin: bin, Bus: a.bus, LogDir: h.logDir, Offline: true, CacheDir: modelCache(a.prefs),
+		OnDemand: []proto.Role{proto.RoleListen, proto.RoleMedia}, Logf: t.Logf})
+	a.connectEngine(h)
+	defer h.Stop()
+	a.startEngine()
+	v.wait(t, "engine ready", time.Minute, func() bool { return a.engState == engineReady })
+	a.refreshModels()
+	v.drain()
+	tt := ui.NewTester(a.view, 1200, 800)
+
+	// The wizard: packs with sizes still to download.
+	a.openOnboarding()
+	v.drain()
+	tt.Frame()
+	total, missing, _ := a.packSizes("fast")
+	if total == 0 || missing != total {
+		t.Errorf("fast pack: %d of %d missing", missing, total)
+	}
+	a.obOpen = false
+
+	// Every page draws.
+	for _, p := range pages {
+		a.navigate(p.path)
+		v.drain()
+		tt.Frame()
+	}
+
+	// Studio: Generate says Kokoro is to be downloaded.
+	a.navigate("/studio")
+	a.selectModel(catalog.Builtin().Entries[0])
+	a.text = "Hello"
+	a.generate()
+	v.wait(t, "studio refusal", time.Minute, func() bool { return a.job == nil })
+	tt.Frame()
+	if a.needDownload == nil || !tt.HasText("Download") {
+		t.Errorf("studio: error %q, download %v: %q", a.jobError, a.needDownload, tt.Texts())
+	}
+	t.Logf("studio: %q", a.jobError)
+
+	// Transcribe a file: the speech-to-text model is to be downloaded.
+	in := say(t, dir, "hello", "Samantha", "Hello there.", 16000)
+	a.navigate("/transcripts")
+	a.trMode = 1
+	a.transcribeFile(in)
+	v.wait(t, "transcribe refusal", time.Minute, func() bool { return a.trJob == nil })
+	if a.trNeed == nil {
+		t.Errorf("transcribe: %q", a.trErr)
+	}
+	t.Logf("transcribe: %q", a.trErr)
+
+	// Clone from a file: no transcript model, the clip still loads.
+	a.startClone("")
+	a.cloneLoad(in, "hello.wav", false)
+	v.wait(t, "clone", 2*time.Minute, func() bool { return a.clone.busy == "" && a.clone.asr != "" && a.clone.asr != "running" })
+	tt.Frame()
+	if !a.clone.hasClip() || a.clone.asr != "noasr" {
+		t.Errorf("clone: clip %v asr %q %q", a.clone.hasClip(), a.clone.asr, a.clone.asrErr)
+	}
+
+	// A download through the dead proxy fails as a job, and says why.
+	e := catalog.Builtin().Entries[0]
+	a.download(e)
+	v.wait(t, "download fails", 5*time.Minute, func() bool { m := a.model(e); return m.jobID != "" && !m.downloading })
+	m := a.model(e)
+	t.Logf("download: %q", m.err)
+	if m.err == "" {
+		t.Errorf("download through a dead proxy: no error shown")
+	}
+	a.navigate("/models")
+	tt.Frame()
+
+	// The Local API answers, and says the model is missing.
+	port := 3919
+	a.updateSettings(func(s *settings.Settings) { s.API.Enabled, s.API.Port = true, port })
+	v.drain()
+	a.startAPI(data)
+	v.wait(t, "api up", 30*time.Second, func() bool { return a.apiPort == port || a.apiErr != "" })
+	var out []byte
+	v.do(t, "api speech", time.Minute, func() error {
+		var err error
+		out, err = exec.Command("curl", "-sS", "--noproxy", "*", "-w", "\n%{http_code}", "-H", "Content-Type: application/json",
+			"-d", `{"model":"tts-1","voice":"alloy","input":"hi"}`, fmt.Sprintf("http://127.0.0.1:%d/v1/audio/speech", port)).CombinedOutput()
+		return err
+	})
+	t.Logf("api speech: %s", out)
+	if !bytes.HasSuffix(bytes.TrimSpace(out), []byte("409")) && !bytes.HasSuffix(bytes.TrimSpace(out), []byte("503")) {
+		t.Errorf("api speech without models: %s", out)
+	}
+	if a.engState != engineReady {
+		t.Errorf("engine %v %s", a.engState, a.engError)
+	}
+}
