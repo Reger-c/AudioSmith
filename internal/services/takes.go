@@ -63,7 +63,7 @@ func newTakes(cfg Config, pron *Pronunciation) *Takes {
 	}
 	t.render = &renderer{
 		synth: cfg.Synth, modelPath: cfg.ModelPath, licences: cfg.Licences, models: cfg.Models,
-		pron: pron, cacheDir: cfg.CacheDir, bus: cfg.Bus, logf: cfg.Logf,
+		pron: pron, cacheDir: cfg.CacheDir, bus: cfg.Bus, logf: cfg.Logf, watermark: cfg.Watermark,
 	}
 	if cfg.Scheduler != nil {
 		cfg.Scheduler.Register(KindRender, t.render)

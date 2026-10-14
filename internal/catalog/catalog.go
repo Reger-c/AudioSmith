@@ -37,10 +37,11 @@ const (
 	TaskSeparate  Task = "separate"  // stems (vocals / background)
 	TaskLID       Task = "lid"       // language identification
 	TaskLLM       Task = "llm"       // text generation (cleanup, direction)
+	TaskWatermark Task = "watermark" // invisible watermark: embed and detect (AudioSeal)
 	TaskTranslate Task = "translate" // machine translation
 )
 
-var knownTasks = []Task{TaskTTS, TaskSTT, TaskAlign, TaskVAD, TaskDiarize, TaskEnhance, TaskSeparate, TaskLID, TaskLLM, TaskTranslate}
+var knownTasks = []Task{TaskTTS, TaskSTT, TaskAlign, TaskVAD, TaskDiarize, TaskEnhance, TaskSeparate, TaskLID, TaskLLM, TaskTranslate, TaskWatermark}
 
 // Capability is an optional feature of a model, which shows or hides a
 // control and lets the API reject a request early.
@@ -174,6 +175,9 @@ type Licence struct {
 	Gated bool `json:"gated,omitempty"`
 	// Verified is false until someone checked the upstream model card.
 	Verified bool `json:"verified"`
+	// Note explains a licence that differs from the repo's own tag (for
+	// the credits and reviewers; English, not shown in pickers).
+	Note string `json:"note,omitempty"`
 }
 
 //go:embed catalog.json
@@ -277,6 +281,8 @@ const (
 	// translation and writing help: Qwen3 4B Instruct 2507, 4-bit
 	// (Apache-2.0); Qwen3 1.7B is the light one for 8 GB Macs.
 	DefaultLLM = "qwen3-4b-instruct-2507-4bit"
+	// DefaultWatermark marks generated speech (AudioSeal, 16 bits).
+	DefaultWatermark = "audioseal-16bits"
 )
 
 // TextLength measures text against Entry.MaxChars: one per character,

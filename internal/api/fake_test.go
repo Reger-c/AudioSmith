@@ -390,6 +390,13 @@ func (f *fakeBackend) Probe(ctx context.Context, path string) (proto.ProbeResult
 	return proto.ProbeResult{Format: strings.TrimPrefix(filepath.Ext(path), "."), Duration: 1.5, HasAudio: true, SampleRate: 24000, Channels: 1}, nil
 }
 
+func (f *fakeBackend) DetectWatermark(ctx context.Context, path string) (proto.WatermarkDetectResult, error) {
+	if _, err := os.Stat(path); err != nil {
+		return proto.WatermarkDetectResult{}, &proto.Error{Code: proto.CodeFileNotFound, Message: "no such file"}
+	}
+	return proto.WatermarkDetectResult{Probability: 1, Detected: true, Message: 0xA53C, Bits: make([]float64, 16), Confidence: 0.9, AudioSeconds: 1.5}, nil
+}
+
 func (f *fakeBackend) CanEncode() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -1777,6 +1777,60 @@
         }
       }
     },
+    "/api/watermark/detect": {
+      "post": {
+        "tags": [
+          "Tools"
+        ],
+        "summary": "Check a file for the invisible watermark",
+        "operationId": "detectWatermark",
+        "description": "AudioSeal's detector on an uploaded audio or video file: the share of samples that carry the mark, the 16-bit message, and whether AudioSmith made it (its marker byte, and the install id). Needs the AudioSeal model downloaded.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The audio or video file."
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatermarkReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/ws/tts": {
       "get": {
         "tags": [
@@ -3194,6 +3248,80 @@
             ]
           }
         }
+      },
+      "WatermarkReport": {
+        "type": "object",
+        "properties": {
+          "probability": {
+            "type": "number",
+            "description": "Share of samples found watermarked (0–1)."
+          },
+          "detected": {
+            "type": "boolean",
+            "description": "probability ≥ 0.5."
+          },
+          "message": {
+            "type": "integer",
+            "description": "The 16-bit message (random when not watermarked)."
+          },
+          "bits": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Probability of each bit being 1, most significant first."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Mean |2p − 1| of the bits."
+          },
+          "frames": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "number"
+                },
+                "end": {
+                  "type": "number"
+                },
+                "probability": {
+                  "type": "number"
+                }
+              }
+            },
+            "description": "Per second."
+          },
+          "audioSeconds": {
+            "type": "number"
+          },
+          "model": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "number"
+          },
+          "audioSmith": {
+            "type": "boolean",
+            "description": "The mark is AudioSmith's."
+          },
+          "install": {
+            "type": "integer",
+            "description": "The install that made it (1–255), when audioSmith."
+          }
+        },
+        "required": [
+          "probability",
+          "detected",
+          "message",
+          "bits",
+          "confidence",
+          "audioSeconds",
+          "model",
+          "seconds",
+          "audioSmith"
+        ]
       }
     },
     "responses": {

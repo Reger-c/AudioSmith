@@ -79,7 +79,8 @@ func Methods(role proto.Role) []string {
 	switch role {
 	case proto.RoleMedia:
 		return append(common, proto.MethodMediaProbe, proto.MethodMediaDecode, proto.MethodMediaEncode,
-			proto.MethodMediaMux, proto.MethodMediaThumbnail, proto.MethodMediaTranscode)
+			proto.MethodMediaMux, proto.MethodMediaThumbnail, proto.MethodMediaTranscode,
+			proto.MethodWatermarkEmbed, proto.MethodWatermarkDetect)
 	case proto.RoleListen:
 		return append(common, proto.MethodCaptureDevices, proto.MethodCaptureStart, proto.MethodCaptureStop,
 			proto.MethodModelsLoad, proto.MethodModelsUnload, proto.MethodModelsLoaded, proto.MethodSTTTranscribe)
@@ -318,6 +319,10 @@ func (f *fakeEngine) startJob(m proto.Message) {
 			f.diarize(m)
 		case proto.MethodLLMGenerate:
 			f.generate(m)
+		case proto.MethodWatermarkEmbed:
+			f.watermarkEmbed(m)
+		case proto.MethodWatermarkDetect:
+			f.watermarkDetect(m)
 		case proto.MethodMediaMux:
 			f.mux(m)
 		case proto.MethodMediaThumbnail:
@@ -352,6 +357,9 @@ func (f *fakeEngine) handleHello(m proto.Message) {
 	}
 	if role == proto.RoleGPU {
 		families = []string{"kokoro", "qwen3_tts", "omnivoice", "chatterbox", "whisper", "qwen3_asr", "qwen3_forced_aligner", "silero_vad", "deepfilternet", "htdemucs", "mel_roformer", "sortformer", "qwen3", "gemma4"}
+	}
+	if role == proto.RoleMedia {
+		families = []string{"audioseal"}
 	}
 	res := proto.HelloResult{
 		Protocol: proto.Version, Version: "fake", Role: role, PID: os.Getpid(), Concurrency: Concurrency(role),

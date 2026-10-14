@@ -46,6 +46,8 @@ public enum Method {
     public static let mediaThumbnail = "media.thumbnail"
     public static let mediaTranscode = "media.transcode"
     public static let llmGenerate = "llm.generate"
+    public static let watermarkEmbed = "watermark.embed"
+    public static let watermarkDetect = "watermark.detect"
     public static let captureDevices = "capture.devices"
     public static let captureStart = "capture.start"
     public static let captureStop = "capture.stop"
@@ -61,7 +63,7 @@ public enum Method {
         switch method {
         case modelsLoad, ttsSynthesize, ttsEncodeVoice, sttTranscribe, sttAlign, vadDetect, enhanceRun,
              mediaDecode, mediaEncode, captureStart, separateRun, diarizeRun, mediaMux, mediaThumbnail, mediaTranscode,
-             llmGenerate:
+             llmGenerate, watermarkEmbed, watermarkDetect:
             return true
         default:
             return false
@@ -71,7 +73,7 @@ public enum Method {
     /// The role whose worker serves method (engine.*, job.cancel: every role).
     public static func role(of method: String) -> Role {
         switch method {
-        case mediaProbe, mediaDecode, mediaEncode, mediaMux, mediaThumbnail, mediaTranscode: return .media
+        case mediaProbe, mediaDecode, mediaEncode, mediaMux, mediaThumbnail, mediaTranscode, watermarkEmbed, watermarkDetect: return .media
         case captureDevices, captureStart, captureStop: return .listen
         default: return .gpu
         }
@@ -540,6 +542,8 @@ public func paramsType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.captureLevel: LevelParams.self
     case Method.llmGenerate: LLMGenerateParams.self
     case Method.llmToken: LLMTokenParams.self
+    case Method.watermarkEmbed: WatermarkEmbedParams.self
+    case Method.watermarkDetect: WatermarkDetectParams.self
     default: nil
     }
 }
@@ -569,6 +573,8 @@ public func resultType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.mediaThumbnail: ThumbnailResult.self
     case Method.mediaTranscode: TranscodeResult.self
     case Method.llmGenerate: LLMGenerateResult.self
+    case Method.watermarkEmbed: WatermarkEmbedResult.self
+    case Method.watermarkDetect: WatermarkDetectResult.self
     case Method.captureDevices: DevicesResult.self
     case Method.captureStart: CaptureResult.self
     case Method.captureStop: CaptureStopResult.self

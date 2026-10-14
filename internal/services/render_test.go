@@ -114,6 +114,8 @@ type renderEnv struct {
 	svc   *Services
 	synth *fakeSynth
 	keep  atomic.Int64
+	// wm is the render's watermark (watermark_test.go); nil: none.
+	wm WatermarkFunc
 
 	mu       sync.Mutex
 	stream   map[string][]byte // pcm16 by job
@@ -154,6 +156,12 @@ func newRenderEnv(t *testing.T, models func(string) ModelInfo) *renderEnv {
 		ModelPath: func(_ context.Context, m string) (string, error) { return "/models/" + m, nil },
 		Models:    models,
 		KeepTakes: func() int { return int(e.keep.Load()) },
+		Watermark: func(ctx context.Context, path string, bits int) (bool, error) {
+			if e.wm == nil {
+				return false, nil
+			}
+			return e.wm(ctx, path, bits)
+		},
 	})
 	if err := e.sched.Start(ctx); err != nil {
 		t.Fatal(err)

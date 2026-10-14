@@ -17,7 +17,7 @@ func (a *app) toolsPage(c *ui.Context) {
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(px(t, 20)).Gap(px(t, 16)).MaxWidth(px(t, 760)).Children(func() {
 			ui.Segmented(c.Key("tools-tab"), &a.toolTab, i18n.T("A/B voices"), i18n.T("Convert"), i18n.T("Rate fit"),
-				i18n.T("Direction"), i18n.T("File probe")).Label(i18n.T("Tool"))
+				i18n.T("Direction"), i18n.T("File probe"), i18n.T("Watermark")).Label(i18n.T("Tool"))
 			switch a.toolTab {
 			case 0:
 				a.abTool(c)
@@ -27,6 +27,8 @@ func (a *app) toolsPage(c *ui.Context) {
 				a.rateFitTool(c)
 			case 3:
 				a.directionTool(c)
+			case 5:
+				a.watermarkTool(c) // watermark_app.go (thread #14)
 			default:
 				a.probeTool(c)
 			}

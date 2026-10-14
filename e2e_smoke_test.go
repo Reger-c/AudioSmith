@@ -348,6 +348,8 @@ func TestModelSmoke(t *testing.T) {
 				add(r)
 			case "llm":
 				smokeLLM(e, snap, call, add)
+			case "watermark":
+				smokeWatermark(e, snap, ref, outDir, call, add)
 			case "separate":
 				smokeSeparate(e, snap, outDir, clip, call, add)
 			case "diarize":

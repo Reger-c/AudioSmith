@@ -293,6 +293,11 @@ func (b *apiBackend) Fit(ctx context.Context, req translate.FitRequest) (transla
 	return (&translate.Fitter{Router: b.router}).Check(ctx, req)
 }
 
+// DetectWatermark checks a file for the watermark (watermark_app.go, thread #14).
+func (b *apiBackend) DetectWatermark(ctx context.Context, path string) (proto.WatermarkDetectResult, error) {
+	return b.lib.detectWatermark(ctx, path)
+}
+
 func (b *apiBackend) Probe(ctx context.Context, path string) (proto.ProbeResult, error) {
 	if b.sup == nil {
 		return proto.ProbeResult{}, fmt.Errorf("probe: %w", core.ErrEngine)
