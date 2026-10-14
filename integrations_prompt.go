@@ -22,15 +22,15 @@ import (
 type promptAgent struct {
 	Name   string // as the user knows it: "Claude Code"
 	Client string // its X-AudioSmith-Client; "" = the agent names itself (any MCP client)
-	Doc    string // the project's instructions file the usage note goes to
+	Skills string // its user-level skills folder (integrations_skill.go)
 }
 
 // promptAgents are the pages with a setup prompt, by slug.
 var promptAgents = map[string]promptAgent{
-	"claude-code": {Name: "Claude Code", Client: "claude-code", Doc: "CLAUDE.md"},
-	"codex":       {Name: "Codex", Client: "codex-cli", Doc: "AGENTS.md"},
-	"cursor":      {Name: "Cursor", Client: "cursor", Doc: ".cursor/rules/audiosmith.mdc"},
-	"mcp":         {Name: "MCP", Doc: "AGENTS.md"},
+	"claude-code": {Name: "Claude Code", Client: "claude-code", Skills: "~/.claude/skills"},
+	"codex":       {Name: "Codex", Client: "codex-cli", Skills: "~/.agents/skills"},
+	"cursor":      {Name: "Cursor", Client: "cursor", Skills: "~/.cursor/skills"},
+	"mcp":         {Name: "MCP", Skills: "~/.agents/skills"}, // the Agent Skills standard's shared folder
 }
 
 // mcpToolNames are the MCP server's tools and resources (internal/mcp).
@@ -132,11 +132,11 @@ func agentPrompt(slug string, p promptEnv) string {
 	if ag.Client == "" {
 		line("# " + i18n.T("Connect AudioSmith to your agent"))
 		line("")
-		line(i18n.T("You are an AI agent on my Mac that can use MCP servers. Connect AudioSmith (a speech app on this Mac: text to speech, voice cloning and design, transcription) to yourself as an MCP server, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so."))
+		line(i18n.T("You are an AI agent on my Mac that can use MCP servers. Connect AudioSmith (a speech app on this Mac: text to speech, voice cloning and design, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so."))
 	} else {
 		line("# " + i18n.T("Connect AudioSmith to %s", ag.Name))
 		line("")
-		line(i18n.T("You are %s on my Mac. Connect AudioSmith (a speech app on this Mac: text to speech, voice cloning and design, transcription) to yourself as an MCP server, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so.", ag.Name))
+		line(i18n.T("You are %s on my Mac. Connect AudioSmith (a speech app on this Mac: text to speech, voice cloning and design, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so.", ag.Name))
 	}
 
 	// Facts.
@@ -176,7 +176,7 @@ func agentPrompt(slug string, p promptEnv) string {
 
 	// Rules.
 	head(i18n.T("Rules to keep"))
-	item(i18n.T("Install nothing (no brew, npm, pip or downloads) and don't change AudioSmith's own settings."))
+	item(i18n.T("Install no software (no brew, npm, pip or downloads) and don't change AudioSmith's own settings."))
 	item(i18n.T("Keep AudioSmith on this Mac: use only 127.0.0.1, never expose the API to the network (no 0.0.0.0, tunnels or port forwarding)."))
 	if p.auth() {
 		item(i18n.T("Never show the API key in your replies, and never write it into project files or anything shared or committed: only into your private user-level configuration."))
@@ -213,13 +213,8 @@ func agentPrompt(slug string, p promptEnv) string {
 		name = i18n.T("the agent")
 	}
 	line("   " + i18n.T("The tools of a server added now usually appear only in a new session of %s: if you cannot call them yet, say so. Make a test sound with generate_speech (a short sentence) only if I agree.", name))
-	line("4. " + i18n.T("Only if I agree: add this note to %s in this project (create it if it is missing; skip it if it already describes AudioSmith):", "`"+ag.Doc+"`"))
-	note := promptNote()
-	if slug == "cursor" {
-		note = "---\ndescription: AudioSmith speech tools (MCP)\nalwaysApply: false\n---\n" + note
-	}
-	code("markdown", note)
-	line("5. " + i18n.T("Report: the commands you ran, the files you changed and their backups, the results of the checks, and what I still have to do (such as restarting %s).", name))
+	promptSkillStep(&b, slug, p)
+	line("5. " + i18n.T("Report: the commands you ran, the files you changed and their backups, the results of the checks, and what I still have to do (such as starting a new chat in %s).", name))
 	return b.String()
 }
 
@@ -328,23 +323,4 @@ func mcpHandshake(p promptEnv, client string) string {
 	b.WriteString(post + ` -H "Mcp-Session-Id: $SID" -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_voices","arguments":{}}}'` + "\n")
 	b.WriteString(`curl -sS -X DELETE "$URL" -H "$ID"` + auth + ` -H "Mcp-Session-Id: $SID"` + "\n")
 	return b.String()
-}
-
-// promptNote is the usage note for the project's instructions.
-func promptNote() string {
-	then := func(s string) string { // a space after ";", none after "；"
-		if strings.HasSuffix(s, "；") {
-			return s
-		}
-		return s + " "
-	}
-	return strings.Join([]string{
-		"## " + i18n.T("AudioSmith (speech on this Mac)"),
-		i18n.T("The MCP server audiosmith is AudioSmith, a speech app on this Mac; it must be open, with its Local API on. Everything stays on this Mac."),
-		"- generate_speech: " + i18n.T("text to speech (WAV) in a saved voice; the audio comes back inline and/or as a file in AudioSmith's agents' folder."),
-		"- transcribe: " + i18n.T("an audio or video file to text, optionally with times."),
-		"- list_voices, list_models, list_languages: " + then(i18n.T("what is available;")) + "check_health: " + i18n.T("whether the engine is ready."),
-		"- design_voice: " + then(i18n.T("a new voice from a description;")) + "clone_voice: " + then(i18n.T("from a recording, only with the speaker's consent (consent: true);")) + "describe_voice: " + i18n.T("how a description is read."),
-		i18n.T("Use it for narration, voice-overs, spoken previews and transcripts."),
-	}, "\n")
 }

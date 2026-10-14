@@ -68,11 +68,33 @@ type Client struct {
 	Calls    int
 }
 
-// Instructions tell agents how to use the server.
-const Instructions = "AudioSmith makes speech on this Mac (MLX models): generate_speech speaks text in a saved, built-in or designed voice; " +
-	"clone_voice saves a voice from a recording; design_voice makes one from a description; transcribe turns audio into text. " +
-	"Call list_voices and list_models first to pick a voice and a model. A model whose licence was not accepted, " +
-	"or that is not downloaded, answers an error that says so: ask the user to fix it in AudioSmith."
+// Instructions tell agents how to use the server: the initialize
+// result carries them, and clients like Claude Code show them to the
+// model in every new chat. They are a compact form of the agent skill
+// the Integrations page makes (integrations_skill.go), so that an agent
+// without the skill knows the basics; TestInstructions keeps the tools
+// and arguments they name real.
+const Instructions = "AudioSmith is a speech app running on this Mac: text to speech, voice cloning and design, and transcription, " +
+	"all local (MLX models; nothing leaves the Mac). Use it when the user wants speech, narration, a voice-over, " +
+	"a new voice, or a transcript or subtitles.\n" +
+	"- generate_speech: text (any length, up to 100,000 characters: AudioSmith splits it) to a WAV. " +
+	"voice = a saved voice's name from list_voices, a model's built-in speaker (list_models → voices), " +
+	"or empty for this agent's own voice. output \"file\" writes the WAV to AudioSmith's agents' folder " +
+	"and returns its path in file (name it with filename); prefer it, as \"inline\" puts the audio in your context as base64. " +
+	"instructions sets the delivery on models that take it.\n" +
+	"- transcribe: path = absolute path of an audio or video file on this Mac; timestamps: true returns " +
+	"segments with start/end seconds (write SRT or VTT from them).\n" +
+	"- design_voice: a voice from a natural-language description (gender, age, accent, style); " +
+	"describe_voice shows how a description is read, without saving.\n" +
+	"- clone_voice: name + path of 5–15 s of clean speech; consent: true only after the user confirms " +
+	"the speaker agreed. Ask before cloning anyone's voice.\n" +
+	"- list_voices, list_models (downloaded, licence_to_accept, needs_reference: speaks cloned voices only), " +
+	"list_languages, check_health. Resources: voice://{id}, history://recent.\n" +
+	"Errors start with a code: licence_required or model_not_downloaded → ask the user to fix it in " +
+	"AudioSmith → Models; engine_unavailable or queue_timeout → wait and retry; needs_reference → a cloned " +
+	"voice or another model. If AudioSmith cannot be reached, ask the user to open it with its Local API on. " +
+	"Use only 127.0.0.1, keep files in the agents' folder unless told otherwise, and report the paths of " +
+	"the files you make."
 
 // New makes the MCP server.
 func New(o Options) *Server {
@@ -560,6 +582,9 @@ func (s *Server) listModels(ctx context.Context, req *sdk.CallToolRequest, in li
 		if m.LicenceNeeded {
 			item["licence_to_accept"] = true
 		}
+		if e.NeedsReference { // speaks cloned voices only (MOSS-TTS-Nano)
+			item["needs_reference"] = true
+		}
 		var speakers []string
 		for _, v := range e.Voices {
 			speakers = append(speakers, v.ID)
@@ -604,7 +629,7 @@ func (s *Server) addTools() {
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "list_voices", Title: "List voices",
 		Description: "The saved voices, and OpenAI voice names that map to built-in speakers."}, s.listVoices)
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "list_models", Title: "List models",
-		Description: "Speech and speech-to-text models: what they can do, their built-in voices, whether they are downloaded and their licence."}, s.listModels)
+		Description: "Speech and speech-to-text models: what they can do, their built-in voices, whether they are downloaded, their licence, and whether they speak cloned voices only (needs_reference)."}, s.listModels)
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "list_languages", Title: "List languages",
 		Description: "Languages a model speaks (or every speech model)."}, s.listLanguages)
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "check_health", Title: "Check health",

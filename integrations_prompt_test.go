@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -17,13 +16,24 @@ import (
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
-var fenceRE = regexp.MustCompile("(?s)```([a-z]*)\n(.*?)\n```")
-
-// promptBlocks are the fenced blocks of a prompt: language, code.
+// promptBlocks are the outer fenced blocks of a prompt: language, code.
+// A fence of n backticks closes with a line of the same n (the skill's
+// script, fenced with four, holds fences of three).
 func promptBlocks(s string) [][2]string {
 	var out [][2]string
-	for _, m := range fenceRE.FindAllStringSubmatch(s, -1) {
-		out = append(out, [2]string{m[1], m[2]})
+	fence, lang := "", ""
+	var code []string
+	for _, l := range strings.Split(s, "\n") {
+		switch {
+		case fence == "" && strings.HasPrefix(l, "```"):
+			fence = l[:len(l)-len(strings.TrimLeft(l, "`"))]
+			lang, code = strings.TrimPrefix(l, fence), nil
+		case fence != "" && l == fence:
+			out = append(out, [2]string{lang, strings.Join(code, "\n")})
+			fence = ""
+		case fence != "":
+			code = append(code, l)
+		}
 	}
 	return out
 }
@@ -42,10 +52,10 @@ func TestAgentPrompts(t *testing.T) {
 		"included": {Base: "http://127.0.0.1:4000", Exe: testExe, Key: "as-SECRET"},
 	}
 	want := map[string][]string{
-		"claude-code": {"X-AudioSmith-Client: claude-code", "claude mcp add --transport http --scope user audiosmith http://127.0.0.1:4000/mcp", "claude mcp list", "claude mcp get audiosmith", "CLAUDE.md"},
-		"codex":       {`"X-AudioSmith-Client" = "codex-cli"`, "~/.codex/config.toml", "[mcp_servers.audiosmith]", `url = "http://127.0.0.1:4000/mcp"`, "tool_timeout_sec = 600", `"--mcp-stdio", "--client", "codex-cli"`, "codex mcp list", "AGENTS.md"},
-		"cursor":      {`"X-AudioSmith-Client": "cursor"`, "~/.cursor/mcp.json", ".cursor/mcp.json", `"url": "http://127.0.0.1:4000/mcp"`, ".cursor/rules/audiosmith.mdc", "alwaysApply: false"},
-		"mcp":         {`"X-AudioSmith-Client": "<your-name>"`, `"type": "http"`, testExe, `"--mcp-stdio"`, "AGENTS.md"},
+		"claude-code": {"X-AudioSmith-Client: claude-code", "claude mcp add --transport http --scope user audiosmith http://127.0.0.1:4000/mcp", "claude mcp list", "claude mcp get audiosmith", "`~/.claude/skills/audiosmith/SKILL.md`", "`.claude/skills/audiosmith/SKILL.md`", `D="$HOME/.claude/skills/audiosmith"`},
+		"codex":       {`"X-AudioSmith-Client" = "codex-cli"`, "~/.codex/config.toml", "[mcp_servers.audiosmith]", `url = "http://127.0.0.1:4000/mcp"`, "tool_timeout_sec = 600", `"--mcp-stdio", "--client", "codex-cli"`, "codex mcp list", "`~/.agents/skills/audiosmith/SKILL.md`", `D="$HOME/.agents/skills/audiosmith"`},
+		"cursor":      {`"X-AudioSmith-Client": "cursor"`, "~/.cursor/mcp.json", ".cursor/mcp.json", `"url": "http://127.0.0.1:4000/mcp"`, "`~/.cursor/skills/audiosmith/SKILL.md`", `D="$HOME/.cursor/skills/audiosmith"`},
+		"mcp":         {`"X-AudioSmith-Client": "<your-name>"`, `"type": "http"`, testExe, `"--mcp-stdio"`, "`~/.agents/skills`", `D="$HOME/.agents/skills/audiosmith"`},
 	}
 	for _, lang := range []string{"en", "zh-Hans"} {
 		i18n.SetLocale(lang)
@@ -53,7 +63,7 @@ func TestAgentPrompts(t *testing.T) {
 			for mode, e := range envs {
 				p := promptEnv{integEnv: e, Voices: []string{"Narrator", "Ann"}, Bindings: map[string]string{"claude-code": "Narrator"}, Dir: "/Users/me/AudioSmith/mcp"}
 				s := agentPrompt(slug, p)
-				for _, w := range append(words, "http://127.0.0.1:4000/health", "curl -sS http://127.0.0.1:4000/health", "port 4000", "URL=http://127.0.0.1:4000/mcp", "tools/list", "list_voices", "Narrator, Ann", "/Users/me/AudioSmith/mcp") {
+				for _, w := range append(words, "http://127.0.0.1:4000/health", "curl -sS http://127.0.0.1:4000/health", "port 4000", "URL=http://127.0.0.1:4000/mcp", "tools/list", "list_voices", "Narrator, Ann", "/Users/me/AudioSmith/mcp", "<<'AUDIOSMITH_SKILL'\n---\nname: audiosmith\n", "name: audiosmith`") {
 					if lang == "zh-Hans" && w == "port 4000" {
 						w = "端口 4000"
 					}
@@ -129,7 +139,7 @@ func TestAgentPromptHandshake(t *testing.T) {
 	var health, handshake string
 	for _, blk := range promptBlocks(s) {
 		switch {
-		case strings.Contains(blk[1], "/health"):
+		case strings.Contains(blk[1], "/health") && health == "": // the first: the skill's script mentions it too
 			health = blk[1]
 		case strings.Contains(blk[1], "tools/list"):
 			handshake = blk[1]
@@ -207,7 +217,8 @@ func TestAgentPromptPage(t *testing.T) {
 	if err != nil || string(data) != agentPrompt("codex", a.promptEnvOf()) {
 		t.Fatalf("saved %v:\n%s", err, data)
 	}
-	// The manual setup opens.
+	// The manual setup opens (under the skill's card: a tall window).
+	tt.SetSize(1100, 1600)
 	if err := tt.Click("Manual setup"); err != nil {
 		t.Fatal(err)
 	}
