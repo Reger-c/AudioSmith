@@ -22,6 +22,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
 )
@@ -274,19 +275,21 @@ func (a *app) deleteModel(e catalog.Entry) {
 
 func (a *app) modelsPage(c *ui.Context) {
 	t := c.Theme()
-	header(c, i18n.T("Models"), func() {
-		if ui.Button(c.Key("models-refresh"), i18n.T("Refresh")).Clicked() {
+	pageHeader(c, i18n.T("Models"), func() {
+		if iconButton(c.Key("models-refresh"), icons.Refresh, i18n.T("Refresh")).Tooltip(i18n.T("Look again at what is on disk")).Clicked() {
 			a.refreshModels()
 		}
-		if ui.Button(c.Key("models-folder"), i18n.T("Open model folder")).Clicked() {
-			mygo.Shell.OpenPath(a.hubClient().Options().CacheDir)
-		}
-		if ui.Button(c.Key("models-settings"), i18n.T("Download settings")).Clicked() {
-			a.navigate("/settings/models")
-		}
+		moreMenu(c.Key("models-more"), "", func(m *ui.Menu) {
+			if m.Item(i18n.T("Open model folder")).Chosen() {
+				mygo.Shell.OpenPath(a.hubClient().Options().CacheDir)
+			}
+			if m.Item(i18n.T("Download settings")).Chosen() {
+				a.navigate("/settings/models")
+			}
+		})
 	})
 	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Padding(px(t, 16), px(t, 20)).Gap(px(t, 10)).MaxWidth(px(t, 860)).Children(func() {
+		ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp2)).MaxWidth(px(t, 880)).Children(func() {
 			for _, e := range catalog.Builtin().Entries {
 				a.modelCard(c, e)
 			}
@@ -302,40 +305,89 @@ func (a *app) modelCard(c *ui.Context, e catalog.Entry) {
 	for _, r := range eng.Loaded {
 		loaded = loaded || r == e.Repo
 	}
-	ui.Row(c.Key("model-"+e.ID)).Gap(px(t, 16)).Padding(px(t, 12)).Radius(10).Border(1, t.Border).Background(t.Surface).AlignItems(ui.Start).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 5)).Children(func() {
-			a.modelInfo(c, e, m, loaded)
+	state := func() {
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+			st := m.local.State
+			switch {
+			case m.downloading:
+			case st == hub.Downloaded:
+				ui.Icon(c, icons.CheckCircle.Linear).Size(px(t, 14), px(t, 14)).TextColor(t.Success)
+			case st == hub.Partial:
+				ui.Icon(c, icons.DangerTriangle.Linear).Size(px(t, 14), px(t, 14)).TextColor(t.Warning)
+			}
+			caption(c, a.modelStateText(e, m)).SingleLine()
 		})
-		ui.Column(c).Shrink(0).Gap(px(t, 8)).AlignItems(ui.End).Children(func() {
-			ui.Text(c, a.modelStateText(e, m)).FontSize(px(t, 12)).TextColor(t.TextMuted)
-			ui.Row(c).Gap(px(t, 6)).Children(func() {
-				a.modelActions(c, e, m, loaded)
+	}
+	narrow := a.pageWidth(c) < px(t, 640)
+	card(c.Key("model-"+e.ID)).Padding(px(t, sp3), px(t, sp4)).Children(func() {
+		ui.Row(c).Gap(px(t, sp4)).AlignItems(ui.Start).Children(func() {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, sp1)).Children(func() {
+				a.modelInfo(c, e, m, loaded)
+			})
+			if narrow {
+				return
+			}
+			ui.Column(c).Shrink(0).Gap(px(t, sp2)).AlignItems(ui.End).Children(func() {
+				state()
+				ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+					a.modelActions(c, e, m, loaded)
+				})
 			})
 		})
+		if narrow {
+			// The state and the actions go under the description.
+			ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+				state()
+				ui.Spacer(c)
+				a.modelActions(c, e, m, loaded)
+			})
+		}
+		if m.downloading {
+			frac := -1.0
+			if m.progress.TotalBytes > 0 {
+				frac = float64(m.progress.Bytes) / float64(m.progress.TotalBytes)
+			}
+			ui.Progress(c, frac).Label(i18n.T("Downloading %s", e.Label))
+			info := i18n.T("%s of %s", mb(m.progress.Bytes), mb(m.progress.TotalBytes))
+			if m.progress.Mirror != "" {
+				info += " · " + strings.TrimPrefix(m.progress.Mirror, "https://")
+			}
+			truncText(c, info).FontSize(px(t, fsMicro)).TextColor(tok(t).Text2)
+		}
+		if m.err != "" && !m.downloading {
+			ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Start).Children(func() {
+				ui.Icon(c, icons.DangerCircle.Linear).Size(px(t, 14), px(t, 14)).TextColor(t.Danger).Shrink(0)
+				ui.Text(c, m.err).FontSize(px(t, fsCaption)).TextColor(t.Danger).Selectable().Grow(1).MinWidth(0)
+			})
+		}
 	})
 }
 
-// modelInfo describes an entry: name, what it does, its size and licence,
-// and the download in progress.
+// modelInfo describes an entry: name, what it does, its size and licence.
 func (a *app) modelInfo(c *ui.Context, e catalog.Entry, m *modelState, loaded bool) {
 	t := c.Theme()
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, e.Label).FontSize(px(t, 14)).Bold()
+	k := tok(t)
+	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
+		ui.Text(c, e.Label).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
+		if s := catalog.HumanSize(e.Size); s != "" {
+			tagChip(c, s)
+		}
 		if e.Quantization != "" {
-			ui.Badge(c, e.Quantization)
+			tagChip(c, e.Quantization)
 		}
 		if e.Hidden {
-			ui.Badge(c, i18n.T("Preview"))
+			tagChip(c, i18n.T("Preview"))
 		}
 		if loaded {
-			ui.Badge(c, i18n.T("In memory"))
+			ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+				statusDot(c, t.Success)
+				ui.Text(c, i18n.T("In memory")).FontSize(px(t, fsMicro)).TextColor(k.Text2)
+			})
 		}
 	})
-	ui.Text(c, i18n.T(e.About)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	about := i18n.T(e.About)
+	ui.Text(c, about).FontSize(px(t, fsCaption)).TextColor(k.Text2).MaxLines(2).Ellipsis("…").Tooltip(about)
 	var facts []string
-	if s := catalog.HumanSize(e.Size); s != "" {
-		facts = append(facts, s)
-	}
 	if n := len(e.Languages); n > 0 {
 		facts = append(facts, i18n.N(n, "%d language", "%d languages", n))
 	}
@@ -346,80 +398,70 @@ func (a *app) modelInfo(c *ui.Context, e catalog.Entry, m *modelState, loaded bo
 		facts = append(facts, i18n.T("needs %g GB of memory", e.MinMemoryGB))
 	}
 	facts = append(facts, e.Repo)
-	ui.Text(c, strings.Join(facts, " · ")).FontSize(px(t, 11)).TextColor(t.TextMuted).Selectable()
+	truncText(c, strings.Join(facts, " · ")).FontSize(px(t, fsMicro)).TextColor(k.Text3)
 
 	// The licence.
-	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
 		lic := e.Licence
 		use := i18n.T("commercial use allowed")
 		color := t.Success
 		if !lic.Commercial {
 			use, color = i18n.T("non-commercial use only"), t.Warning
 		}
-		ui.Box(c).Size(px(t, 6), px(t, 6)).Radius(px(t, 3)).Background(color)
-		ui.Text(c, lic.Name+" · "+use).FontSize(px(t, 12))
+		statusDot(c, color)
+		ui.Text(c, lic.Name+" · "+use).FontSize(px(t, fsCaption))
 		if lic.RequiresAcceptance {
 			if licence.Covers(a.accepted, e) {
-				ui.Text(c, "· "+i18n.T("accepted")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-			} else if ui.Button(c.Key("licence"), i18n.T("Review licence…")).Clicked() {
+				ui.Text(c, "· "+i18n.T("accepted")).FontSize(px(t, fsCaption)).TextColor(k.Text2)
+			} else if ghostButton(c.Key("licence"), i18n.T("Review licence…")).FontSize(px(t, fsCaption)).Clicked() {
 				a.askLicence(e, nil)
 			}
 		}
 		if lic.URL != "" {
-			ui.Link(c, i18n.T("Model card"), lic.URL).FontSize(px(t, 12))
+			ui.Link(c, i18n.T("Model card"), lic.URL).FontSize(px(t, fsCaption))
 		}
 	})
-
-	if m.downloading {
-		frac := -1.0
-		if m.progress.TotalBytes > 0 {
-			frac = float64(m.progress.Bytes) / float64(m.progress.TotalBytes)
-		}
-		ui.Progress(c, frac).Label(i18n.T("Downloading %s", e.Label))
-		info := i18n.T("%s of %s", mb(m.progress.Bytes), mb(m.progress.TotalBytes))
-		if m.progress.Mirror != "" {
-			info += " · " + strings.TrimPrefix(m.progress.Mirror, "https://")
-		}
-		ui.Text(c, info).FontSize(px(t, 11)).TextColor(t.TextMuted)
-	}
-	if m.err != "" && !m.downloading {
-		ui.Text(c, m.err).FontSize(px(t, 12)).TextColor(t.Danger).Selectable()
-	}
 }
 
-// modelActions are the buttons of an entry for its state.
+// modelActions are the buttons of an entry for its state: Download (or
+// Resume), Cancel while it downloads, and the ⋯ menu (Verify, Show in
+// Finder, Delete) once there are files.
 func (a *app) modelActions(c *ui.Context, e catalog.Entry, m *modelState, loaded bool) {
 	st := m.local.State
 	switch {
 	case m.downloading:
-		if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
+		if iconButton(c.Key("cancel"), icons.CloseCircle, i18n.T("Cancel")).Tooltip(i18n.T("Cancel the download")).Clicked() {
 			a.cancelDownload(e)
 		}
 	case st == hub.Partial:
-		if primaryButton(c.Key("download"), i18n.T("Resume")).Clicked() {
+		if secondaryIconButton(c.Key("download"), icons.DownloadMinimalistic, i18n.T("Resume")).Label(i18n.T("Resume")).Clicked() {
 			a.download(e)
 		}
 	case st != hub.Downloaded:
-		if primaryButton(c.Key("download"), i18n.T("Download")).Disabled(!m.known).Clicked() {
+		if secondaryIconButton(c.Key("download"), icons.DownloadMinimalistic, i18n.T("Download")).Label(i18n.T("Download")).Disabled(!m.known).Clicked() {
 			a.download(e)
 		}
 	}
-	if st == hub.Downloaded && !m.downloading {
-		if ui.Button(c.Key("verify"), i18n.T("Verify")).Disabled(m.verifying).Tooltip(i18n.T("Check every file against its hash")).Clicked() {
-			a.verifyModel(e)
-		}
-		if ui.Button(c.Key("reveal"), i18n.T("Reveal")).Tooltip(i18n.T("Show in Finder")).Clicked() {
-			mygo.Shell.ShowItemInFolder(m.local.Snapshot)
-		}
-	}
 	if (st == hub.Downloaded || st == hub.Partial) && !m.downloading {
-		del := ui.Button(c.Key("delete"), i18n.T("Delete")).Disabled(loaded)
-		if loaded {
-			del.Tooltip(i18n.T("Unload it first"))
-		}
-		if del.Clicked() {
-			a.deleting, a.deleteAsk = e, true
-		}
+		snapshot := m.local.Snapshot
+		moreMenu(c.Key("model-more"), i18n.T("More actions for %s", e.Label), func(mm *ui.Menu) {
+			if st == hub.Downloaded {
+				if mm.Item(i18n.T("Verify")).Disabled(m.verifying).Chosen() {
+					a.verifyModel(e)
+				}
+				if mm.Item(i18n.T("Show in Finder")).Chosen() {
+					mygo.Shell.ShowItemInFolder(snapshot)
+				}
+				mm.Separator()
+			}
+			label := i18n.T("Delete")
+			if loaded {
+				label = i18n.T("Delete (unload it first)")
+			}
+			if mm.Item(label).Disabled(loaded).Chosen() {
+				a.deleting, a.deleteAsk = e, true
+			}
+		})
 	}
 }
 
@@ -478,17 +520,20 @@ func (a *app) licenceModal(c *ui.Context) {
 	e := a.licenceEntry
 	lic := e.Licence
 	if ui.Modal(c, &a.licenceOpen, func() {
-		ui.Column(c).Width(px(t, 440)).Gap(px(t, 12)).Children(func() {
-			ui.Text(c, i18n.T("Licence of %s", e.Label)).FontSize(px(t, 15)).Bold()
-			ui.Text(c, i18n.T("%s's weights are licensed under %s.", e.Label, lic.Name))
-			if !lic.Commercial {
-				ui.Text(c, i18n.T("You may use the model, and what you make with it, for non-commercial purposes only. AudioSmith runs it only after you accept.")).TextColor(t.TextMuted)
-			}
-			if lic.URL != "" {
-				ui.Link(c, i18n.T("Read the licence"), lic.URL)
-			}
+		ui.Column(c).Width(px(t, 440)).Gap(px(t, sp3)).Children(func() {
+			sectionHeading(c, i18n.T("Licence of %s", e.Label))
+			fillCard(c).Gap(px(t, sp2)).Children(func() {
+				ui.Text(c, i18n.T("%s's weights are licensed under %s.", e.Label, lic.Name))
+				if !lic.Commercial {
+					ui.Text(c, i18n.T("You may use the model, and what you make with it, for non-commercial purposes only. AudioSmith runs it only after you accept.")).
+						FontSize(px(t, fsCaption)).TextColor(tok(t).Text2)
+				}
+				if lic.URL != "" {
+					ui.Link(c, i18n.T("Read the licence"), lic.URL)
+				}
+			})
 			ui.Checkbox(c.Key("licence-agree"), &a.licenceAgree, i18n.T("I have read the licence and will use this model only as it allows."))
-			ui.Row(c).Gap(px(t, 8)).Justify(ui.End).Children(func() {
+			ui.Row(c).Gap(px(t, sp2)).Justify(ui.End).Children(func() {
 				if ui.Button(c.Key("licence-cancel"), i18n.T("Cancel")).Clicked() {
 					a.licenceOpen, a.licenceThen = false, nil
 				}

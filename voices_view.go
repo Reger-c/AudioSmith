@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/lang"
 )
 
@@ -46,20 +47,24 @@ func voiceMatches(v *core.Voice, q string) bool {
 }
 
 // voicesPage is /voices: the saved voices, and the profile editor of the
-// one chosen.
+// one chosen (beside the list, or a drawer over it when the window is
+// narrow).
 func (a *app) voicesPage(c *ui.Context) {
 	t := c.Theme()
-	header(c, i18n.T("Voices"), func() {
-		if ui.Button(c.Key("voices-import"), i18n.T("Import…")).Tooltip(i18n.T("Import a .asvoice or .ovsvoice file")).Clicked() {
+	narrow := a.pageWidth(c) < px(t, 640)
+	pageHeader(c, i18n.T("Voices"), func() {
+		if iconButton(c.Key("voices-import"), icons.Import, i18n.T("Import…")).Tooltip(i18n.T("Import a .asvoice or .ovsvoice file")).Clicked() {
 			a.chooseVoiceFile()
 		}
-		if ui.Button(c.Key("voices-design"), i18n.T("Design a voice")).Clicked() {
+		if labelOrIcon(c.Key("voices-design"), icons.MagicStick3, i18n.T("Design a voice"), narrow).Clicked() {
 			a.navigate("/design")
 		}
 		if primaryButton(c.Key("voices-new"), i18n.T("New voice from a clip")).Clicked() {
 			a.startClone("")
 		}
 	})
+	w := px(t, 360)
+	inline := a.panelFits(c, w)
 	body := ui.Row(c.Key("voices-body")).Grow(1).MinHeight(0).AlignItems(ui.Stretch)
 	if files := body.DroppedFiles(); files != nil {
 		a.voicesDropped(files)
@@ -70,8 +75,7 @@ func (a *app) voicesPage(c *ui.Context) {
 			a.voicesGrid(c)
 		})
 		if a.edit != nil {
-			ui.Box(c).Width(1).Background(t.Border)
-			ui.Scroll(c.Key("voice-editor")).Width(px(t, 380)).Shrink(0).Background(t.Surface).Children(func() {
+			sidePanel(c, "voice-editor", w, inline, i18n.T("Edit voice profile"), func() { a.edit = nil }, func() {
 				a.voiceEditor(c)
 			})
 		}
@@ -82,11 +86,14 @@ func (a *app) voicesPage(c *ui.Context) {
 
 func (a *app) voicesToolbar(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Padding(px(t, 12), px(t, 20), px(t, 4)).Children(func() {
-		ui.TextInput(c.Key("voices-search"), &a.voiceQuery).Placeholder(i18n.T("Search voices")).Label(i18n.T("Search voices")).Grow(1).MinWidth(px(t, 140)).MaxWidth(px(t, 320))
-		ui.Segmented(c.Key("voices-kind"), &a.voiceKind, i18n.T("All"), i18n.T("Cloned"), i18n.T("Designed")).Label(i18n.T("Kind"))
-		ui.Box(c).Grow(1)
-		ui.Text(c, i18n.N(len(a.voices), "%d voice", "%d voices", len(a.voices))).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Children(func() {
+		searchField(c, "voices-search", &a.voiceQuery, i18n.T("Search voices"), px(t, 320))
+		ui.Segmented(c.Key("voices-kind"), &a.voiceKind, i18n.T("All"), i18n.T("Cloned"), i18n.T("Designed")).Label(i18n.T("Kind")).Shrink(0)
+		ui.Spacer(c)
+		// The count goes when the editor or the window leaves the search little room.
+		if a.edit == nil && a.pageWidth(c) >= px(t, 600) {
+			caption(c, i18n.N(len(a.voices), "%d voice", "%d voices", len(a.voices))).SingleLine().Shrink(0)
+		}
 	})
 }
 
@@ -94,88 +101,123 @@ func (a *app) voicesGrid(c *ui.Context) {
 	t := c.Theme()
 	vs := a.shownVoices()
 	if len(vs) == 0 {
-		ui.Column(c).Grow(1).Center().Gap(px(t, 8)).Padding(px(t, 24)).Children(func() {
-			switch {
-			case !a.voicesLoaded:
-				ui.Text(c, i18n.T("Loading…")).TextColor(t.TextMuted)
-			case len(a.voices) > 0:
-				ui.Text(c, i18n.T("No matches")).FontSize(px(t, 15)).Bold()
-			default:
-				ui.Text(c, i18n.T("No saved voices yet")).FontSize(px(t, 15)).Bold()
-				ui.Text(c, i18n.T("Upload or record a clip and save it as a voice, design one from a description, or pick one in the gallery.")).
-					TextColor(t.TextMuted).TextAlign(ui.Center).MaxWidth(px(t, 420))
-				ui.Row(c).Gap(px(t, 8)).Children(func() {
+		switch {
+		case !a.voicesLoaded:
+			ui.Column(c).Grow(1).Center().Children(func() { caption(c, i18n.T("Loading…")) })
+		case len(a.voices) > 0:
+			emptyState(c, icons.Magnifer, i18n.T("No matches"), "", nil)
+		default:
+			emptyState(c, icons.UserSpeakRounded, i18n.T("No saved voices yet"),
+				i18n.T("Upload or record a clip and save it as a voice, design one from a description, or pick one in the gallery."), func() {
 					if ui.Button(c.Key("empty-gallery"), i18n.T("Open the gallery")).Clicked() {
 						a.navigate("/gallery")
 					}
 					if ui.Button(c.Key("empty-design"), i18n.T("Design a voice")).Clicked() {
 						a.navigate("/design")
 					}
-					if primaryButton(c.Key("empty-clone"), i18n.T("New voice from a clip")).Clicked() {
-						a.startClone("")
-					}
 				})
-			}
-		})
+		}
 		return
 	}
-	ui.GridView(c.Key("voices-grid"), &a.voiceGrid, len(vs), px(t, 250), px(t, 84), func(i int) {
+	ui.GridView(c.Key("voices-grid"), &a.voiceGrid, len(vs), px(t, 240), px(t, 68), func(i int) {
 		v := vs[i]
 		a.voiceCard(c, &v)
-	}).Grow(1).Padding(px(t, 8), px(t, 16)).Gap(px(t, 10))
+	}).Grow(1).Padding(0, px(t, sp6), px(t, sp4)).Gap(px(t, sp2))
 }
 
-// voiceCard is one saved voice: a click opens its editor.
+// voiceCard is one saved voice: a click opens its editor; Preview and
+// the ⋯ menu show while the pointer is on it (or it is chosen, or plays).
 func (a *app) voiceCard(c *ui.Context, v *core.Voice) {
 	t := c.Theme()
+	k := tok(t)
 	selected := a.edit != nil && a.edit.id == v.ID
-	card := ui.Row(c.Key("voice-"+v.ID)).Grow(1).Gap(px(t, 10)).AlignItems(ui.Center).Padding(px(t, 10)).Radius(10).
-		Border(1, t.Border).Background(t.Surface)
-	if selected {
-		card.Border(2, t.Accent)
-	}
+	card := ui.Row(c.Key("voice-"+v.ID)).Grow(1).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, sp2), px(t, sp2), px(t, sp2), px(t, sp3)).
+		Radius(px(t, radiusCard)).Border(1, k.Line)
 	hovered := card.Hovered()
+	switch {
+	case selected:
+		card.Background(k.Pressed).Border(1, k.Pressed)
+	case hovered:
+		card.Background(k.Subtle)
+	}
 	card.Children(func() {
 		open := ui.ButtonBase(c.Key("open")).Grow(1).MinWidth(0).Label(v.Name)
 		if open.Clicked() {
 			a.openVoiceEditor(v.ID)
 		}
 		open.Children(func() {
-			ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Grow(1).MinWidth(0).Children(func() {
+			ui.Row(c).Gap(px(t, sp3)).AlignItems(ui.Center).Grow(1).MinWidth(0).Children(func() {
 				ui.Avatar(c, v.Name, a.portrait(v))
 				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
-					ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, v.Name).Bold().SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-						voiceBadges(c, v)
+					ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, v.Name).FontWeight(600).SingleLine().Ellipsis("…").Shrink(1).MinWidth(0).Tooltip(v.Name)
+						voiceMarks(c, v)
 					})
-					ui.Text(c, voiceMeta(v)).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+					truncText(c, voiceMeta(v)).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 				})
 			})
 		})
-		label := i18n.T("Preview")
-		if a.voicePlaying(v) {
-			label = i18n.T("Stop")
-		}
+		playing := a.voicePlaying(v)
 		if j := a.voiceJob("sample", v.ID); j.running() {
 			ui.Spinner(c).Label(i18n.T("Rendering the sample…"))
-		} else if hovered || a.voicePlaying(v) || selected {
-			if ui.Button(c.Key("play"), label).Clicked() {
+		} else if hovered || playing || selected {
+			label, ic := i18n.T("Preview"), icons.Play
+			if playing {
+				label, ic = i18n.T("Stop"), icons.Stop
+			}
+			if iconButton(c.Key("play"), ic, label).Clicked() {
 				a.playVoice(v)
 			}
+		}
+		if hovered || selected {
+			id := v.ID
+			moreMenu(c.Key("voice-more"), "", func(m *ui.Menu) {
+				if m.Item(i18n.T("Use in Studio")).Chosen() {
+					if v := a.findVoice(id); v != nil {
+						a.useVoiceInStudio(v)
+					}
+				}
+				a.longformVoiceItems(m, func(then func(*core.Voice)) {
+					if v := a.findVoice(id); v != nil {
+						then(v)
+					}
+				})
+				m.Separator()
+				if m.Item(i18n.T("Delete…")).Chosen() {
+					a.askDeleteVoice(id)
+				}
+			})
 		}
 	})
 }
 
-// voiceBadges are a voice's Verified and Locked badges.
-func voiceBadges(c *ui.Context, v *core.Voice) {
+// voiceMarks are a voice's Verified, Consent included and Locked marks:
+// icons whose tooltips name them.
+func voiceMarks(c *ui.Context, v *core.Voice) {
 	t := c.Theme()
+	k := tok(t)
 	if v.Verified() {
-		ui.Badge(c, i18n.T("Verified")).Background(t.Success.Alpha(0.18)).TextColor(t.Success)
+		iconMark(c, icons.VerifiedCheck, t.Success, i18n.T("Verified"))
 	} else if v.Consent.State == core.ConsentIncluded {
-		ui.Badge(c, i18n.T("Consent included")).Tooltip(i18n.T("The imported file says the speaker consented. It is not verified here."))
+		iconMark(c, icons.ShieldCheck, k.Text3, i18n.T("Consent included")+": "+i18n.T("The imported file says the speaker consented. It is not verified here."))
 	}
 	if v.Locked {
-		ui.Badge(c, i18n.T("Locked")).Tooltip(i18n.T("The voice's identity is locked to a take and a seed"))
+		iconMark(c, icons.LockKeyhole, k.Text2, i18n.T("Locked")+": "+i18n.T("The voice's identity is locked to a take and a seed"))
+	}
+}
+
+// voiceBadges are a voice's Verified and Locked badges, as short status
+// marks (the editor).
+func voiceBadges(c *ui.Context, v *core.Voice) {
+	t := c.Theme()
+	k := tok(t)
+	if v.Verified() {
+		statusMark(c, icons.VerifiedCheck, t.Success, i18n.T("Verified"))
+	} else if v.Consent.State == core.ConsentIncluded {
+		statusMark(c, icons.ShieldCheck, k.Text2, i18n.T("Consent included")).Tooltip(i18n.T("The imported file says the speaker consented. It is not verified here."))
+	}
+	if v.Locked {
+		statusMark(c, icons.LockKeyhole, k.Text2, i18n.T("Locked")).Tooltip(i18n.T("The voice's identity is locked to a take and a seed"))
 	}
 }
 

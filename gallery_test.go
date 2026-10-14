@@ -92,7 +92,7 @@ func TestGalleryPage(t *testing.T) {
 	if !g.favs.Has(first.ID) {
 		t.Fatal("not a favorite")
 	}
-	tt.Click("★ Favorites")
+	tt.Click("Favorites")
 	tt.Frame()
 	if g.page.Total != 1 {
 		t.Errorf("favorites only: %d", g.page.Total)

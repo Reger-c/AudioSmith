@@ -101,23 +101,23 @@ func (a *app) historyModels() []string {
 func (a *app) historyPage(c *ui.Context) {
 	t := c.Theme()
 	h := &a.history
-	header(c, i18n.T("History"), func() {
-		ui.Text(c, i18n.N(len(a.takes), "%d take", "%d takes", len(a.takes))).FontSize(px(t, 12)).TextColor(t.TextMuted)
-		if ui.Button(c.Key("open-folder"), i18n.T("Open folder")).Clicked() {
+	pageHeader(c, i18n.T("History"), func() {
+		caption(c, i18n.N(len(a.takes), "%d take", "%d takes", len(a.takes))).SingleLine()
+		if iconButton(c.Key("open-folder"), icons.FolderOpen, i18n.T("Open folder")).Tooltip(i18n.T("Open the folder of the takes in Finder")).Clicked() {
 			mygo.Shell.OpenPath(a.takeStore.AudioDir())
 		}
 	})
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 10), px(t, 20), 0).Children(func() {
-		if ui.TextInput(c.Key("history-search"), &h.query).Placeholder(i18n.T("Search the scripts")).Label(i18n.T("Search takes")).Grow(1).Changed() {
+	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Children(func() {
+		if searchField(c, "history-search", &h.query, i18n.T("Search the scripts"), 0).Label(i18n.T("Search takes")).Changed() {
 			a.searchTakes()
 		}
-		ui.Segmented(c.Key("history-filter"), &h.filter, i18n.T("All"), i18n.T("Starred")).Label(i18n.T("Show"))
+		ui.Segmented(c.Key("history-filter"), &h.filter, i18n.T("All"), i18n.T("Starred")).Label(i18n.T("Show")).Shrink(0)
 		models := append([]string{i18n.T("All models")}, a.historyModels()...)
 		choice := h.model
 		if choice == "" {
 			choice = models[0]
 		}
-		if ui.Select(c.Key("history-model"), &choice, models).Label(i18n.T("Model")).Width(px(t, 200)).Changed() {
+		if ui.Select(c.Key("history-model"), &choice, models).Label(i18n.T("Model")).Width(px(t, 180)).Shrink(1).MinWidth(px(t, 110)).Changed() {
 			h.model = choice
 			if choice == models[0] {
 				h.model = ""
@@ -126,75 +126,80 @@ func (a *app) historyPage(c *ui.Context) {
 	})
 	takes := a.historyTakes()
 	sel := a.findTake(h.selected)
+	w := px(t, 360)
+	inline := a.panelFits(c, w)
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.List(c, &a.historyList, len(takes)).Grow(1).MinWidth(0).Padding(px(t, 10), 0).ItemKey(func(i int) any { return takes[i].ID }).Rows(func(r ui.ListRow) {
+		ui.List(c, &a.historyList, len(takes)).Grow(1).MinWidth(0).Padding(0, 0, px(t, sp4)).ItemKey(func(i int) any { return takes[i].ID }).Rows(func(r ui.ListRow) {
 			tk := &takes[r.Index]
-			ui.Column(c).Padding(px(t, 5), px(t, 20)).Children(func() {
+			ui.Column(c).Padding(px(t, sp1), px(t, sp6)).Children(func() {
 				a.takeRow(c, a.findTake(tk.ID))
 			})
 		})
 		if sel != nil {
-			ui.Box(c).Width(1).Background(t.Border)
-			ui.Scroll(c.Key("details")).Width(px(t, 360)).Shrink(0).Background(t.Surface).Children(func() {
+			sidePanel(c, "details", w, inline, i18n.T("Take details"), func() { h.selected = "" }, func() {
 				a.takeDetails(c, sel)
 			})
 		}
 	})
 	if len(takes) == 0 {
-		ui.Column(c).Absolute().Left(0).Top(titleBarHeight + px(t, 50)).Right(0).Bottom(0).Center().Gap(px(t, 6)).PassThrough().Children(func() {
+		ui.Column(c).Absolute().Left(0).Top(titleBarHeight + px(t, 50)).Right(0).Bottom(0).Center().PassThrough().Children(func() {
 			if len(a.takes) == 0 {
-				ui.Text(c, i18n.T("No takes yet")).FontSize(px(t, 15)).Bold()
-				ui.Text(c, i18n.T("What you generate in the studio shows up here.")).TextColor(t.TextMuted)
+				emptyState(c, icons.History, i18n.T("No takes yet"), i18n.T("What you generate in the studio shows up here."), nil)
 			} else {
-				ui.Text(c, i18n.T("No take matches")).FontSize(px(t, 15)).Bold()
+				emptyState(c, icons.Magnifer, i18n.T("No take matches"), "", nil)
 			}
 		})
 	}
 }
 
-// takeRow is a take in the History list.
+// takeRow is a take in the History list: a flat card with the round play
+// button, the waveform, the script, its meta line, star, Reuse and ⋯.
 func (a *app) takeRow(c *ui.Context, cl *core.Take) {
 	if cl == nil {
 		return
 	}
 	t := c.Theme()
+	k := tok(t)
 	selected := a.history.selected == cl.ID
-	card := ui.Column(c.Key("card-"+cl.ID)).Gap(px(t, 8)).Padding(px(t, 12)).Radius(10).Border(1, t.Border).Background(t.Surface)
+	card := card(c.Key("card-"+cl.ID)).Padding(px(t, sp3), px(t, sp4)).Gap(px(t, sp2))
 	if selected {
-		card.Border(2, t.Accent)
+		card.Border(1, k.G[5]).Background(k.Subtle)
 	}
 	card.Children(func() {
-		ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
-			label := i18n.T("Play")
-			if a.pl.Playing(cl.ID) {
-				label = i18n.T("Pause")
-			}
-			if primaryButton(c.Key("play"), label).Width(px(t, 72)).Clicked() {
+		ui.Row(c).Gap(px(t, sp3)).AlignItems(ui.Center).Children(func() {
+			if playButton(c.Key("play"), a.pl.Playing(cl.ID), false, 32).Clicked() {
 				a.play(cl)
 			}
 			a.waveform(c, cl)
 		})
-		ui.Column(c).Gap(px(t, 2)).Children(func() {
-			ui.Text(c, cl.Text).FontSize(px(t, 13)).MaxLines(3).Ellipsis("…")
-			ui.Text(c, clipMeta(cl)).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-		})
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
+		ui.Text(c, cl.Text).MaxLines(2).Ellipsis("…")
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+			truncText(c, clipMeta(cl)).FontSize(px(t, fsCaption)).TextColor(k.Text2).Grow(1)
 			a.starButton(c, cl)
+			if ghostButton(c.Key("reuse"), i18n.T("Reuse")).Tooltip(i18n.T("Load this take's text and settings into the studio")).Clicked() {
+				a.reuse(cl)
+			}
 			details := i18n.T("Details")
 			if selected {
 				details = i18n.T("Hide details")
 			}
-			if ui.Button(c.Key("details"), details).Clicked() {
-				if selected {
-					a.history.selected = ""
-				} else {
-					a.history.selected = cl.ID
+			path := a.takeStore.AudioPath(*cl)
+			moreMenu(c.Key("take-more"), "", func(m *ui.Menu) {
+				if m.Item(details).Chosen() {
+					if selected {
+						a.history.selected = ""
+					} else {
+						a.history.selected = cl.ID
+					}
 				}
-			}
-			if ui.Button(c.Key("reuse"), i18n.T("Reuse")).Tooltip(i18n.T("Load this take's text and settings into the studio")).Clicked() {
-				a.reuse(cl)
-			}
-			ui.Button(c.Key("delete"), i18n.T("Delete")).OnClick(func() { a.deleteClip(cl) })
+				if m.Item(i18n.T("Show in Finder")).Chosen() {
+					mygo.Shell.ShowItemInFolder(path)
+				}
+				m.Separator()
+				if m.Item(i18n.T("Delete")).Chosen() {
+					a.deleteClip(cl)
+				}
+			})
 		})
 	})
 }
@@ -258,47 +263,44 @@ func recipeRows(t *core.Take) [][2]string {
 // takeDetails is the History's details pane.
 func (a *app) takeDetails(c *ui.Context, tk *core.Take) {
 	t := c.Theme()
-	ui.Column(c.Key("details-" + tk.ID)).Padding(px(t, 16)).Gap(px(t, 12)).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Take details")).FontSize(px(t, 14)).Bold().Grow(1)
-			if iconButton(c.Key("close-details"), icons.Close, i18n.T("Close")).Clicked() {
-				a.history.selected = ""
-			}
-		})
+	k := tok(t)
+	ui.Column(c.Key("details-"+tk.ID)).Padding(px(t, sp3), px(t, sp5), px(t, sp5)).Gap(px(t, sp3)).Children(func() {
+		panelHeader(c, i18n.T("Take details"), func() { a.history.selected = "" })
 		a.outputPanel(c, tk, false)
-		ui.Row(c).Gap(px(t, 8)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).Children(func() {
 			if primaryButton(c.Key("details-reuse"), i18n.T("Reuse")).Tooltip(i18n.T("Load the whole recipe into the studio, seed included")).Clicked() {
 				a.reuse(tk)
 			}
 		})
-		ui.Text(c, i18n.T("Script")).Bold()
-		ui.Text(c, tk.Text).FontSize(px(t, 13)).Selectable()
-		ui.Text(c, i18n.T("Recipe")).Bold()
-		ui.Column(c).Gap(px(t, 4)).Children(func() {
+		sectionTitle(c, i18n.T("Script"))
+		ui.Text(c, tk.Text).Selectable()
+		sectionTitle(c, i18n.T("Recipe"))
+		ui.Column(c).Gap(px(t, sp1)).Children(func() {
 			for _, row := range recipeRows(tk) {
-				ui.Row(c.Key("recipe-" + row[0])).Gap(px(t, 8)).Children(func() {
-					ui.Text(c, row[0]).FontSize(px(t, 12)).TextColor(t.TextMuted).Width(px(t, 120)).Shrink(0)
-					ui.Text(c, row[1]).FontSize(px(t, 12)).Selectable().Grow(1).MinWidth(0)
+				ui.Row(c.Key("recipe-" + row[0])).Gap(px(t, sp2)).Children(func() {
+					ui.Text(c, row[0]).FontSize(px(t, fsCaption)).TextColor(k.Text2).Width(px(t, 116)).Shrink(0)
+					ui.Text(c, row[1]).FontSize(px(t, fsCaption)).Selectable().Grow(1).MinWidth(0)
 				})
 			}
 		})
 		if tk.Render != nil && len(tk.Render.Chunks) > 1 {
-			ui.Text(c, i18n.N(len(tk.Render.Chunks), "%d chunk", "%d chunks", len(tk.Render.Chunks))).Bold()
+			sectionTitle(c, i18n.N(len(tk.Render.Chunks), "%d chunk", "%d chunks", len(tk.Render.Chunks)))
 			ui.Column(c).Gap(px(t, 2)).Children(func() {
 				for i, ch := range tk.Render.Chunks {
-					row := ui.ButtonBase(c.Key(fmt.Sprintf("chunk-%d", i))).Padding(px(t, 3), px(t, 6)).Radius(5).Label(ch.Text).Tooltip(i18n.T("Play from here"))
+					row := ui.ButtonBase(c.Key(fmt.Sprintf("chunk-%d", i))).Padding(px(t, 3), px(t, 6)).Radius(px(t, 6)).Gap(px(t, sp1)).AlignItems(ui.Center).
+						Label(ch.Text).Tooltip(i18n.T("Play from here"))
 					if row.Hovered() {
-						row.Background(t.SurfaceHover)
+						row.Background(k.Hover)
 					}
 					if row.Clicked() {
 						a.seekTake(tk, ch.Start)
 					}
 					row.Children(func() {
-						ui.Text(c, fmt.Sprintf("%d", i+1)).FontSize(px(t, 11)).TextColor(t.TextMuted).Width(px(t, 22))
-						ui.Text(c, noticeTime(ch.Start)).FontSize(px(t, 11)).TextColor(t.TextMuted).Width(px(t, 48))
-						ui.Text(c, ch.Text).FontSize(px(t, 12)).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+						ui.Text(c, fmt.Sprintf("%d", i+1)).FontSize(px(t, fsMicro)).TextColor(k.Text3).Width(px(t, 18)).Shrink(0)
+						ui.Text(c, noticeTime(ch.Start)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.AccentInk).Width(px(t, 48)).Shrink(0)
+						ui.Text(c, ch.Text).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
 						if ch.Cached {
-							ui.Text(c, i18n.T("cached")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+							ui.Text(c, i18n.T("cached")).FontSize(px(t, fsMicro)).TextColor(k.Text3)
 						}
 					})
 				}

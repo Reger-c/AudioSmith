@@ -86,11 +86,13 @@ func (a *app) wfInspector(c *ui.Context) {
 	case workflow.KindExport:
 		a.wfExportPanel(c, n)
 	}
-	ui.Divider(c)
-	if ui.Button(c.Key("wf-step-remove-"+id), i18n.T("Remove step")).Disabled(locked).Clicked() {
-		a.wfSel = id
-		a.wfRemoveSelected()
-	}
+	ui.Box(c).Height(1).Background(tok(t).Line)
+	ui.Row(c).Children(func() {
+		if ghostIconButton(c.Key("wf-step-remove-"+id), icons.TrashBinMinimalistic, i18n.T("Remove step")).Label(i18n.T("Remove step")).Disabled(locked).Clicked() {
+			a.wfSel = id
+			a.wfRemoveSelected()
+		}
+	})
 }
 
 // wfWorkflowDetails is the panel without a selected step.
