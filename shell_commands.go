@@ -171,7 +171,7 @@ func (a *app) palette(c *ui.Context) {
 		items := a.paletteItems()
 		a.paletteSel = max(0, min(a.paletteSel, len(items)-1))
 		ui.Row(c).Padding(px(t, 10), px(t, 12)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, searchIcon).TextColor(t.TextMuted)
+			ui.Icon(c, searchIcon.Linear).TextColor(t.TextMuted)
 			// A text input rather than ui.SearchField, whose placeholder
 			// is not translated; Escape closes the palette.
 			search := ui.TextInput(c.Key("palette-search"), &a.paletteQuery).AutoFocus().Grow(1).

@@ -118,7 +118,7 @@ func (a *app) networkSettings(c *ui.Context) {
 			}
 		})
 	}
-	settingRow(c, "proxy", i18n.T("Proxy"), a.proxyInfo, func() {
+	settingRowNote(c, "proxy", i18n.T("Proxy"), a.proxyInfo, func() {
 		opts := proxyOptions()
 		if ui.Select(c.Key("proxy-select"), &a.proxyMode, opts).Label(i18n.T("Proxy")).Width(px(t, 240)).Changed() {
 			mode := ""

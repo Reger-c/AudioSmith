@@ -11,14 +11,15 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dictation"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/lang"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 var (
-	transcribeIcon = icon(`<path d="M3 4h10M3 7h7M3 10h9M3 13h5"/><circle cx="12.5" cy="12" r="1.8"/>`)
-	micIcon        = icon(`<rect x="6" y="2" width="4" height="8" rx="2"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5V14.5"/>`)
+	transcribeIcon = icons.Subtitles
+	micIcon        = icons.Microphone3
 )
 
 // clock shows seconds as "1:05" or "1:02:05".
@@ -210,7 +211,7 @@ func (a *app) transcriptHistory(c *ui.Context) {
 				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 					ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 						if tr.Source == core.SourceDictation {
-							ui.Icon(c, micIcon).TextColor(t.TextMuted)
+							ui.Icon(c, micIcon.Linear).TextColor(t.TextMuted)
 						}
 						ui.Text(c, transcriptTitle(tr)).FontSize(px(t, 12)).Bold().SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
 					})

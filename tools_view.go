@@ -193,7 +193,7 @@ func (a *app) rateFitTool(c *ui.Context) {
 	if !canRewrite {
 		desc = i18n.T("Set up a language model in Settings → Writing help to get shorter versions.")
 	}
-	settingRow(c, "rf-rewrite", i18n.T("Suggest a shorter version"), desc, func() {
+	settingRowNote(c, "rf-rewrite", i18n.T("Suggest a shorter version"), desc, func() {
 		ui.Switch(c.Key("rf-rewrite-switch"), &rf.rewrite).Disabled(!canRewrite).Label(i18n.T("Suggest a shorter version"))
 	})
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {

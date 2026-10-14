@@ -656,7 +656,7 @@ func (a *app) writingSettings(c *ui.Context) {
 			ollama = i18n.T("Ollama runs on this Mac, but has no model: pull one, e.g. ollama pull qwen3:4b.")
 		}
 	}
-	settingRow(c, "llm-route", i18n.T("Use for writing help"), ollama, func() {
+	settingRowNote(c, "llm-route", i18n.T("Use for writing help"), ollama, func() {
 		if ui.Select(c.Key("llm-route-select"), &f.route, labels).Label(i18n.T("Use for writing help")).Width(px(t, 260)).Changed() {
 			a.chooseLLMRoute(ids[max(slices.Index(labels, f.route), 0)])
 		}

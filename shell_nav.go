@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -63,11 +64,12 @@ func (a *app) saveClosedSections() {
 // sidebar beside a divider that resizes it.
 func (a *app) sidebarFrame(c *ui.Context, page func()) {
 	t := c.Theme()
+	k := tok(t)
 	if a.railMode() {
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Width(px(t, railWidth)).Shrink(0).Background(t.Surface).Children(func() { a.navRail(c) })
-			ui.Box(c).Width(1).Background(t.Border)
-			ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(page)
+			ui.Column(c).Width(px(t, railWidth)).Shrink(0).Background(k.Sidebar).Children(func() { a.navRail(c) })
+			ui.Box(c).Width(1).Background(k.Line)
+			ui.Column(c).Grow(1).MinWidth(0).Background(k.Bg).Children(page)
 		})
 		return
 	}
@@ -80,9 +82,9 @@ func (a *app) sidebarFrame(c *ui.Context, page func()) {
 		a.sideW, a.sideWScale = px(t, float32(w)), scale
 	}
 	split := ui.Split(c.Key("sidebar-split"), &a.sideW, func() {
-		ui.Column(c).Fill().Background(t.Surface).Children(func() { a.sidebar(c) })
+		ui.Column(c).Fill().Background(k.Sidebar).Children(func() { a.sidebar(c) })
 	}, func() {
-		ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(page)
+		ui.Column(c).Grow(1).MinWidth(0).Background(k.Bg).Children(page)
 	}).Grow(1).MinHeight(0)
 	// Keep the width in its bounds, and save it once the drag rests.
 	lo, hi := px(t, settings.MinSidebarWidth), px(t, settings.MaxSidebarWidth)
@@ -106,17 +108,20 @@ func (a *app) sidebarFrame(c *ui.Context, page func()) {
 // tooltips, a badge as a dot.
 func (a *app) navRail(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Height(titleBarHeight).Shrink(0).DragWindow().AlignItems(ui.End).Justify(ui.Center).Padding(0, 0, px(t, 4), 0).Children(func() {
-		b := railButton(c, "rail-off", "›", i18n.T("Show the sidebar"), false)
-		if b.Clicked() {
+	k := tok(t)
+	ui.Row(c).Height(titleBarHeight).Shrink(0).DragWindow().AlignItems(ui.End).Justify(ui.Center).Padding(0, 0, px(t, sp1), 0).Children(func() {
+		if iconButton(c.Key("rail-off"), icons.SidebarMinimalistic, i18n.T("Show the sidebar")).Clicked() {
 			a.setRail(false)
 		}
 	})
+	ui.Column(c).AlignItems(ui.Center).Padding(px(t, sp1), 0).Shrink(0).Children(func() {
+		a.railButton(c, "rail-search", icons.Magnifer, i18n.T("Command palette"), i18n.T("Command palette")+" (⌘K)", false, "", a.openPalette)
+	})
 	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).AlignItems(ui.Center).Gap(px(t, 2)).Padding(px(t, 4), 0).Children(func() {
+		ui.Column(c).AlignItems(ui.Center).Gap(px(t, 2)).Padding(px(t, sp1), 0).Children(func() {
 			for gi, g := range navGroups {
 				if gi > 0 {
-					ui.Box(c).Height(1).Width(px(t, 24)).Background(t.Border).Margin(px(t, 4), 0)
+					ui.Box(c).Height(1).Width(px(t, 20)).Background(k.Line).Margin(px(t, 6), 0)
 				}
 				for _, p := range g.pages {
 					a.railItem(c, p.path, p.icon, pageTitle(p.path))
@@ -124,49 +129,44 @@ func (a *app) navRail(c *ui.Context) {
 			}
 		})
 	})
-	ui.Column(c).AlignItems(ui.Center).Padding(px(t, 6), 0).Children(func() {
-		a.railItem(c, "/settings", settingsIcon, i18n.T("Settings"))
+	ui.Column(c).AlignItems(ui.Center).Padding(px(t, 6), 0, px(t, 10)).Children(func() {
+		a.railButton(c, "rail/settings", icons.Settings, i18n.T("Settings"), i18n.T("Settings")+" (⌘,)", a.settingsOpen, "", func() { a.navigate("/settings") })
 	})
 }
 
 // railItem is a page's icon in the rail.
-func (a *app) railItem(c *ui.Context, path string, ic *ui.SVG, title string) {
-	t := c.Theme()
-	selected := section(a.router.Path()) == path
+func (a *app) railItem(c *ui.Context, path string, ic icons.Icon, title string) {
 	tip := title
 	if k := pageKeys(path); k != "" {
 		tip += " (" + k + ")"
 	}
-	b := ui.ButtonBase(c.Key("rail" + path)).Width(px(t, 36)).Height(px(t, 32)).Radius(7).Center().Tooltip(tip).Label(title)
+	selected := !a.settingsOpen && section(a.router.Path()) == path
+	a.railButton(c, "rail"+path, ic, title, tip, selected, a.navBadge(path), func() { a.navigate(path) })
+}
+
+// railButton is a button of the rail: Bold on the pressed face while
+// selected, a dot for a badge.
+func (a *app) railButton(c *ui.Context, key string, ic icons.Icon, label, tip string, selected bool, badge string, click func()) {
+	t := c.Theme()
+	k := tok(t)
+	b := ui.ButtonBase(c.Key(key)).Size(px(t, 36), px(t, 32)).Radius(px(t, radiusControl)).Center().Tooltip(tip).Label(label)
 	switch {
 	case selected:
-		b.Background(t.Accent.Alpha(0.18))
+		b.Background(k.Pressed)
 	case b.Hovered():
-		b.Background(t.SurfaceHover)
+		b.Background(k.Hover)
 	}
-	badge := a.navBadge(path)
 	b.Children(func() {
-		col := t.TextMuted
+		col := k.Text2
 		if selected {
-			col = t.Accent
+			col = k.Text
 		}
-		ui.Icon(c, ic).TextColor(col).Width(px(t, 16)).Height(px(t, 16))
+		ui.Icon(c, ic.Get(selected)).Size(px(t, 18), px(t, 18)).TextColor(col)
 		if badge != "" {
-			ui.Box(c).Absolute().Top(px(t, 4)).Right(px(t, 5)).Width(px(t, 7)).Height(px(t, 7)).Radius(4).Background(t.Accent)
+			ui.Box(c).Absolute().Top(px(t, 4)).Right(px(t, 5)).Size(px(t, 7), px(t, 7)).Radius(px(t, 4)).Background(k.Accent)
 		}
 	})
 	if b.Clicked() {
-		a.navigate(path)
+		click()
 	}
-}
-
-// railButton is a small text button of the sidebar's title bar.
-func railButton(c *ui.Context, key, glyph, label string, _ bool) ui.Element {
-	t := c.Theme()
-	b := ui.ButtonBase(c.Key(key)).Width(px(t, 24)).Height(px(t, 22)).Radius(5).Center().Tooltip(label).Label(label)
-	if b.Hovered() {
-		b.Background(t.SurfaceHover)
-	}
-	b.Children(func() { ui.Text(c, glyph).FontSize(px(t, 15)).TextColor(t.TextMuted) })
-	return b
 }

@@ -336,7 +336,7 @@ func (a *app) dictationSettings(c *ui.Context) {
 	if ready, known := a.modelOnDisk(e); known && !ready {
 		desc = i18n.T("%s is not downloaded yet.", e.Label)
 	}
-	settingRow(c, "dict-model", i18n.T("Model"), desc, func() {
+	settingRowNote(c, "dict-model", i18n.T("Model"), desc, func() {
 		var labels []string
 		for _, x := range sttEntries() {
 			labels = append(labels, x.Label)
@@ -401,7 +401,7 @@ func (a *app) dictationSettings(c *ui.Context) {
 	if ok {
 		cleanDesc = i18n.T("%s removes fillers and applies self-corrections; after 4 seconds the polished text is used instead.", who)
 	}
-	settingRow(c, "dict-cleanup", i18n.T("Clean up with a language model"), cleanDesc, func() {
+	settingRowNote(c, "dict-cleanup", i18n.T("Clean up with a language model"), cleanDesc, func() {
 		if ui.Switch(c.Key("dict-cleanup-switch"), &f.cleanup).Label(i18n.T("Clean up with a language model")).Changed() {
 			on := f.cleanup
 			a.updateSettings(func(s *settings.Settings) { s.Dictation.Cleanup = on })
@@ -416,7 +416,7 @@ func (a *app) dictationSettings(c *ui.Context) {
 	if !a.dictSys.AccessibilityTrusted() {
 		outDesc = i18n.T("Typing needs Accessibility (Settings → Permissions): until then the text is copied.")
 	}
-	settingRow(c, "dict-output", i18n.T("Result"), outDesc, func() {
+	settingRowNote(c, "dict-output", i18n.T("Result"), outDesc, func() {
 		if ui.Segmented(c.Key("dict-output-seg"), &f.output, i18n.T("Type it"), i18n.T("Copy only")).Label(i18n.T("Result")).Changed() {
 			o := settings.OutputPaste
 			if f.output == 1 {

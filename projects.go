@@ -18,6 +18,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
 )
@@ -172,7 +173,7 @@ func itemKind(it store.LibraryItem) string {
 }
 
 // itemIcon is an item's icon.
-func itemIcon(it store.LibraryItem) *ui.SVG {
+func itemIcon(it store.LibraryItem) icons.Icon {
 	switch it.Source {
 	case "voice":
 		return voicesIcon
@@ -430,9 +431,9 @@ func (a *app) deleteItems(items []store.LibraryItem) {
 }
 
 var (
-	storiesIcon   = icon(`<path d="M3 3.5h4.5a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 0-1.5-1.5H3zM13 3.5H9.5"/><path d="M5 6.5h2M5 8.5h2M11 6.5h1M11 8.5h1"/><path d="M9 5a1.5 1.5 0 0 1 1.5-1.5H13v8h-2.5A1.5 1.5 0 0 0 9 13"/>`)
-	audiobookIcon = icon(`<path d="M3 4.5a1 1 0 0 1 1-1h4v10H4a1 1 0 0 1-1-1z"/><path d="M8 3.5h4a1 1 0 0 1 1 1V8"/><path d="M10 13.5v-2a2 2 0 0 1 4 0v2"/><rect x="9.5" y="11.5" width="1.2" height="2.5" rx=".5"/><rect x="13.3" y="11.5" width="1.2" height="2.5" rx=".5"/>`)
-	projectsIcon  = icon(`<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6h12M5 9h6M5 11h4"/>`)
-	exportIcon    = icon(`<path d="M8 2v8M5 5l3-3 3 3"/><path d="M3 9v3.5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V9"/>`)
-	renderIcon    = icon(`<circle cx="8" cy="8" r="6"/><path d="M6.5 5.5v5l4-2.5z"/>`)
+	storiesIcon   = icons.Dialog2
+	audiobookIcon = icons.NotebookMinimalistic
+	projectsIcon  = icons.FolderWithFiles
+	exportIcon    = icons.Export
+	renderIcon    = icons.Play
 )

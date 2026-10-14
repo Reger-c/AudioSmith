@@ -172,7 +172,7 @@ func (a *app) localLLMSettings(c *ui.Context) {
 	case m.err != "":
 		desc = m.err
 	}
-	settingRow(c, "llm-engine", i18n.T("Language model"), desc, func() {
+	settingRowNote(c, "llm-engine", i18n.T("Language model"), desc, func() {
 		if ui.Select(c.Key("llm-engine-select"), &f.localPick, labels).Label(i18n.T("Language model")).Width(px(t, 260)).Changed() {
 			e := opts[max(slices.Index(labels, f.localPick), 0)]
 			id := e.ID

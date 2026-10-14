@@ -124,8 +124,15 @@ func TestNavigation(t *testing.T) {
 		}
 	}
 	tt.Key(ui.Cmd, ui.KeyComma)
-	if a.router.Path() != "/settings/general" || !tt.HasText("Interface size") && !tt.HasText("Language") {
-		t.Errorf("⌘,: %s %q", a.router.Path(), tt.Texts())
+	if !a.settingsOpen || a.shownPath() != "/settings/general" || !tt.HasText("Interface size") && !tt.HasText("Language") {
+		t.Errorf("⌘,: %s %q", a.shownPath(), tt.Texts())
+	}
+	// Settings is a dialog over the page (0.3): the page stays.
+	if a.router.Path() != "/transcripts" {
+		t.Errorf("under the settings: %s", a.router.Path())
+	}
+	if err := tt.Click("Close"); err != nil || a.settingsOpen {
+		t.Fatalf("close: %v %v", err, a.settingsOpen)
 	}
 	// The sidebar.
 	if err := tt.Click("History"); err != nil {
@@ -137,22 +144,26 @@ func TestNavigation(t *testing.T) {
 	// Back.
 	a.router.Back()
 	tt.Frame()
-	if a.router.Path() != "/settings/general" {
+	if a.router.Path() != "/transcripts" {
 		t.Errorf("back: %s", a.router.Path())
 	}
 	// The same page again adds no history.
 	a.showPage("studio")
 	a.showPage("studio")
 	a.router.Back()
-	if a.router.Path() != "/settings/general" {
+	if a.router.Path() != "/transcripts" {
 		t.Errorf("showPage twice pushed twice: %s", a.router.Path())
 	}
-	// Settings remembers its section.
+	// Settings remembers its section; going to a page closes it.
 	a.navigate("/settings/appearance")
 	a.showPage("studio")
+	if a.settingsOpen {
+		t.Error("a page left the settings open")
+	}
+	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyComma)
-	if a.router.Path() != "/settings/appearance" {
-		t.Errorf("settings section: %s", a.router.Path())
+	if a.shownPath() != "/settings/appearance" {
+		t.Errorf("settings section: %s", a.shownPath())
 	}
 }
 
@@ -170,8 +181,8 @@ func TestDeepLinks(t *testing.T) {
 		"audiosmith://dub":             "/dub",
 	} {
 		a.openURL(link)
-		if a.router.Path() != want {
-			t.Errorf("%s → %s, want %s", link, a.router.Path(), want)
+		if a.shownPath() != want {
+			t.Errorf("%s → %s, want %s", link, a.shownPath(), want)
 		}
 	}
 	a.openURL("AudioSmith://engine")
@@ -278,9 +289,10 @@ func TestNotifications(t *testing.T) {
 		t.Fatalf("centre: %q", tt.Texts())
 	}
 	tt.Click("Open")
-	if a.router.Path() != "/settings/models" || a.noticesOpen {
-		t.Errorf("open link: %s", a.router.Path())
+	if a.shownPath() != "/settings/models" || a.noticesOpen {
+		t.Errorf("open link: %s", a.shownPath())
 	}
+	a.settingsOpen = false
 	a.noticesOpen = true
 	tt.Frame()
 	tt.Click("Mark all read")

@@ -18,6 +18,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/settings"
@@ -25,8 +26,8 @@ import (
 )
 
 var (
-	dubIcon   = icon(`<rect x="1.5" y="3" width="13" height="9" rx="1.5"/><path d="M5 14h6M6.5 6.2v3.6L9.5 8z"/>`)
-	batchIcon = icon(`<rect x="2" y="2" width="9" height="7" rx="1"/><path d="M5 12h9V5.5M7.5 14.5h7"/>`)
+	dubIcon   = icons.VideoFramePlayHorizontal
+	batchIcon = icons.LayersMinimalistic
 )
 
 // dubTargetLangs are the languages the pickers offer first (any BCP-47
@@ -143,7 +144,7 @@ func (a *app) dubEmpty(c *ui.Context) {
 				zone.Border(2, t.Accent)
 			}
 			zone.Children(func() {
-				ui.Icon(c, dubIcon).Size(px(t, 36), px(t, 36))
+				ui.Icon(c, dubIcon.Linear).Size(px(t, 36), px(t, 36))
 				ui.Text(c, i18n.T("Video and audio dubbing")).FontSize(px(t, 17)).Bold()
 				ui.Text(c, "MP4 · MOV · M4V · MKV · WEBM · MP3 · WAV · M4A · FLAC").FontSize(px(t, 12)).TextColor(t.TextMuted)
 				ui.Text(c, i18n.T("Drop a video or audio file here")).TextColor(t.TextMuted)

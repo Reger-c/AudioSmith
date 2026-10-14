@@ -99,7 +99,7 @@ func (a *app) statusBar(c *ui.Context) {
 			}
 		}
 		bell := statusButton(c, "status-bell", i18n.T("Notifications"), func() {
-			ui.Icon(c, bellIcon).Size(px(t, 14), px(t, 14))
+			ui.Icon(c, bellIcon.Linear).Size(px(t, 14), px(t, 14))
 			if unread > 0 {
 				ui.Text(c, itoa(unread)).FontSize(px(t, 11)).Bold().TextColor(t.Accent)
 			}
@@ -111,7 +111,7 @@ func (a *app) statusBar(c *ui.Context) {
 
 		logsLabel := i18n.T("Logs")
 		if statusButton(c, "status-logs", i18n.T("Show or hide the logs panel (⇧⌘L)"), func() {
-			ui.Icon(c, logsIcon).Size(px(t, 14), px(t, 14))
+			ui.Icon(c, logsIcon.Linear).Size(px(t, 14), px(t, 14))
 			ui.Text(c, logsLabel).FontSize(px(t, 12))
 		}).Clicked() {
 			a.logsPanel = !a.logsPanel

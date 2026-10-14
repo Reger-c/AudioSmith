@@ -24,6 +24,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
 	"github.com/hehehai/AudioSmith/internal/logs"
@@ -53,6 +54,10 @@ type shellState struct {
 	// synced from (see syncNav).
 	nav, navShown string
 	lastSettings  string // settings section shown last
+	// The settings dialog (0.3): open, and the router of its sections
+	// ("/general"), which navigate drives from "/settings/…" paths.
+	settingsOpen bool
+	setRouter    *ui.Router
 
 	bus      *core.Bus
 	settings settings.Service
@@ -95,6 +100,7 @@ type shellState struct {
 func newShellState() shellState {
 	return shellState{
 		router:       ui.NewRouter("/studio"),
+		setRouter:    ui.NewRouter("/general"),
 		lastSettings: "general",
 		logsHeight:   220,
 		prefs:        settings.Defaults(),
@@ -164,7 +170,7 @@ func (a *app) closeShell() {
 // navPage is a page of the sidebar.
 type navPage struct {
 	path, title string // title: English, translated where shown (pageTitle)
-	icon        *ui.SVG
+	icon        icons.Icon
 }
 
 // navGroup is a section of the sidebar.
@@ -317,16 +323,20 @@ func pageTitle(path string) string {
 	return path
 }
 
-// navigate goes to a router path ("/models", "/settings/general"); it
-// does nothing when that page shows already. "/settings" opens the
-// section shown last.
+// navigate goes to a router path ("/models"); it does nothing when that
+// page shows already. "/settings/general" opens the settings dialog at
+// that section, over the page, and "/settings" at the section shown last;
+// any other path closes it.
 func (a *app) navigate(path string) {
 	if path == "/settings" || path == "/settings/" {
 		path = "/settings/" + a.lastSettings
 	}
 	if rest, ok := strings.CutPrefix(path, "/settings/"); ok && rest != "" {
 		a.lastSettings, _, _ = strings.Cut(rest, "/")
+		a.openSettings("/" + rest)
+		return
 	}
+	a.settingsOpen = false
 	if path == a.router.Path() {
 		return
 	}
@@ -374,19 +384,15 @@ func (a *app) openWindow() {
 	a.maybeOnboard() // M7a: a fresh install opens the setup (onboarding.go)
 }
 
-func icon(shapes string) *ui.SVG {
-	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">` + shapes + `</svg>`))
-}
-
 var (
-	studioIcon   = icon(`<path d="M2 8h1.5M5 5v6M8 3v10M11 5.5v5M14 8h-1"/>`)
-	historyIcon  = icon(`<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>`)
-	engineIcon   = icon(`<rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/>`)
-	modelsIcon   = icon(`<path d="M8 1.8 13.5 5v6L8 14.2 2.5 11V5z"/><path d="M2.5 5 8 8.2 13.5 5M8 8.2v6"/>`)
-	logsIcon     = icon(`<rect x="2.5" y="2" width="11" height="12" rx="1.5"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/>`)
-	settingsIcon = icon(`<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>`)
-	bellIcon     = icon(`<path d="M4 11V7a4 4 0 0 1 8 0v4l1 1.5H3z"/><path d="M6.5 14a1.5 1.5 0 0 0 3 0"/>`)
-	searchIcon   = icon(`<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/>`)
+	studioIcon   = icons.Soundwave
+	historyIcon  = icons.History
+	engineIcon   = icons.CpuBolt
+	modelsIcon   = icons.Box
+	logsIcon     = icons.ClipboardList
+	settingsIcon = icons.Settings
+	bellIcon     = icons.Bell
+	searchIcon   = icons.Magnifer
 )
 
 func (a *app) view(c *ui.Context) {
@@ -425,6 +431,7 @@ func (a *app) view(c *ui.Context) {
 		ui.Divider(c)
 		a.statusBar(c)
 	})
+	a.settingsDialog(c) // shell_settings.go
 	a.palette(c)
 	a.shortcutSheet(c)
 	a.onboarding(c) // M7a: the first-run wizard, under the licence dialog
@@ -460,9 +467,6 @@ func (a *app) pages(c *ui.Context) {
 		case a.callsRoute(c, r): // M6b: /calls, /calls/setup, /integrations/twilio (calls_pages.go, thread #23)
 		case a.m5Route(c, r): // M5: /tools, /integrations, /api-reference (api_pages.go, thread #20)
 		case a.wfRoute(c, r): // M6: /workflows (workflow_pages.go, thread #21)
-		case r.Match("/settings/{section...}"):
-			r.Title(i18n.T("Settings"))
-			a.settingsPage(c, r)
 		default:
 			r.Title(i18n.T("Not found"))
 			a.notFoundPage(c, r.Path())
@@ -491,41 +495,86 @@ func (a *app) syncNav() {
 
 func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Height(titleBarHeight).Shrink(0).DragWindow().AlignItems(ui.End).Justify(ui.End).Padding(0, px(t, 8), px(t, 4), 0).Children(func() {
-		if railButton(c, "rail-on", "‹", i18n.T("Show icons only"), false).Clicked() {
+	k := tok(t)
+	ui.Row(c).Height(titleBarHeight).Shrink(0).DragWindow().AlignItems(ui.Center).Justify(ui.End).Padding(0, px(t, sp2), 0, 0).Children(func() {
+		if iconButton(c.Key("rail-on"), icons.SidebarMinimalistic, i18n.T("Show icons only")).Clicked() {
 			a.setRail(true)
 		}
 	})
+	a.sidebarSearch(c)
+	// The sidebar's own theme: icons in the secondary grey, the chosen
+	// page's in the text colour (MyGo draws a sidebar item's icon in the
+	// accent, and the chosen one's in the accent's text colour).
+	side := *t
+	side.Accent, side.AccentText = k.Text2, k.Text
+	side.SurfaceHover, side.SurfacePressed = k.G[2], k.G[3]
+	chosen := side
+	chosen.Accent = k.Text
 	ui.Sidebar(c, &a.nav, func() {
 		for _, g := range navGroups {
 			open := a.sectionOpen(g.id)
 			ui.SidebarSection(c.Key("nav-"+g.id), groupTitle(g.id), open, func() {
 				for _, p := range g.pages {
-					item := ui.SidebarItem(c, p.path, p.icon, pageTitle(p.path))
+					sel := p.path == a.nav
+					if sel {
+						c.SetTheme(&chosen)
+					} else {
+						c.SetTheme(&side)
+					}
+					item := ui.SidebarItem(c, p.path, p.icon.Get(sel), pageTitle(p.path))
+					c.SetTheme(t)
+					if sel {
+						item.Background(k.Pressed).FontWeight(600)
+					} else {
+						item.TextColor(k.G[8])
+					}
 					if b := a.navBadge(p.path); b != "" {
 						item.Children(func() { ui.Badge(c, b) })
 					}
 				}
 			})
 		}
-		ui.SidebarSection(c.Key("nav-App"), i18n.T("App"), nil, func() {
-			ui.SidebarItem(c, "/settings", settingsIcon, i18n.T("Settings"))
-		})
-	}).Grow(1).Background(ui.Transparent).Label(i18n.T("Sections")).OnChange(func() {
+	}).Grow(1).Background(ui.Transparent).Padding(px(t, sp1), px(t, 10)).Label(i18n.T("Sections")).OnChange(func() {
 		a.navigate(a.nav)
 	})
 	a.saveClosedSections()
-}
-
-// header is a page's title bar, which drags the window.
-func header(c *ui.Context, title string, trailing func()) {
-	t := c.Theme()
-	ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, px(t, 16), 0, px(t, 20)).Gap(px(t, 8)).DragWindow().Children(func() {
-		ui.Text(c, title).FontSize(px(t, 15)).Bold().SingleLine().Grow(1)
-		if trailing != nil {
-			trailing()
+	ui.Column(c).Shrink(0).Padding(px(t, 6), px(t, 10), px(t, 10)).Children(func() {
+		b := ghostBase(c.Key("nav-settings")).Padding(px(t, 6), px(t, sp2)).Gap(px(t, sp2)).Justify(ui.Start).Label(i18n.T("Settings")).Tooltip(i18n.T("Settings") + " (⌘,)")
+		b.Children(func() {
+			ui.Icon(c, icons.Settings.Get(a.settingsOpen)).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)
+			ui.Text(c, i18n.T("Settings")).TextColor(k.G[8]).SingleLine().Grow(1)
+		})
+		if b.Clicked() {
+			a.navigate("/settings")
 		}
 	})
+}
+
+// sidebarSearch is the sidebar's search field: it opens the palette.
+func (a *app) sidebarSearch(c *ui.Context) {
+	t := c.Theme()
+	k := tok(t)
+	ui.Column(c).Shrink(0).Padding(0, px(t, 10), px(t, sp2)).Children(func() {
+		b := ui.ButtonBase(c.Key("nav-search")).Padding(px(t, 6), px(t, sp2)).Gap(px(t, sp2)).Radius(px(t, radiusControl)).
+			Background(k.Bg).Border(1, k.Line).Justify(ui.Start).Label(i18n.T("Command palette")).Tooltip(i18n.T("Command palette") + " (⌘K)")
+		if b.Hovered() {
+			b.Border(1, k.G[4])
+		}
+		b.Children(func() {
+			ui.Icon(c, icons.Magnifer.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Text3)
+			ui.Text(c, i18n.T("Search")).FontSize(px(t, fsCaption)).TextColor(k.Text3).SingleLine().Grow(1).MinWidth(0)
+			ui.Text(c, "⌘K").FontSize(px(t, fsMicro)).TextColor(k.Text3)
+		})
+		if b.Clicked() {
+			a.openPalette()
+		}
+	})
+}
+
+// header is a page's title bar, which drags the window, above a hairline
+// (pageHeader in ui_kit.go without it).
+func header(c *ui.Context, title string, trailing func()) {
+	pageHeader(c, title, trailing)
 	ui.Divider(c)
 }
 

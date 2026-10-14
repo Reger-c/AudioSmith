@@ -204,7 +204,7 @@ func (a *app) itemAvatar(c *ui.Context, it store.LibraryItem) {
 		}
 	}
 	ui.Column(c).Width(px(t, 32)).Height(px(t, 32)).Center().Radius(16).Background(t.Accent.Alpha(0.12)).Children(func() {
-		ui.Icon(c, itemIcon(it)).TextColor(t.Accent)
+		ui.Icon(c, itemIcon(it).Linear).TextColor(tok(t).Text2)
 	})
 }
 

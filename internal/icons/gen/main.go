@@ -42,8 +42,8 @@ const (
 
 // iconSet is the part of an IconifyJSON file the generator reads.
 type iconSet struct {
-	Width   int `json:"width"`
-	Height  int `json:"height"`
+	Width   int                              `json:"width"`
+	Height  int                              `json:"height"`
 	Icons   map[string]struct{ Body string } `json:"icons"`
 	Aliases map[string]struct {
 		Parent string `json:"parent"`

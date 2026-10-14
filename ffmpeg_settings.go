@@ -193,11 +193,11 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 	tool := a.mediaTool()
 	switch {
 	case m.FFmpeg == "":
-		settingRow(c, "ff-none", i18n.T("Not set up"), i18n.T("Exports are WAV, M4A and M4B; videos must be MP4 or MOV."), func() {})
+		settingRowNote(c, "ff-none", i18n.T("Not set up"), i18n.T("Exports are WAV, M4A and M4B; videos must be MP4 or MOV."), func() {})
 	case a.ffChecking:
-		settingRow(c, "ff-checking", i18n.T("Checking ffmpeg…"), shortPath(m.FFmpeg), func() { ui.Spinner(c) })
+		settingRowNote(c, "ff-checking", i18n.T("Checking ffmpeg…"), shortPath(m.FFmpeg), func() { ui.Spinner(c) })
 	case tool == nil:
-		settingRow(c, "ff-broken", i18n.T("ffmpeg does not run"), orDash(a.ffErr), func() {
+		settingRowNote(c, "ff-broken", i18n.T("ffmpeg does not run"), orDash(a.ffErr), func() {
 			if ui.Button(c.Key("ff-retry"), i18n.T("Try again")).Clicked() {
 				a.ffPath = ""
 				a.loadMediaTool()
@@ -208,7 +208,7 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 		if tool.FFprobe == "" {
 			desc += "\n" + i18n.T("ffprobe is missing beside it: WebM and MKV files cannot be read.")
 		}
-		settingRow(c, "ff-ready", i18n.T("ffmpeg is ready"), desc, func() {
+		settingRowNote(c, "ff-ready", i18n.T("ffmpeg is ready"), desc, func() {
 			label := i18n.T("Stop using it")
 			if m.Origin == settings.MediaDownloaded {
 				label = i18n.T("Remove")
@@ -280,7 +280,7 @@ func (a *app) ffmpegDownloadSection(c *ui.Context) {
 			}
 		})
 	default:
-		settingRow(c, "ff-download", i18n.T("Download ffmpeg"), desc, func() {
+		settingRowNote(c, "ff-download", i18n.T("Download ffmpeg"), desc, func() {
 			disabled := m.Origin == settings.MediaDownloaded && tool != nil
 			if ui.Button(c.Key("ff-install"), i18n.T("Download")).Disabled(disabled).Clicked() {
 				a.installFFmpeg()
