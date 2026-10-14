@@ -88,7 +88,7 @@ func (a *app) galleryPage(c *ui.Context) {
 	}
 	items := page.Items
 	g.moreAsked = false
-	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), px(t, 140), func(i int) {
+	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), px(t, 176), func(i int) {
 		if i == len(items) {
 			// The grid builds only the rows in view: this cell is built
 			// when the end scrolls into view, so the next page loads then
@@ -190,11 +190,12 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 	loc := i18n.Locale()
 	card(c.Key("arch-" + arch.ID)).Grow(1).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
 		name := arch.Name.In(loc)
-		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+		desc := arch.Description.In(loc)
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Start).Children(func() {
 			ui.Avatar(c, name, nil)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 				ui.Text(c, name).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Tooltip(name)
-				truncText(c, arch.Attrs.Summary(loc)).FontSize(px(t, fsCaption)).TextColor(k.Text2)
+				ui.Text(c, desc).FontSize(px(t, fsCaption)).TextColor(k.Text2).MaxLines(2).Ellipsis("…").MinWidth(0).Tooltip(desc)
 			})
 			fav := g.favs.Has(arch.ID)
 			tip := i18n.T("Add to favorites")
@@ -205,7 +206,16 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 				a.toggleFavorite(arch.ID)
 			}
 		})
-		ui.Text(c, arch.Description.In(loc)).FontSize(px(t, fsCaption)).TextColor(k.Text2).MaxLines(2).Ellipsis("…").Grow(1)
+		// The voice's details as tags, all of them: its language first,
+		// then gender, age, pitch and the rest; they wrap.
+		ui.Row(c.Key("meta")).Gap(px(t, 4)).Wrap().AlignContent(ui.Start).Grow(1).MinHeight(0).Children(func() {
+			if len(arch.Languages) > 0 {
+				tagChip(c, dubLangName(arch.Languages[0]))
+			}
+			for _, l := range archetypeAttrLabels(arch.Attrs, loc) {
+				tagChip(c, l)
+			}
+		})
 		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 			p := g.previews[arch.ID]
 			switch {
@@ -258,4 +268,19 @@ func (a *app) designFromArchetype(arch gallery.Archetype) {
 	d.saveName = arch.Name.In(i18n.Locale())
 	d.parsed, d.parsedFor = vd.Result{}, ""
 	a.navigate("/design")
+}
+
+// archetypeAttrLabels are an archetype's attributes as labels, in the
+// design categories' order (what Summary joins with " · ").
+func archetypeAttrLabels(attrs vd.Attributes, locale string) []string {
+	attrs = attrs.Canonical()
+	var out []string
+	for _, cat := range vd.Categories {
+		for _, v := range attrs.Get(cat) {
+			if op, ok := vd.Lookup(cat, v); ok {
+				out = append(out, op.Label.In(locale))
+			}
+		}
+	}
+	return out
 }
