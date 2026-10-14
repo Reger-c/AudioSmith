@@ -16,6 +16,7 @@ import (
 
 	"github.com/hehehai/AudioSmith/internal/api"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	mcpsrv "github.com/hehehai/AudioSmith/internal/mcp"
 )
 
 // promptAgent is an agent that gets a setup prompt.
@@ -35,7 +36,8 @@ var promptAgents = map[string]promptAgent{
 
 // mcpToolNames are the MCP server's tools and resources (internal/mcp).
 var (
-	mcpToolNames     = []string{"generate_speech", "clone_voice", "design_voice", "describe_voice", "transcribe", "list_voices", "list_models", "list_languages", "check_health"}
+	mcpToolNames = append([]string{"generate_speech", "clone_voice", "design_voice", "describe_voice", "transcribe", "list_voices", "list_models", "list_languages", "check_health"},
+		mcpsrv.StudioTools...) // thread #35
 	mcpResourceNames = []string{"voice://{id}", "history://recent"}
 )
 
@@ -132,11 +134,11 @@ func agentPrompt(slug string, p promptEnv) string {
 	if ag.Client == "" {
 		line("# " + i18n.T("Connect AudioSmith to your agent"))
 		line("")
-		line(i18n.T("You are an AI agent on my Mac that can use MCP servers. Connect AudioSmith (a speech app on this Mac: text to speech, voice cloning and design, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so."))
+		line(i18n.T("You are an AI agent on my Mac that can use MCP servers. Connect AudioSmith (a voice studio on this Mac: text to speech, audiobooks and stories, video dubbing, voices, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so."))
 	} else {
 		line("# " + i18n.T("Connect AudioSmith to %s", ag.Name))
 		line("")
-		line(i18n.T("You are %s on my Mac. Connect AudioSmith (a speech app on this Mac: text to speech, voice cloning and design, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so.", ag.Name))
+		line(i18n.T("You are %s on my Mac. Connect AudioSmith (a voice studio on this Mac: text to speech, audiobooks and stories, video dubbing, voices, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so.", ag.Name))
 	}
 
 	// Facts.

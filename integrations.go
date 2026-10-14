@@ -210,8 +210,18 @@ func mcpBlocks(e integEnv) []integBlock {
 		env = append(env, kv{integKeyEnv, e.Key})
 	}
 	stdio := obj{{"mcpServers", obj{{"audiosmith", obj{{"command", e.Exe}, {"args", []string{"--mcp-stdio"}}, {"env", env}}}}}}
-	tools := "generate_speech · clone_voice · design_voice · describe_voice · transcribe · list_voices · list_models · list_languages · check_health\n" +
-		"resources: voice://{id} · history://recent"
+	// The tools by area, as the agent skill groups them (thread #35).
+	var lines []string
+	for _, area := range skillAreaOrder {
+		var names []string
+		for _, n := range mcpToolNames {
+			if skillAreas[n] == area {
+				names = append(names, n)
+			}
+		}
+		lines = append(lines, areaTitle(area)+": "+strings.Join(names, " · "))
+	}
+	tools := strings.Join(lines, "\n") + "\nresources: voice://{id} · history://recent"
 	return []integBlock{
 		{Title: i18n.T("Streamable HTTP"), Hint: i18n.T("Name your agent in the header: it gets its own voice (Settings → Local API)."), Lang: "json", Code: jsonText(httpConf)},
 		{Title: i18n.T("stdio"), Hint: i18n.T("For clients that start servers as commands. AudioSmith must be running; the shim finds it by itself."), Lang: "json", Code: jsonText(stdio), File: "mcp.json"},
@@ -388,7 +398,7 @@ func integCaption(s string) string {
 func integAbout(slug string) string {
 	switch slug {
 	case "claude-code":
-		return i18n.T("Let Claude Code speak, clone voices and transcribe through MCP.")
+		return i18n.T("Let Claude Code use AudioSmith through MCP: speech, voices, audiobooks, dubbing, transcripts.")
 	case "cursor":
 		return i18n.T("Give Cursor's agent AudioSmith's speech tools.")
 	case "codex":
