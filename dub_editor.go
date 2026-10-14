@@ -20,13 +20,25 @@ import (
 	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
-// dubToolbar is the editor's toolbar.
+// dubToolbar is the editor's toolbar: the count, the language shown,
+// select all, undo / redo, Retry failed, Verify, and ⋯ (paste, the
+// glossary, and the editing tools).
 func (a *app) dubToolbar(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	p := a.dub
 	locked := a.dubLocked()
-	ui.Row(c.Key("dub-toolbar")).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
-		ui.Badge(c, i18n.N(len(p.Segments), "%d line", "%d lines", len(p.Segments)))
+	ui.Row(c.Key("dub-toolbar")).Gap(px(t, sp1)).AlignItems(ui.Center).Shrink(0).Children(func() {
+		all := len(p.Segments) > 0 && len(a.dubSelected()) == len(p.Segments)
+		if ui.Checkbox(c.Key("dub-all"), &all, "").Label(i18n.T("All")).Tooltip(i18n.T("Select all lines")).Changed() {
+			a.dubSel = map[string]bool{}
+			if all {
+				for _, s := range p.Segments {
+					a.dubSel[s.ID] = true
+				}
+			}
+		}
+		ui.Text(c, i18n.N(len(p.Segments), "%d line", "%d lines", len(p.Segments))).FontSize(px(t, fsCaption)).TextColor(k.Text2).SingleLine().Shrink(0).Margin(0, px(t, sp1))
 		langs := p.Languages()
 		if len(langs) > 0 {
 			names := []string{i18n.T("Source")}
@@ -37,40 +49,49 @@ func (a *app) dubToolbar(c *ui.Context) {
 				ids = append(ids, l)
 			}
 			cur := names[max(slices.Index(ids, a.dubLang), 0)]
-			if ui.Select(c.Key("dub-showlang"), &cur, names).Label(i18n.T("Language shown")).Changed() {
+			if ui.Select(c.Key("dub-showlang"), &cur, names).Label(i18n.T("Language shown")).Tooltip(i18n.T("Language shown")).Width(px(t, 180)).Shrink(1).MinWidth(px(t, 120)).Changed() {
 				a.dubCommitEdit()
 				a.dubLang = ids[slices.Index(names, cur)]
 				a.dubPaste.parsed = ""
 			}
 		}
-		all := len(p.Segments) > 0 && len(a.dubSelected()) == len(p.Segments)
-		if ui.Checkbox(c.Key("dub-all"), &all, i18n.T("All")).Changed() {
-			a.dubSel = map[string]bool{}
-			if all {
-				for _, s := range p.Segments {
-					a.dubSel[s.ID] = true
-				}
-			}
-		}
-		if ui.Button(c.Key("dub-undo"), "↶").Label(i18n.T("Undo")).Tooltip(i18n.T("Undo (⌘Z)")).Disabled(locked || !a.dubHist.CanUndo()).Clicked() {
+		if iconButton(c.Key("dub-undo"), icons.UndoLeft, i18n.T("Undo")).Tooltip(i18n.T("Undo (⌘Z)")).Disabled(locked || !a.dubHist.CanUndo()).Clicked() {
 			a.dubUndo()
 		}
-		if ui.Button(c.Key("dub-redo"), "↷").Label(i18n.T("Redo")).Tooltip(i18n.T("Redo (⇧⌘Z)")).Disabled(locked || !a.dubHist.CanRedo()).Clicked() {
+		if iconButton(c.Key("dub-redo"), icons.UndoRight, i18n.T("Redo")).Tooltip(i18n.T("Redo (⇧⌘Z)")).Disabled(locked || !a.dubHist.CanRedo()).Clicked() {
 			a.dubRedo()
 		}
+		ui.Spacer(c)
 		if n := a.dubFailedCount(a.dubLang); n > 0 && a.dubLang != "" {
-			if ui.Button(c.Key("dub-retry"), i18n.N(n, "Retry %d failed", "Retry %d failed", n)).Disabled(a.dubBusy()).Clicked() {
+			if labelOrIcon(c.Key("dub-retry"), icons.Restart, i18n.N(n, "Retry %d failed", "Retry %d failed", n), a.dubNarrow).
+				Disabled(a.dubBusy()).Shrink(0).Clicked() {
 				a.dubTranslate(false)
 			}
 		}
-		if a.dubLang != "" && ui.Button(c.Key("dub-paste"), i18n.T("Paste translation")).Disabled(locked).Clicked() {
-			a.dubPaste.open = !a.dubPaste.open
+		if a.dubLang != "" && p.Track(a.dubLang).File != "" {
+			label := i18n.T("Verify")
+			if qc := p.Track(a.dubLang).QC; qc != nil && !p.Track(a.dubLang).QCStale() {
+				label = i18n.N(qc.Flagged, "Verify · %d to re-listen", "Verify · %d to re-listen", qc.Flagged)
+			}
+			var b ui.Element
+			if a.dubNarrow {
+				b = iconButton(c.Key("dub-verify"), icons.Pulse2, label)
+			} else {
+				b = ghostIconButton(c.Key("dub-verify"), icons.Pulse2, label).Label(label).Shrink(0)
+			}
+			if b.Tooltip(i18n.T("Listen to the dub again with speech to text, and flag lines that drift")).Disabled(a.dubBusy()).Clicked() {
+				a.dubVerify()
+			}
 		}
-		if ui.Button(c.Key("dub-gloss"), i18n.T("Glossary (%d)", len(p.Glossary))).Clicked() {
-			a.dubGloss.open = !a.dubGloss.open
-			a.dubGloss.editing = -1
-		}
-		ui.MenuButton(c.Key("dub-more"), i18n.T("More"), func(m *ui.Menu) {
+		moreMenu(c.Key("dub-more"), i18n.T("More editing tools"), func(m *ui.Menu) {
+			if a.dubLang != "" {
+				menuDo(m, i18n.T("Paste translation"), locked, func() { a.dubPaste.open = !a.dubPaste.open })
+			}
+			menuDo(m, i18n.T("Glossary (%d)", len(p.Glossary)), false, func() {
+				a.dubGloss.open = !a.dubGloss.open
+				a.dubGloss.editing = -1
+			})
+			m.Separator()
 			menuDo(m, i18n.T("Clean up fragments"), locked, a.dubCleanup)
 			menuDo(m, i18n.T("Mirror source delivery"), locked || p.Media.Audio == "", a.dubMirror)
 			menuDo(m, i18n.T("Import subtitles as the transcript…"), locked || a.dubBusy(), a.dubImportSubtitles)
@@ -80,24 +101,9 @@ func (a *app) dubToolbar(c *ui.Context) {
 				menuDo(m, i18n.T("Skip failed lines"), locked || a.dubFailedCount(a.dubLang) == 0, a.dubSkipFailed)
 			}
 		})
-		ui.Spacer(c)
-		if a.dubLang != "" && p.Track(a.dubLang).File != "" {
-			label := i18n.T("Verify")
-			if qc := p.Track(a.dubLang).QC; qc != nil && !p.Track(a.dubLang).QCStale() {
-				label = i18n.N(qc.Flagged, "Verify · %d to re-listen", "Verify · %d to re-listen", qc.Flagged)
-			}
-			if ui.Button(c.Key("dub-verify"), label).Tooltip(i18n.T("Listen to the dub again with speech to text, and flag lines that drift")).Disabled(a.dubBusy()).Clicked() {
-				a.dubVerify()
-			}
-		}
 	})
 	if a.dubNotice != "" {
-		ui.Row(c.Key("dub-notice")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, a.dubNotice).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
-			if iconButton(c.Key("dub-notice-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
-				a.dubNotice = ""
-			}
-		})
+		notice(c, "dub-notice", noticeInfo, a.dubNotice, "", nil, func() { a.dubNotice = "" })
 	}
 	if n := len(a.dubSelected()); n > 0 {
 		a.dubBulkBar(c, n)
@@ -107,10 +113,12 @@ func (a *app) dubToolbar(c *ui.Context) {
 // dubBulkBar acts on the lines ticked.
 func (a *app) dubBulkBar(c *ui.Context, n int) {
 	t := c.Theme()
+	k := tok(t)
 	locked := a.dubLocked()
-	ui.Row(c.Key("dub-bulk")).Gap(px(t, 6)).AlignItems(ui.Center).Padding(px(t, 6), px(t, 8)).Radius(6).Background(t.Surface).Children(func() {
-		ui.Text(c, i18n.N(n, "%d selected", "%d selected", n)).Bold()
-		ui.MenuButton(c.Key("bulk-voice"), i18n.T("Set voice…"), func(m *ui.Menu) {
+	ui.Row(c.Key("dub-bulk")).Gap(px(t, sp1)).AlignItems(ui.Center).Padding(px(t, 4), px(t, 4), px(t, 4), px(t, sp3)).Radius(px(t, radiusControl)).
+		Background(k.Subtle).Shrink(0).Children(func() {
+		ui.Text(c, i18n.N(n, "%d selected", "%d selected", n)).FontWeight(600).SingleLine().Shrink(0).Margin(0, px(t, sp2), 0, 0)
+		dropButton(c.Key("bulk-voice"), icons.UserSpeakRounded, i18n.T("Set voice…")).Menu(func(m *ui.Menu) {
 			for _, v := range a.dubVoiceChoices() {
 				ref := v.ref
 				label := v.label
@@ -120,7 +128,7 @@ func (a *app) dubBulkBar(c *ui.Context, n int) {
 				menuDo(m, label, locked, func() { a.dubBulkVoice(ref) })
 			}
 		})
-		ui.MenuButton(c.Key("bulk-lang"), i18n.T("Set language…"), func(m *ui.Menu) {
+		dropButton(c.Key("bulk-lang"), icons.Global, i18n.T("Set language…")).Menu(func(m *ui.Menu) {
 			menuDo(m, i18n.T("The track's (default)"), locked, func() { a.dubBulkLang("") })
 			if src := a.dub.SourceLanguage(); src != "" {
 				menuDo(m, i18n.T("Keep the source language (%s)", dubLangName(src)), locked, func() { a.dubBulkLang(src) })
@@ -129,11 +137,11 @@ func (a *app) dubBulkBar(c *ui.Context, n int) {
 				menuDo(m, dubLangName(l), locked, func() { a.dubBulkLang(l) })
 			}
 		})
-		if ui.Button(c.Key("bulk-delete"), i18n.T("Delete")).Disabled(locked).Clicked() {
+		if iconButton(c.Key("bulk-delete"), icons.TrashBinMinimalistic, i18n.T("Delete")).Disabled(locked).Clicked() {
 			a.dubBulkDelete()
 		}
 		ui.Spacer(c)
-		if ui.Button(c.Key("bulk-clear"), i18n.T("Clear selection")).Clicked() {
+		if iconButton(c.Key("bulk-clear"), icons.Close, i18n.T("Clear selection")).Clicked() {
 			a.dubSel = map[string]bool{}
 		}
 	})
@@ -150,7 +158,7 @@ func (a *app) dubLines(c *ui.Context) {
 		return i
 	}
 	var after func()
-	ui.List(c.Key("dub-lines"), &a.dubList2, len(p.Segments)).Grow(1).MinHeight(px(t, 160)).Gap(px(t, 4)).ItemKey(a.dubList2.Key).Rows(func(r ui.ListRow) {
+	ui.List(c.Key("dub-lines"), &a.dubList2, len(p.Segments)).Grow(1).MinHeight(px(t, 220)).Gap(px(t, 2)).ItemKey(a.dubList2.Key).Rows(func(r ui.ListRow) {
 		if r.Index >= len(a.dub.Segments) {
 			return
 		}
@@ -210,24 +218,27 @@ func (a *app) dubBadges(s dub.Segment) [][2]string {
 	return out
 }
 
-// dubRow is one line; it returns a change to make after the list.
+// dubRow is one line; it returns a change to make after the list. A flat
+// row (the selected one on the subtle fill): tick, time, the speaker
+// chip, badges, then audition and ⋯; the source dimmed, the line.
 func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 	t := c.Theme()
+	k := tok(t)
 	p := a.dub
 	s := p.Segments[i]
 	id := s.ID
 	locked := a.dubLocked()
 	cur := a.dubCur == id
 	overlap := i+1 < len(p.Segments) && s.End > p.Segments[i+1].Start+0.01
-	card := ui.Column(c.Key("row-"+id)).Gap(px(t, 4)).Padding(px(t, 6), px(t, 10)).Radius(6).Border(1, t.Border)
+	row := ui.Column(c.Key("row-"+id)).Gap(px(t, 4)).Padding(px(t, 6), px(t, sp2)).Radius(px(t, radiusCard))
 	if cur {
-		card.Border(2, t.Accent)
+		row.Background(k.Subtle)
 	}
-	if card.Clicked() && !cur {
+	if row.Clicked() && !cur {
 		a.dubCur = id
 		a.dubTL.sel = id
 	}
-	card.Children(func() {
+	row.Children(func() {
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 			sel := a.dubSel[id]
 			if ui.Checkbox(c.Key("sel"), &sel, "").Label(i18n.T("Select line %d", i+1)).Changed() {
@@ -237,55 +248,58 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 					delete(a.dubSel, id)
 				}
 			}
-			if ui.Button(c.Key("time"), tlClock(s.Start)).Label(i18n.T("Play from %s", tlClock(s.Start))).Clicked() {
+			tb := ghostBase(c.Key("time")).Padding(px(t, 2), px(t, 6)).Label(i18n.T("Play from %s", tlClock(s.Start))).Tooltip(i18n.T("Play from %s", tlClock(s.Start))).Shrink(0)
+			tb.Children(func() {
+				ui.Text(c, tlClock(s.Start)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.Text2)
+			})
+			if tb.Clicked() {
 				after = func() { a.dubPlayRange(id) }
 			}
 			who := p.SpeakerName(s.Speaker) + " · " + a.dubVoiceLabel(p.VoiceOf(s))
-			if ui.Button(c.Key("who"), who).Tooltip(i18n.T("Line options")).Clicked() {
+			wb := ghostBase(c.Key("who")).Padding(px(t, 2), px(t, sp2)).Gap(px(t, 4)).Background(k.Hover).Label(who).Tooltip(i18n.T("Line options")).MinWidth(0).Shrink(1)
+			if a.dubOpen == id {
+				wb.Background(k.Pressed)
+			}
+			wb.Children(func() {
+				ui.Text(c, who).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").MinWidth(0)
+				ui.Icon(c, icons.AltArrowDown.Linear).Size(px(t, 12), px(t, 12)).TextColor(k.Text3).Shrink(0)
+			})
+			if wb.Clicked() {
 				if a.dubOpen == id {
 					a.dubOpen = ""
 				} else {
 					a.dubOpen = id
 				}
 			}
-			if overlap {
-				ui.Text(c, i18n.T("Overlaps the next line")).FontSize(px(t, 11)).TextColor(t.Danger)
-			}
-			for _, b := range a.dubBadges(s) {
-				badge := ui.Badge(c, b[0])
-				switch b[1] {
-				case "danger":
-					badge.TextColor(t.Danger)
-				case "warning":
-					badge.TextColor(t.Warning)
-				case "accent":
-					badge.TextColor(t.Accent)
+			ui.Row(c).Gap(px(t, 4)).AlignItems(ui.Center).Grow(1).MinWidth(0).ClipX().Children(func() {
+				if overlap {
+					dubBadge(c, i18n.T("Overlaps the next line"), "danger")
 				}
-			}
-			ui.Spacer(c)
+				for _, b := range a.dubBadges(s) {
+					dubBadge(c, b[0], b[1])
+				}
+			})
 			if a.dubLang != "" {
 				busy := a.dubAudition.busy && a.dubAudition.seg == id
-				label := "🎧"
 				if busy {
-					label = "…"
-				}
-				if ui.Button(c.Key("hear"), label).Label(i18n.T("Hear this line dubbed")).Tooltip(i18n.T("Hear this line dubbed")).Disabled(busy || strings.TrimSpace(p.TextFor(s, a.dubLang)) == "").Clicked() {
+					ui.Box(c).Size(px(t, 28), px(t, 28)).Center().Shrink(0).Children(func() { ui.Spinner(c).Label(i18n.T("Hear this line dubbed")) })
+				} else if iconButton(c.Key("hear"), icons.HeadphonesRound, i18n.T("Hear this line dubbed")).Disabled(strings.TrimSpace(p.TextFor(s, a.dubLang)) == "").Clicked() {
 					after = func() { a.dubAuditionLine(id) }
 				}
 			}
-			ui.MenuButton(c.Key("menu"), "⋯", func(m *ui.Menu) {
+			moreMenu(c.Key("menu"), i18n.T("Line actions"), func(m *ui.Menu) {
 				menuDo(m, i18n.T("Split (⌘D)"), locked, func() { after = func() { a.dubSplit(id, -1) } })
 				menuDo(m, i18n.T("Merge with previous (⇧⌘M)"), locked || i == 0, func() { after = func() { a.dubMerge(id, false) } })
 				menuDo(m, i18n.T("Merge with next (⌘M)"), locked || i+1 >= len(p.Segments), func() { after = func() { a.dubMerge(id, true) } })
 				menuDo(m, i18n.T("Insert a line below"), locked, func() { after = func() { a.dubInsert(id) } })
 				m.Separator()
 				menuDo(m, i18n.T("Delete"), locked, func() { after = func() { a.dubDelete(id) } })
-			}).Label(i18n.T("Line actions"))
+			})
 		})
 		// The source, dimmed, when a translation shows.
 		translated := a.dubLang != "" && strings.TrimSpace(p.TextFor(s, a.dubLang)) != ""
 		if translated && !(a.dubEdit == id && a.dubEditL == "") {
-			src := ui.Text(c, s.Text).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			src := ui.Text(c, s.Text).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 			if !locked && src.Clicked() {
 				after = func() { a.dubBeginEdit(id, "") }
 			}
@@ -294,19 +308,25 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 		line := s.Lines[dub.LangFor(s, a.dubLang)]
 		if a.dubLang != "" && line.Shorter != "" {
 			ui.Row(c.Key("shorter")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, i18n.T("Shorter: %s", line.Shorter)).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).MinWidth(0)
-				if ui.Button(c.Key("use-shorter"), i18n.T("Use shorter rewrite")).Disabled(locked).Clicked() {
+				caption(c, i18n.T("Shorter: %s", line.Shorter)).Grow(1).MinWidth(0)
+				if ghostButton(c.Key("use-shorter"), i18n.T("Use shorter rewrite")).Disabled(locked).Shrink(0).Clicked() {
 					after = func() { a.dubUseShorter(id) }
 				}
 			})
 		}
 		if a.dubLang != "" && line.Err != "" {
-			ui.Text(c, i18n.T("The translation failed (%s).", line.Err)).FontSize(px(t, 11)).TextColor(t.Danger)
+			ui.Row(c).Gap(px(t, 6)).Children(func() {
+				iconMark(c, icons.DangerCircle, t.Danger, "")
+				caption(c, i18n.T("The translation failed (%s).", line.Err)).TextColor(t.Danger).Grow(1).MinWidth(0)
+			})
 		}
 		if qc := p.Track(a.dubLang).QC; qc != nil && a.dubLang != "" && !p.Track(a.dubLang).QCStale() {
 			for _, q := range qc.Lines {
 				if q.ID == id && q.Flagged {
-					ui.Text(c, i18n.T("Heard: “%s”", q.Heard)).FontSize(px(t, 11)).TextColor(t.Warning)
+					ui.Row(c).Gap(px(t, 6)).Children(func() {
+						iconMark(c, icons.DangerTriangle, t.Warning, "")
+						caption(c, i18n.T("Heard: “%s”", q.Heard)).TextColor(t.Warning).Grow(1).MinWidth(0)
+					})
 				}
 			}
 		}
@@ -315,6 +335,22 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 		}
 	})
 	return after
+}
+
+// dubBadge is a line's badge: a small grey chip, its text coloured by
+// what it says (danger, warning, accent; muted is grey).
+func dubBadge(c *ui.Context, text, tone string) {
+	t := c.Theme()
+	k := tok(t)
+	b := tagChip(c, text)
+	switch tone {
+	case "danger":
+		b.TextColor(k.Danger)
+	case "warning":
+		b.TextColor(k.Warning)
+	case "accent":
+		b.TextColor(k.AccentInk)
+	}
 }
 
 // dubLineText is the line's text in the language shown, or its editor.
@@ -333,10 +369,10 @@ func (a *app) dubLineText(c *ui.Context, s dub.Segment, locked bool, after *func
 			*after = func() { a.dubSplit(id, -1) }
 		}
 		ui.Row(c).Gap(px(t, 6)).Children(func() {
-			if ui.Button(c.Key("edit-ok"), i18n.T("Done")).Clicked() {
+			if ui.Button(c.Key("edit-ok"), i18n.T("Done")).Tooltip("⌘↩").Clicked() {
 				*after = a.dubCommitEdit
 			}
-			if ui.Button(c.Key("edit-cancel"), i18n.T("Cancel")).Clicked() {
+			if ghostButton(c.Key("edit-cancel"), i18n.T("Cancel")).Tooltip("Esc").Clicked() {
 				*after = a.dubCancelEdit
 			}
 		})
@@ -353,13 +389,13 @@ func (a *app) dubLineText(c *ui.Context, s dub.Segment, locked bool, after *func
 	}
 	var label ui.Element
 	if strings.TrimSpace(text) == "" {
-		label = ui.Text(c, i18n.T("(no text: click to write it)")).TextColor(t.TextMuted)
+		label = ui.Text(c, i18n.T("(no text: click to write it)")).TextColor(tok(t).Text3)
 	} else {
 		label = ui.Text(c, text)
 	}
-	label.Grow(1)
+	label.Grow(1).Cursor(ui.CursorText)
 	if missing && strings.TrimSpace(text) != "" {
-		ui.Text(c, i18n.T("Not translated yet: click to write the translation")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		ui.Text(c, i18n.T("Not translated yet: click to write the translation")).FontSize(px(t, fsMicro)).TextColor(tok(t).Text3)
 	}
 	if !locked && label.Clicked() {
 		l := a.dubLang
@@ -373,7 +409,7 @@ func (a *app) dubLineOptions(c *ui.Context, s dub.Segment, locked bool, after *f
 	t := c.Theme()
 	p := a.dub
 	id := s.ID
-	ui.Column(c.Key("opts")).Gap(px(t, 6)).Padding(px(t, 8)).Radius(6).Background(t.Surface).Children(func() {
+	ui.Column(c.Key("opts")).Gap(px(t, sp2)).Padding(px(t, sp3)).Radius(px(t, radiusControl)).Background(tok(t).Bg).Children(func() {
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Wrap().Children(func() {
 			choices := a.dubVoiceChoices()
 			labels := []string{i18n.T("The speaker's (%s)", a.dubVoiceLabel(p.Cast[s.Speaker]))}
@@ -411,7 +447,7 @@ func (a *app) dubLineOptions(c *ui.Context, s dub.Segment, locked bool, after *f
 					a.dubSetLine(id, "volume", func(s *dub.Segment) { s.Volume = dubRound(vol) })
 				}
 			})
-			ui.Text(c, strconv.Itoa(int(vol*100+0.5))+"%").FontSize(px(t, 11)).TextColor(t.TextMuted)
+			caption(c, strconv.Itoa(int(vol*100+0.5))+"%")
 			speed := s.Speed
 			if speed == 0 {
 				speed = 1
@@ -425,7 +461,7 @@ func (a *app) dubLineOptions(c *ui.Context, s dub.Segment, locked bool, after *f
 					a.dubSetLine(id, "speed", func(s *dub.Segment) { s.Speed = v })
 				}
 			})
-			ui.Text(c, fmt.Sprintf("%.2f×", speed)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+			caption(c, fmt.Sprintf("%.2f×", speed))
 		})
 		dir := s.Direction
 		ui.Field(c, i18n.T("Direction"), func() {
@@ -436,17 +472,17 @@ func (a *app) dubLineOptions(c *ui.Context, s dub.Segment, locked bool, after *f
 			}
 		})
 		if !dubCaps(p.Settings.Model).Instruct && s.Direction != "" {
-			ui.Text(c, i18n.T("This voice model does not take directions; Prosody Mirror's notes still guide the translation.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+			caption(c, i18n.T("This voice model does not take directions; Prosody Mirror's notes still guide the translation.")).TextColor(tok(t).Text3)
 		}
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.End).Wrap().Children(func() {
 			start, end := s.Start, s.End
 			ui.Field(c, i18n.T("Start"), func() {
-				if ui.NumberInput(c.Key("start"), &start, 0, max(p.Source.Duration, s.End), 0.01).Label(i18n.T("Start")).Width(px(t, 100)).Disabled(locked).Changed() {
+				if ui.NumberInput(c.Key("start"), &start, 0, max(p.Source.Duration, s.End), 0.01).Label(i18n.T("Start")).Width(px(t, 150)).Disabled(locked).Changed() {
 					*after = func() { a.dubSetTiming(id, start, s.End, true) }
 				}
 			})
 			ui.Field(c, i18n.T("End"), func() {
-				if ui.NumberInput(c.Key("end"), &end, 0, max(p.Source.Duration, s.End+10), 0.01).Label(i18n.T("End")).Width(px(t, 100)).Disabled(locked).Changed() {
+				if ui.NumberInput(c.Key("end"), &end, 0, max(p.Source.Duration, s.End+10), 0.01).Label(i18n.T("End")).Width(px(t, 150)).Disabled(locked).Changed() {
 					*after = func() { a.dubSetTiming(id, s.Start, end, true) }
 				}
 			})

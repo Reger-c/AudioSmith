@@ -42,9 +42,12 @@ var dubDialects = map[string][]string{
 	"fr": {"fr-FR", "fr-CA", "fr-BE"}, "de": {"de-DE", "de-AT", "de-CH"}, "ar": {"ar-EG", "ar-SA", "ar-MA"}, "nl": {"nl-NL", "nl-BE"},
 }
 
-// dubPage is /dub.
+// dubPage is /dub: the stepper, the workspace, and the step's panel on
+// the right (a drawer when the window is narrow); the footer says what
+// runs and holds the step's one primary action.
 func (a *app) dubPage(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	a.dubShortcuts(c)
 	if a.dubPlaying() {
 		c.After(100 * time.Millisecond) // the playhead moves
@@ -54,40 +57,47 @@ func (a *app) dubPage(c *ui.Context) {
 	if a.dub != nil && a.dub.Title != "" {
 		title = i18n.T("Dubbing") + " · " + a.dub.Title
 	}
-	header(c, title, func() { a.dubHeaderActions(c) })
+	width := px(t, inspectorWidth+20)
+	inline, shown := a.dubSide.layout(a, c, width, px(t, 480))
+	w := a.pageWidth(c)
+	if inline && shown {
+		w -= width
+	}
+	a.dubNarrow = w < px(t, 560)
+	// Narrow, before the transcript: the workspace has nothing to show
+	// yet, so the step's panel takes its place.
+	embed := a.dub != nil && !inline && len(a.dub.Segments) == 0
+	if embed {
+		shown = false
+	}
+	pageHeader(c, title, func() { a.dubHeaderActions(c, shown, embed) })
 	if a.dub == nil {
 		a.dubEmpty(c)
 		a.dubConfirmDialog(c)
 		return
 	}
 	a.dubStepper(c)
-	ui.Divider(c)
+	ui.Box(c).Height(1).Background(k.Line).Shrink(0)
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Scroll(c.Key("dub-side")).Width(px(t, inspectorWidth+40)).Shrink(0).Background(t.Surface).Children(func() {
-			ui.Column(c).Padding(px(t, 16)).Gap(px(t, 10)).Children(func() {
-				switch a.dubStep {
-				case dubStepSource:
-					a.dubSourcePanel(c)
-				case dubStepTranscribe:
-					a.dubTranscribePanel(c)
-				case dubStepTranslate:
-					a.dubTranslatePanel(c)
-				case dubStepCast:
-					a.dubCastPanel(c)
-				case dubStepGenerate:
-					a.dubGeneratePanel(c)
-				case dubStepExport:
-					a.dubExportPanel(c)
+		// The workspace fills the page; when the window is too short for
+		// its notices, player, timeline and some lines, it scrolls.
+		_, winH := c.Size()
+		avail := winH - titleBarHeight - px(t, statusBarHeight) - px(t, 40) - px(t, 52) - 4
+		ui.Scroll(c.Key("dub-work")).Grow(1).MinWidth(0).Children(func() {
+			ui.Column(c).MinHeight(avail).Padding(px(t, sp3), px(t, sp6), px(t, sp2)).Gap(px(t, sp2)).Children(func() {
+				a.dubBanners(c)
+				if embed {
+					ui.Column(c.Key("dub-embed")).Gap(px(t, sp3)).MaxWidth(px(t, 520)).Children(func() { a.dubStepPanel(c) })
+					return
 				}
+				a.dubWorkspace(c)
 			})
-		})
-		ui.Box(c).Width(1).Background(t.Border)
-		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, 12), px(t, 16)).Gap(px(t, 8)).Children(func() {
-			a.dubBanners(c)
-			a.dubWorkspace(c)
+		}).ClipX()
+		a.dubSide.view(c, "dub-side", i18n.T("Step settings"), inline, shown, false, width, func() {
+			ui.Column(c).Padding(px(t, sp4), px(t, sp4), px(t, sp5)).Gap(px(t, sp3)).Children(func() { a.dubStepPanel(c) })
 		})
 	})
-	ui.Divider(c)
+	ui.Box(c).Height(1).Background(k.Line).Shrink(0)
 	a.dubFooter(c)
 	if a.dubGloss.open {
 		ui.Modal(c.Key("dub-gloss-modal"), &a.dubGloss.open, func() { a.dubGlossaryPanel(c) })
@@ -98,103 +108,156 @@ func (a *app) dubPage(c *ui.Context) {
 	a.dubConfirmDialog(c)
 }
 
-// dubHeaderActions: the projects, New, Create Story, Batch.
-func (a *app) dubHeaderActions(c *ui.Context) {
-	ui.MenuButton(c.Key("dub-projects"), i18n.T("Projects"), func(m *ui.Menu) {
+// dubStepPanel is the panel of the step shown.
+func (a *app) dubStepPanel(c *ui.Context) {
+	switch a.dubStep {
+	case dubStepSource:
+		a.dubSourcePanel(c)
+	case dubStepTranscribe:
+		a.dubTranscribePanel(c)
+	case dubStepTranslate:
+		a.dubTranslatePanel(c)
+	case dubStepCast:
+		a.dubCastPanel(c)
+	case dubStepGenerate:
+		a.dubGeneratePanel(c)
+	case dubStepExport:
+		a.dubExportPanel(c)
+	}
+}
+
+// dubHeaderActions: Projects ▾, New dub, the step panel's toggle, and ⋯
+// (Create Story, Delete, Batch).
+func (a *app) dubHeaderActions(c *ui.Context, shown, embed bool) {
+	projects := i18n.T("Projects")
+	var b ui.Element
+	if a.dubNarrow {
+		b = iconButton(c.Key("dub-projects"), icons.FolderWithFiles, projects)
+	} else {
+		b = dropButton(c.Key("dub-projects"), icons.FolderWithFiles, projects)
+	}
+	b.Menu(func(m *ui.Menu) {
 		if len(a.dubList) == 0 {
 			m.Item(i18n.T("No dubs yet")).Disabled(true)
 		}
 		for _, r := range a.dubList {
 			id := r.ID
 			label := firstOf(r.Title, i18n.T("Untitled dub")) + " · " + dubPhaseText(dub.Phase(r.Phase))
-			if m.Item(label).Chosen() {
+			if m.Item(label).Checked(a.dub != nil && a.dub.ID == id).Chosen() {
 				a.openDub(id)
 			}
 		}
 	})
-	if ui.Button(c.Key("dub-new"), i18n.T("New dub")).Clicked() {
-		a.dubStopPlayer()
-		a.dub = nil
-		a.updateSettings(func(s *settings.Settings) { s.Dubbing.Open = "" })
-	}
 	if a.dub != nil {
-		if ui.Button(c.Key("dub-story"), i18n.T("Create Story")).Tooltip(i18n.T("Turn speakers into characters and lines into a Stories script")).
-			Disabled(len(a.dub.Segments) == 0).Clicked() {
-			a.dubAskStory()
+		newDub := i18n.T("New dub")
+		if a.dubNarrow {
+			b = iconButton(c.Key("dub-new"), icons.AddCircle, newDub)
+		} else {
+			b = ghostIconButton(c.Key("dub-new"), icons.AddCircle, newDub).Label(newDub)
 		}
-		if ui.Button(c.Key("dub-delete"), i18n.T("Delete")).Clicked() {
-			a.dubConfirm, a.dubConfirmOpen = "delete:"+a.dub.ID, true
+		if b.Clicked() {
+			a.dubStopPlayer()
+			a.dub = nil
+			a.updateSettings(func(s *settings.Settings) { s.Dubbing.Open = "" })
+			return
 		}
 	}
-	if ui.Button(c.Key("dub-batch"), i18n.T("Batch")).Tooltip(i18n.T("Dub many videos into many languages")).Clicked() {
-		a.navigate("/batch")
+	if a.dub != nil && !embed {
+		a.dubSide.toggle(c.Key("dub-panel"), icons.PanelRight, shown, i18n.T("Show the step settings"), i18n.T("Hide the step settings"))
 	}
+	moreMenu(c.Key("dub-more-actions"), "", func(m *ui.Menu) {
+		if a.dub != nil {
+			if m.Item(i18n.T("Create Story")).Disabled(len(a.dub.Segments) == 0).Chosen() {
+				a.dubAskStory()
+			}
+			if m.Item(i18n.T("Delete…")).Chosen() {
+				a.dubConfirm, a.dubConfirmOpen = "delete:"+a.dub.ID, true
+			}
+			m.Separator()
+		}
+		if m.Item(i18n.T("Batch dubbing")).Chosen() {
+			a.navigate("/batch")
+		}
+	})
 }
 
 // dubEmpty is the page without a project: drop a file or paste a link.
 func (a *app) dubEmpty(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	ui.Scroll(c.Key("dub-empty")).Grow(1).Children(func() {
-		ui.Column(c).Padding(px(t, 24)).Gap(px(t, 16)).AlignItems(ui.Center).Children(func() {
-			zone := ui.Column(c.Key("dub-drop")).Width(px(t, 560)).Padding(px(t, 28)).Gap(px(t, 10)).AlignItems(ui.Center).Radius(12).Border(1, t.Border)
+		ui.Column(c).Padding(px(t, sp4), px(t, sp6), px(t, sp6)).Gap(px(t, sp4)).AlignItems(ui.Center).Children(func() {
+			zone := ui.Column(c.Key("dub-drop")).FillWidth().MaxWidth(px(t, 560)).Padding(px(t, sp6)).Gap(px(t, sp3)).AlignItems(ui.Center).
+				Radius(px(t, radiusCard)).Border(1, k.Line)
 			if files := zone.DroppedFiles(); len(files) > 0 {
 				a.dubDropped(files)
 			}
 			if zone.FileDragOver() {
-				zone.Border(2, t.Accent)
+				zone.Border(2, k.Accent)
 			}
 			zone.Children(func() {
-				ui.Icon(c, dubIcon.Linear).Size(px(t, 36), px(t, 36))
-				ui.Text(c, i18n.T("Video and audio dubbing")).FontSize(px(t, 17)).Bold()
-				ui.Text(c, "MP4 · MOV · M4V · MKV · WEBM · MP3 · WAV · M4A · FLAC").FontSize(px(t, 12)).TextColor(t.TextMuted)
-				ui.Text(c, i18n.T("Drop a video or audio file here")).TextColor(t.TextMuted)
+				ui.Icon(c, dubIcon.Linear).Size(px(t, 36), px(t, 36)).TextColor(k.Text3)
+				ui.Text(c, i18n.T("Video and audio dubbing")).FontSize(px(t, fsSection)).FontWeight(600).TextAlign(ui.Center)
+				caption(c, i18n.T("Drop a video or audio file here")).TextAlign(ui.Center)
+				ui.Text(c, "MP4 · MOV · M4V · MKV · WEBM · MP3 · WAV · M4A · FLAC").FontSize(px(t, fsMicro)).TextColor(k.Text3).TextAlign(ui.Center)
 				if primaryButton(c.Key("dub-choose"), i18n.T("Choose file…")).Clicked() {
 					a.chooseDubSource()
 				}
-				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Width(px(t, 480)).Children(func() {
-					ui.TextInput(c.Key("dub-url"), &a.dubURL).Placeholder(i18n.T("…or paste a YouTube or video link")).Label(i18n.T("Video link")).Grow(1)
+				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).FillWidth().MaxWidth(px(t, 480)).Children(func() {
+					ui.TextInput(c.Key("dub-url"), &a.dubURL).Placeholder(i18n.T("…or paste a YouTube or video link")).Label(i18n.T("Video link")).Grow(1).MinWidth(0)
 					if ui.Button(c.Key("dub-url-go"), i18n.T("Import")).Disabled(strings.TrimSpace(a.dubURL) == "").Clicked() {
 						a.dubImportURL()
 					}
 				})
-				ui.Collapsible(c.Key("dub-url-more"), i18n.T("Link options"), &a.dubURLMore, func() {
-					ui.Column(c).Gap(px(t, 6)).Children(func() {
+				ui.Column(c).FillWidth().MaxWidth(px(t, 480)).Children(func() {
+					collapsible(c.Key("dub-url-more"), i18n.T("Link options"), &a.dubURLMore, nil, func() {
 						ui.Checkbox(c.Key("dub-captions"), &a.dubCaptions, i18n.T("Use the video's captions when it has them (written by people)"))
 						ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 							label := i18n.T("Sign-in cookies (cookies.txt)…")
 							if a.dubCookies != "" {
 								label = shortPath(a.dubCookies)
 							}
-							if ui.Button(c.Key("dub-cookies"), label).Clicked() {
+							if ui.Button(c.Key("dub-cookies"), label).Shrink(1).MinWidth(0).Clicked() {
 								a.dubChooseCookies()
 							}
 							if a.dubCookies != "" && iconButton(c.Key("dub-cookies-x"), icons.Close, i18n.T("Remove the cookies")).Clicked() {
 								a.dubCookies = ""
 							}
+							infoTip(c.Key("dub-cookies-tip"), i18n.T("Cookies are used for this download only and never saved."))
 						})
-						ui.Text(c, i18n.T("Cookies are used for this download only and never saved.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
 					})
 				})
 				if a.dubErr != "" {
-					ui.Text(c, a.dubErr).FontSize(px(t, 12)).TextColor(t.Danger)
-					if a.dubErrCode == dub.CodeNoYtDlp && ui.Button(c.Key("dub-url-settings"), i18n.T("Open Settings → Dubbing")).Clicked() {
-						a.navigate("/settings/dubbing")
-					}
+					ui.Column(c).FillWidth().Children(func() {
+						notice(c, "dub-url-err", noticeError, a.dubErr, "", func() {
+							if a.dubErrCode == dub.CodeNoYtDlp && ui.Button(c.Key("dub-url-settings"), i18n.T("Open Settings → Dubbing")).Clicked() {
+								a.navigate("/settings/dubbing")
+							}
+						}, nil)
+					})
 				}
 			})
-			ui.Row(c).Gap(px(t, 18)).Children(func() {
+			ui.Row(c).Gap(px(t, sp2)).Wrap().Justify(ui.Center).Children(func() {
 				for i, s := range []string{i18n.T("Upload & transcribe"), i18n.T("Translate"), i18n.T("Generate the dub")} {
-					ui.Text(c, strconv.Itoa(i+1)+" · "+s).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					if i > 0 {
+						iconMark(c, icons.AltArrowRight, k.Text3, "")
+					}
+					ui.Text(c, strconv.Itoa(i+1)+" · "+s).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 				}
 			})
 			if len(a.dubList) > 0 {
-				ui.Column(c.Key("dub-recent")).Width(px(t, 560)).Gap(px(t, 4)).Children(func() {
-					ui.Text(c, i18n.T("Recent dubs")).Bold()
+				ui.Column(c.Key("dub-recent")).FillWidth().MaxWidth(px(t, 560)).Gap(px(t, 2)).Children(func() {
+					sectionTitle(c, i18n.T("Recent dubs"))
 					for _, r := range a.dubList[:min(len(a.dubList), 8)] {
 						id := r.ID
-						ui.Row(c.Key("recent-"+id)).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 6), px(t, 8)).Radius(6).Border(1, t.Border).Children(func() {
+						row := ui.Row(c.Key("recent-"+id)).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, 6), px(t, sp2)).Radius(px(t, radiusControl))
+						if row.Hovered() {
+							row.Background(k.Hover)
+						}
+						row.Children(func() {
+							iconMark(c, dubIcon, k.Text2, "")
 							ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-								ui.Text(c, firstOf(r.Title, i18n.T("Untitled dub"))).SingleLine()
+								truncText(c, firstOf(r.Title, i18n.T("Untitled dub")))
 								meta := []string{dubPhaseText(dub.Phase(r.Phase))}
 								if r.Duration > 0 {
 									meta = append(meta, tlClock(r.Duration))
@@ -202,9 +265,9 @@ func (a *app) dubEmpty(c *ui.Context) {
 								for _, l := range r.Languages {
 									meta = append(meta, dubLangName(l))
 								}
-								ui.Text(c, strings.Join(meta, " · ")).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine()
+								truncText(c, strings.Join(meta, " · ")).FontSize(px(t, fsMicro)).TextColor(k.Text2)
 							})
-							if ui.Button(c.Key("open"), i18n.T("Open")).Clicked() {
+							if ghostButton(c.Key("open"), i18n.T("Open")).Clicked() {
 								a.openDub(id)
 							}
 						})
@@ -272,41 +335,56 @@ func (a *app) dubStepState(step int) (done, running, failed bool) {
 	return done, running, failed
 }
 
-// dubStepper is the row of steps.
+// dubStepper is the row of steps: a quiet row where done steps show a
+// check, the current one is on the pressed face, and the rest are grey.
+// When the workspace is narrow only the current step shows its name.
 func (a *app) dubStepper(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	names := []string{i18n.T("Source"), i18n.T("Transcribe"), i18n.T("Translate"), i18n.T("Cast"), i18n.T("Generate"), i18n.T("Export")}
-	ui.Row(c.Key("dub-steps")).Gap(px(t, 4)).Padding(px(t, 8), px(t, 16)).AlignItems(ui.Center).FocusGroup(ui.Horizontal).Children(func() {
+	compact := a.dubNarrow || a.pageWidth(c) < px(t, 760)
+	ui.Row(c.Key("dub-steps")).Gap(px(t, 2)).Padding(px(t, 2), px(t, sp5), px(t, sp2)).AlignItems(ui.Center).FocusGroup(ui.Horizontal).Shrink(0).ClipX().Children(func() {
 		for i, name := range names {
 			done, running, failed := a.dubStepState(i)
-			mark := strconv.Itoa(i + 1)
-			switch {
-			case running:
-				mark = "…"
-			case failed:
-				mark = "!"
-			case done:
-				mark = "✓"
-			}
-			b := ui.ButtonBase(c.Key("step-"+strconv.Itoa(i))).Padding(px(t, 5), px(t, 10)).Radius(14).Gap(px(t, 6)).AlignItems(ui.Center).
-				Label(i18n.T("Step %d: %s", i+1, name))
-			if a.dubStep == i {
-				b.Background(t.Accent).TextColor(t.AccentText)
-			} else if failed {
-				b.TextColor(t.Danger)
-			} else if !done {
-				b.TextColor(t.TextMuted)
+			cur := a.dubStep == i
+			label := i18n.T("Step %d: %s", i+1, name)
+			b := ghostBase(c.Key("step-"+strconv.Itoa(i))).Padding(px(t, 5), px(t, sp2)).Gap(px(t, 6)).AlignItems(ui.Center).Label(label).Tooltip(name).Shrink(0)
+			if cur {
+				b.Background(k.Pressed)
 			}
 			b.Children(func() {
-				ui.Text(c, mark).FontSize(px(t, 11)).Bold()
-				ui.Text(c, name).FontSize(px(t, 13))
+				col := k.Text3
+				switch {
+				case cur:
+					col = k.Text
+				case done:
+					col = k.Text2
+				}
+				ui.Box(c).Size(px(t, 16), px(t, 16)).Center().Shrink(0).Children(func() {
+					switch {
+					case running:
+						ui.Spinner(c).Size(px(t, 14), px(t, 14))
+					case failed:
+						iconMark(c, icons.DangerCircle, k.Danger, "")
+					case done:
+						iconMark(c, icons.CheckCircle, k.AccentInk, "")
+					default:
+						ui.Text(c, strconv.Itoa(i+1)).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(col)
+					}
+				})
+				if cur || !compact {
+					txt := ui.Text(c, name).SingleLine().TextColor(col)
+					if cur {
+						txt.FontWeight(600)
+					}
+				}
 			})
 			if b.Clicked() {
 				a.dubCommitEdit()
 				a.dubStep = i
 			}
 			if i < len(names)-1 {
-				ui.Text(c, "›").TextColor(t.TextMuted)
+				ui.Icon(c, icons.AltArrowRight.Linear).Size(px(t, 12), px(t, 12)).TextColor(k.Text3).Shrink(0)
 			}
 		}
 	})
@@ -314,37 +392,22 @@ func (a *app) dubStepper(c *ui.Context) {
 
 // --- banners --------------------------------------------------------------------------------
 
-// dubBanner is a coloured note with actions.
-func dubBanner(c *ui.Context, key, text string, tone ui.Color, actions func()) {
-	t := c.Theme()
-	ui.Row(c.Key(key)).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 8), px(t, 10)).Radius(8).Background(tone.Alpha(0.12)).Border(1, tone.Alpha(0.5)).Children(func() {
-		ui.Text(c, text).FontSize(px(t, 12)).Grow(1).MinWidth(0)
-		if actions != nil {
-			actions()
-		}
-	})
-}
-
 // dubBanners: an interrupted run, the last error, review checkpoints and
-// stage warnings.
+// stage warnings, each a one-line notice.
 func (a *app) dubBanners(c *ui.Context) {
-	t := c.Theme()
 	p := a.dub
 	if a.dubInterrupted() {
-		dubBanner(c, "b-recover", i18n.T("The last run stopped before it finished (the app quit, or a step failed)."), t.Warning, func() {
-			if primaryButton(c.Key("b-resume"), i18n.T("Continue the run")).Clicked() {
+		notice(c, "b-recover", noticeWarn, i18n.T("The last run stopped before it finished (the app quit, or a step failed)."), "", func() {
+			if ui.Button(c.Key("b-resume"), i18n.T("Continue the run")).Clicked() {
 				a.dubResume()
 			}
-			if ui.Button(c.Key("b-forget"), i18n.T("Dismiss")).Clicked() {
-				a.dubSet(func(p *dub.Project) { p.Run = nil })
-			}
-		})
+		}, func() { a.dubSet(func(p *dub.Project) { p.Run = nil }) })
 	}
 	if a.dubErr != "" {
-		dubBanner(c, "b-error", a.dubErr, t.Danger, func() {
+		notice(c, "b-error", noticeError, a.dubErr, "", func() {
 			if a.dubNeed != nil {
 				e := *a.dubNeed
-				if ui.Button(c.Key("b-download"), i18n.T("Download")).Clicked() {
+				if secondaryIconButton(c.Key("b-download"), icons.DownloadMinimalistic, i18n.T("Download")).Label(i18n.T("Download")).Clicked() {
 					a.download(e)
 					a.dubErr, a.dubNeed = "", nil
 				}
@@ -359,52 +422,39 @@ func (a *app) dubBanners(c *ui.Context) {
 					a.navigate("/settings/dubbing")
 				}
 			}
-			if iconButton(c.Key("b-error-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
-				a.dubErr, a.dubErrCode, a.dubNeed = "", "", nil
-			}
-		})
+		}, func() { a.dubErr, a.dubErrCode, a.dubNeed = "", "", nil })
 	}
 	busy := a.dubBusy()
 	if p.Settings.Review && !busy {
 		switch {
 		case len(p.Segments) > 0 && len(p.Tracks) == 0 && !dubAnyTranslated(p) && !a.dubDismissed["transcript"]:
-			dubBanner(c, "b-transcript", i18n.T("Transcript ready — fix recognition errors now: every translation starts from it."), t.Accent, func() {
-				if primaryButton(c.Key("b-go-translate"), i18n.T("Translate →")).Clicked() {
+			notice(c, "b-transcript", noticeInfo, i18n.T("Transcript ready — fix recognition errors now: every translation starts from it."), "", func() {
+				if ui.Button(c.Key("b-go-translate"), i18n.T("Translate →")).Clicked() {
 					a.dubStep = dubStepTranslate
 					a.dubTranslate(false)
 				}
-				if iconButton(c.Key("b-transcript-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
-					a.dubDismissed["transcript"] = true
-				}
-			})
+			}, func() { a.dubDismissed["transcript"] = true })
 		case p.AllTranslated() && !p.TracksReady() && !a.dubDismissed["translated"]:
-			dubBanner(c, "b-translated", i18n.T("Translations ready — skim them before generating."), t.Accent, func() {
-				if primaryButton(c.Key("b-go-generate"), i18n.T("Generate dub →")).Clicked() {
+			notice(c, "b-translated", noticeInfo, i18n.T("Translations ready — skim them before generating."), "", func() {
+				if ui.Button(c.Key("b-go-generate"), i18n.T("Generate dub →")).Clicked() {
 					a.dubStep = dubStepGenerate
 					a.dubGenerate()
 				}
-				if iconButton(c.Key("b-translated-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
-					a.dubDismissed["translated"] = true
-				}
-			})
+			}, func() { a.dubDismissed["translated"] = true })
 		}
 	}
 	if p.TracksReady() && !busy && !a.dubDismissed["done"] {
 		n := a.dubStaleCount(a.dubLang)
 		text := i18n.T("Dub complete — review the timing; changed lines regenerate alone.")
+		kind := noticeOK
 		if n > 0 {
 			text = i18n.N(n, "%d line changed since it was generated.", "%d lines changed since they were generated.", n)
+			kind = noticeInfo
 		}
-		dubBanner(c, "b-done", text, t.Success, func() {
-			if n > 0 && primaryButton(c.Key("b-regen"), i18n.N(n, "Regenerate %d changed", "Regenerate %d changed", n)).Clicked() {
-				a.dubGenerate()
-			}
-			if iconButton(c.Key("b-done-x"), icons.Close, i18n.T("Dismiss")).Clicked() {
-				a.dubDismissed["done"] = true
-			}
-		})
+		notice(c, "b-done", kind, text, "", nil, func() { a.dubDismissed["done"] = true })
 	}
-	// Stage warnings: the first, and how many more (expandable).
+	// Stage warnings: the first, with all of them in its ⓘ; × dismisses
+	// them all.
 	var codes []string
 	for _, k := range sortedKeys(p.Stages) {
 		for _, w := range p.Stages[k].Warnings {
@@ -414,23 +464,21 @@ func (a *app) dubBanners(c *ui.Context) {
 		}
 	}
 	if len(codes) > 0 {
-		shown := codes[:1]
-		if a.dubDismissed["w:all"] {
-			shown = codes
+		text := dubWarningText(codes[0])
+		more := ""
+		if len(codes) > 1 {
+			text = i18n.N(len(codes)-1, "%[2]s (+%[1]d more note)", "%[2]s (+%[1]d more notes)", len(codes)-1, text)
+			var all []string
+			for _, w := range codes {
+				all = append(all, "• "+dubWarningText(w))
+			}
+			more = strings.Join(all, "\n")
 		}
-		for i, w := range shown {
-			ww := w
-			dubBanner(c, "b-w-"+w, dubWarningText(w), t.Warning, func() {
-				if i == 0 && len(codes) > 1 && !a.dubDismissed["w:all"] {
-					if ui.Button(c.Key("more"), i18n.N(len(codes)-1, "%d more note", "%d more notes", len(codes)-1)).Clicked() {
-						a.dubDismissed["w:all"] = true
-					}
-				}
-				if iconButton(c.Key("x"), icons.Close, i18n.T("Dismiss")).Clicked() {
-					a.dubDismissed["w:"+ww] = true
-				}
-			})
-		}
+		notice(c, "b-warn", noticeWarn, text, more, nil, func() {
+			for _, w := range codes {
+				a.dubDismissed["w:"+w] = true
+			}
+		})
 	}
 }
 
@@ -441,20 +489,19 @@ func (a *app) dubWorkspace(c *ui.Context) {
 	t := c.Theme()
 	p := a.dub
 	if len(p.Segments) == 0 {
-		ui.Column(c.Key("dub-wait")).Grow(1).Center().Gap(px(t, 10)).Padding(px(t, 24)).Radius(10).Border(1, t.Border).Children(func() {
+		ui.Column(c.Key("dub-wait")).Grow(1).Center().Gap(px(t, sp3)).Padding(px(t, sp6)).Children(func() {
+			k := tok(t)
 			if a.dubBusy() {
 				ui.Spinner(c)
-				ui.Text(c, a.dubStatus()).TextColor(t.TextMuted)
+				caption(c, a.dubStatus()).TextAlign(ui.Center)
 				return
 			}
+			ui.Icon(c, icons.Subtitles.Linear).Size(px(t, 36), px(t, 36)).TextColor(k.Text3)
 			if p.Source.Path == "" && p.Source.URL == "" {
-				ui.Text(c, i18n.T("Choose the video or audio to dub in the Source step.")).TextColor(t.TextMuted)
+				caption(c, i18n.T("Choose the video or audio to dub in the Source step.")).TextAlign(ui.Center)
 				return
 			}
-			ui.Text(c, i18n.T("The transcript shows here once the source is transcribed.")).TextColor(t.TextMuted)
-			if primaryButton(c.Key("dub-start2"), a.dubStartLabel()).Clicked() {
-				a.dubStart()
-			}
+			caption(c, i18n.T("The transcript shows here once the source is transcribed.")).TextAlign(ui.Center)
 		})
 		return
 	}
@@ -466,26 +513,24 @@ func (a *app) dubWorkspace(c *ui.Context) {
 	a.dubLines(c)
 }
 
-// dubPlayerBar: A/B, play, time, the video.
+// dubPlayerBar: play, A/B, time, the video.
 func (a *app) dubPlayerBar(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	p := a.dub
 	pl := &a.dubPlayer
 	if p.Source.HasVideo && a.dubVideo.show {
 		if a.dubVideo.wv != nil && a.dubVideo.project == p.ID {
-			ui.WebView(c, a.dubVideo.wv).Height(px(t, 220)).Radius(8)
+			ui.WebView(c, a.dubVideo.wv).Height(px(t, 220)).Radius(px(t, radiusControl))
 		} else {
-			ui.Column(c.Key("dub-video-off")).Height(px(t, 120)).Center().Radius(8).Background(t.Surface).Children(func() {
-				ui.Text(c, i18n.T("The video preview shows in the app window.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			ui.Column(c.Key("dub-video-off")).Height(px(t, 120)).Center().Radius(px(t, radiusControl)).Background(k.Subtle).Children(func() {
+				caption(c, i18n.T("The video preview shows in the app window."))
 			})
 		}
 	}
-	ui.Row(c.Key("dub-player")).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
-		label := "▶"
-		if a.dubPlaying() {
-			label = "❚❚"
-		}
-		if ui.Button(c.Key("dub-play"), label).Label(i18n.T("Play or pause")).Tooltip(i18n.T("Play or pause (Space)")).Disabled(pl.loading || p.Media.Audio == "").Clicked() {
+	ui.Row(c.Key("dub-player")).Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(0).Children(func() {
+		if playButton(c.Key("dub-play"), a.dubPlaying(), false, 32).Label(i18n.T("Play or pause")).Tooltip(i18n.T("Play or pause (Space)")).
+			Disabled(pl.loading || p.Media.Audio == "").Clicked() {
 			a.dubTogglePlay()
 		}
 		tracks := []string{dubOrig}
@@ -498,12 +543,19 @@ func (a *app) dubPlayerBar(c *ui.Context) {
 		}
 		if len(tracks) > 1 {
 			i := max(slices.Index(tracks, pl.track), 0)
-			sel := i
-			if ui.Segmented(c.Key("dub-ab"), &sel, names...).Label(i18n.T("Track")).Changed() || sel != i {
-				a.dubSwitchTrack(tracks[sel])
+			if a.dubNarrow {
+				cur := names[i]
+				if ui.Select(c.Key("dub-ab-select"), &cur, names).Label(i18n.T("Track")).Shrink(1).MinWidth(0).Changed() {
+					a.dubSwitchTrack(tracks[slices.Index(names, cur)])
+				}
+			} else {
+				sel := i
+				if ui.Segmented(c.Key("dub-ab"), &sel, names...).Label(i18n.T("Track")).Shrink(1).MinWidth(0).Changed() || sel != i {
+					a.dubSwitchTrack(tracks[sel])
+				}
 			}
 		}
-		ui.Text(c, tlClock(a.dubPosition())+" / "+tlClock(p.Source.Duration)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		ui.Text(c, tlClock(a.dubPosition())+" / "+tlClock(p.Source.Duration)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Shrink(0)
 		ui.Spacer(c)
 		if p.Source.HasVideo {
 			show := a.dubVideo.show
@@ -562,7 +614,11 @@ func (a *app) dubTimeline(c *ui.Context) {
 		Play: a.dubPlayRange,
 	})
 	if len(over) > 0 {
-		ui.Text(c.Key("dub-overlap"), i18n.T("Some lines overlap the next: both play at once.")).FontSize(px(c.Theme(), 11)).TextColor(c.Theme().Danger)
+		t := c.Theme()
+		ui.Row(c.Key("dub-overlap")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			iconMark(c, icons.DangerCircle, t.Danger, "")
+			caption(c, i18n.T("Some lines overlap the next: both play at once.")).TextColor(t.Danger)
+		})
 	}
 }
 
@@ -608,17 +664,19 @@ func (a *app) dubStartLabel() string {
 	return i18n.T("Dub it")
 }
 
-// dubFooter: the status and progress, Cancel, and the step's action.
+// dubFooter: the status and progress, Cancel, and the step's action —
+// the page's one primary button (Export on the Export step, else the
+// pipeline's next step).
 func (a *app) dubFooter(c *ui.Context) {
 	t := c.Theme()
 	p := a.dub
-	ui.Row(c.Key("dub-footer")).Height(px(t, 46)).Shrink(0).Gap(px(t, 8)).AlignItems(ui.Center).Padding(0, px(t, 16)).Children(func() {
+	ui.Row(c.Key("dub-footer")).Height(px(t, 52)).Shrink(0).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(0, px(t, sp6)).Children(func() {
 		if a.dubBusy() {
 			j := a.dubRunning()
 			ui.Spinner(c)
-			ui.Text(c, a.dubStatus()).FontSize(px(t, 12)).SingleLine().MinWidth(0)
+			ui.Text(c, a.dubStatus()).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
 			if j.Progress.Fraction > 0 {
-				ui.Progress(c, j.Progress.Fraction).Width(px(t, 160))
+				ui.Progress(c, j.Progress.Fraction).Width(px(t, 160)).Shrink(1)
 			}
 			ui.Spacer(c)
 			if ui.Button(c.Key("dub-cancel"), i18n.T("Cancel")).Clicked() {
@@ -626,7 +684,25 @@ func (a *app) dubFooter(c *ui.Context) {
 			}
 			return
 		}
-		ui.Text(c, dubPhaseText(p.Phase())).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		phase := dubPhaseText(p.Phase())
+		if a.dubStep == dubStepExport {
+			ex := &a.dubExport
+			blocked, ready := a.dubExportBlocked(ex.format), a.dubExportReady()
+			caption(c, phase).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
+			ui.Spacer(c)
+			if ex.job != "" {
+				ui.Spinner(c)
+			}
+			b := primaryIconButton(c.Key("dx-go"), icons.Export, i18n.T("Export…")).Label(i18n.T("Export…")).Disabled(blocked != "" || ready != "" || ex.job != "")
+			if why := firstOf(blocked, ready); why != "" {
+				b.Tooltip(why)
+			}
+			if b.Clicked() {
+				a.dubDoExport()
+			}
+			return
+		}
+		caption(c, phase).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
 		ui.Spacer(c)
 		switch {
 		case len(p.Segments) == 0:
@@ -642,7 +718,10 @@ func (a *app) dubFooter(c *ui.Context) {
 			label := i18n.N(len(p.Targets), "Generate dub", "Generate %d dubs", len(p.Targets))
 			if p.TracksReady() {
 				if n == 0 {
-					ui.Text(c, i18n.T("Every line is up to date.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+					ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+						iconMark(c, icons.CheckCircle, t.Success, "")
+						caption(c, i18n.T("Every line is up to date.")).SingleLine()
+					})
 					return
 				}
 				label = i18n.N(n, "Regenerate %d changed", "Regenerate %d changed", n)
@@ -665,7 +744,7 @@ func dubTranslateLabel(p *dub.Project) string {
 
 // dubPanelTitle is a panel's title.
 func dubPanelTitle(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(px(c.Theme(), 14)).Bold()
+	sectionHeading(c, title)
 }
 
 // dubSourcePanel: the source, its language and speakers.
@@ -675,23 +754,37 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 	locked := a.dubBusy()
 	dubPanelTitle(c, i18n.T("Source"))
 	if p.Source.Path == "" && p.Source.URL == "" {
-		zone := ui.Column(c.Key("src-drop")).Padding(px(t, 16)).Gap(px(t, 8)).AlignItems(ui.Center).Radius(8).Border(1, t.Border)
+		zone := ui.Column(c.Key("src-drop")).Padding(px(t, sp4)).Gap(px(t, sp2)).AlignItems(ui.Center).Radius(px(t, radiusCard)).Border(1, tok(t).Line)
 		if files := zone.DroppedFiles(); len(files) > 0 {
 			a.dubDropped(files)
 		}
 		zone.Children(func() {
-			ui.Text(c, i18n.T("Drop a video or audio file here")).TextColor(t.TextMuted)
+			caption(c, i18n.T("Drop a video or audio file here")).TextAlign(ui.Center)
 			if ui.Button(c.Key("src-choose"), i18n.T("Choose file…")).Clicked() {
 				a.chooseDubSource()
 			}
 		})
 	} else {
-		ui.Column(c.Key("src-info")).Gap(px(t, 4)).Padding(px(t, 10)).Radius(8).Border(1, t.Border).Children(func() {
+		fillCard(c.Key("src-info")).Gap(px(t, 4)).Padding(px(t, sp3)).Children(func() {
 			name := p.Source.Name
 			if name == "" {
 				name = p.Source.URL
 			}
-			ui.Text(c, name).Bold().MaxLines(2)
+			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+				ic := icons.Soundwave
+				if p.Source.HasVideo {
+					ic = dubIcon
+				}
+				iconMark(c, ic, tok(t).Text2, "")
+				ui.Text(c, name).FontWeight(600).MaxLines(2).Ellipsis("…").Grow(1).MinWidth(0).Tooltip(name)
+				if iconButton(c.Key("src-remove"), icons.TrashBinMinimalistic, i18n.T("Remove source")).Disabled(locked).Clicked() {
+					if len(p.Segments) > 0 {
+						a.dubConfirm, a.dubConfirmOpen = "remove", true
+					} else {
+						a.dubRemoveSource()
+					}
+				}
+			})
 			var meta []string
 			if p.Source.Kind == dub.SourceURL {
 				meta = append(meta, p.Source.URL)
@@ -707,19 +800,10 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 			if p.Source.Size > 0 {
 				meta = append(meta, fmt.Sprintf("%.1f MB", float64(p.Source.Size)/1e6))
 			}
-			ui.Text(c, strings.Join(meta, " · ")).FontSize(px(t, 11)).TextColor(t.TextMuted).MaxLines(2)
+			caption(c, strings.Join(meta, " · ")).MaxLines(2).Ellipsis("…")
 			if p.Source.Kind == dub.SourceURL && p.Source.WantCaptions {
-				ui.Text(c, i18n.T("The video's captions are used when it has them.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+				caption(c, i18n.T("The video's captions are used when it has them.")).TextColor(tok(t).Text3)
 			}
-			ui.Row(c).Gap(px(t, 6)).Children(func() {
-				if ui.Button(c.Key("src-remove"), i18n.T("Remove source")).Disabled(locked).Clicked() {
-					if len(p.Segments) > 0 {
-						a.dubConfirm, a.dubConfirmOpen = "remove", true
-					} else {
-						a.dubRemoveSource()
-					}
-				}
-			})
 		})
 	}
 	// The spoken language.
@@ -740,9 +824,9 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 		}
 	})
 	if p.Detected != "" && p.SourceLang == "" {
-		ui.Text(c, i18n.T("Detected: %s", dubLangName(p.Detected))).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Detected: %s", dubLangName(p.Detected)))
 	}
-	ui.Field(c, i18n.T("Speakers"), func() {
+	fieldInfo(c, i18n.T("Speakers"), i18n.T("How many people speak? Leave it on Auto to detect them; the speaker model tells up to 4 apart."), func() {
 		names := []string{i18n.T("Auto-detect")}
 		for i := 1; i <= dub.MaxSpeakers; i++ {
 			names = append(names, strconv.Itoa(i))
@@ -753,13 +837,11 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 			a.dubSet(func(p *dub.Project) { p.Speakers = n })
 		}
 	})
-	ui.Text(c, i18n.T("How many people speak? Leave it on Auto to detect them; the speaker model tells up to 4 apart.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
 	review := p.Settings.Review
-	if dubSwitch(c, "src-review", i18n.T("Review after each step"), &review, false) {
+	if dubSwitch(c, "src-review", i18n.T("Review after each step"), i18n.T("Stops after the transcript and after the translation, so they can be checked first."), &review, false) {
 		a.dubSettings(func(s *dub.Settings) { s.Review = review })
 	}
-	ui.Text(c, i18n.T("Stops after the transcript and after the translation, so they can be checked first.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
-	if ui.Button(c.Key("src-import"), i18n.T("Import subtitles (SRT/VTT)…")).Disabled(locked || p.Source.Path == "" && p.Source.URL == "").
+	if ghostIconButton(c.Key("src-import"), icons.Import, i18n.T("Import subtitles (SRT/VTT)…")).Label(i18n.T("Import subtitles (SRT/VTT)…")).Disabled(locked || p.Source.Path == "" && p.Source.URL == "").
 		Tooltip(i18n.T("Use a subtitle file as the transcript instead of recognising speech")).Clicked() {
 		a.dubImportSubtitles()
 	}
@@ -772,28 +854,29 @@ func (a *app) dubTranscribePanel(c *ui.Context) {
 	dubPanelTitle(c, i18n.T("Transcribe"))
 	for _, st := range []dub.Stage{dub.StageIngest, dub.StageSeparate, dub.StageTranscribe, dub.StageReferences} {
 		s := p.Stage(st, "")
-		mark, col := "·", t.TextMuted
-		switch s.Status {
-		case dub.StatusDone:
-			mark, col = "✓", t.Success
-		case dub.StatusSkipped:
-			mark, col = "–", t.Warning
-		case dub.StatusFailed:
-			mark, col = "!", t.Danger
-		case dub.StatusRunning:
-			mark, col = "…", t.Accent
-		}
-		ui.Row(c.Key("stage-" + string(st))).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, mark).TextColor(col).Bold().Width(px(t, 14))
-			ui.Text(c, dubStageTitle(st)).FontSize(px(t, 12))
+		ui.Row(c.Key("stage-" + string(st))).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+			ui.Box(c).Size(px(t, 14), px(t, 14)).Center().Shrink(0).Children(func() {
+				switch s.Status {
+				case dub.StatusDone:
+					iconMark(c, icons.CheckCircle, t.Success, "")
+				case dub.StatusSkipped:
+					iconMark(c, icons.DangerTriangle, t.Warning, "")
+				case dub.StatusFailed:
+					iconMark(c, icons.DangerCircle, t.Danger, "")
+				case dub.StatusRunning:
+					ui.Spinner(c).Size(px(t, 12), px(t, 12))
+				default:
+					statusDot(c, tok(t).G[5])
+				}
+			})
+			ui.Text(c, dubStageTitle(st)).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0)
 		})
 		if s.Status == dub.StatusFailed && s.Message != "" {
-			ui.Text(c, s.Message).FontSize(px(t, 11)).TextColor(t.Danger)
+			caption(c, s.Message).TextColor(t.Danger).Padding(0, 0, 0, px(t, 22))
 		}
 	}
 	if len(p.Segments) > 0 {
-		ui.Divider(c)
-		ui.Text(c, i18n.T("Speakers")).Bold()
+		sectionTitle(c, i18n.T("Speakers"))
 		for _, sp := range p.SpeakerLabels() {
 			name := p.SpeakerName(sp)
 			n := 0
@@ -803,23 +886,24 @@ func (a *app) dubTranscribePanel(c *ui.Context) {
 				}
 			}
 			ui.Row(c.Key("spk-" + sp)).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, sp).FontSize(px(t, 11)).TextColor(t.TextMuted).Width(px(t, 26))
-				in := ui.TextInput(c.Key("name"), &name).Label(i18n.T("Name of %s", sp)).Grow(1)
+				ui.Text(c, sp).FontSize(px(t, fsMicro)).TextColor(tok(t).Text3).Width(px(t, 22)).Shrink(0)
+				in := ui.TextInput(c.Key("name"), &name).Label(i18n.T("Name of %s", sp)).Grow(1).MinWidth(0)
 				if in.Changed() {
 					a.dubRenameSpeaker(sp, name)
 				}
-				ui.Text(c, i18n.N(n, "%d line", "%d lines", n)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+				tagChip(c, i18n.N(n, "%d line", "%d lines", n))
 			})
 		}
-		ui.Divider(c)
-		ui.Row(c).Gap(px(t, 6)).Wrap().Children(func() {
-			if ui.Button(c.Key("tr-again"), i18n.T("Transcribe again")).Disabled(a.dubBusy()).Tooltip(i18n.T("Recognise the speech again: edits to the transcript are lost")).Clicked() {
+		ui.Column(c).Gap(px(t, 2)).Children(func() {
+			if ghostIconButton(c.Key("tr-again"), icons.Restart, i18n.T("Transcribe again")).Label(i18n.T("Transcribe again")).Disabled(a.dubBusy()).
+				Tooltip(i18n.T("Recognise the speech again: edits to the transcript are lost")).Clicked() {
 				a.dubConfirm, a.dubConfirmOpen = "transcribe", true
 			}
-			if ui.Button(c.Key("tr-mirror"), i18n.T("Mirror source delivery")).Disabled(a.dubLocked()).Tooltip(i18n.T("Give lines that stand out a direction (whispered, quick…) from how they are said")).Clicked() {
+			if ghostIconButton(c.Key("tr-mirror"), icons.Pulse2, i18n.T("Mirror source delivery")).Label(i18n.T("Mirror source delivery")).Disabled(a.dubLocked()).
+				Tooltip(i18n.T("Give lines that stand out a direction (whispered, quick…) from how they are said")).Clicked() {
 				a.dubMirror()
 			}
-			if ui.Button(c.Key("tr-cleanup"), i18n.T("Clean up fragments")).Disabled(a.dubLocked()).Clicked() {
+			if ghostIconButton(c.Key("tr-cleanup"), icons.MagicStick3, i18n.T("Clean up fragments")).Label(i18n.T("Clean up fragments")).Disabled(a.dubLocked()).Clicked() {
 				a.dubCleanup()
 			}
 		})
@@ -879,37 +963,36 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 	// Dialects.
 	base, _, _ := strings.Cut(p.Primary(), "-")
 	if ds, ok := dubDialects[base]; ok {
-		ui.Row(c.Key("tl-dialects")).Gap(px(t, 4)).Wrap().Children(func() {
-			for _, d := range append([]string{base}, ds...) {
-				label := i18n.T("Default")
-				if d != base {
-					label = d[len(base)+1:]
-				}
-				b := ui.Button(c.Key("dialect-"+d), label).Disabled(locked)
-				if p.Primary() == d {
-					b.Background(t.Accent).TextColor(t.AccentText)
-				}
-				if b.Clicked() {
-					dd := d
-					a.dubSet(func(p *dub.Project) { p.Targets[0] = dd })
-					a.dubLang = dd
-				}
+		opts := append([]string{base}, ds...)
+		labels := make([]string, len(opts))
+		for i, d := range opts {
+			labels[i] = i18n.T("Default")
+			if d != base {
+				labels[i] = d
+			}
+		}
+		cur := labels[max(slices.Index(opts, p.Primary()), 0)]
+		ui.Field(c, i18n.T("Dialect"), func() {
+			if ui.Select(c.Key("tl-dialect"), &cur, labels).Label(i18n.T("Dialect")).Disabled(locked).Changed() {
+				dd := opts[slices.Index(labels, cur)]
+				a.dubSet(func(p *dub.Project) { p.Targets[0] = dd })
+				a.dubLang = dd
 			}
 		})
 	}
 	// More languages.
-	ui.Text(c, i18n.T("More languages")).FontSize(px(t, 12))
+	ui.Text(c, i18n.T("More languages"))
 	ui.Row(c.Key("tl-more")).Gap(px(t, 4)).Wrap().AlignItems(ui.Center).Children(func() {
 		for _, l := range p.Targets[min(1, len(p.Targets)):] {
 			ll := l
-			ui.Row(c.Key("chip-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 6)).Radius(10).Background(t.Background).Border(1, t.Border).Children(func() {
-				ui.Text(c, dubLangName(ll)).FontSize(px(t, 12))
-				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Disabled(locked).Clicked() {
+			ui.Row(c.Key("chip-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 2), px(t, 2), px(t, sp2)).Radius(px(t, radiusControl)).Background(tok(t).Hover).Children(func() {
+				ui.Text(c, dubLangName(ll)).FontSize(px(t, fsCaption)).SingleLine()
+				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Size(px(t, 22), px(t, 22)).Disabled(locked).Clicked() {
 					a.dubSet(func(p *dub.Project) { p.Targets = slices.DeleteFunc(p.Targets, func(x string) bool { return x == ll }) })
 				}
 			})
 		}
-		ui.MenuButton(c.Key("tl-add"), i18n.T("+ Add"), func(m *ui.Menu) {
+		dropButton(c.Key("tl-add"), icons.AddCircle, i18n.T("Add")).Shrink(0).Menu(func(m *ui.Menu) {
 			for _, l := range dubTargetLangs {
 				if slices.Contains(p.Targets, l) {
 					continue
@@ -921,7 +1004,6 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 			}
 		})
 	})
-	ui.Divider(c)
 	// The translator.
 	engines := []string{"llm", "deepl", "google", "microsoft"}
 	names := []string{i18n.T("Language model"), "DeepL", "Google Cloud Translation", "Microsoft Translator"}
@@ -935,36 +1017,37 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 	ok, name := a.dubTranslatorReady(p.Settings)
 	switch {
 	case ok && name != "":
-		ui.Text(c, i18n.T("Uses %s", name)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Uses %s", name))
 	case !ok:
-		ui.Column(c.Key("tl-needs")).Gap(px(t, 4)).Padding(px(t, 8)).Radius(6).Background(t.Warning.Alpha(0.12)).Children(func() {
-			ui.Text(c, i18n.T("Translating needs a translation engine: a local model (Ollama, LM Studio) or a provider in Settings → Writing help.")).FontSize(px(t, 12))
+		fillCard(c.Key("tl-needs")).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
+			ui.Row(c).Gap(px(t, 6)).Children(func() {
+				iconMark(c, icons.DangerTriangle, t.Warning, "")
+				caption(c, i18n.T("Translating needs a translation engine: a local model (Ollama, LM Studio) or a provider in Settings → Writing help.")).TextColor(tok(t).Text).Grow(1).MinWidth(0)
+			})
 			if ui.Button(c.Key("tl-setup"), i18n.T("Set up writing help")).Clicked() {
 				a.navigate("/settings/writing")
 			}
 		})
 	}
 	if p.Settings.Translator != "llm" && p.Settings.Translator != "" {
-		ui.Text(c, i18n.T("The service's API key is kept in the Keychain as “mt.%s”.", p.Settings.Translator)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("The service's API key is kept in the Keychain as “mt.%s”.", p.Settings.Translator)).TextColor(tok(t).Text3)
 	}
 	if p.Settings.Translator == "llm" || p.Settings.Translator == "" {
 		quals := []translate.Quality{translate.Fast, translate.Autofit, translate.Cinematic}
 		qi := max(slices.Index(quals, p.Settings.Quality), 0)
-		ui.Field(c, i18n.T("Quality"), func() {
+		fieldInfo(c, i18n.T("Quality"), i18n.T("Fast is one literal pass; Autofit rewrites lines that would not fit their time; Cinematic drafts, critiques and adapts for natural phrasing."), func() {
 			if ui.Segmented(c.Key("tl-quality"), &qi, i18n.T("Fast"), i18n.T("Autofit"), i18n.T("Cinematic")).Label(i18n.T("Quality")).Disabled(locked).Changed() {
 				q := quals[qi]
 				a.dubSettings(func(s *dub.Settings) { s.Quality = q })
 			}
 		})
-		ui.Text(c, i18n.T("Fast is one literal pass; Autofit rewrites lines that would not fit their time; Cinematic drafts, critiques and adapts for natural phrasing.")).
-			FontSize(px(t, 11)).TextColor(t.TextMuted)
 		auto := p.Settings.AutoGlossary
-		if dubSwitch(c, "tl-autogloss", i18n.T("Auto glossary"), &auto, locked) {
+		if dubSwitch(c, "tl-autogloss", i18n.T("Auto glossary"), "", &auto, locked) {
 			a.dubSettings(func(s *dub.Settings) { s.AutoGlossary = auto })
 		}
 	}
 	shorter := p.Settings.SuggestShorter
-	if dubSwitch(c, "tl-shorter", i18n.T("Suggest shorter lines"), &shorter, locked) {
+	if dubSwitch(c, "tl-shorter", i18n.T("Suggest shorter lines"), "", &shorter, locked) {
 		a.dubSettings(func(s *dub.Settings) { s.SuggestShorter = shorter })
 	}
 	forms := []translate.Formality{translate.FormalityAuto, translate.FormalityFormal, translate.FormalityInformal}
@@ -984,17 +1067,17 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 			a.dubSettings(func(s *dub.Settings) { s.Style = string(v) })
 		}
 	})
-	ui.Row(c).Gap(px(t, 6)).Wrap().Children(func() {
-		if ui.Button(c.Key("tl-gloss"), i18n.T("Glossary (%d)", len(p.Glossary))).Clicked() {
+	ui.Column(c).Gap(px(t, 2)).Children(func() {
+		if ghostIconButton(c.Key("tl-gloss"), icons.TextSquare, i18n.T("Glossary (%d)", len(p.Glossary))).Label(i18n.T("Glossary (%d)", len(p.Glossary))).Clicked() {
 			a.dubGloss.open = !a.dubGloss.open
 		}
-		if ui.Button(c.Key("tl-paste"), i18n.T("Paste translation")).Disabled(len(p.Segments) == 0).Clicked() {
+		if ghostIconButton(c.Key("tl-paste"), icons.Copy, i18n.T("Paste translation")).Label(i18n.T("Paste translation")).Disabled(len(p.Segments) == 0).Clicked() {
 			a.dubPaste.open = !a.dubPaste.open
 			if a.dubLang == "" {
 				a.dubLang = p.Primary()
 			}
 		}
-		if ui.Button(c.Key("tl-again"), i18n.T("Translate everything again")).Disabled(locked || len(p.Segments) == 0).
+		if ghostIconButton(c.Key("tl-again"), icons.Restart, i18n.T("Translate everything again")).Label(i18n.T("Translate everything again")).Disabled(locked || len(p.Segments) == 0).
 			Tooltip(i18n.T("Lines you wrote yourself are kept")).Clicked() {
 			a.dubTranslate(true)
 		}
@@ -1006,19 +1089,20 @@ func (a *app) dubCastPanel(c *ui.Context) {
 	t := c.Theme()
 	p := a.dub
 	locked := a.dubLocked()
-	dubPanelTitle(c, i18n.N(len(p.SpeakerLabels()), "Cast · %d speaker", "Cast · %d speakers", len(p.SpeakerLabels())))
-	ui.Text(c, i18n.T("Drag a voice onto a speaker, or pick one from the list. Auto clones each speaker's own voice.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		dubPanelTitle(c, i18n.N(len(p.SpeakerLabels()), "Cast · %d speaker", "Cast · %d speakers", len(p.SpeakerLabels())))
+		infoTip(c.Key("cast-tip"), i18n.T("Drag a voice onto a speaker, or pick one from the list. Auto clones each speaker's own voice."))
+	})
 	choices := a.dubVoiceChoices()
 	// The chips.
 	ui.Row(c.Key("cast-chips")).Gap(px(t, 4)).Wrap().Children(func() {
 		for _, v := range choices {
-			chip := ui.Text(c.Key("chip-"+v.ref), v.label).FontSize(px(t, 12)).Padding(px(t, 3), px(t, 8)).Radius(10).Background(t.Background).Border(1, t.Border).
-				Drag(dubVoiceChip{ref: v.ref})
-			_ = chip
+			ui.Text(c.Key("chip-"+v.ref), v.label).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).SingleLine().Padding(px(t, 3), px(t, sp2)).
+				Radius(px(t, radiusControl)).Background(tok(t).Hover).Cursor(ui.CursorGrab).Drag(dubVoiceChip{ref: v.ref})
 		}
 	})
 	if len(p.SpeakerLabels()) == 0 {
-		ui.Text(c, i18n.T("Speakers appear once the source is transcribed.")).TextColor(t.TextMuted)
+		caption(c, i18n.T("Speakers appear once the source is transcribed."))
 	}
 	refs := make([]string, len(choices))
 	labels := make([]string, len(choices))
@@ -1029,7 +1113,7 @@ func (a *app) dubCastPanel(c *ui.Context) {
 		}
 	}
 	for _, sp := range p.SpeakerLabels() {
-		card := ui.Column(c.Key("cast-"+sp)).Gap(px(t, 6)).Padding(px(t, 10)).Radius(8).Border(1, t.Border)
+		card := fillCard(c.Key("cast-" + sp)).Gap(px(t, 6)).Padding(px(t, sp3))
 		if _, over := ui.DragOver[dubVoiceChip](card); over {
 			card.Border(2, t.Accent)
 		}
@@ -1037,29 +1121,29 @@ func (a *app) dubCastPanel(c *ui.Context) {
 			a.dubCast(sp, chip.ref)
 		}
 		card.Children(func() {
-			ui.Text(c, p.SpeakerName(sp)).Bold()
-			if r, ok := p.References[sp]; ok {
-				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, p.SpeakerName(sp)).FontWeight(600).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+				if r, ok := p.References[sp]; ok {
 					info := i18n.T("Own voice: %s–%s", tlClock(r.Start), tlClock(r.End))
 					if r.Enhanced {
 						info += " · " + i18n.T("cleaned")
 					}
-					ui.Text(c, info).FontSize(px(t, 11)).TextColor(t.TextMuted).Grow(1)
+					ui.Text(c, info).FontSize(px(t, fsMicro)).TextColor(tok(t).Text2).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Tooltip(info)
 					path := a.dubSvc.Path(p.ID, r.File)
 					id := "dubref:" + p.ID + ":" + sp
-					label := "▶"
-					if a.pl.Playing(id) {
-						label = "❚❚"
-					}
-					if ui.Button(c.Key("ref-play"), label).Label(i18n.T("Hear the voice sample")).Clicked() {
+					if playToggle(c.Key("ref-play"), a.pl.Playing(id), i18n.T("Hear the voice sample"), i18n.T("Hear the voice sample")).Clicked() {
 						a.dubStopPlayer()
 						if err := a.pl.Toggle(id, path); err != nil {
 							a.toast(i18n.T("Cannot play: %v", err))
 						}
 					}
+				}
+			})
+			if _, ok := p.References[sp]; !ok && p.Stage(dub.StageReferences, "").Status == dub.StatusDone {
+				ui.Row(c).Gap(px(t, 6)).Children(func() {
+					iconMark(c, icons.DangerTriangle, t.Warning, "")
+					caption(c, i18n.T("Says too little to clone: uses the default voice unless cast.")).TextColor(t.Warning).Grow(1).MinWidth(0)
 				})
-			} else if p.Stage(dub.StageReferences, "").Status == dub.StatusDone {
-				ui.Text(c, i18n.T("Says too little to clone: uses the default voice unless cast.")).FontSize(px(t, 11)).TextColor(t.Warning)
 			}
 			cur := p.Cast[sp]
 			v := labels[max(slices.Index(refs, cur), 0)]
@@ -1068,12 +1152,11 @@ func (a *app) dubCastPanel(c *ui.Context) {
 			}
 		})
 	}
-	ui.Divider(c)
 	match := 0
 	if p.Settings.VoiceMatch == dub.MatchLine {
 		match = 1
 	}
-	ui.Field(c, i18n.T("Voice match"), func() {
+	fieldInfo(c, i18n.T("Voice match"), i18n.T("Consistent clones each speaker from one sample; Per line clones each line from its own audio (follows the delivery, less stable)."), func() {
 		if ui.Segmented(c.Key("cast-match"), &match, i18n.T("Consistent"), i18n.T("Per line")).Label(i18n.T("Voice match")).Changed() {
 			m := dub.MatchConsistent
 			if match == 1 {
@@ -1082,7 +1165,6 @@ func (a *app) dubCastPanel(c *ui.Context) {
 			a.dubSettings(func(s *dub.Settings) { s.VoiceMatch = m })
 		}
 	})
-	ui.Text(c, i18n.T("Consistent clones each speaker from one sample; Per line clones each line from its own audio (follows the delivery, less stable).")).FontSize(px(t, 11)).TextColor(t.TextMuted)
 }
 
 // dubVoiceChip is a voice dragged onto a speaker.
@@ -1120,25 +1202,59 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 	})
 	caps := dubCaps(p.Settings.Model)
 	if caps.Duration {
-		ui.Text(c, i18n.T("This model speaks each line in exactly its time: the best lip sync.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("This model speaks each line in exactly its time: the best lip sync.")).TextColor(tok(t).Text3)
 	}
 	// Timing.
 	timings := dub.Timings
 	tnames := []string{i18n.T("Concise"), i18n.T("Smart fit"), i18n.T("Stretch video"), i18n.T("Lip sync")}
 	tcur := tnames[max(slices.Index(timings, p.Settings.Timing), 0)]
-	ui.Field(c, i18n.T("Timing"), func() {
+	fieldInfo(c, i18n.T("Timing"), dubTimingHelp(p.Settings.Timing), func() {
 		if ui.Select(c.Key("gen-timing"), &tcur, tnames).Label(i18n.T("Timing")).Disabled(locked).Changed() {
 			tm := timings[slices.Index(tnames, tcur)]
 			a.dubSettings(func(s *dub.Settings) { s.Timing = tm })
 		}
 	})
-	ui.Text(c, dubTimingHelp(p.Settings.Timing)).FontSize(px(t, 11)).TextColor(t.TextMuted)
 	keep := p.Settings.KeepBackground
-	if dubSwitch(c, "gen-bg", i18n.T("Keep background (music and effects)"), &keep, locked) {
+	if dubSwitch(c, "gen-bg", i18n.T("Keep background (music and effects)"), "", &keep, locked) {
 		a.dubSettings(func(s *dub.Settings) { s.KeepBackground = keep })
 	}
-	ui.Divider(c)
-	ui.Text(c, i18n.T("Voice controls")).Bold()
+	summary := ""
+	if p.Settings.Steps != 0 || p.Settings.Guidance != 0 || p.Settings.Speed != 0 || p.Settings.Instruct != "" {
+		summary = i18n.T("Changed")
+	}
+	collapsible(c.Key("gen-voice"), i18n.T("Voice controls"), &a.dubVoiceCtl, func() {
+		if summary != "" {
+			caption(c, summary).SingleLine()
+		}
+	}, func() { a.dubVoiceControls(c, caps, locked) })
+	sectionTitle(c, i18n.T("Tracks"))
+	// Tracks.
+	for _, l := range p.Targets {
+		tr := p.Track(l)
+		state := i18n.T("not generated")
+		if tr.File != "" {
+			state = tlClock(tr.Seconds)
+			if n := a.dubStaleCount(l); n > 0 {
+				state += " · " + i18n.N(n, "%d changed", "%d changed", n)
+			}
+			if tr.QC != nil && !tr.QCStale() {
+				state += " · " + i18n.N(tr.QC.Flagged, "%d to re-listen", "%d to re-listen", tr.QC.Flagged)
+			}
+		} else if n := len(tr.Lines); n > 0 {
+			state = i18n.N(n, "%d line rendered", "%d lines rendered", n)
+		}
+		ui.Row(c.Key("track-" + l)).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, dubLangName(l)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			ui.Text(c, state).FontSize(px(t, fsMicro)).TextColor(tok(t).Text2).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Tooltip(state)
+		})
+	}
+	// Verify is in the editor's toolbar.
+}
+
+// dubVoiceControls are the Generate step's voice controls: steps,
+// guidance, speed and style, as the model takes them.
+func (a *app) dubVoiceControls(c *ui.Context, caps services.DubModelCaps, locked bool) {
+	p := a.dub
 	if caps.Steps {
 		steps := float64(p.Settings.Steps)
 		if steps == 0 {
@@ -1185,38 +1301,9 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 			}
 		})
 	}
-	if ui.Button(c.Key("gen-reset"), i18n.T("Reset voice controls")).Disabled(locked).Clicked() {
+	if ghostIconButton(c.Key("gen-reset"), icons.Restart, i18n.T("Reset voice controls")).Label(i18n.T("Reset voice controls")).Disabled(locked).Clicked() {
 		a.dubSettings(func(s *dub.Settings) { s.Steps, s.Guidance, s.Speed, s.Instruct = 0, 0, 0, "" })
 	}
-	ui.Divider(c)
-	// Tracks.
-	for _, l := range p.Targets {
-		tr := p.Track(l)
-		state := i18n.T("not generated")
-		if tr.File != "" {
-			state = tlClock(tr.Seconds)
-			if n := a.dubStaleCount(l); n > 0 {
-				state += " · " + i18n.N(n, "%d changed", "%d changed", n)
-			}
-			if tr.QC != nil && !tr.QCStale() {
-				state += " · " + i18n.N(tr.QC.Flagged, "%d to re-listen", "%d to re-listen", tr.QC.Flagged)
-			}
-		} else if n := len(tr.Lines); n > 0 {
-			state = i18n.N(n, "%d line rendered", "%d lines rendered", n)
-		}
-		ui.Row(c.Key("track-" + l)).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, dubLangName(l)).Grow(1)
-			ui.Text(c, state).FontSize(px(t, 11)).TextColor(t.TextMuted)
-		})
-	}
-	ui.Row(c).Gap(px(t, 6)).Wrap().Children(func() {
-		if primaryButton(c.Key("gen-go"), i18n.N(len(p.Targets), "Generate dub", "Generate %d dubs", len(p.Targets))).Disabled(locked || len(p.Segments) == 0).Clicked() {
-			a.dubGenerate()
-		}
-		if p.Track(a.dubLang).File != "" && ui.Button(c.Key("gen-verify"), i18n.T("Verify")).Disabled(locked).Clicked() {
-			a.dubVerify()
-		}
-	})
 }
 
 // dubTimingHelp explains a timing strategy.
@@ -1239,10 +1326,11 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 	t := c.Theme()
 	p := a.dub
 	g := &a.dubGloss
-	ui.Column(c.Key("dub-gloss")).Gap(px(t, 6)).Width(px(t, 620)).MaxHeight(px(t, 520)).Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.N(len(p.Glossary), "Glossary · %d term", "Glossary · %d terms", len(p.Glossary))).Bold().Grow(1)
-			if ui.Button(c.Key("g-auto"), i18n.T("Auto")).Tooltip(i18n.T("Ask the language model for names and recurring terms")).
+	w, h := c.Size()
+	ui.Column(c.Key("dub-gloss")).Gap(px(t, sp2)).Width(min(px(t, 620), w-px(t, 64))).MaxHeight(min(px(t, 520), h-px(t, 64))).Children(func() {
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+			sectionHeading(c, i18n.N(len(p.Glossary), "Glossary · %d term", "Glossary · %d terms", len(p.Glossary))).Grow(1)
+			if ghostIconButton(c.Key("g-auto"), icons.MagicStick3, i18n.T("Auto")).Label(i18n.T("Auto")).Tooltip(i18n.T("Ask the language model for names and recurring terms")).
 				Disabled(g.extracting || len(p.Segments) == 0 || a.llmRouter == nil).Clicked() {
 				a.dubExtractTerms()
 			}
@@ -1251,7 +1339,7 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 			}
 		})
 		if len(p.Glossary) == 0 {
-			ui.Text(c, i18n.T("No terms yet. Add one below, or Auto.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("No terms yet. Add one below, or Auto."))
 		}
 		for i, term := range p.Glossary {
 			ii := i
@@ -1263,7 +1351,7 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 					if ui.Button(c.Key("save"), i18n.T("Save")).Clicked() {
 						a.dubSaveTerm(ii)
 					}
-					if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
+					if ghostButton(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
 						g.editing = -1
 					}
 					return
@@ -1272,27 +1360,27 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 				if term.Note != "" {
 					line += " · " + term.Note
 				}
-				ui.Text(c, line).FontSize(px(t, 12)).Grow(1).MinWidth(0)
+				truncText(c, line).Grow(1)
 				if term.Auto {
-					ui.Badge(c, i18n.T("auto"))
+					tagChip(c, i18n.T("auto"))
 				}
-				if ui.Button(c.Key("edit"), i18n.T("Edit")).Clicked() {
+				if iconButton(c.Key("edit"), icons.Pen, i18n.T("Edit")).Clicked() {
 					g.editing, g.eSrc, g.eTgt, g.eNot = ii, term.Source, term.Target, term.Note
 				}
-				if iconButton(c.Key("del"), icons.Close, i18n.T("Delete %s", term.Source)).Clicked() {
+				if iconButton(c.Key("del"), icons.TrashBinMinimalistic, i18n.T("Delete %s", term.Source)).Clicked() {
 					a.dubDeleteTerm(ii)
 				}
 			})
 		}
 		ui.Row(c.Key("g-add")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.TextInput(c.Key("src"), &g.src).Placeholder(i18n.T("Source")).Label(i18n.T("Source term")).Grow(1)
-			ui.TextInput(c.Key("tgt"), &g.tgt).Placeholder(i18n.T("Translation")).Label(i18n.T("Translation")).Grow(1)
-			ui.TextInput(c.Key("note"), &g.note).Placeholder(i18n.T("Note (optional)")).Label(i18n.T("Note")).Grow(1)
-			if ui.Button(c.Key("add"), i18n.T("Add term")).Disabled(strings.TrimSpace(g.src) == "" || strings.TrimSpace(g.tgt) == "").Clicked() {
+			ui.TextInput(c.Key("src"), &g.src).Placeholder(i18n.T("Source")).Label(i18n.T("Source term")).Grow(1).MinWidth(0)
+			ui.TextInput(c.Key("tgt"), &g.tgt).Placeholder(i18n.T("Translation")).Label(i18n.T("Translation")).Grow(1).MinWidth(0)
+			ui.TextInput(c.Key("note"), &g.note).Placeholder(i18n.T("Note (optional)")).Label(i18n.T("Note")).Grow(1).MinWidth(0)
+			if primaryButton(c.Key("add"), i18n.T("Add term")).Disabled(strings.TrimSpace(g.src) == "" || strings.TrimSpace(g.tgt) == "").Clicked() {
 				a.dubAddTerm()
 			}
 		})
-		ui.Text(c, i18n.T("Terms go into every translation; yours win over auto ones.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Terms go into every translation; yours win over auto ones.")).TextColor(tok(t).Text3)
 	})
 }
 
@@ -1300,10 +1388,11 @@ func (a *app) dubGlossaryPanel(c *ui.Context) {
 func (a *app) dubPastePanel(c *ui.Context) {
 	t := c.Theme()
 	ps := &a.dubPaste
-	ui.Column(c.Key("dub-paste")).Gap(px(t, 6)).Width(px(t, 620)).Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Paste translation · %s", dubLangName(a.dubLang))).Bold().Grow(1)
-			if ui.Button(c.Key("p-file"), i18n.T("Load .srt / .vtt…")).Clicked() {
+	w, _ := c.Size()
+	ui.Column(c.Key("dub-paste")).Gap(px(t, sp2)).Width(min(px(t, 620), w-px(t, 64))).Children(func() {
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+			sectionHeading(c, i18n.T("Paste translation · %s", dubLangName(a.dubLang))).Grow(1)
+			if ghostIconButton(c.Key("p-file"), icons.Import, i18n.T("Load .srt / .vtt…")).Label(i18n.T("Load .srt / .vtt…")).Clicked() {
 				a.dubPasteFile()
 			}
 			if iconButton(c.Key("p-close"), icons.Close, i18n.T("Close")).Clicked() {
@@ -1331,11 +1420,12 @@ func (a *app) dubPastePanel(c *ui.Context) {
 		}
 		pv := ps.preview
 		mode := map[dub.PasteMode]string{dub.PasteTimed: i18n.T("Timestamped"), dub.PasteNumbered: i18n.T("Numbered lines"), dub.PastePlain: i18n.T("Plain lines")}[pv.Mode]
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Badge(c, mode)
-			ui.Text(c, i18n.T("%d of %d segments matched", pv.Matched, len(pv.Rows))).FontSize(px(t, 12))
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
+			tagChip(c, mode)
+			ui.Text(c, i18n.T("%d of %d segments matched", pv.Matched, len(pv.Rows))).FontSize(px(t, fsCaption))
 			if pv.Unused > 0 {
-				ui.Text(c, i18n.N(pv.Unused, "%d pasted line went unused", "%d pasted lines went unused", pv.Unused)).FontSize(px(t, 12)).TextColor(t.Warning)
+				iconMark(c, icons.DangerTriangle, t.Warning, "")
+				caption(c, i18n.N(pv.Unused, "%d pasted line went unused", "%d pasted lines went unused", pv.Unused)).TextColor(t.Warning)
 			}
 		})
 		shown := 0
@@ -1347,17 +1437,19 @@ func (a *app) dubPastePanel(c *ui.Context) {
 				continue
 			}
 			shown++
-			ui.Text(c.Key("pv-"+r.ID), firstOf(r.Before, "—")+"  →  "+r.After).FontSize(px(t, 11)).TextColor(t.TextMuted).MaxLines(2)
+			caption(c.Key("pv-"+r.ID), firstOf(r.Before, "—")+"  →  "+r.After).MaxLines(2).Ellipsis("…")
 		}
 		if pv.Matched > shown {
-			ui.Text(c, i18n.N(pv.Matched-shown, "+ %d more", "+ %d more", pv.Matched-shown)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+			caption(c, i18n.N(pv.Matched-shown, "+ %d more", "+ %d more", pv.Matched-shown)).TextColor(tok(t).Text3)
 		}
 		if ps.err != "" {
-			ui.Text(c, ps.err).FontSize(px(t, 11)).TextColor(t.Danger)
+			caption(c, ps.err).TextColor(t.Danger)
 		}
-		if primaryButton(c.Key("p-apply"), i18n.N(pv.Matched, "Apply to %d segment", "Apply to %d segments", pv.Matched)).Disabled(pv.Matched == 0 || a.dubLocked()).Clicked() {
-			a.dubApplyPaste()
-		}
+		ui.Row(c).Justify(ui.End).Children(func() {
+			if primaryButton(c.Key("p-apply"), i18n.N(pv.Matched, "Apply to %d segment", "Apply to %d segments", pv.Matched)).Disabled(pv.Matched == 0 || a.dubLocked()).Clicked() {
+				a.dubApplyPaste()
+			}
+		})
 	})
 }
 
@@ -1449,12 +1541,11 @@ func sortedKeys[V any](m map[string]V) []string {
 	return out
 }
 
-// dubSwitch is a switch with its label beside it; it reports a change.
-func dubSwitch(c *ui.Context, key, label string, on *bool, disabled bool) bool {
-	t := c.Theme()
+// dubSwitch is a switch with its label beside it (and a ⓘ with info,
+// "" for none); it reports a change.
+func dubSwitch(c *ui.Context, key, label, info string, on *bool, disabled bool) bool {
 	changed := false
-	ui.Row(c.Key(key + "-row")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, label).Grow(1).MinWidth(0)
+	formRow(c, key+"-row", label, info, func() {
 		changed = ui.Switch(c.Key(key), on).Label(label).Disabled(disabled).Changed()
 	})
 	return changed

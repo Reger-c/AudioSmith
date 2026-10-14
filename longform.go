@@ -100,6 +100,8 @@ type lfPage struct {
 	dismissed   string // fp when the warnings were dismissed
 	reactions   bool
 	ra          readAlong
+	panel       panelState // the inspector: beside the page, or a drawer
+	narrow      bool       // the main column is narrow: rows fold actions into ⋯
 }
 
 func newLfPage(kind core.ProjectKind, model string) *lfPage {

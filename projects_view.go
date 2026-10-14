@@ -14,74 +14,108 @@ import (
 	"github.com/hehehai/AudioSmith/internal/store"
 )
 
-// projectsPage is /projects.
+// projectsPage is /projects: the categories on the left (a select in
+// the toolbar when the window is narrow), the toolbar, and the items.
 func (a *app) projectsPage(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	s := &a.projects
 	a.refreshLibrary()
-	header(c, i18n.T("Projects"), func() {
-		if ui.Button(c.Key("pj-new-story"), i18n.T("New story")).Clicked() {
-			a.navigate("/stories")
-		}
-		if ui.Button(c.Key("pj-new-book"), i18n.T("New audiobook")).Clicked() {
-			a.navigate("/audiobook")
-		}
-	})
-	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c.Key("pj-filters")).Width(px(t, 190)).Shrink(0).Padding(px(t, 12), px(t, 10)).Gap(px(t, 2)).Background(t.Surface).Children(func() {
-			for i, cat := range libCategories {
-				n := s.counts[cat]
-				sel := s.category == i
-				row := ui.ButtonBase(c.Key("cat-"+strconv.Itoa(i))).Padding(px(t, 6), px(t, 8)).Radius(6).Label(categoryLabel(cat)).Selected(sel)
-				if sel {
-					row.Background(t.Accent.Alpha(0.15))
-				} else if row.Hovered() {
-					row.Background(t.SurfaceHover)
-				}
-				if row.Clicked() {
-					s.category = i
-					clear(s.selected)
-				}
-				row.Children(func() {
-					ui.Text(c, categoryLabel(cat)).Grow(1).SingleLine()
-					ui.Text(c, strconv.Itoa(n)).FontSize(px(t, 12)).TextColor(t.TextMuted)
-				})
+	narrow := a.pageWidth(c)-px(t, 190) < px(t, 520)
+	pageHeader(c, i18n.T("Projects"), func() {
+		primaryIconButton(c.Key("pj-new"), icons.AddCircle, i18n.T("New")).Label(i18n.T("New")).Menu(func(m *ui.Menu) {
+			if m.Item(i18n.T("New story")).Chosen() {
+				a.navigate("/stories")
+			}
+			if m.Item(i18n.T("New audiobook")).Chosen() {
+				a.navigate("/audiobook")
+			}
+			if m.Item(i18n.T("New dub")).Chosen() {
+				a.navigate("/dub")
 			}
 		})
-		ui.Box(c).Width(1).Background(t.Border)
-		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, 12), px(t, 20)).Gap(px(t, 10)).Children(func() {
-			a.libraryToolbar(c)
+	})
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		if !narrow {
+			ui.Column(c.Key("pj-filters")).Width(px(t, 190)).Shrink(0).Padding(px(t, sp1), px(t, sp3)).Gap(px(t, 2)).Children(func() {
+				for i, cat := range libCategories {
+					n := s.counts[cat]
+					sel := s.category == i
+					row := ui.ButtonBase(c.Key("cat-"+strconv.Itoa(i))).Padding(px(t, 6), px(t, sp2)).Radius(px(t, radiusControl)).Label(categoryLabel(cat)).Selected(sel)
+					if sel {
+						row.Background(k.Pressed)
+					} else if row.Hovered() {
+						row.Background(k.Hover)
+					}
+					if row.Clicked() {
+						s.category = i
+						clear(s.selected)
+					}
+					row.Children(func() {
+						txt := ui.Text(c, categoryLabel(cat)).TextColor(k.Text).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+						if sel {
+							txt.FontWeight(600)
+						}
+						ui.Text(c, strconv.Itoa(n)).FontSize(px(t, fsMicro)).TextColor(k.Text3)
+					})
+				}
+			})
+			ui.Box(c).Width(1).Background(k.Line)
+		}
+		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Gap(px(t, sp3)).Children(func() {
+			a.libraryToolbar(c, narrow)
 			a.libraryItems(c)
 		})
 	})
 	a.libraryDialogs(c)
 }
 
-// libraryToolbar: search, view, selection.
-func (a *app) libraryToolbar(c *ui.Context) {
+// libraryToolbar: the category (narrow), search, view, selection.
+func (a *app) libraryToolbar(c *ui.Context, narrow bool) {
 	t := c.Theme()
 	s := &a.projects
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if ui.TextInput(c.Key("pj-search"), &s.query).Placeholder(i18n.T("Search projects, voices, takes, exports…")).Label(i18n.T("Search the library")).
-			Grow(1).MinWidth(px(t, 160)).MaxWidth(px(t, 380)).Changed() {
+	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(0).Children(func() {
+		if narrow {
+			labels := make([]string, len(libCategories))
+			for i, cat := range libCategories {
+				labels[i] = categoryLabel(cat) + " · " + strconv.Itoa(s.counts[cat])
+			}
+			cur := labels[min(max(s.category, 0), len(labels)-1)]
+			if ui.Select(c.Key("pj-category"), &cur, labels).Label(i18n.T("Category")).Tooltip(i18n.T("Category")).Width(px(t, 150)).Shrink(1).MinWidth(px(t, 90)).Changed() {
+				for i, l := range labels {
+					if l == cur {
+						s.category = i
+					}
+				}
+				clear(s.selected)
+			}
+		}
+		if searchField(c, "pj-search", &s.query, i18n.T("Search projects, voices, takes, exports…"), px(t, 380)).Label(i18n.T("Search the library")).Changed() {
 			clear(s.selected)
 		}
-		ui.Segmented(c.Key("pj-view"), &s.cards, i18n.T("List"), i18n.T("Cards")).Label(i18n.T("View"))
+		ui.Segmented(c.Key("pj-view"), &s.cards, i18n.T("List"), i18n.T("Cards")).Label(i18n.T("View")).Shrink(0)
 		ui.Spacer(c)
 		n := len(s.selected)
 		if n == 0 {
-			if ui.Button(c.Key("pj-select"), i18n.T("Select visible")).Disabled(len(s.items) == 0).Clicked() {
+			sel := i18n.T("Select visible")
+			var b ui.Element
+			if narrow {
+				b = iconButton(c.Key("pj-select"), icons.CheckCircle, sel)
+			} else {
+				b = ghostButton(c.Key("pj-select"), sel).Shrink(0)
+			}
+			if b.Disabled(len(s.items) == 0).Clicked() {
 				for _, it := range s.items {
 					s.selected[libKey(it)] = true
 				}
 			}
 			return
 		}
-		if ui.Button(c.Key("pj-clear"), i18n.T("Clear")).Clicked() {
+		if iconButton(c.Key("pj-clear"), icons.Close, i18n.T("Clear selection")).Clicked() {
 			clear(s.selected)
 			clear(s.errors)
 		}
-		if ui.Button(c.Key("pj-delete"), i18n.T("Delete selected (%d)", n)).Clicked() {
+		if ghostIconButton(c.Key("pj-delete"), icons.TrashBinMinimalistic, i18n.T("Delete selected (%d)", n)).Label(i18n.T("Delete selected (%d)", n)).Shrink(0).Clicked() {
 			s.deleteOpen = true
 		}
 	})
@@ -93,24 +127,21 @@ func (a *app) libraryItems(c *ui.Context) {
 	s := &a.projects
 	items := s.items
 	if len(items) == 0 {
-		ui.Column(c.Key("pj-empty")).Grow(1).Center().Gap(px(t, 8)).Children(func() {
-			switch {
-			case s.loading && s.loaded == "":
-				ui.Text(c, i18n.T("Loading…")).TextColor(t.TextMuted)
-			case strings.TrimSpace(s.query) != "":
-				ui.Text(c, i18n.T("No matches for “%s”", strings.TrimSpace(s.query))).TextColor(t.TextMuted)
-			default:
-				ui.Text(c, i18n.T("Nothing here yet")).FontSize(px(t, 15)).Bold()
-				ui.Text(c, i18n.T("Write a story, make an audiobook, design a voice or generate a take, and it shows up here.")).TextColor(t.TextMuted)
-			}
-		})
+		switch {
+		case s.loading && s.loaded == "":
+			ui.Column(c.Key("pj-empty")).Grow(1).Center().Children(func() { ui.Spinner(c).Label(i18n.T("Loading…")) })
+		case strings.TrimSpace(s.query) != "":
+			emptyState(c.Key("pj-empty"), icons.Magnifer, i18n.T("No matches for “%s”", strings.TrimSpace(s.query)), "", nil)
+		default:
+			emptyState(c.Key("pj-empty"), projectsIcon, i18n.T("Nothing here yet"), i18n.T("Write a story, make an audiobook, design a voice or generate a take, and it shows up here."), nil)
+		}
 		return
 	}
 	if s.cards == 1 {
-		ui.GridView(c.Key("pj-grid"), &s.grid, len(items), px(t, 280), px(t, 150), func(i int) {
+		ui.GridView(c.Key("pj-grid"), &s.grid, len(items), px(t, 260), px(t, 150), func(i int) {
 			it := items[i]
 			a.libraryCard(c, it)
-		}).Grow(1).Gap(px(t, 10))
+		}).Grow(1).Gap(px(t, sp3))
 	} else {
 		s.list.Key = func(i int) any {
 			if i < len(items) {
@@ -123,24 +154,31 @@ func (a *app) libraryItems(c *ui.Context) {
 		})
 	}
 	if len(items) >= s.limit {
-		if ui.Button(c.Key("pj-more"), i18n.T("Show more")).Clicked() {
-			s.limit += libPageSize
-		}
+		ui.Row(c).Justify(ui.Center).Children(func() {
+			if ghostButton(c.Key("pj-more"), i18n.T("Show more")).Clicked() {
+				s.limit += libPageSize
+			}
+		})
 	}
 }
 
-// libraryRow is one item in the list.
+// libraryRow is one item in the list: a flat row (hover, chosen on the
+// pressed grey) with its tick, icon, title and meta, its main action and
+// ⋯.
 func (a *app) libraryRow(c *ui.Context, it store.LibraryItem) {
 	t := c.Theme()
+	k := tok(t)
 	s := &a.projects
 	key := libKey(it)
-	ui.Column(c.Key("it-"+key)).Gap(px(t, 4)).Padding(px(t, 8), px(t, 10)).Radius(8).Background(func() ui.Color {
-		if s.selected[key] {
-			return t.Accent.Alpha(0.10)
-		}
-		return ui.Transparent
-	}()).Children(func() {
-		ui.Row(c).Gap(px(t, 10)).AlignItems(ui.Center).Children(func() {
+	row := ui.Column(c.Key("it-"+key)).Gap(px(t, 4)).Padding(px(t, 6), px(t, sp2)).Radius(px(t, radiusControl))
+	switch {
+	case s.selected[key]:
+		row.Background(k.Pressed)
+	case row.Hovered():
+		row.Background(k.Hover)
+	}
+	row.Children(func() {
+		ui.Row(c).Gap(px(t, sp3)).AlignItems(ui.Center).Children(func() {
 			on := s.selected[key]
 			if ui.Checkbox(c.Key("sel"), &on, "").Label(i18n.T("Select %s", it.Title)).Changed() {
 				if on {
@@ -152,30 +190,34 @@ func (a *app) libraryRow(c *ui.Context, it store.LibraryItem) {
 			a.itemAvatar(c, it)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 				a.itemTitle(c, it)
-				ui.Text(c, a.itemMeta(it)).FontSize(px(t, 11)).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+				truncText(c, a.itemMeta(it)).FontSize(px(t, fsMicro)).TextColor(k.Text2)
 				if e := s.errors[key]; e != "" {
-					ui.Text(c, e).FontSize(px(t, 11)).TextColor(t.Danger)
+					caption(c, e).TextColor(t.Danger)
 				}
 			})
 			a.itemActions(c, it)
 		})
 		if it.Source == "render" {
-			a.renderDetails(c, it)
+			ui.Column(c).Padding(0, 0, 0, px(t, 64)).Children(func() { a.renderDetails(c, it) })
 		}
 	})
 }
 
-// libraryCard is one item as a card.
+// libraryCard is one item as a flat card (on the pressed grey when
+// chosen).
 func (a *app) libraryCard(c *ui.Context, it store.LibraryItem) {
 	t := c.Theme()
+	k := tok(t)
 	s := &a.projects
 	key := libKey(it)
-	card := ui.Column(c.Key("card-"+key)).Grow(1).Gap(px(t, 6)).Padding(px(t, 10)).Radius(10).Border(1, t.Border).Background(t.Surface)
+	var cd ui.Element
 	if s.selected[key] {
-		card.Border(2, t.Accent)
+		cd = fillCard(c.Key("card-" + key)).Background(k.Pressed)
+	} else {
+		cd = card(c.Key("card-" + key))
 	}
-	card.Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+	cd.Grow(1).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 			a.itemAvatar(c, it)
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				a.itemTitle(c, it)
@@ -189,23 +231,24 @@ func (a *app) libraryCard(c *ui.Context, it store.LibraryItem) {
 				}
 			}
 		})
-		ui.Text(c, a.itemMeta(it)).FontSize(px(t, 11)).TextColor(t.TextMuted).MaxLines(2).Ellipsis("…")
+		ui.Text(c, a.itemMeta(it)).FontSize(px(t, fsMicro)).TextColor(k.Text2).MaxLines(2).Ellipsis("…")
 		ui.Spacer(c)
-		ui.Row(c).Gap(px(t, 6)).Children(func() { a.itemActions(c, it) })
+		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Justify(ui.End).Children(func() { a.itemActions(c, it) })
 	})
 }
 
-// itemAvatar: a voice's portrait, else the kind's icon.
+// itemAvatar: a voice's portrait, else the kind's icon on a grey circle.
 func (a *app) itemAvatar(c *ui.Context, it store.LibraryItem) {
 	t := c.Theme()
+	k := tok(t)
 	if it.Source == "voice" {
 		if v := a.findVoice(it.ID); v != nil {
 			ui.Avatar(c, v.Name, a.portrait(v))
 			return
 		}
 	}
-	ui.Column(c).Width(px(t, 32)).Height(px(t, 32)).Center().Radius(16).Background(t.Accent.Alpha(0.12)).Children(func() {
-		ui.Icon(c, itemIcon(it).Linear).TextColor(tok(t).Text2)
+	ui.Column(c).Width(px(t, 32)).Height(px(t, 32)).Center().Radius(px(t, 16)).Background(k.Hover).Shrink(0).Children(func() {
+		ui.Icon(c, itemIcon(it).Linear).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)
 	})
 }
 
@@ -223,7 +266,7 @@ func (a *app) itemTitle(c *ui.Context, it store.LibraryItem) {
 					s.renaming = ""
 				}
 			}
-			if ui.Button(c.Key("rename-cancel"), i18n.T("Cancel")).Clicked() || c.Shortcut(0, ui.KeyEscape) {
+			if ghostButton(c.Key("rename-cancel"), i18n.T("Cancel")).Clicked() || c.Shortcut(0, ui.KeyEscape) {
 				s.renaming = ""
 			}
 		})
@@ -233,76 +276,83 @@ func (a *app) itemTitle(c *ui.Context, it store.LibraryItem) {
 	if title == "" {
 		title = i18n.T("Untitled")
 	}
-	if ui.ButtonBase(c.Key("title")).Label(i18n.T("Open %s", title)).Children(func() {
-		ui.Text(c, title).Bold().MaxLines(2).Ellipsis("…").Grow(1).MinWidth(0)
-	}).Clicked() {
+	b := ui.ButtonBase(c.Key("title")).Label(i18n.T("Open %s", title)).Tooltip(title).MinWidth(0)
+	b.Children(func() {
+		txt := ui.Text(c, title).FontWeight(600).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+		if b.Hovered() {
+			txt.Underline()
+		}
+	})
+	if b.Clicked() {
 		a.openItem(it)
 	}
 }
 
-// itemActions are an item's buttons, by kind.
+// itemActions are an item's actions, by kind: play where there is audio,
+// its main action as a ghost button, and ⋯ (Rename, Show in Finder,
+// Delete).
 func (a *app) itemActions(c *ui.Context, it store.LibraryItem) {
 	s := &a.projects
 	key := libKey(it)
+	reveal := ""
 	switch it.Source {
 	case "dub", "workflow", "call": // M4 (thread #19), M6 (thread #21), M6b (thread #23)
-		if ui.Button(c.Key("open"), i18n.T("Open")).Clicked() {
+		if ghostButton(c.Key("open"), i18n.T("Open")).Clicked() {
 			a.openItem(it)
 		}
 	case "project":
-		if ui.Button(c.Key("open"), i18n.T("Open")).Clicked() {
+		if ghostButton(c.Key("open"), i18n.T("Open")).Clicked() {
 			a.openItem(it)
-		}
-		if ui.Button(c.Key("rename"), "✎").Label(i18n.T("Rename")).Tooltip(i18n.T("Rename")).Clicked() {
-			s.renaming, s.renameText = key, it.Title
 		}
 	case "render":
 		if r := a.renderFor(it.ID); r != nil && r.body.Output != nil {
 			id := "book:" + r.rec.ID
-			label := "▶"
-			if a.pl.Playing(id) {
-				label = "❚❚"
-			}
 			book := r.body.Output.Book
-			if ui.Button(c.Key("play"), label).Label(i18n.T("Play")).Tooltip(i18n.T("Play")).Clicked() {
+			reveal = book
+			if playToggle(c.Key("play"), a.pl.Playing(id), i18n.T("Play"), i18n.T("Pause")).Clicked() {
 				if err := a.pl.Toggle(id, book); err != nil {
 					a.toast(i18n.T("Can't play: %v", err))
 				}
 			}
-			if ui.Button(c.Key("reveal"), i18n.T("Show in Finder")).Clicked() {
-				mygo.Shell.ShowItemInFolder(book)
-			}
 		}
 	case "voice":
-		if ui.Button(c.Key("use"), i18n.T("Use voice")).Clicked() {
+		if ghostButton(c.Key("use"), i18n.T("Use voice")).Clicked() {
 			if v := a.findVoice(it.ID); v != nil {
 				a.useVoiceInStudio(v)
 			}
 		}
 	case "take":
 		if tk := a.findTake(it.ID); tk != nil {
-			label := "▶"
-			if a.pl.Playing(tk.ID) {
-				label = "❚❚"
-			}
-			if ui.Button(c.Key("play"), label).Label(i18n.T("Play")).Tooltip(i18n.T("Play")).Clicked() {
+			if playToggle(c.Key("play"), a.pl.Playing(tk.ID), i18n.T("Play"), i18n.T("Pause")).Clicked() {
 				a.play(tk)
 			}
-			if ui.Button(c.Key("reuse"), i18n.T("Reuse script")).Clicked() {
+			if ghostButton(c.Key("reuse"), i18n.T("Reuse script")).Clicked() {
 				a.reuse(tk)
 			}
 		}
 	case "export":
-		path := it.Detail
-		if ui.Button(c.Key("reveal"), i18n.T("Show in Finder")).Clicked() {
-			mygo.Shell.ShowItemInFolder(path)
+		reveal = it.Detail
+		if iconButton(c.Key("reveal"), icons.FolderOpen, i18n.T("Show in Finder")).Clicked() {
+			mygo.Shell.ShowItemInFolder(reveal)
 		}
+		reveal = ""
 	}
-	if iconButton(c.Key("delete"), icons.Close, i18n.T("Delete")).Tooltip(i18n.T("Delete")).Clicked() {
-		clear(s.selected)
-		s.selected[key] = true
-		s.deleteOpen = true
-	}
+	moreMenu(c.Key("more"), i18n.T("Item actions"), func(m *ui.Menu) {
+		if it.Source == "project" && m.Item(i18n.T("Rename")).Chosen() {
+			s.renaming, s.renameText = key, it.Title
+		}
+		if reveal != "" && m.Item(i18n.T("Show in Finder")).Chosen() {
+			mygo.Shell.ShowItemInFolder(reveal)
+		}
+		if it.Source == "project" || reveal != "" {
+			m.Separator()
+		}
+		if m.Item(i18n.T("Delete…")).Chosen() {
+			clear(s.selected)
+			s.selected[key] = true
+			s.deleteOpen = true
+		}
+	})
 }
 
 // renderDetails is "How it was made".
@@ -311,24 +361,24 @@ func (a *app) renderDetails(c *ui.Context, it store.LibraryItem) {
 	s := &a.projects
 	key := libKey(it)
 	open := s.details[key]
-	ui.Collapsible(c.Key("how-"+key), i18n.T("How it was made"), &open, func() {
+	collapsible(c.Key("how-"+key), i18n.T("How it was made"), &open, nil, func() {
 		r := a.renderFor(it.ID)
 		if r == nil {
-			ui.Text(c, i18n.T("Loading…")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("Loading…"))
 			return
 		}
 		sum := r.body.Summary
 		if sum.Model == "" {
-			ui.Text(c, i18n.T("Rendered before details were recorded.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("Rendered before details were recorded."))
 			return
 		}
 		row := func(k, v string) {
 			if v == "" {
 				return
 			}
-			ui.Row(c.Key("how-" + k)).Gap(px(t, 8)).Children(func() {
-				ui.Text(c, k).FontSize(px(t, 12)).TextColor(t.TextMuted).Width(px(t, 110))
-				ui.Text(c, v).FontSize(px(t, 12)).Grow(1).MinWidth(0).Selectable()
+			ui.Row(c.Key("how-" + k)).Gap(px(t, sp2)).Children(func() {
+				ui.Text(c, k).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).Width(px(t, 110)).Shrink(0)
+				ui.Text(c, v).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0).Selectable()
 			})
 		}
 		lang := sum.Lang
@@ -405,22 +455,26 @@ func (a *app) libraryDialogs(c *ui.Context) {
 			s.deleteOpen = false
 		}
 		ui.Modal(c, &s.deleteOpen, func() {
-			ui.Column(c.Key("pj-del")).Width(px(t, 440)).Gap(px(t, 10)).Padding(px(t, 18)).Children(func() {
-				ui.Text(c, i18n.N(len(items), "Delete %d item?", "Delete %d items?", len(items))).FontSize(px(t, 15)).Bold()
+			w, _ := c.Size()
+			ui.Column(c.Key("pj-del")).Width(min(px(t, 440), w-px(t, 64))).Gap(px(t, sp3)).Padding(px(t, sp5)).Children(func() {
+				sectionHeading(c, i18n.N(len(items), "Delete %d item?", "Delete %d items?", len(items)))
 				ui.Scroll(c).MaxHeight(px(t, 200)).Children(func() {
 					ui.Column(c).Gap(px(t, 2)).Children(func() {
 						for _, it := range items {
-							line := "• " + strings.Join(strings.Fields(it.Title), " ")
-							if e := s.errors[libKey(it)]; e != "" {
-								line += " — " + e
-							}
-							ui.Text(c, line).FontSize(px(t, 12)).SingleLine().Ellipsis("…")
+							line := strings.Join(strings.Fields(it.Title), " ")
+							e := s.errors[libKey(it)]
+							ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+								iconMark(c, itemIcon(it), tok(t).Text2, "")
+								truncText(c, line).FontSize(px(t, fsCaption)).Grow(1)
+								if e != "" {
+									caption(c, e).TextColor(t.Danger).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Tooltip(e)
+								}
+							})
 						}
 					})
 				})
-				ui.Text(c, i18n.T("This cannot be undone. Projects and export records are removed; deleting voices, takes or renders removes their audio too. Exported files are kept.")).
-					FontSize(px(t, 12)).TextColor(t.TextMuted)
-				ui.Row(c).Gap(px(t, 8)).Children(func() {
+				caption(c, i18n.T("This cannot be undone. Projects and export records are removed; deleting voices, takes or renders removes their audio too. Exported files are kept."))
+				ui.Row(c).Gap(px(t, sp2)).Children(func() {
 					ui.Spacer(c)
 					if ui.Button(c.Key("del-cancel"), i18n.T("Cancel")).AutoFocus().Clicked() {
 						s.deleteOpen = false
@@ -429,7 +483,7 @@ func (a *app) libraryDialogs(c *ui.Context) {
 					if len(s.errors) > 0 {
 						label = i18n.T("Retry")
 					}
-					if primaryButton(c.Key("del-ok"), label).Background(t.Danger).Clicked() {
+					if recordButton(c.Key("del-ok"), label).Clicked() {
 						a.deleteItems(items)
 					}
 				})

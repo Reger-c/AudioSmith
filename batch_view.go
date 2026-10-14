@@ -16,79 +16,104 @@ import (
 	"github.com/hehehai/AudioSmith/internal/store"
 )
 
-// batchPage is /batch.
+// batchPage is /batch: the setup (videos, languages, voice) beside the
+// queue, or above it when the window is narrow.
 func (a *app) batchPage(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	b := &a.batch
 	if len(b.jobs) > 0 {
 		c.After(time.Second)
 	}
-	header(c, i18n.T("Batch dubbing"), func() {
-		if ui.Button(c.Key("batch-dub"), i18n.T("Dub page")).Clicked() {
+	side := px(t, inspectorWidth+40)
+	stacked := a.pageWidth(c)-side < px(t, 440)
+	pageHeader(c, i18n.T("Batch dubbing"), func() {
+		label := i18n.T("Dub page")
+		var btn ui.Element
+		if stacked {
+			btn = iconButton(c.Key("batch-dub"), dubIcon, label)
+		} else {
+			btn = ghostIconButton(c.Key("batch-dub"), dubIcon, label).Label(label)
+		}
+		if btn.Clicked() {
 			a.navigate("/dub")
 		}
 	})
-	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Scroll(c.Key("batch-side")).Width(px(t, inspectorWidth+40)).Shrink(0).Background(t.Surface).Children(func() {
-			ui.Column(c).Padding(px(t, 16)).Gap(px(t, 10)).Children(func() {
-				a.batchSetup(c)
-				ui.Divider(c)
-				a.batchWatchPanel(c)
+	setup := func() {
+		ui.Column(c).Padding(px(t, sp2), px(t, sp5), px(t, sp5)).Gap(px(t, sp3)).Children(func() {
+			a.batchSetup(c)
+			ui.Box(c).Height(1).Background(k.Line)
+			a.batchWatchPanel(c)
+		})
+	}
+	if stacked {
+		ui.Scroll(c.Key("batch-stack")).Grow(1).MinHeight(0).Children(func() {
+			setup()
+			ui.Column(c).Padding(px(t, sp2), px(t, sp5), px(t, sp5)).Gap(px(t, sp2)).MinHeight(px(t, 240)).Children(func() {
+				a.batchQueue(c, true)
+			})
+		}).ClipX()
+	} else {
+		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+			ui.Scroll(c.Key("batch-side")).Width(side).Shrink(0).Children(setup)
+			ui.Box(c).Width(1).Background(k.Line)
+			ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, sp2), px(t, sp6), px(t, sp4)).Gap(px(t, sp3)).Children(func() {
+				a.batchQueue(c, false)
 			})
 		})
-		ui.Box(c).Width(1).Background(t.Border)
-		ui.Column(c).Grow(1).MinWidth(0).Padding(px(t, 12), px(t, 16)).Gap(px(t, 8)).Children(func() {
-			a.batchQueue(c)
-		})
-	})
+	}
 	a.batchConfirm(c)
 }
 
 // batchSetup: the videos to add and the batch settings.
 func (a *app) batchSetup(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	b := &a.batch
 	s := &b.settings
-	ui.Text(c, i18n.T("Videos")).FontSize(px(t, 14)).Bold()
-	zone := ui.Column(c.Key("batch-drop")).Padding(px(t, 12)).Gap(px(t, 6)).Radius(8).Border(1, t.Border)
+	sectionHeading(c, i18n.T("Videos"))
+	zone := ui.Column(c.Key("batch-drop")).Padding(px(t, sp2)).Gap(px(t, 2)).Radius(px(t, radiusCard)).Border(1, k.G[5]).BorderStyle(ui.BorderDashed)
 	if files := zone.DroppedFiles(); len(files) > 0 {
 		a.batchDropped(files)
 	}
 	if zone.FileDragOver() {
-		zone.Border(2, t.Accent)
+		zone.Border(2, k.Accent).Background(k.AccentSoft)
 	}
 	zone.Children(func() {
 		if len(b.files) == 0 {
-			ui.Text(c, i18n.T("Drop videos here to dub them in a batch.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("Drop videos here to dub them in a batch.")).TextAlign(ui.Center).Padding(px(t, sp2))
 		}
 		for _, f := range b.files {
 			ff := f
-			ui.Row(c.Key("file-" + f)).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, filepath.Base(ff)).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine()
+			ui.Row(c.Key("file-"+f)).Gap(px(t, 6)).AlignItems(ui.Center).Padding(0, 0, 0, px(t, sp2)).Children(func() {
+				iconMark(c, dubIcon, k.Text2, "")
+				truncText(c, filepath.Base(ff)).FontSize(px(t, fsCaption)).Grow(1)
 				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", filepath.Base(ff))).Clicked() {
 					b.files = slices.DeleteFunc(b.files, func(x string) bool { return x == ff })
 				}
 			})
 		}
-		if ui.Button(c.Key("batch-add"), i18n.T("Add videos…")).Clicked() {
-			a.batchAddFiles()
-		}
+		ui.Row(c).Justify(ui.Center).Children(func() {
+			if ghostIconButton(c.Key("batch-add"), icons.AddCircle, i18n.T("Add videos…")).Label(i18n.T("Add videos…")).Clicked() {
+				a.batchAddFiles()
+			}
+		})
 	})
 	// Target languages.
-	ui.Text(c, i18n.T("Dub into")).FontSize(px(t, 12)).Bold()
+	ui.Text(c, i18n.T("Dub into"))
 	ui.Row(c.Key("batch-langs")).Gap(px(t, 4)).Wrap().AlignItems(ui.Center).Children(func() {
 		for _, l := range s.Targets {
 			ll := l
-			ui.Row(c.Key("lang-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 6)).Radius(10).Background(t.Background).Border(1, t.Border).Children(func() {
-				ui.Text(c, dubLangName(ll)).FontSize(px(t, 12))
-				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Clicked() {
+			ui.Row(c.Key("lang-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 2), px(t, 2), px(t, sp2)).Radius(px(t, radiusControl)).Background(k.Hover).Children(func() {
+				ui.Text(c, dubLangName(ll)).FontSize(px(t, fsCaption)).SingleLine()
+				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Size(px(t, 22), px(t, 22)).Clicked() {
 					a.batchSetSettings(func(s *services.BatchSettings) {
 						s.Targets = slices.DeleteFunc(s.Targets, func(x string) bool { return x == ll })
 					})
 				}
 			})
 		}
-		ui.MenuButton(c.Key("batch-lang-add"), i18n.T("+ Add"), func(m *ui.Menu) {
+		dropButton(c.Key("batch-lang-add"), icons.AddCircle, i18n.T("Add")).Shrink(0).Menu(func(m *ui.Menu) {
 			for _, l := range dubTargetLangs {
 				if !slices.Contains(s.Targets, l) && m.Item(dubLangName(l)).Chosen() {
 					ll := l
@@ -140,50 +165,67 @@ func (a *app) batchSetup(c *ui.Context) {
 		}
 	})
 	keep := s.KeepBackground
-	if dubSwitch(c, "batch-bg", i18n.T("Keep background (music and effects)"), &keep, false) {
+	if dubSwitch(c, "batch-bg", i18n.T("Keep background (music and effects)"), "", &keep, false) {
 		a.batchSetSettings(func(s *services.BatchSettings) { s.KeepBackground = keep })
 	}
 	if ok, name := a.dubTranslatorReady(dub.Settings{Translator: s.Translator}); ok {
-		ui.Text(c, i18n.T("Translator: %s", name)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Translator: %s", name)).TextColor(k.Text3)
 	} else {
-		ui.Text(c, i18n.T("Translating needs a translation engine: a local model (Ollama, LM Studio) or a provider in Settings → Writing help.")).FontSize(px(t, 11)).TextColor(t.Warning)
-		if ui.Button(c.Key("batch-llm"), i18n.T("Set up writing help")).Clicked() {
-			a.navigate("/settings/writing")
-		}
+		fillCard(c.Key("batch-needs")).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
+			ui.Row(c).Gap(px(t, 6)).Children(func() {
+				iconMark(c, icons.DangerTriangle, t.Warning, "")
+				caption(c, i18n.T("Translating needs a translation engine: a local model (Ollama, LM Studio) or a provider in Settings → Writing help.")).TextColor(k.Text).Grow(1).MinWidth(0)
+			})
+			if ui.Button(c.Key("batch-llm"), i18n.T("Set up writing help")).Clicked() {
+				a.navigate("/settings/writing")
+			}
+		})
 	}
 	n, m := len(b.files), len(s.Targets)
-	ui.Text(c, i18n.N(n, "%d video", "%d videos", n)+" × "+i18n.N(m, "%d language", "%d languages", m)+" = "+i18n.N(n*m, "%d dub", "%d dubs", n*m)).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
-	if primaryButton(c.Key("batch-queue"), i18n.T("Add to queue")).Disabled(n == 0 || m == 0).Clicked() {
-		a.batchEnqueue()
-	}
+	ui.Column(c).Gap(px(t, sp2)).Margin(px(t, sp1), 0, 0, 0).Children(func() {
+		caption(c, i18n.N(n, "%d video", "%d videos", n)+" × "+i18n.N(m, "%d language", "%d languages", m)+" = "+i18n.N(n*m, "%d dub", "%d dubs", n*m))
+		if primaryButton(c.Key("batch-queue"), i18n.T("Add to queue")).Disabled(n == 0 || m == 0).Clicked() {
+			a.batchEnqueue()
+		}
+	})
 	for _, e := range b.errs {
-		ui.Text(c, e).FontSize(px(t, 11)).TextColor(t.Danger)
+		ui.Row(c).Gap(px(t, 6)).Children(func() {
+			iconMark(c, icons.DangerCircle, t.Danger, "")
+			caption(c, e).TextColor(t.Danger).Grow(1).MinWidth(0)
+		})
 	}
 }
 
 // batchWatchPanel is the watch folder.
 func (a *app) batchWatchPanel(c *ui.Context) {
 	t := c.Theme()
+	k := tok(t)
 	w := a.batch.watch
-	ui.Text(c, i18n.T("Watch folder")).FontSize(px(t, 14)).Bold()
-	ui.Text(c, i18n.T("New videos dropped into the folder join the queue with the settings above (checked every 5 s, once a file stops growing). Files already there are left alone.")).
-		FontSize(px(t, 11)).TextColor(t.TextMuted)
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		sectionHeading(c, i18n.T("Watch folder"))
+		infoTip(c.Key("watch-tip"), i18n.T("New videos dropped into the folder join the queue with the settings above (checked every 5 s, once a file stops growing). Files already there are left alone."))
+	})
 	if !w.Active {
-		if ui.Button(c.Key("watch-start"), i18n.T("Watch a folder…")).Disabled(len(a.batch.settings.Targets) == 0).Clicked() {
-			a.batchWatchChoose()
-		}
+		ui.Row(c).Children(func() {
+			if ghostIconButton(c.Key("watch-start"), icons.FolderOpen, i18n.T("Watch a folder…")).Label(i18n.T("Watch a folder…")).Disabled(len(a.batch.settings.Targets) == 0).Clicked() {
+				a.batchWatchChoose()
+			}
+		})
 		return
 	}
-	ui.Column(c.Key("watch-on")).Gap(px(t, 4)).Padding(px(t, 10)).Radius(8).Border(1, t.Border).Children(func() {
+	fillCard(c.Key("watch-on")).Gap(px(t, 4)).Padding(px(t, sp3)).Children(func() {
 		state := i18n.T("Watching")
+		col := k.Success
 		if w.Paused {
-			state = i18n.T("Paused")
+			state, col = i18n.T("Paused"), k.G[5]
 		}
-		ui.Text(c, state+" · "+shortPath(w.Dir)).FontSize(px(t, 12)).MaxLines(2)
-		ui.Text(c, i18n.N(w.Added, "%d video added", "%d videos added", w.Added)).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			statusDot(c, col)
+			truncText(c, state+" · "+shortPath(w.Dir)).FontSize(px(t, fsCaption)).Grow(1)
+		})
+		caption(c, i18n.N(w.Added, "%d video added", "%d videos added", w.Added))
 		if w.Err != "" {
-			ui.Text(c, w.Err).FontSize(px(t, 11)).TextColor(t.Danger)
+			caption(c, w.Err).TextColor(t.Danger)
 		}
 		ui.Row(c).Gap(px(t, 6)).Children(func() {
 			if w.Paused {
@@ -193,15 +235,16 @@ func (a *app) batchWatchPanel(c *ui.Context) {
 			} else if ui.Button(c.Key("watch-pause"), i18n.T("Pause")).Clicked() {
 				a.batchWatchPause(true)
 			}
-			if ui.Button(c.Key("watch-stop"), i18n.T("Stop")).Clicked() {
+			if ghostButton(c.Key("watch-stop"), i18n.T("Stop")).Clicked() {
 				a.batchWatchStop()
 			}
 		})
 	})
 }
 
-// batchQueue is the tabs and the job cards.
-func (a *app) batchQueue(c *ui.Context) {
+// batchQueue is the tabs (a segmented control) and the job cards;
+// stacked, the page scrolls as a whole.
+func (a *app) batchQueue(c *ui.Context, stacked bool) {
 	t := c.Theme()
 	b := &a.batch
 	var tabs [3][]store.DubRecord
@@ -215,43 +258,61 @@ func (a *app) batchQueue(c *ui.Context) {
 			tabs[2] = append(tabs[2], r)
 		}
 	}
-	ui.Tabs(c.Key("batch-tabs"), &b.tab, i18n.T("Active (%d)", len(tabs[0])), i18n.T("Completed (%d)", len(tabs[1])), i18n.T("Failed (%d)", len(tabs[2])))
+	ui.Row(c).Children(func() {
+		ui.Segmented(c.Key("batch-tabs"), &b.tab, i18n.T("Active (%d)", len(tabs[0])), i18n.T("Completed (%d)", len(tabs[1])), i18n.T("Failed (%d)", len(tabs[2]))).
+			Label(i18n.T("Queue")).Shrink(1).MinWidth(0)
+	})
 	list := tabs[min(max(b.tab, 0), 2)]
 	if len(list) == 0 {
-		empty := []string{i18n.T("No active dubs. Add videos on the left."), i18n.T("Nothing has completed yet."), i18n.T("No failed dubs.")}[b.tab]
-		ui.Column(c.Key("batch-empty")).Grow(1).Center().Children(func() {
-			ui.Text(c, empty).TextColor(t.TextMuted)
-		})
+		empty := []string{i18n.T("No active dubs. Add videos on the left."), i18n.T("Nothing has completed yet."), i18n.T("No failed dubs.")}[min(max(b.tab, 0), 2)]
+		emptyState(c.Key("batch-empty"), batchIcon, empty, "", nil).MinHeight(px(t, 160))
 		return
 	}
-	ui.Scroll(c.Key("batch-list")).Grow(1).Children(func() {
-		ui.Column(c).Gap(px(t, 6)).Children(func() {
+	cards := func() {
+		ui.Column(c).Gap(px(t, sp2)).Children(func() {
 			for _, r := range list {
 				a.batchCard(c, r)
 			}
 		})
-	})
+	}
+	if stacked {
+		cards()
+		return
+	}
+	ui.Scroll(c.Key("batch-list")).Grow(1).Children(cards)
 }
 
-// batchCard is one video of the queue.
+// batchCard is one video of the queue: a flat card with its title,
+// languages and state, Export ▾ / Retry, Open, and ⋯ (Delete).
 func (a *app) batchCard(c *ui.Context, r store.DubRecord) {
 	t := c.Theme()
+	k := tok(t)
 	b := &a.batch
 	p := b.docs[r.ID]
 	id := r.ID
 	status := a.batchStatus(id)
-	ui.Column(c.Key("card-"+id)).Gap(px(t, 4)).Padding(px(t, 10)).Radius(8).Border(1, t.Border).Children(func() {
+	card(c.Key("card-"+id)).Padding(px(t, sp3), px(t, sp4)).Gap(px(t, 6)).Children(func() {
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, firstOf(r.Title, filepath.Base(r.Source))).Bold().Grow(1).MinWidth(0).SingleLine()
+			iconMark(c, dubIcon, k.Text2, "")
+			ui.Text(c, firstOf(r.Title, filepath.Base(r.Source))).FontWeight(600).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			for _, l := range r.Languages {
-				ui.Badge(c, l)
+				tagChip(c, l)
 			}
+			moreMenu(c.Key("more"), i18n.T("Dub actions"), func(m *ui.Menu) {
+				if m.Item(i18n.T("Open in the Dub page")).Chosen() {
+					a.openDubAny(id)
+				}
+				m.Separator()
+				if m.Item(i18n.T("Delete…")).Chosen() {
+					b.confirm = id
+				}
+			})
 		})
 		meta := []string{i18n.DateTime(r.CreatedAt)}
 		if r.Duration > 0 {
 			meta = append(meta, tlClock(r.Duration))
 		}
-		ui.Text(c, strings.Join(meta, " · ")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, strings.Join(meta, " · ")).SingleLine().Ellipsis("…")
 		switch status {
 		case "active":
 			j := batchRunning(b.jobs[id])
@@ -267,31 +328,33 @@ func (a *app) batchCard(c *ui.Context, r store.DubRecord) {
 					stage += " " + j.Progress.Message
 				}
 			}
-			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, stage).FontSize(px(t, 12)).Grow(1)
-				if j.Progress.Fraction > 0 {
-					ui.Progress(c, j.Progress.Fraction).Width(px(t, 120))
+			ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+				if j.ID != "" && j.State == jobs.StateRunning {
+					ui.Spinner(c)
+				} else {
+					statusDot(c, k.G[5])
 				}
-				if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
+				ui.Text(c, stage).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+				if j.Progress.Fraction > 0 {
+					ui.Progress(c, j.Progress.Fraction).Width(px(t, 120)).Shrink(1)
+				}
+				if ghostButton(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
 					a.batchCancel(id)
 				}
 			})
 		case "done":
-			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
+			ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+				iconMark(c, icons.CheckCircle, k.Success, "")
+				caption(c, i18n.T("Done")).Grow(1)
 				if p != nil {
-					for _, l := range p.Targets {
-						ll := l
-						if ui.Button(c.Key("export-"+l), i18n.T("Export %s", dubLangName(ll))).Disabled(p.Track(ll).File == "").Clicked() {
-							a.batchExport(id, ll)
+					dropButton(c.Key("export"), icons.Export, i18n.T("Export")).Shrink(0).Menu(func(m *ui.Menu) {
+						for _, l := range p.Targets {
+							ll := l
+							if m.Item(i18n.T("Export %s", dubLangName(ll))).Disabled(p.Track(ll).File == "").Chosen() {
+								a.batchExport(id, ll)
+							}
 						}
-					}
-				}
-				ui.Spacer(c)
-				if ui.Button(c.Key("open"), i18n.T("Open in the Dub page")).Clicked() {
-					a.openDubAny(id)
-				}
-				if ui.Button(c.Key("delete"), i18n.T("Delete")).Clicked() {
-					b.confirm = id
+					})
 				}
 			})
 		default:
@@ -303,16 +366,11 @@ func (a *app) batchCard(c *ui.Context, r store.DubRecord) {
 					break
 				}
 			}
-			ui.Text(c, why).FontSize(px(t, 12)).TextColor(t.Danger).MaxLines(3)
-			ui.Row(c).Gap(px(t, 6)).Children(func() {
+			ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+				iconMark(c, icons.DangerCircle, t.Danger, "")
+				caption(c, why).TextColor(t.Danger).MaxLines(3).Ellipsis("…").Tooltip(why).Grow(1).MinWidth(0)
 				if ui.Button(c.Key("retry"), i18n.T("Retry")).Clicked() {
 					a.batchRetry(id)
-				}
-				if ui.Button(c.Key("open"), i18n.T("Open in the Dub page")).Clicked() {
-					a.openDubAny(id)
-				}
-				if ui.Button(c.Key("delete"), i18n.T("Delete")).Clicked() {
-					b.confirm = id
 				}
 			})
 		}

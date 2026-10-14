@@ -20,6 +20,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/ffmpeg"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
 )
@@ -154,7 +155,7 @@ func (a *app) dubExportPanel(c *ui.Context) {
 	subtitle := ex.format == dub.ExportSRT || ex.format == dub.ExportVTT || ex.format == dub.ExportASS
 	switch {
 	case ex.format == dub.ExportMP4:
-		ui.Text(c, i18n.T("Tracks")).FontSize(px(t, 12)).Bold()
+		sectionTitle(c, i18n.T("Tracks"))
 		ui.Column(c).Gap(px(t, 4)).Children(func() {
 			for _, l := range append([]string{dub.OrigTrack}, p.Targets...) {
 				on := ex.tracks[l]
@@ -221,37 +222,42 @@ func (a *app) dubExportPanel(c *ui.Context) {
 			ui.Segmented(c.Key("dx-bits"), &ex.bits, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float"))
 		})
 	}
+	k := tok(t)
 	if subtitle {
-		ui.Text(c, i18n.T("Subtitles are made from the lines as written; long lines are split Netflix-style (42 characters a line, 17 a second).")).
-			FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Subtitles are made from the lines as written; long lines are split Netflix-style (42 characters a line, 17 a second).")).TextColor(k.Text3)
 	}
 	if !p.Settings.KeepBackground && (ex.format == dub.ExportMP4 || ex.format == dub.ExportWAV || ex.format == dub.ExportM4A) {
-		ui.Text(c, i18n.T("Keep background is off: the dubbed tracks are speech only.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("Keep background is off: the dubbed tracks are speech only.")).TextColor(k.Text3)
 	}
+	// Export… itself is the footer's primary button.
 	blocked := a.dubExportBlocked(ex.format)
 	ready := a.dubExportReady()
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		if primaryButton(c.Key("dx-go"), i18n.T("Export…")).Disabled(blocked != "" || ready != "" || ex.job != "").Clicked() {
-			a.dubDoExport()
-		}
-		if ex.job != "" {
+	mark := func(ic icons.Icon, col ui.Color, text string) {
+		ui.Row(c).Gap(px(t, 6)).Children(func() {
+			iconMark(c, ic, col, "")
+			caption(c, text).TextColor(col).Grow(1).MinWidth(0)
+		})
+	}
+	if ex.job != "" {
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c)
-			ui.Text(c, i18n.T("Exporting…")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-		}
-	})
+			caption(c, i18n.T("Exporting…"))
+		})
+	}
 	switch {
 	case blocked != "":
-		ui.Text(c, blocked).FontSize(px(t, 12)).TextColor(t.Warning)
+		mark(icons.DangerTriangle, t.Warning, blocked)
 	case ready != "":
-		ui.Text(c, ready).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		mark(icons.InfoCircle, k.Text2, ready)
 	}
 	if ex.err != "" {
-		ui.Text(c, ex.err).FontSize(px(t, 12)).TextColor(t.Danger)
+		mark(icons.DangerCircle, t.Danger, ex.err)
 	}
 	if ex.last != "" {
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Exported %s", filepath.Base(ex.last))).FontSize(px(t, 12)).TextColor(t.Success).Grow(1).MinWidth(0).SingleLine()
-			if a.win != nil && ui.Button(c.Key("dx-reveal"), i18n.T("Show in Finder")).Clicked() {
+			iconMark(c, icons.CheckCircle, t.Success, "")
+			truncText(c, i18n.T("Exported %s", filepath.Base(ex.last))).FontSize(px(t, fsCaption)).Grow(1)
+			if a.win != nil && iconButton(c.Key("dx-reveal"), icons.FolderOpen, i18n.T("Show in Finder")).Clicked() {
 				mygo.Shell.ShowItemInFolder(ex.last)
 			}
 		})

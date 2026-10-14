@@ -205,21 +205,19 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 	if a.pl.Current() == id {
 		pos = float64(a.pl.Progress(id)) * ch.Seconds
 	}
-	ui.Divider(c)
-	ui.Row(c.Key("ra-head")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, i18n.T("Follow along")).Bold()
+	k := tok(t)
+	ui.Box(c).Height(1).Background(k.Line)
+	ui.Row(c.Key("ra-head")).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, i18n.T("Follow along")).FontWeight(600).SingleLine().Shrink(0)
+		ui.Spacer(c)
 		if iconButton(c.Key("ra-prev"), icons.AltArrowLeft, i18n.T("Previous chapter")).Disabled(ra.chapter == 0).Clicked() {
 			ra.chapter--
 		}
-		ui.Text(c, ch.Title).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).TextAlign(ui.Center)
+		truncText(c, ch.Title).TextAlign(ui.Center).Shrink(1).MaxWidth(px(t, 260))
 		if iconButton(c.Key("ra-next"), icons.AltArrowRight, i18n.T("Next chapter")).Disabled(ra.chapter >= len(ra.chapters)-1).Clicked() {
 			ra.chapter++
 		}
-		play := i18n.T("Play chapter")
-		if a.pl.Playing(id) {
-			play = i18n.T("Pause")
-		}
-		if ui.Button(c.Key("ra-play"), play).Clicked() {
+		if playToggle(c.Key("ra-play"), a.pl.Playing(id), i18n.T("Play chapter"), i18n.T("Pause")).Clicked() {
 			if err := a.pl.Toggle(id, ch.File); err != nil {
 				a.toast(i18n.T("Can't play: %v", err))
 			}
@@ -230,11 +228,11 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 		if ch.Aligned {
 			note = i18n.T("Word timing comes from the forced aligner.")
 		}
-		ui.Text(c, note).FontSize(px(t, 11)).TextColor(t.TextMuted).Grow(1).MinWidth(0)
+		caption(c, note).TextColor(k.Text3).Grow(1).MinWidth(0)
 		if _, busy := ra.aligning[ra.chapter]; busy {
 			ui.Spinner(c).Label(i18n.T("Aligning words…"))
 		} else if !ch.Aligned {
-			if ui.Button(c.Key("ra-align"), i18n.T("Align words")).Tooltip(i18n.T("Find each word's time with the forced aligner")).Clicked() {
+			if ghostButton(c.Key("ra-align"), i18n.T("Align words")).Tooltip(i18n.T("Find each word's time with the forced aligner")).Clicked() {
 				a.alignChapter(p, r, ra.chapter)
 			}
 		}
@@ -270,7 +268,7 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 				}
 				start := para.Start
 				if ui.ButtonBase(c.Key("ra-p-" + strconv.Itoa(pi))).Label(i18n.T("Play from here")).Children(func() {
-					ui.Text(c, b.String()).TextColor(t.TextMuted).FontSize(px(t, 14)).MaxLines(3).Ellipsis("…").Grow(1).MinWidth(0)
+					ui.Text(c, b.String()).TextColor(k.Text2).FontSize(px(t, 14)).MaxLines(3).Ellipsis("…").Grow(1).MinWidth(0)
 				}).Clicked() {
 					seek(start)
 				}
@@ -282,9 +280,9 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 					bg := ui.Transparent
 					switch {
 					case pos >= w.Start && pos < w.End:
-						bg, color = t.Accent.Alpha(0.25), t.Text
+						bg, color = t.Selection, k.Text
 					case pos >= w.End:
-						color = t.TextMuted
+						color = k.Text2
 					}
 					start := w.Start
 					if ui.ButtonBase(c.Key("w"+strconv.Itoa(wi))).Label(w.Text).Radius(3).Padding(0, px(t, 1)).Background(bg).Children(func() {

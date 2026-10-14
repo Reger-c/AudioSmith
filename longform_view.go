@@ -25,14 +25,52 @@ import (
 	"github.com/hehehai/AudioSmith/internal/services"
 )
 
-// lfSection is a collapsible section of a page's inspector.
-func (a *app) lfSection(c *ui.Context, p *lfPage, key, title string, fn func()) {
+// lfLayout places a longform page's inspector: beside the main column
+// when both fit, else a drawer; it also notes whether the main column is
+// narrow (rows fold their actions into ⋯, the header shows icons).
+func (a *app) lfLayout(c *ui.Context, p *lfPage) (inline, shown bool) {
+	t := c.Theme()
+	inline, shown = p.panel.layout(a, c, px(t, inspectorWidth), px(t, 480))
+	w := a.pageWidth(c)
+	if inline && shown {
+		w -= px(t, inspectorWidth)
+	}
+	p.narrow = w < px(t, 600)
+	return inline, shown
+}
+
+// lfInspector is a longform page's inspector: its sections, beside the
+// page or as a drawer.
+func (a *app) lfInspector(c *ui.Context, p *lfPage, inline, shown bool, sections func()) {
+	t := c.Theme()
+	p.panel.view(c, "lf-inspector", i18n.T("Inspector"), inline, shown, false, px(t, inspectorWidth), func() {
+		ui.Column(c).Padding(px(t, sp2), px(t, sp4), px(t, sp5)).Gap(px(t, sp1)).Children(sections)
+	})
+}
+
+// lfSection is a collapsible section of a page's inspector; summary
+// shows on its header (a model, a count).
+func (a *app) lfSection(c *ui.Context, p *lfPage, key, title, summary string, fn func()) {
 	t := c.Theme()
 	open := p.open[key]
-	ui.Collapsible(c.Key("sec-"+key), title, &open, func() {
-		ui.Column(c).Gap(px(t, 8)).Padding(px(t, 4), 0).Children(fn)
+	var trailing func()
+	if summary != "" {
+		trailing = func() {
+			caption(c, summary).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).MaxWidth(px(t, 150))
+		}
+	}
+	collapsible(c.Key("sec-"+key), title, &open, trailing, func() {
+		ui.Column(c).Gap(px(t, sp3)).Padding(0, 0, px(t, sp2)).Children(fn)
 	})
 	p.open[key] = open
+}
+
+// lfCount is a section's count summary, "" for none.
+func lfCount(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
 }
 
 // lfSetup is the setup card: title, model, default voice, speed, language
@@ -62,8 +100,9 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 	})
 	if m := a.model(e); e.ID != "custom" && m.known && m.local.State != hub.Downloaded {
 		ui.Row(c.Key("lf-download")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("%s is not downloaded yet.", e.Label)).FontSize(px(t, 12)).TextColor(t.Warning).Grow(1).MinWidth(0)
-			if !m.downloading && ui.Button(c.Key("lf-dl"), i18n.T("Download")).Clicked() {
+			iconMark(c, icons.DangerTriangle, t.Warning, "")
+			caption(c, i18n.T("%s is not downloaded yet.", e.Label)).TextColor(t.Warning).Grow(1).MinWidth(0)
+			if !m.downloading && secondaryIconButton(c.Key("lf-dl"), icons.DownloadMinimalistic, i18n.T("Download")).Label(i18n.T("Download")).Tooltip(e.Repo).Clicked() {
 				a.download(e)
 			}
 		})
@@ -76,7 +115,7 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 		a.lfVoiceSelect(c, "lf-voice", &d.Voice, e, i18n.T("None"), locked)
 	})
 	if len(a.lfVoices(e)) == 0 {
-		ui.Text(c, i18n.T("No voices for this model yet: clone or design one first.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, i18n.T("No voices for this model yet: clone or design one first."))
 	}
 	if e.Has(catalog.CapSpeed) {
 		if d.Speed <= 0 {
@@ -93,9 +132,9 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 				}
 			}
 			if n > 0 {
-				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, i18n.N(n, "%d line has its own speed", "%d lines have their own speed", n)).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
-					if ui.Button(c.Key("lf-speed-all"), i18n.T("Use for all lines")).Disabled(locked).Clicked() {
+				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
+					caption(c, i18n.N(n, "%d line has its own speed", "%d lines have their own speed", n)).Grow(1).MinWidth(0)
+					if ghostButton(c.Key("lf-speed-all"), i18n.T("Use for all lines")).Disabled(locked).Clicked() {
 						for i := range d.Lines {
 							d.Lines[i].Speed = 0
 						}
@@ -124,7 +163,7 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 		}
 	})
 	if len(formats) == 1 {
-		ui.Text(c, i18n.T("M4B with chapters and cover comes once the engine can encode it; books are WAV until then.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+		caption(c, i18n.T("M4B with chapters and cover comes once the engine can encode it; books are WAV until then.")).TextColor(tok(t).Text3)
 	}
 }
 
@@ -208,8 +247,9 @@ func (a *app) lfProduction(c *ui.Context, p *lfPage, locked bool) {
 			}
 		})
 	}
-	ui.Switch(c.Key("lf-vary"), &pr.VaryRepeats).Label(i18n.T("Vary repeated lines")).Disabled(locked)
-	ui.Text(c, i18n.T("Give identical lines takes of their own instead of reusing one recording.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+	formRow(c, "lf-vary-row", i18n.T("Vary repeated lines"), i18n.T("Give identical lines takes of their own instead of reusing one recording."), func() {
+		ui.Switch(c.Key("lf-vary"), &pr.VaryRepeats).Label(i18n.T("Vary repeated lines")).Disabled(locked)
+	})
 	lg := float64(pr.LineGapMs)
 	ui.Field(c, i18n.T("Gap between lines %d ms", pr.LineGapMs), func() {
 		if snapped(ui.Slider(c.Key("lf-line-gap"), &lg, 0, 2000).Label(i18n.T("Gap between lines")).Disabled(locked), &lg, 50).Changed() {
@@ -223,23 +263,22 @@ func (a *app) lfProduction(c *ui.Context, p *lfPage, locked bool) {
 		}
 	})
 	trim := !pr.KeepEdges
-	if ui.Switch(c.Key("lf-trim"), &trim).Label(i18n.T("Trim engine silence")).Disabled(locked).Changed() {
-		pr.KeepEdges = !trim
-	}
-	ui.Text(c, i18n.T("Cut the silence engines pad onto each chunk before joining, so the gaps above are what you hear.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+	formRow(c, "lf-trim-row", i18n.T("Trim engine silence"), i18n.T("Cut the silence engines pad onto each chunk before joining, so the gaps above are what you hear."), func() {
+		if ui.Switch(c.Key("lf-trim"), &trim).Label(i18n.T("Trim engine silence")).Disabled(locked).Changed() {
+			pr.KeepEdges = !trim
+		}
+	})
 	seed := float64(pr.Seed)
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, i18n.T("Seed")).Grow(1)
-		if ui.NumberInput(c.Key("lf-seed"), &seed, 0, 1<<31-1, 1).Label(i18n.T("Seed")).Width(px(t, 120)).Disabled(locked).Changed() {
+	formRow(c, "lf-seed-row", i18n.T("Seed"), i18n.T("0: the project's own seed (%d), so a render can be made again from the cache.", p.doc.Seed), func() {
+		if ui.NumberInput(c.Key("lf-seed"), &seed, 0, 1<<31-1, 1).Label(i18n.T("Seed")).Width(px(t, 160)).Disabled(locked).Changed() {
 			pr.Seed = int64(seed)
 		}
 	})
-	if pr.Seed == 0 {
-		ui.Text(c, i18n.T("0: the project's own seed (%d), so a render can be made again from the cache.", p.doc.Seed)).FontSize(px(t, 11)).TextColor(t.TextMuted)
-	}
-	if ui.Button(c.Key("lf-prod-reset"), i18n.T("Reset")).Disabled(locked || *pr == services.DefaultProduction()).Clicked() {
-		*pr = services.DefaultProduction()
-	}
+	ui.Row(c).Children(func() {
+		if ghostIconButton(c.Key("lf-prod-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Disabled(locked || *pr == services.DefaultProduction()).Clicked() {
+			*pr = services.DefaultProduction()
+		}
+	})
 }
 
 // Loudness choices of the book card.
@@ -263,28 +302,23 @@ func (a *app) lfBookCard(c *ui.Context, p *lfPage, locked bool) {
 	ui.Field(c, i18n.T("Description"), func() {
 		ui.TextArea(c.Key("book-desc"), &b.Description).Label(i18n.T("Description")).Lines(2, 6).MinHeight(0).Disabled(locked)
 	})
-	ui.Row(c.Key("book-cover")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("book-cover")).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
 		if bmp := a.coverBitmap(b.Cover); bmp != nil {
-			ui.Image(c, bmp).Width(px(t, 36)).Height(px(t, 48)).Radius(3)
+			ui.Image(c, bmp).Width(px(t, 36)).Height(px(t, 48)).Radius(px(t, 4))
 		}
 		name := i18n.T("No cover")
 		if b.Cover != "" {
 			name = filepath.Base(b.Cover)
 		}
-		ui.Text(c, name).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-		if ui.Button(c.Key("cover-add"), i18n.T("Choose cover…")).Tooltip(i18n.T("PNG or JPEG, at most 8 MB; embedded in M4B books")).Disabled(locked).Clicked() {
+		truncText(c, name).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).Grow(1)
+		if ghostButton(c.Key("cover-add"), i18n.T("Choose cover…")).Tooltip(i18n.T("PNG or JPEG, at most 8 MB; embedded in M4B books")).Disabled(locked).Clicked() {
 			a.chooseCover(p)
 		}
-		if b.Cover != "" && ui.Button(c.Key("cover-remove"), i18n.T("Remove")).Disabled(locked).Clicked() {
+		if b.Cover != "" && iconButton(c.Key("cover-remove"), icons.TrashBinMinimalistic, i18n.T("Remove")).Disabled(locked).Clicked() {
 			b.Cover = ""
 		}
 	})
 	li := max(slices.Index(lfLoudness, b.Loudness), 0)
-	ui.Field(c, i18n.T("Loudness"), func() {
-		if ui.Segmented(c.Key("book-loud"), &li, i18n.T("Off"), i18n.T("ACX"), i18n.T("Podcast")).Label(i18n.T("Loudness")).Disabled(locked).Changed() {
-			b.Loudness = lfLoudness[li]
-		}
-	})
 	note := i18n.T("Chapters as rendered, not normalised.")
 	switch b.Loudness {
 	case services.LoudnessACX:
@@ -292,9 +326,14 @@ func (a *app) lfBookCard(c *ui.Context, p *lfPage, locked bool) {
 	case services.LoudnessPodcast:
 		note = i18n.T("Podcast: −16 LUFS, peaks under −1.5 dBTP.")
 	}
-	ui.Text(c, note).FontSize(px(t, 11)).TextColor(t.TextMuted)
-	ui.Switch(c.Key("book-stems"), &p.doc.Stems).Label(i18n.T("A stem per character")).Disabled(locked)
-	ui.Text(c, i18n.T("Each character's lines on the book's timeline, silent elsewhere, for mixing. As large as the book per character.")).FontSize(px(t, 11)).TextColor(t.TextMuted)
+	fieldInfo(c, i18n.T("Loudness"), note, func() {
+		if ui.Segmented(c.Key("book-loud"), &li, i18n.T("Off"), i18n.T("ACX"), i18n.T("Podcast")).Label(i18n.T("Loudness")).Disabled(locked).Changed() {
+			b.Loudness = lfLoudness[li]
+		}
+	})
+	formRow(c, "book-stems-row", i18n.T("A stem per character"), i18n.T("Each character's lines on the book's timeline, silent elsewhere, for mixing. As large as the book per character."), func() {
+		ui.Switch(c.Key("book-stems"), &p.doc.Stems).Label(i18n.T("A stem per character")).Disabled(locked)
+	})
 }
 
 // coverCache holds decoded covers by path (main thread only).
@@ -370,52 +409,56 @@ func (a *app) lfProjectCard(c *ui.Context, p *lfPage, locked bool) {
 	ui.Field(c, i18n.T("Project name"), func() {
 		ui.TextInput(c.Key("proj-name"), &p.saveName).Placeholder(i18n.T("Project name")).Label(i18n.T("Project name"))
 	})
-	ui.Row(c).Gap(px(t, 6)).Wrap().Children(func() {
-		if primaryButton(c.Key("proj-save"), i18n.T("Save")).Disabled(strings.TrimSpace(p.saveName) == "" && strings.TrimSpace(p.doc.Title) == "").Clicked() {
+	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		if ui.Button(c.Key("proj-save"), i18n.T("Save")).Disabled(strings.TrimSpace(p.saveName) == "" && strings.TrimSpace(p.doc.Title) == "").Clicked() {
 			a.saveLf(p, false)
 		}
-		if p.project != "" && ui.Button(c.Key("proj-copy"), i18n.T("Save a copy")).Clicked() {
-			a.saveLf(p, true)
+		if p.project != "" && p.unsaved() {
+			statusDot(c, t.Warning)
+			caption(c, i18n.T("Unsaved changes")).SingleLine().Ellipsis("…").MinWidth(0)
 		}
-		if ui.Button(c.Key("proj-new"), i18n.T("New")).Disabled(locked).Clicked() {
-			if p.unsaved() {
-				p.confirm, p.confirmOpen = "new", true
-			} else {
-				a.newLf(p)
+		ui.Spacer(c)
+		moreMenu(c.Key("proj-more"), i18n.T("Project actions"), func(m *ui.Menu) {
+			if p.project != "" && m.Item(i18n.T("Save a copy")).Chosen() {
+				a.saveLf(p, true)
 			}
-		}
-	})
-	if p.project != "" && p.unsaved() {
-		ui.Text(c, i18n.T("Unsaved changes")).FontSize(px(t, 11)).TextColor(t.Warning)
-	}
-	if len(p.projects) == 0 {
-		ui.Text(c, i18n.T("No saved projects yet.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-		return
-	}
-	for _, pr := range p.projects {
-		ui.Row(c.Key("proj-"+pr.ID)).Gap(px(t, 6)).AlignItems(ui.Center).Padding(px(t, 4), px(t, 6)).Radius(6).
-			Background(func() ui.Color {
-				if pr.ID == p.project {
-					return t.Accent.Alpha(0.12)
-				}
-				return ui.Transparent
-			}()).Children(func() {
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, pr.Title).SingleLine().Ellipsis("…")
-				ui.Text(c, i18n.DateTime(pr.UpdatedAt)).FontSize(px(t, 11)).TextColor(t.TextMuted)
-			})
-			if pr.ID != p.project && ui.Button(c.Key("open"), i18n.T("Open")).Disabled(locked).Clicked() {
+			if m.Item(i18n.T("New")).Disabled(locked).Chosen() {
 				if p.unsaved() {
-					p.confirm, p.confirmOpen = pr.ID, true
+					p.confirm, p.confirmOpen = "new", true
 				} else {
-					a.openLfProject(pr.ID)
+					a.newLf(p)
 				}
-			}
-			if iconButton(c.Key("delete"), icons.Close, i18n.T("Delete")).Tooltip(i18n.T("Delete")).Disabled(locked && pr.ID == p.project).Clicked() {
-				p.confirm, p.confirmOpen = "delete:"+pr.ID, true
 			}
 		})
+	})
+	if len(p.projects) == 0 {
+		caption(c, i18n.T("No saved projects yet."))
+		return
 	}
+	ui.Column(c).Gap(px(t, 2)).Children(func() {
+		for _, pr := range p.projects {
+			row := ui.Row(c.Key("proj-"+pr.ID)).Gap(px(t, 6)).AlignItems(ui.Center).Padding(px(t, 4), px(t, 4), px(t, 4), px(t, sp2)).Radius(px(t, radiusControl))
+			if pr.ID == p.project {
+				row.Background(tok(t).Pressed)
+			}
+			row.Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+					truncText(c, pr.Title)
+					ui.Text(c, i18n.DateTime(pr.UpdatedAt)).FontSize(px(t, fsMicro)).TextColor(tok(t).Text3)
+				})
+				if pr.ID != p.project && ghostButton(c.Key("open"), i18n.T("Open")).Disabled(locked).Clicked() {
+					if p.unsaved() {
+						p.confirm, p.confirmOpen = pr.ID, true
+					} else {
+						a.openLfProject(pr.ID)
+					}
+				}
+				if iconButton(c.Key("delete"), icons.TrashBinMinimalistic, i18n.T("Delete")).Disabled(locked && pr.ID == p.project).Clicked() {
+					p.confirm, p.confirmOpen = "delete:"+pr.ID, true
+				}
+			})
+		}
+	})
 }
 
 // lfConfirm asks before replacing or deleting.
@@ -473,7 +516,7 @@ func (a *app) clearLf(p *lfPage) {
 func (a *app) lfRenderPanel(c *ui.Context, p *lfPage) {
 	t := c.Theme()
 	ui.Scroll(c.Key("lf-panel")).MaxHeightPercent(55).Shrink(0).Children(func() {
-		ui.Column(c).Gap(px(t, 10)).Children(func() {
+		ui.Column(c).Gap(px(t, sp3)).Children(func() {
 			a.lfRenderBar(c, p)
 			a.lfOutputs(c, p)
 		})
@@ -483,19 +526,21 @@ func (a *app) lfRenderPanel(c *ui.Context, p *lfPage) {
 // lfRenderBar is Generate / Stop, the reason it can't, and the progress.
 func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 	t := c.Theme()
+	k := tok(t)
 	r := a.lfRenders[p.render]
 	running := r != nil && r.rec.State == core.RenderRunning
 	blocker := a.lfBlocker(p)
-	ui.Column(c.Key("lf-render")).Gap(px(t, 6)).Padding(px(t, 10)).Radius(8).Border(1, t.Border).Background(t.Surface).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+	ui.Column(c.Key("lf-render")).Gap(px(t, sp2)).Children(func() {
+		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).MinHeight(px(t, 32)).Children(func() {
 			label := i18n.T("Generate")
 			if p.kind == core.ProjectAudiobook {
 				label = i18n.T("Create audiobook")
 			}
 			switch {
 			case running:
-				ui.Text(c, a.renderStatus(r)).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-				if ui.Button(c.Key("lf-stop"), i18n.T("Stop")).Disabled(r.body.Stopping).Clicked() {
+				ui.Spinner(c)
+				ui.Text(c, a.renderStatus(r)).FontSize(px(t, fsCaption)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+				if secondaryIconButton(c.Key("lf-stop"), icons.Stop, i18n.T("Stop")).Label(i18n.T("Stop")).Disabled(r.body.Stopping).Clicked() {
 					a.stopLf(p)
 				}
 			default:
@@ -503,11 +548,13 @@ func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 				if msg == "" {
 					msg = a.lfReadyLine(p)
 				}
-				color := t.TextMuted
 				if blocker != "" {
-					color = t.Warning
+					iconMark(c, icons.DangerTriangle, t.Warning, "")
 				}
-				ui.Text(c.Key("lf-blocker"), msg).FontSize(px(t, 12)).TextColor(color).Grow(1).MinWidth(0)
+				txt := caption(c.Key("lf-blocker"), msg).Grow(1).MinWidth(0)
+				if blocker != "" {
+					txt.TextColor(t.Warning)
+				}
 				if r != nil && (r.rec.State == core.RenderFailed || r.rec.State == core.RenderStopped) {
 					if ui.Button(c.Key("lf-resume"), i18n.X("render", "Resume")).Tooltip(i18n.T("Render what is missing: finished chapters are kept")).
 						Disabled(a.activeRender() != nil).Clicked() {
@@ -531,10 +578,13 @@ func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 			if n > 0 {
 				msg = i18n.N(n, "%d chapter failed: Resume retries just that one.", "%d chapters failed: Resume retries just those.", n) + " " + msg
 			}
-			ui.Text(c.Key("lf-failed"), msg).FontSize(px(t, 12)).TextColor(t.Danger).Selectable()
+			ui.Row(c).Gap(px(t, 6)).Children(func() {
+				iconMark(c, icons.DangerCircle, t.Danger, "")
+				caption(c.Key("lf-failed"), msg).TextColor(t.Danger).Selectable().Grow(1).MinWidth(0)
+			})
 			a.chapterTracker(c, r)
 		case r.rec.State == core.RenderStopped:
-			ui.Text(c, i18n.T("Stopped: finished chapters are kept; Resume goes on from them.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			caption(c, i18n.T("Stopped: finished chapters are kept; Resume goes on from them.")).TextColor(k.Text2)
 		}
 	})
 	a.interruptedRenders(c, p)
@@ -543,7 +593,7 @@ func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 // lfReadyLine says what Generate will make.
 func (a *app) lfReadyLine(p *lfPage) string {
 	st := p.stats
-	if st.Chapters == 0 {
+	if st.Chapters == 0 || p.kind == core.ProjectAudiobook { // the Audiobook's stats show above its manuscript
 		return ""
 	}
 	return i18n.N(st.Chapters, "%d chapter", "%d chapters", st.Chapters) + " · " + i18n.T("≈ %s", formatDuration(st.Seconds))
@@ -576,6 +626,7 @@ func (a *app) renderStatus(r *lfRender) string {
 // chapterTracker: elapsed, ETA, a bar, and every chapter's state.
 func (a *app) chapterTracker(c *ui.Context, r *lfRender) {
 	t := c.Theme()
+	k := tok(t)
 	b := &r.body
 	total, done := 0.0, 0.0
 	for _, ch := range b.Chapters {
@@ -598,8 +649,8 @@ func (a *app) chapterTracker(c *ui.Context, r *lfRender) {
 	if r.rec.State == core.RenderRunning {
 		c.After(time.Second) // the clock
 	}
-	ui.Progress(c, frac).Label(i18n.T("Render progress"))
-	ui.Row(c).Gap(px(t, 8)).Children(func() {
+	fillCard(c.Key("lf-track")).Padding(px(t, sp3)).Gap(px(t, sp2)).Children(func() {
+		ui.Progress(c, frac).Label(i18n.T("Render progress"))
 		info := i18n.T("%d of %d chapters", b.Done(), len(b.Chapters))
 		if !b.Started.IsZero() && r.rec.State == core.RenderRunning {
 			info += " · " + i18n.T("elapsed %s", lfClock(now.Sub(b.Started)))
@@ -607,38 +658,46 @@ func (a *app) chapterTracker(c *ui.Context, r *lfRender) {
 				info += " · " + i18n.T("~%s left", lfClock(eta))
 			}
 		}
-		ui.Text(c, info).FontSize(px(t, 12)).TextColor(t.TextMuted)
-	})
-	ui.Scroll(c.Key("lf-chapters")).MaxHeight(px(t, 220)).Children(func() {
-		ui.Column(c).Gap(px(t, 2)).Children(func() {
-			for i, ch := range b.Chapters {
-				icon, color := "○", t.TextMuted
-				extra := ""
-				switch ch.State {
-				case services.ChapterRendering:
-					icon, color = "◐", t.Accent
-					extra = " · " + strconv.Itoa(int(ch.Fraction*100)) + "%"
-				case services.ChapterDone:
-					icon, color = "✓", t.Success
-				case services.ChapterCached:
-					icon, color = "⚡", t.Success
-					extra = " · " + i18n.T("cached")
-				case services.ChapterFailed:
-					icon, color = "✗", t.Danger
-					extra = " · " + i18n.T("failed: %s", jobErrorText(ch.Error))
-				case services.ChapterStopped:
-					icon = "■"
-					extra = " · " + i18n.T("stopped")
+		caption(c, info).SingleLine().Ellipsis("…").MinWidth(0)
+		ui.Scroll(c.Key("lf-chapters")).MaxHeight(px(t, 200)).Children(func() {
+			ui.Column(c).Gap(px(t, 2)).Children(func() {
+				for i, ch := range b.Chapters {
+					title := ch.Title
+					if title == "" {
+						title = i18n.T("Chapter %d", i+1)
+					}
+					extra := ""
+					switch ch.State {
+					case services.ChapterRendering:
+						extra = " · " + strconv.Itoa(int(ch.Fraction*100)) + "%"
+					case services.ChapterCached:
+						extra = " · " + i18n.T("cached")
+					case services.ChapterFailed:
+						extra = " · " + i18n.T("failed: %s", jobErrorText(ch.Error))
+					case services.ChapterStopped:
+						extra = " · " + i18n.T("stopped")
+					}
+					ui.Row(c.Key("ch-" + strconv.Itoa(i))).Gap(px(t, sp2)).AlignItems(ui.Center).MinHeight(px(t, 22)).Children(func() {
+						ui.Box(c).Size(px(t, 14), px(t, 14)).Center().Shrink(0).Children(func() {
+							switch ch.State {
+							case services.ChapterRendering:
+								statusDot(c, k.Accent)
+							case services.ChapterDone:
+								iconMark(c, icons.CheckCircle, t.Success, "")
+							case services.ChapterCached:
+								iconMark(c, icons.CheckCircle, k.Text2, "")
+							case services.ChapterFailed:
+								iconMark(c, icons.CloseCircle, t.Danger, "")
+							case services.ChapterStopped:
+								iconMark(c, icons.Stop, k.Text3, "")
+							default:
+								statusDot(c, k.G[5])
+							}
+						})
+						truncText(c, title+extra).FontSize(px(t, fsCaption)).Grow(1)
+					})
 				}
-				title := ch.Title
-				if title == "" {
-					title = i18n.T("Chapter %d", i+1)
-				}
-				ui.Row(c.Key("ch-" + strconv.Itoa(i))).Gap(px(t, 6)).Children(func() {
-					ui.Text(c, icon).TextColor(color).Width(px(t, 16))
-					ui.Text(c, title+extra).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").Tooltip(title + extra)
-				})
-			}
+			})
 		})
 	})
 }
@@ -670,16 +729,18 @@ func (a *app) interruptedRenders(c *ui.Context, p *lfPage) {
 		}
 	}
 	for _, r := range list {
-		ui.Row(c.Key("int-"+r.rec.ID)).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 8)).Radius(8).Border(1, t.Border).Children(func() {
+		ui.Row(c.Key("int-"+r.rec.ID)).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, sp2), px(t, sp2), px(t, sp2), px(t, sp3)).
+			Radius(px(t, radiusControl)).Border(1, tok(t).Line).Children(func() {
+			iconMark(c, icons.Stop, tok(t).Text3, "")
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, i18n.T("Interrupted: %s", r.rec.Title)).SingleLine().Ellipsis("…")
-				ui.Text(c, i18n.T("%d of %d chapters are made", r.body.Done(), len(r.body.Chapters))).FontSize(px(t, 11)).TextColor(t.TextMuted)
+				truncText(c, i18n.T("Interrupted: %s", r.rec.Title))
+				ui.Text(c, i18n.T("%d of %d chapters are made", r.body.Done(), len(r.body.Chapters))).FontSize(px(t, fsMicro)).TextColor(tok(t).Text2)
 			})
+			if ghostButton(c.Key("show"), i18n.T("Show")).Clicked() {
+				p.render = r.rec.ID
+			}
 			if ui.Button(c.Key("resume"), i18n.X("render", "Resume")).Disabled(a.activeRender() != nil).Clicked() {
 				a.resumeLf(p, r.rec.ID)
-			}
-			if ui.Button(c.Key("show"), i18n.T("Show")).Clicked() {
-				p.render = r.rec.ID
 			}
 		})
 	}
@@ -687,82 +748,89 @@ func (a *app) interruptedRenders(c *ui.Context, p *lfPage) {
 
 // --- outputs ---------------------------------------------------------------
 
-// lfOutputs shows a finished render: play, save, cue sheet, stems,
-// loudness, and (Audiobook) the read-along player.
+// lfOutputs shows a finished render as a flat card like the Studio's
+// take: play, what it is, Save ▾ (the book, chapters, cue sheet, stems)
+// and ⋯ (Show in Finder); then the loudness checks and (Audiobook) the
+// read-along player.
 func (a *app) lfOutputs(c *ui.Context, p *lfPage) {
 	t := c.Theme()
+	k := tok(t)
 	r := a.lfRenders[p.render]
 	if r == nil || r.rec.State != core.RenderDone || r.body.Output == nil {
 		return
 	}
 	out := r.body.Output
-	ui.Column(c.Key("lf-out")).Gap(px(t, 8)).Padding(px(t, 12)).Radius(8).Border(1, t.Border).Background(t.Surface).Children(func() {
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			title := i18n.T("Story ready")
-			if r.rec.Kind == core.ProjectAudiobook {
-				title = i18n.T("Audiobook ready")
-			}
-			ui.Text(c, title).Bold()
-			ui.Text(c, lfClock(time.Duration(out.Seconds*float64(time.Second)))+" · "+humanBytes(out.Bytes)).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1)
-			id := "book:" + r.rec.ID
-			play := i18n.T("Play")
-			if a.pl.Playing(id) {
-				play = i18n.T("Pause")
-			}
-			if ui.Button(c.Key("out-play"), play).Clicked() {
+	id := "book:" + r.rec.ID
+	card(c.Key("lf-out")).Padding(px(t, sp3), px(t, sp4)).Children(func() {
+		ui.Row(c).Gap(px(t, sp3)).AlignItems(ui.Center).Children(func() {
+			if playButton(c.Key("out-play"), a.pl.Playing(id), false, 36).Clicked() {
 				if err := a.pl.Toggle(id, out.Book); err != nil {
 					a.toast(i18n.T("Can't play: %v", err))
 				}
 			}
+			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
+				title := i18n.T("Story ready")
+				if r.rec.Kind == core.ProjectAudiobook {
+					title = i18n.T("Audiobook ready")
+				}
+				ui.Text(c, title).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0)
+				meta := lfClock(time.Duration(out.Seconds*float64(time.Second))) + " · " + humanBytes(out.Bytes)
+				if n := doneCached(&r.body); n > 0 {
+					meta += " · " + i18n.N(n, "Reused %d already-rendered chapter.", "Reused %d already-rendered chapters.", n)
+				}
+				truncText(c, meta).FontSize(px(t, fsCaption)).TextColor(k.Text2)
+			})
+			dropButton(c.Key("out-save"), icons.Export, i18n.T("Save")).Shrink(0).Menu(func(m *ui.Menu) {
+				m.Submenu(i18n.T("Save book…"), func(m *ui.Menu) {
+					if out.Encoded != "" && m.Item(i18n.T("M4B audiobook")).Chosen() {
+						a.saveOutput(r, "book", out.Encoded, "m4b", 0)
+					}
+					for _, bits := range bitDepths {
+						if m.Item(i18n.T("WAV, %s", bitsLabel(bits))).Chosen() {
+							a.saveOutput(r, "book", out.Book, "wav", bits)
+						}
+					}
+					a.ffmpegBookItems(m, r) // M7a: MP3/Opus with chapters (ffmpeg_formats.go)
+				})
+				if m.Item(i18n.T("Save chapters…")).Chosen() {
+					a.saveChapters(r)
+				}
+				if m.Item(i18n.T("Save cue sheet…")).Chosen() {
+					a.saveOutput(r, "cues", out.Cues, "txt", 0)
+				}
+				if len(out.Stems) > 0 {
+					m.Submenu(i18n.T("Stems"), func(m *ui.Menu) {
+						for _, s := range out.Stems {
+							name := s.Character
+							if name == "" {
+								name = i18n.T("Narrator")
+							}
+							if m.Item(name).Chosen() {
+								a.saveOutput(r, "stem", s.File, "wav", 0)
+							}
+							a.ffmpegStemItems(m, r, s, name) // M7a: ffmpeg_formats.go
+						}
+					})
+				}
+			})
+			moreMenu(c.Key("out-more"), "", func(m *ui.Menu) {
+				if m.Item(i18n.T("Show in Finder")).Chosen() {
+					mygo.Shell.ShowItemInFolder(out.Book)
+				}
+			})
 		})
-		if a.pl.Current() == "book:"+r.rec.ID {
-			prog := float64(a.pl.Progress("book:" + r.rec.ID))
+		if a.pl.Current() == id {
+			prog := float64(a.pl.Progress(id))
 			if ui.Slider(c.Key("out-seek"), &prog, 0, 1).Label(i18n.T("Position")).Changed() {
-				a.pl.Seek("book:"+r.rec.ID, float32(prog))
+				a.pl.Seek(id, float32(prog))
 			}
-		}
-		if n := doneCached(&r.body); n > 0 {
-			ui.Text(c, i18n.N(n, "Reused %d already-rendered chapter.", "Reused %d already-rendered chapters.", n)).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		}
 		if out.EncodeError != "" {
-			ui.Text(c, i18n.T("No M4B: %s", out.EncodeError)).FontSize(px(t, 12)).TextColor(t.Warning)
-		}
-		ui.Row(c).Gap(px(t, 6)).Wrap().Children(func() {
-			ui.MenuButton(c.Key("out-save"), i18n.T("Save book…"), func(m *ui.Menu) {
-				if out.Encoded != "" && m.Item(i18n.T("M4B audiobook")).Chosen() {
-					a.saveOutput(r, "book", out.Encoded, "m4b", 0)
-				}
-				for _, bits := range bitDepths {
-					if m.Item(i18n.T("WAV, %s", bitsLabel(bits))).Chosen() {
-						a.saveOutput(r, "book", out.Book, "wav", bits)
-					}
-				}
-				a.ffmpegBookItems(m, r) // M7a: MP3/Opus with chapters (ffmpeg_formats.go)
+			ui.Row(c).Gap(px(t, 6)).Children(func() {
+				iconMark(c, icons.DangerTriangle, t.Warning, "")
+				caption(c, i18n.T("No M4B: %s", out.EncodeError)).TextColor(t.Warning).Grow(1).MinWidth(0)
 			})
-			if ui.Button(c.Key("out-chapters"), i18n.T("Save chapters…")).Tooltip(i18n.T("One WAV per chapter, into a folder")).Clicked() {
-				a.saveChapters(r)
-			}
-			if ui.Button(c.Key("out-cues"), i18n.T("Save cue sheet…")).Tooltip(i18n.T("HH:MM:SS and the title of each chapter (.txt)")).Clicked() {
-				a.saveOutput(r, "cues", out.Cues, "txt", 0)
-			}
-			if len(out.Stems) > 0 {
-				ui.MenuButton(c.Key("out-stems"), i18n.T("Stems"), func(m *ui.Menu) {
-					for _, s := range out.Stems {
-						name := s.Character
-						if name == "" {
-							name = i18n.T("Narrator")
-						}
-						if m.Item(name).Chosen() {
-							a.saveOutput(r, "stem", s.File, "wav", 0)
-						}
-						a.ffmpegStemItems(m, r, s, name) // M7a: ffmpeg_formats.go
-					}
-				})
-			}
-			if ui.Button(c.Key("out-reveal"), i18n.T("Show in Finder")).Clicked() {
-				mygo.Shell.ShowItemInFolder(out.Book)
-			}
-		})
+		}
 		a.loudnessReport(c, p, r)
 		if r.rec.Kind == core.ProjectAudiobook {
 			a.readAlongView(c, p, r)
@@ -789,7 +857,7 @@ func (a *app) loudnessReport(c *ui.Context, p *lfPage, r *lfRender) {
 	rep := out.Loudness
 	line := i18n.T("%.1f LUFS · peak %.1f dBTP · LRA %.1f LU", rep.Integrated, rep.TruePeak, rep.Range)
 	if rep.Target == "" {
-		ui.Text(c, line).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		caption(c, line)
 		return
 	}
 	failed := 0
@@ -803,16 +871,19 @@ func (a *app) loudnessReport(c *ui.Context, p *lfPage, r *lfRender) {
 	if failed > 0 {
 		head = i18n.N(failed, "%[2]s: %[1]d chapter fails a check", "%[2]s: %[1]d chapters fail a check", failed, strings.ToUpper(rep.Target))
 	}
-	ui.Collapsible(c.Key("loud"), head+" · "+line, &open, func() {
-		ui.Column(c).Gap(px(t, 3)).Children(func() {
+	var summary func()
+	if !p.narrow {
+		summary = func() { caption(c, line).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Tooltip(line) }
+	}
+	collapsible(c.Key("loud"), head, &open, summary, func() {
+		ui.Column(c).Gap(px(t, 4)).Children(func() {
+			if p.narrow {
+				caption(c, line)
+			}
 			for i, ch := range out.Chapters {
 				title := ch.Title
 				if title == "" {
 					title = i18n.T("Chapter %d", i+1)
-				}
-				mark, color := "✓", t.Success
-				if !ch.Report.Compliant {
-					mark, color = "✗", t.Danger
 				}
 				var bad []string
 				for _, k := range ch.Report.Checks {
@@ -828,9 +899,13 @@ func (a *app) loudnessReport(c *ui.Context, p *lfPage, r *lfRender) {
 				if len(bad) > 0 {
 					text += " · " + strings.Join(bad, ", ")
 				}
-				ui.Row(c.Key("loud-" + strconv.Itoa(i))).Gap(px(t, 6)).Children(func() {
-					ui.Text(c, mark).TextColor(color).Width(px(t, 14))
-					ui.Text(c, text).FontSize(px(t, 11)).Grow(1).MinWidth(0)
+				ui.Row(c.Key("loud-" + strconv.Itoa(i))).Gap(px(t, sp2)).Children(func() {
+					if ch.Report.Compliant {
+						iconMark(c, icons.CheckCircle, t.Success, "")
+					} else {
+						iconMark(c, icons.CloseCircle, t.Danger, "")
+					}
+					ui.Text(c, text).FontSize(px(t, fsCaption)).TextColor(tok(t).Text2).Grow(1).MinWidth(0)
 				})
 			}
 		})

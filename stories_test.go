@@ -65,9 +65,19 @@ func TestStoriesAutoCastRenderAndOutputs(t *testing.T) {
 	if len(synth.texts) != 4 {
 		t.Errorf("synthesized %q", synth.texts)
 	}
-	if !tt.HasText("Story ready") || !tt.HasText("Save book…") || !tt.HasText("Save cue sheet…") {
+	if !tt.HasText("Story ready") {
 		t.Errorf("outputs: %q", tt.Texts())
 	}
+	tt.SetSize(2400, 1000) // the outputs in view, clear of the toasts
+	tt.Frame()
+	if err := tt.Click("Save"); err != nil {
+		t.Fatal(err)
+	}
+	if m := strings.Join(tt.Menu(), "|"); !strings.Contains(m, "Save book…") || !strings.Contains(m, "Save cue sheet…") {
+		t.Errorf("the Save menu: %q", m)
+	}
+	tt.CloseMenu()
+	tt.SetSize(1100, 720)
 	// Save the cue sheet and the chapters (as the dialogs would).
 	dir := t.TempDir()
 	a.writeOutput(a.lib.svc.Library, r.rec, "cues", r.body.Output.Cues, filepath.Join(dir, "cues.txt"), "txt", 0)
@@ -111,13 +121,15 @@ func TestStoryLines(t *testing.T) {
 	// Options of line 2: a tone, a speed, a pause after.
 	p.sel = 2
 	tt.Frame()
-	if err := tt.Click("Laughter"); err != nil {
-		t.Fatalf("%v %q", err, tt.Texts())
+	tt.Click("Insert")
+	if err := tt.ChooseMenuItem("Laughter"); err != nil {
+		t.Fatalf("%v %q", err, tt.Menu())
 	}
 	if !strings.HasSuffix(p.doc.Lines[2].Text, "[laughter]") {
 		t.Errorf("tone: %q", p.doc.Lines[2].Text)
 	}
-	if err := tt.Click("Insert pause"); err != nil {
+	tt.Click("Insert")
+	if err := tt.ChooseMenuItem("Insert pause"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(p.doc.Lines[2].Text, "[pause 500ms]") {
