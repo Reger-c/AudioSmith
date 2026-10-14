@@ -55,6 +55,9 @@ dub ──▶ dsp, dsp/{analysis,mix,resample,wav}, doc/subtitle, text, translat
 dub/dubtest ──▶ dub, dsp/…, engine/proto, jobs
 dsp/stretch ──▶ dsp
 services ──▶ dub, dsp/{stretch,dynamics,analysis}, lang (M4)
+api ──▶ core, jobs, services, catalog, settings, engine/proto, translate, lang, voicedesign, dsp, dsp/{resample,wav} (M5)
+mcp ──▶ api, core, settings, voicedesign + modelcontextprotocol/go-sdk (M5)
+main ──▶ api, mcp
 dictation ──▶ (nothing internal; mygo/transfer, purego, purego/objc)
 store ──▶ core, jobs            store/sqlitestore ──▶ core, jobs, store, store/historyjson
 engine ──▶ core, engine/proto, jobs (its executors)        engine/enginetest ──▶ engine/proto
@@ -147,6 +150,7 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | Longform: `services.Compile`, `Longform.Start/Stop/Resume/Delete/Reconcile`, `Library.*` (search/counts over projects, renders, voices, takes, exports); jobs `longform.chapter` (gpu, one per chapter) + `longform.assemble` (cpu lane, After chapters), owner `longform:<id>`; `stt.align` owner `readalong:`; `media.encode` (M4B) via `services.Config.Encode` once the engine has it | internal/services/longform*.go, projects.go (M3) | stories, audiobook, projects pages |
 | `a.useVoiceInStories`, `a.useVoiceInAudiobook`, `a.projectUsageLink`, `a.longformVoiceItems`, `a.recordTakeExport`, `a.recordVoiceExport` | longform*.go, projects*.go (M3) | gallery, voice editor, studio output, history |
 | Dubbing: `a.dubSvc` (`*services.Dubs`: Create/Get/List/Update/Delete/Run/Resume/Cancel/Plan/LineRecipe/TrackMixer/ExportJob/Enqueue/Queue/Watch…), `a.openDub(id)`, `a.dubToStory()`; events `dub.changed`, `dub.watch`; stage jobs `dub.fetch` (net) / `ingest` (media) / `separate`,`transcribe`,`references`,`synthesize:L`,`qc:L` (gpu) / `translate:L` (net) / `mix:L` (cpu) / `dub.export`, owners `dub:<id>`, `dubexport:<id>`; missing engine methods degrade a stage to skipped | internal/dub, internal/services/dub*.go, batch.go, dub*.go, batch*.go, timeline.go (M4) | projects, stories (ToStory), batch/watch |
+| Local API: `a.apiSrv`, `a.apiMCP`, `a.startAPI(dataDir)`, `a.applyAPI()`, `a.apiBaseURL()`; `apiRecipe(api.SpeakRequest, fill, path)`; `a.codeBlock`, `a.toolAwait(jobID, fn)`; server 127.0.0.1:3901 (port file `<data>/api.json`), LAN listener port+1 with PIN; reference in docs/local-api.md | api*.go, integrations*.go, tools*.go, internal/api, internal/mcp (M5) | integrations, tools, MCP stdio (`AudioSmith --mcp-stdio`) |
 | `a.voicePicker(c, p)`, `a.applyStudioVoice(&t, p)`, `a.studioUsesSavedVoice(p)`, `a.studioVoicePrompt(p)`, `a.useVoiceInStudio`, `a.openVoiceEditor`, `a.openDesignFor`, `a.startClone` | voices*.go, clone*.go, design*.go (M1-V) | studio, gallery, palette |
 | `a.probeMedia`, `a.captureDevices`, `a.startRecording(params, onLevel, then)`, `a.stopRecording`, `engineErrorText(err)`, `jobErrorText(*jobs.Error)` | enginelink.go (M1) | voices/clone (reference recorder, imports), studio |
 | Engine jobs: submit `proto` job kinds (`engine.ExecutorKinds`) on `jobs.Lane(proto.RoleOf(kind))`; listen/media workers start on demand (`engine.Config.OnDemand`); default models `catalog.DefaultSTT/DefaultAlign/DefaultVAD/DefaultEnhance/DefaultDictation` | internal/engine, internal/catalog (M1) | voices, studio, later dictation/dubbing |
