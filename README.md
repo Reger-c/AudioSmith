@@ -115,6 +115,8 @@ MyGo is pinned in `go.mod`; `go tool mygo` runs the CLI at that version. Its SQL
 | `scripts/smoke-engine.sh` | Mac | The engine binary alone: three Kokoro takes |
 | `scripts/smoke-models.sh [ids]` | Mac + network | **The model gate.** Each catalogue model (or the listed ids) is downloaded, run offline and checked: TTS takes read back by Whisper (and design tags by pitch), transcripts, word times, VAD, denoising; reports RTF and memory to `/tmp/audiosmith-smoke/report.md` |
 | `AUDIOSMITH_E2E=1 go test -run TestRealEngineMedia -v ./internal/engine` | Mac | The media and listen workers: probe and decode of WAV, AIFF, M4A, MP3, MOV; the microphone |
+| `AUDIOSMITH_E2E=1 go test -run TestDictationLatency -v .` | Mac + network | Dictation's speech-to-text candidates on the listen worker: cold and warm latency for ~5 s of English and Chinese |
+| `AUDIOSMITH_E2E=1 go test -run TestLongRender -v -timeout 2h .` | Mac, models downloaded | 10,000-character renders (English, Chinese) on Kokoro, mixed text with `[laughter]` and a target duration on OmniVoice, `[slow]`/`[fast]`: chunks, loudness, memory |
 | `AUDIOSMITH_E2E=1 go test -run TestEndToEnd -v .` | Mac | The app's state driving the real engine: start, preload, English and Chinese takes, cancel by id, unload |
 | `AUDIOSMITH_E2E=1 go test -run TestRealEngineConformance ./internal/engine` | Mac | Raw protocol 2 against the built engine |
 | `AUDIOSMITH_E2E=1 AUDIOSMITH_E2E_MODELS=kokoro-82m-bf16,omnivoice-bf16 go test -run TestModelLifecycle -v -timeout 40m .` | Mac + network | Download into an empty model folder, cancel and resume, accept the licence, generate with the engine offline (`sandbox-exec`), OmniVoice duration and cloning, delete |
