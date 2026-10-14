@@ -191,6 +191,9 @@ func pageTitle(path string) string {
 	if t, ok := voicePageTitle(path); ok { // voices.go (thread V)
 		return t
 	}
+	if t, ok := dubPageTitle(path); ok { // M4: dub_pages.go (thread #19)
+		return t
+	}
 	if t, ok := longformPageTitle(path); ok { // M3: longform_pages.go (thread #18)
 		return t
 	}
@@ -340,6 +343,7 @@ func (a *app) pages(c *ui.Context) {
 			r.Title(i18n.T("Transcribe"))
 			a.transcribePage(c)
 		case a.longformRoute(c, r): // M3: /stories, /audiobook, /projects (longform_pages.go, thread #18)
+		case a.dubRoute(c, r): // M4: /dub, /batch (dub_pages.go, thread #19)
 		case r.Match("/settings/{section...}"):
 			r.Title(i18n.T("Settings"))
 			a.settingsPage(c, r)
@@ -390,6 +394,7 @@ func (a *app) sidebar(c *ui.Context) {
 			}
 		})
 		a.longformSidebar(c) // M3: Stories, Audiobook, Projects (longform_pages.go, thread #18)
+		a.dubSidebar(c)      // M4: Dub, Batch (dub_pages.go, thread #19)
 		ui.SidebarSection(c, i18n.T("App"), nil, func() {
 			ui.SidebarItem(c, "/settings", settingsIcon, i18n.T("Settings"))
 		})
