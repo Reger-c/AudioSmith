@@ -307,6 +307,17 @@ func TestDubEngine(t *testing.T) {
 		t.Errorf("AVFoundation does not see the Spanish track: %s", av)
 	}
 
+	// MOV keeps track titles (QuickTime user data; MP4 has no place AVFoundation writes them).
+	outMOV := filepath.Join(dir, "dubbed.mov")
+	if _, err := run(proto.MethodMediaMux, proto.MuxParams{Video: mov, KeepAudio: true, Audio: tracks, Subtitles: subs, Output: proto.Output{Path: outMOV, Format: "mov"}}, &mr); err != nil {
+		t.Fatalf("mux mov: %v", err)
+	}
+	avm := avTracks(t, dir, outMOV)
+	t.Logf("AVFoundation (MOV): %s", avm)
+	if !strings.Contains(avm, "name=Español") || !strings.Contains(avm, "name=Français") {
+		t.Errorf("MOV track titles: %s", avm)
+	}
+
 	// Thumbnails.
 	poster := filepath.Join(dir, "poster.jpg")
 	var th proto.ThumbnailResult
@@ -329,7 +340,7 @@ func TestDubEngine(t *testing.T) {
 	}
 	t.Logf("transcode: %+v in %.1f s", tc, took.Seconds())
 	tp := ffprobeStreams(t, fp, tc.Output)
-	if tc.Height != 720 || tc.Width != 1280 || len(tp) == 0 || tp[0].Codec != "h264" {
+	if tc.Height != 720 || tc.Width != 1280 || !slices.ContainsFunc(tp, func(s ffStream) bool { return s.Type == "video" && s.Codec == "h264" }) {
 		t.Errorf("transcode: %+v %+v", tc, tp)
 	}
 	webm := filepath.Join(dir, "clip.webm")
