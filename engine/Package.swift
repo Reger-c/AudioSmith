@@ -32,6 +32,10 @@ let package = Package(
         .package(path: ".build/deps/mlx-audio-swift"),
         .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.32.3"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.32.3"),
+        // Separation (M4), both MIT: HTDemucs and Mel-RoFormer ports to MLX
+        // (built and measured in the M0 spikes, research/m0-spikes.md §5).
+        .package(url: "https://github.com/kylehowells/demucs-mlx-swift.git", revision: "c8482739c621b90a64bf1a9f013712f6fea44eda"),
+        .package(url: "https://github.com/xocialize/mel-roformer-mlx-swift.git", revision: "22162f8fd5cd8cc09abc47a87c1ecddf3baf5ee3"),
     ],
     targets: [
         .target(
@@ -50,6 +54,8 @@ let package = Package(
                 .product(name: "MLXAudioSTS", package: "mlx-audio-swift"),
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "DemucsMLX", package: "demucs-mlx-swift"),
+                .product(name: "SwiftRoFormer", package: "mel-roformer-mlx-swift"),
             ],
             path: "Sources/AudioSmithEngine",
             swiftSettings: [.swiftLanguageMode(.v5)],
