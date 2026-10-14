@@ -36,10 +36,20 @@ func (a *app) splitStory(p *lfPage) {
 		a.toast(i18n.T("Nothing to split: paste or import a story first."))
 		return
 	}
+	n := splitStoryText(&p.doc, src)
+	p.doc.ImportText = ""
+	p.open["review"] = false
+	a.toast(i18n.N(n, "%d line", "%d lines", n))
+}
+
+// splitStoryText splits src by the document's SplitBy into lines
+// (headings become chapter lines) and appends them; it returns how many
+// spoken lines it added. The API's stories use it too.
+func splitStoryText(d *services.LongformDoc, src string) int {
 	opt := text.Options{Mode: text.Paragraphs, MaxChars: -1}
-	switch p.doc.SplitBy {
+	switch d.SplitBy {
 	case "sentences":
-		opt.Mode, opt.MaxChars = text.Sentences, p.doc.MaxChars
+		opt.Mode, opt.MaxChars = text.Sentences, d.MaxChars
 		if opt.MaxChars <= 0 {
 			opt.MaxChars = 500
 		}
@@ -54,36 +64,81 @@ func (a *app) splitStory(p *lfPage) {
 		} else {
 			n++
 		}
-		p.doc.Lines = append(p.doc.Lines, l)
+		d.Lines = append(d.Lines, l)
 	}
-	p.doc.ImportText = ""
-	p.open["review"] = false
-	a.toast(i18n.N(n, "%d line", "%d lines", n))
+	return n
 }
 
 // autoCastStory finds who speaks in the review buffer, casts new speakers
 // with voices round-robin, and appends the lines.
 func (a *app) autoCastStory(p *lfPage) {
 	src := strings.TrimSpace(p.doc.ImportText)
-	res := autocast.Detect(src, nil)
-	if src == "" || len(res.Lines) == 0 {
+	lines, speakers := autoCastText(&p.doc, src, a.lfVoices(entryFor(p.doc.Model)))
+	if lines == 0 {
 		a.toast(i18n.T("Nothing to auto-cast: paste or import a story first."))
 		return
 	}
-	voices := a.lfVoices(entryFor(p.doc.Model))
-	if p.doc.Voice == "" && len(voices) > 0 {
-		p.doc.Voice = voices[0].ref // the narrator
+	p.doc.ImportText = ""
+	p.open["review"] = false
+	n := speakers + 1
+	a.toast(i18n.N(lines, "Auto-cast %[1]d line across %[2]d voices", "Auto-cast %[1]d lines across %[2]d voices", lines, n))
+	p.open["cast"] = true
+}
+
+// autoCastText finds who speaks in src ("Name: line"), casts new
+// speakers with voices round-robin (voices nobody plays first), and
+// appends the lines to d. It returns the lines found (0: nothing to
+// cast, d unchanged) and the speakers. The API's stories use it too.
+func autoCastText(d *services.LongformDoc, src string, voices []lfVoice) (lines, speakers int) {
+	res := autocast.Detect(src, nil)
+	if strings.TrimSpace(src) == "" || len(res.Lines) == 0 {
+		return 0, 0
 	}
-	used := map[string]bool{p.doc.Voice: true}
-	for _, m := range p.doc.Cast {
+	pick := castPicker(d, voices)
+	ids := map[string]string{} // speaker (lower case) → cast id
+	for _, m := range d.Cast {
+		ids[strings.ToLower(m.Name)] = m.ID
+	}
+	spoke := map[string]bool{}
+	for _, l := range res.Lines {
+		line := services.StoryLine{ID: newLineID(), Text: l.Text}
+		if text.IsHeading(l.Text) {
+			line.Chapter, line.Text = true, strings.TrimSpace(strings.TrimLeft(l.Text, "#"))
+			d.Lines = append(d.Lines, line)
+			continue
+		}
+		if l.Speaker != "" {
+			k := strings.ToLower(l.Speaker)
+			id, ok := ids[k]
+			if !ok {
+				id = core.NewID(time.Now())
+				ids[k] = id
+				d.Cast = append(d.Cast, services.CastMember{ID: id, Name: l.Speaker, Voice: pick()})
+			}
+			line.Character = id
+			spoke[k] = true
+		}
+		d.Lines = append(d.Lines, line)
+	}
+	return len(res.Lines), len(spoke)
+}
+
+// castPicker gives new characters voices: the narrator (d.Voice) is the
+// first voice when it has none; then voices nobody plays yet, then
+// round-robin.
+func castPicker(d *services.LongformDoc, voices []lfVoice) func() string {
+	if d.Voice == "" && len(voices) > 0 {
+		d.Voice = voices[0].ref // the narrator
+	}
+	used := map[string]bool{d.Voice: true}
+	for _, m := range d.Cast {
 		used[m.Voice] = true
 	}
 	next := 0
-	pick := func() string {
+	return func() string {
 		if len(voices) == 0 {
 			return ""
 		}
-		// Voices nobody plays yet first, then round-robin.
 		for range voices {
 			v := voices[next%len(voices)]
 			next++
@@ -96,36 +151,6 @@ func (a *app) autoCastStory(p *lfPage) {
 		next++
 		return v.ref
 	}
-	ids := map[string]string{} // speaker (lower case) → cast id
-	for _, m := range p.doc.Cast {
-		ids[strings.ToLower(m.Name)] = m.ID
-	}
-	speakers := map[string]bool{}
-	for _, l := range res.Lines {
-		line := services.StoryLine{ID: newLineID(), Text: l.Text}
-		if text.IsHeading(l.Text) {
-			line.Chapter, line.Text = true, strings.TrimSpace(strings.TrimLeft(l.Text, "#"))
-			p.doc.Lines = append(p.doc.Lines, line)
-			continue
-		}
-		if l.Speaker != "" {
-			k := strings.ToLower(l.Speaker)
-			id, ok := ids[k]
-			if !ok {
-				id = core.NewID(time.Now())
-				ids[k] = id
-				p.doc.Cast = append(p.doc.Cast, services.CastMember{ID: id, Name: l.Speaker, Voice: pick()})
-			}
-			line.Character = id
-			speakers[k] = true
-		}
-		p.doc.Lines = append(p.doc.Lines, line)
-	}
-	p.doc.ImportText = ""
-	p.open["review"] = false
-	n := len(speakers) + 1
-	a.toast(i18n.N(len(res.Lines), "Auto-cast %[1]d line across %[2]d voices", "Auto-cast %[1]d lines across %[2]d voices", len(res.Lines), n))
-	p.open["cast"] = true
 }
 
 // importStory asks for a file and puts its text in the review buffer.

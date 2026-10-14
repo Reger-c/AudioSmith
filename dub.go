@@ -464,21 +464,7 @@ func (a *app) dubAutoStep() int {
 
 // newDub starts a project from a file (or an empty one for a URL).
 func (a *app) newDub(src dub.Source) {
-	p := dub.New("", time.Now())
-	p.Source = src
-	p.Title = strings.TrimSuffix(src.Name, filepath.Ext(src.Name))
-	if src.Kind == dub.SourceURL {
-		p.Title = src.Name
-	}
-	d := a.prefs.Dubbing
-	p.Settings.Model = firstOf(d.Model, a.dubDefaultModel())
-	p.Settings.Review = !d.NoReview
-	if len(d.Targets) > 0 {
-		p.Targets = slices.Clone(d.Targets)
-	}
-	if d.Translator != "" {
-		p.Settings.Translator = d.Translator
-	}
+	p := newDubProject(src, a.prefs.Dubbing, a.dubDefaultModel())
 	svc := a.dubSvc
 	a.async(func() {
 		created, err := svc.Create(context.Background(), p)
@@ -493,16 +479,40 @@ func (a *app) newDub(src dub.Source) {
 	})
 }
 
+// newDubProject is a new dub of src with Settings → Dubbing's choices
+// (model: def when they name none); the API's create_dub uses it too.
+func newDubProject(src dub.Source, d settings.Dubbing, def string) *dub.Project {
+	p := dub.New("", time.Now())
+	p.Source = src
+	p.Title = strings.TrimSuffix(src.Name, filepath.Ext(src.Name))
+	if src.Kind == dub.SourceURL {
+		p.Title = src.Name
+	}
+	p.Settings.Model = firstOf(d.Model, def)
+	p.Settings.Review = !d.NoReview
+	if len(d.Targets) > 0 {
+		p.Targets = slices.Clone(d.Targets)
+	}
+	if d.Translator != "" {
+		p.Settings.Translator = d.Translator
+	}
+	return p
+}
+
 // dubDefaultModel is the TTS model a new dub uses: the default if it is
 // downloaded, else the first downloaded model that clones.
-func (a *app) dubDefaultModel() string {
+func (a *app) dubDefaultModel() string { return dubDefaultModelBy(a.modelOnDisk) }
+
+// dubDefaultModelBy is dubDefaultModel with onDisk saying whether a
+// model is downloaded (and whether that is known).
+func dubDefaultModelBy(onDisk func(catalog.Entry) (ready, known bool)) string {
 	if e, ok := catalog.Builtin().ByRepo(dubDefaultModel); ok {
-		if ready, known := a.modelOnDisk(e); ready || !known {
+		if ready, known := onDisk(e); ready || !known {
 			return e.Repo
 		}
 	}
 	for _, e := range dubTTSModels() {
-		if ready, _ := a.modelOnDisk(e); ready && e.Has(catalog.CapClone) {
+		if ready, _ := onDisk(e); ready && e.Has(catalog.CapClone) {
 			return e.Repo
 		}
 	}

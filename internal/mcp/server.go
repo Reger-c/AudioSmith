@@ -5,7 +5,10 @@
 // through the shim of stdio.go (AudioSmith --mcp-stdio).
 //
 // Tools: generate_speech, clone_voice, design_voice, describe_voice,
-// transcribe, list_voices, list_models, list_languages, check_health.
+// transcribe, list_voices, list_models, list_languages, check_health;
+// and over the app's modules (studio.go, thread #35) jobs, the project
+// library and History, Stories and Audiobook, dubbing and batch, voice
+// discovery, exports and workflows.
 // Resources: voice://{id}, history://recent.
 //
 // Every tool goes through api.Server's operations, so the queue, the
@@ -74,27 +77,29 @@ type Client struct {
 // the Integrations page makes (integrations_skill.go), so that an agent
 // without the skill knows the basics; TestInstructions keeps the tools
 // and arguments they name real.
-const Instructions = "AudioSmith is a speech app running on this Mac: text to speech, voice cloning and design, and transcription, " +
-	"all local (MLX models; nothing leaves the Mac). Use it when the user wants speech, narration, a voice-over, " +
-	"a new voice, or a transcript or subtitles.\n" +
-	"- generate_speech: text (any length, up to 100,000 characters: AudioSmith splits it) to a WAV. " +
-	"voice = a saved voice's name from list_voices, a model's built-in speaker (list_models → voices), " +
-	"or empty for this agent's own voice. output \"file\" writes the WAV to AudioSmith's agents' folder " +
-	"and returns its path in file (name it with filename); prefer it, as \"inline\" puts the audio in your context as base64. " +
-	"instructions sets the delivery on models that take it.\n" +
-	"- transcribe: path = absolute path of an audio or video file on this Mac; timestamps: true returns " +
-	"segments with start/end seconds (write SRT or VTT from them).\n" +
-	"- design_voice: a voice from a natural-language description (gender, age, accent, style); " +
-	"describe_voice shows how a description is read, without saving.\n" +
-	"- clone_voice: name + path of 5–15 s of clean speech; consent: true only after the user confirms " +
-	"the speaker agreed. Ask before cloning anyone's voice.\n" +
-	"- list_voices, list_models (downloaded, licence_to_accept, needs_reference: speaks cloned voices only), " +
-	"list_languages, check_health. Resources: voice://{id}, history://recent.\n" +
-	"Errors start with a code: licence_required or model_not_downloaded → ask the user to fix it in " +
-	"AudioSmith → Models; engine_unavailable or queue_timeout → wait and retry; needs_reference → a cloned " +
-	"voice or another model. If AudioSmith cannot be reached, ask the user to open it with its Local API on. " +
-	"Use only 127.0.0.1, keep files in the agents' folder unless told otherwise, and report the paths of " +
-	"the files you make."
+const Instructions = "AudioSmith is a speech app on this Mac, all local (MLX models; nothing leaves the Mac): text to speech, " +
+	"voices, transcription, audiobooks and stories, video dubbing, exports and workflows. Use it for speech, narration, " +
+	"a voice-over, an audiobook, a dub, a new voice, or a transcript or subtitles.\n" +
+	"- generate_speech: text (≤ 100,000 chars) to a WAV. voice = a saved voice (list_voices), a built-in speaker " +
+	"(list_models → voices) or empty for your own. output \"file\" writes it to the agents' folder and returns its path " +
+	"(name it with filename); \"inline\" puts base64 in your context. instructions sets the delivery.\n" +
+	"- transcribe: path = absolute path of audio or video; timestamps: true returns segments (for SRT or VTT); export_transcript saves txt/srt/vtt.\n" +
+	"- Voices: design_voice (a description), describe_voice, clone_voice (name + path; consent: true only after the user " +
+	"confirms the speaker agreed), search_voices and use_gallery_voice (Discover voices).\n" +
+	"- Books and stories: create_audiobook (path of an EPUB, TXT, MD or DOCX), create_story (text of 'Name: line' lines), " +
+	"get_longform, update_longform (voice, cast, format m4b), render_longform, export_longform.\n" +
+	"- Dubbing: create_dub (path, target_languages), get_dub, edit_dub, run_dub, export_dub (mp4, wav, srt…); batch_dub, list_batch.\n" +
+	"- Library: list_projects, list_takes, export_audio (format, loudness…), list_workflows, run_workflow.\n" +
+	"- Long work returns a job_id at once: call get_job with wait_seconds (≤ 60) until done, then report its files; " +
+	"cancel_job stops it.\n" +
+	"- delete_item needs confirm: true, only after the user said yes.\n" +
+	"- list_models (downloaded, licence_to_accept, needs_reference: cloned voices only), list_languages, check_health. " +
+	"Resources: voice://{id}, history://recent.\n" +
+	"Errors start with a code: licence_required or model_not_downloaded → ask the user to fix it in AudioSmith → Models; " +
+	"engine_unavailable, queue_timeout or busy → wait and retry; needs_reference → a cloned voice or another model; " +
+	"confirm_required → ask the user. Never change AudioSmith's settings, download models or accept licences yourself. " +
+	"If AudioSmith cannot be reached, ask the user to open it with its Local API on. Use only 127.0.0.1; files go to the " +
+	"agents' folder unless you give an absolute directory; report the paths of the files you make."
 
 // New makes the MCP server.
 func New(o Options) *Server {
@@ -170,6 +175,9 @@ func (c caller) trusted() bool {
 
 // sandbox is the folder tools write audio to.
 func (s *Server) sandbox() string {
+	if s.o.API != nil {
+		return s.o.API.OutputDir()
+	}
 	if d := strings.TrimSpace(s.o.Backend.Settings().API.MCPDir); d != "" {
 		return d
 	}
@@ -260,6 +268,10 @@ func toolError(err error) error {
 	}
 	if errors.Is(err, core.ErrNotDownloaded) {
 		return fmt.Errorf("model_not_downloaded: %v (download it in AudioSmith → Models)", err)
+	}
+	// The services' sentinels (not found, invalid, busy…) get their code.
+	if e := api.ErrorOf(err); e.Code != "internal" {
+		return fmt.Errorf("%s: %s", e.Code, e.Message)
 	}
 	return err
 }
@@ -634,6 +646,7 @@ func (s *Server) addTools() {
 		Description: "Languages a model speaks (or every speech model)."}, s.listLanguages)
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "check_health", Title: "Check health",
 		Description: "Whether AudioSmith's engine is ready, starting or down, and its device."}, s.checkHealth)
+	s.addStudioTools() // thread #35: studio.go
 }
 
 // --- resources -------------------------------------------------------------------

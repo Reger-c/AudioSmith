@@ -33,6 +33,23 @@
       "name": "Transcripts"
     },
     {
+      "name": "Projects",
+      "description": "The project library."
+    },
+    {
+      "name": "Audiobook & Stories"
+    },
+    {
+      "name": "Dubbing",
+      "description": "Dubs and the batch queue."
+    },
+    {
+      "name": "Discover voices"
+    },
+    {
+      "name": "Workflows"
+    },
+    {
       "name": "Jobs"
     },
     {
@@ -750,6 +767,15 @@
               "type": "string"
             },
             "description": "Id."
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Accepted, not required here (kept for older clients); agents ask the user first."
           }
         ],
         "responses": {
@@ -990,6 +1016,15 @@
               "type": "string"
             },
             "description": "Id."
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Accepted, not required here (kept for older clients); agents ask the user first."
           }
         ],
         "responses": {
@@ -1242,6 +1277,15 @@
               "type": "string"
             },
             "description": "Id."
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Accepted, not required here (kept for older clients); agents ask the user first."
           }
         ],
         "responses": {
@@ -1367,6 +1411,15 @@
               "type": "string"
             },
             "description": "Id."
+          },
+          {
+            "name": "wait",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            },
+            "description": "Wait up to this many seconds (≤ 60) for the job to end."
           }
         ],
         "responses": {
@@ -1383,7 +1436,8 @@
           "404": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "description": "A queue job, or a group job: longform:<render id> (a story or audiobook render), dub:<dub id> (a dub's run), workflow:<id> (a workflow's run). files lists what it made. ?wait=N long-polls."
       }
     },
     "/api/jobs/{id}/cancel": {
@@ -1393,7 +1447,7 @@
         ],
         "summary": "Cancel a job",
         "operationId": "cancelJob",
-        "description": "Cancels it and the jobs that depend on it.",
+        "description": "Cancels a queue job, or stops a group job (what was made is kept; a run goes on later).",
         "parameters": [
           {
             "name": "id",
@@ -1884,6 +1938,1193 @@
         "responses": {
           "200": {
             "description": "Closed"
+          }
+        }
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "List the project library",
+        "operationId": "listProjects",
+        "description": "The Projects page: stories, audiobooks and their renders, dubs, workflows, voices, transcripts, takes, exports, calls; newest first.",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "story, audiobook, dub, workflow, voice, transcript, take, export, call; empty: all."
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Full-text search."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "1–500 (50)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Paging."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "list"
+                      ]
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Project"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/audiobooks": {
+      "post": {
+        "tags": [
+          "Audiobook & Stories"
+        ],
+        "summary": "Create an audiobook",
+        "operationId": "createAudiobook",
+        "description": "Imports a book (EPUB, TXT, Markdown, DOCX: path) or a manuscript (text: '# ' chapters, [voice:NAME] switches) into a saved Audiobook project.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LongformCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Longform"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/stories": {
+      "post": {
+        "tags": [
+          "Audiobook & Stories"
+        ],
+        "summary": "Create a story",
+        "operationId": "createStory",
+        "description": "Makes a saved Stories project from a script ('Name: line' lines go to that character, as Auto-cast does), a file, or lines.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LongformCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Longform"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/longform/{id}": {
+      "get": {
+        "tags": [
+          "Audiobook & Stories"
+        ],
+        "summary": "Get a story or audiobook",
+        "operationId": "getLongform",
+        "description": "Chapters, cast and voices, problems that stop a render, the last render's files.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Longform"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Audiobook & Stories"
+        ],
+        "summary": "Change a story or audiobook",
+        "operationId": "updateLongform",
+        "description": "Narrator, cast, line voices, model, language, format, loudness and book details; empty fields stay.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LongformUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Longform"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Audiobook & Stories"
+        ],
+        "summary": "Delete a story or audiobook",
+        "operationId": "deleteLongform",
+        "description": "Needs ?confirm=true (else 400 confirm_required). Its renders stay.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true: the user agreed to delete it."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/longform/{id}/render": {
+      "post": {
+        "tags": [
+          "Audiobook & Stories"
+        ],
+        "summary": "Render a story or audiobook",
+        "operationId": "renderLongform",
+        "description": "Starts a render (or of some chapters) and answers its job longform:<render id> at once.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LongformRender"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/longform/{id}/export": {
+      "post": {
+        "tags": [
+          "Audiobook & Stories"
+        ],
+        "summary": "Export a story or audiobook",
+        "operationId": "exportLongform",
+        "description": "Copies or encodes the last (or a given) finished render into the agents' folder or an absolute directory: m4b, wav, mp3, opus, chapters, cues, stems.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LongformExport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exported"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/dubs": {
+      "post": {
+        "tags": [
+          "Dubbing"
+        ],
+        "summary": "Create a dub",
+        "operationId": "createDub",
+        "description": "Makes a dub of a video or audio file with Settings → Dubbing's choices and starts it (through: transcript, translation, dub, none). Its job is dub:<dub id>.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DubCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dub"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/dubs/{id}": {
+      "get": {
+        "tags": [
+          "Dubbing"
+        ],
+        "summary": "Get a dub",
+        "operationId": "getDub",
+        "description": "Stages, speakers, tracks and lines (with their translations in language).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Target language of the translations shown; empty: the main one."
+          },
+          {
+            "name": "segments",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "false leaves the lines out."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dub"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Dubbing"
+        ],
+        "summary": "Edit a dub",
+        "operationId": "editDub",
+        "description": "Changes lines (source text, translation, speaker, voice), the cast and speaker names. Not while it runs (409 busy).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DubEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dub"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Dubbing"
+        ],
+        "summary": "Delete a dub",
+        "operationId": "deleteDub",
+        "description": "Needs ?confirm=true (else 400 confirm_required). Removes its files.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true: the user agreed to delete it."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/dubs/{id}/run": {
+      "post": {
+        "tags": [
+          "Dubbing"
+        ],
+        "summary": "Run a dub",
+        "operationId": "runDub",
+        "description": "Runs the pipeline through a stage; only what changed is made again. Answers the job dub:<dub id>.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DubRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/dubs/{id}/export": {
+      "post": {
+        "tags": [
+          "Dubbing"
+        ],
+        "summary": "Export a dub",
+        "operationId": "exportDub",
+        "description": "Queues an export (MP4, WAV, M4A, MP3, SRT, VTT, ASS, ZIPs) to the agents' folder or an absolute directory; the job's files name the output.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DubExport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/batch": {
+      "get": {
+        "tags": [
+          "Dubbing"
+        ],
+        "summary": "Get the batch queue",
+        "operationId": "getBatch",
+        "description": "The Batch page's dubs, settings and watch folder (read only).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Dubbing"
+        ],
+        "summary": "Batch dub",
+        "operationId": "batchDub",
+        "description": "Adds files (or a folder's) to the batch queue with the Batch page's settings, overridden for these files only. Each dub's job is dub:<dub id>.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/gallery": {
+      "get": {
+        "tags": [
+          "Discover voices"
+        ],
+        "summary": "Search Discover voices",
+        "operationId": "searchGallery",
+        "description": "The gallery's search with the page's filters, and each filter's values with counts.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Words."
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "A category id."
+          },
+          {
+            "name": "gender",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Gender."
+          },
+          {
+            "name": "age",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Age."
+          },
+          {
+            "name": "pitch",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Pitch."
+          },
+          {
+            "name": "accent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Accent or dialect."
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "BCP-47 primary code."
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Style."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "1–100 (20)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Paging."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GalleryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/gallery/{id}": {
+      "get": {
+        "tags": [
+          "Discover voices"
+        ],
+        "summary": "Get a gallery voice",
+        "operationId": "getGalleryVoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GalleryVoice"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/gallery/{id}/use": {
+      "post": {
+        "tags": [
+          "Discover voices"
+        ],
+        "summary": "Use a gallery voice",
+        "operationId": "useGalleryVoice",
+        "description": "Saves it to My voices as Use voice does (once; 201 when made, 200 when it was there) and names the models that speak it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GalleryUse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GalleryUse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{id}/export": {
+      "post": {
+        "tags": [
+          "Takes"
+        ],
+        "summary": "Export a take",
+        "operationId": "exportTake",
+        "description": "The Export audio dialog's export: format, bit depth or bitrate, sample rate, channels, loudness, trim, tags, script and subtitles beside it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeExport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exported"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/transcripts/{id}/export": {
+      "post": {
+        "tags": [
+          "Transcripts"
+        ],
+        "summary": "Export a transcript",
+        "operationId": "exportTranscript",
+        "description": "TXT, SRT, VTT or JSON, to the agents' folder or an absolute directory.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscriptExport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exported"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/workflows": {
+      "get": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "List workflows",
+        "operationId": "listWorkflows",
+        "description": "Saved workflows: steps, inputs, export folders, last run.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "list"
+                      ]
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Workflow"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/{id}/run": {
+      "post": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Run a workflow",
+        "operationId": "runWorkflow",
+        "description": "Runs a saved workflow (new input scripts or files replace its inputs; its steps are not changed). Answers the job workflow:<id>.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -2787,7 +4028,7 @@
           },
           "kind": {
             "type": "string",
-            "description": "take.render, transcript.make, model.download, media.encode…"
+            "description": "take.render, transcript.make, model.download, media.encode…; for group jobs longform.render, dub.run, workflow.run"
           },
           "lane": {
             "type": "string",
@@ -2873,6 +4114,24 @@
           "finished_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "done": {
+            "type": "boolean",
+            "description": "It ended: succeeded, failed, cancelled or interrupted."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Absolute paths of the files it made."
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A group job's queue jobs."
           }
         },
         "required": [
@@ -3321,6 +4580,1524 @@
           "model",
           "seconds",
           "audioSmith"
+        ]
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "updated": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "category",
+          "title",
+          "updated"
+        ]
+      },
+      "Longform": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "voice": {
+            "type": "string"
+          },
+          "voice_name": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "number"
+          },
+          "chapters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "lines": {
+                  "type": "integer"
+                },
+                "chars": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "index",
+                "lines",
+                "chars"
+              ]
+            }
+          },
+          "cast": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "voice": {
+                  "type": "string"
+                },
+                "voice_name": {
+                  "type": "string"
+                },
+                "lines": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "speaker": {
+                  "type": "string"
+                },
+                "voice": {
+                  "type": "string"
+                },
+                "speed": {
+                  "type": "number"
+                },
+                "pause_after_ms": {
+                  "type": "integer"
+                },
+                "chapter": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "text"
+              ]
+            }
+          },
+          "words": {
+            "type": "integer"
+          },
+          "estimated_seconds": {
+            "type": "number"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "blocking": {
+                  "type": "boolean"
+                },
+                "chapter": {
+                  "type": "integer"
+                },
+                "line": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "book": {
+            "type": "object",
+            "properties": {
+              "author": {
+                "type": "string"
+              },
+              "narrator": {
+                "type": "string"
+              },
+              "year": {
+                "type": "string"
+              },
+              "genre": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "cover": {
+                "type": "string"
+              },
+              "loudness": {
+                "type": "string"
+              }
+            }
+          },
+          "last_render": {
+            "type": "object",
+            "properties": {
+              "render_id": {
+                "type": "string"
+              },
+              "job_id": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "partial": {
+                "type": "boolean"
+              },
+              "seconds": {
+                "type": "number"
+              },
+              "book": {
+                "type": "string"
+              },
+              "m4b": {
+                "type": "string"
+              },
+              "cues": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "encode_error": {
+                "type": "string"
+              },
+              "chapters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "file": {
+                      "type": "string"
+                    },
+                    "seconds": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
+                }
+              },
+              "stems": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "created_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "render_id",
+              "job_id",
+              "state",
+              "created_at"
+            ]
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "kind",
+          "title",
+          "model",
+          "format",
+          "chapters",
+          "words",
+          "estimated_seconds",
+          "book",
+          "updated_at"
+        ]
+      },
+      "Exported": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "format": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "seconds": {
+            "type": "number"
+          },
+          "loudness_lufs": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "files",
+          "format"
+        ]
+      },
+      "Dub": {
+        "type": "object",
+        "properties": {
+          "dub_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "number"
+          },
+          "source_language": {
+            "type": "string"
+          },
+          "detected_language": {
+            "type": "string"
+          },
+          "target_languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "phase": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "translator": {
+            "type": "string"
+          },
+          "batch": {
+            "type": "boolean"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "speakers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "voice": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label"
+              ]
+            }
+          },
+          "stages": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "warnings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status"
+              ]
+            }
+          },
+          "tracks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "speech": {
+                  "type": "string"
+                },
+                "seconds": {
+                  "type": "number"
+                },
+                "flagged": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "language": {
+            "type": "string"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "number"
+                },
+                "end": {
+                  "type": "number"
+                },
+                "speaker": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "translation": {
+                  "type": "string"
+                },
+                "voice": {
+                  "type": "string"
+                },
+                "rendered": {
+                  "type": "boolean"
+                },
+                "stale": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "start",
+                "end",
+                "text"
+              ]
+            }
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dub_id",
+          "title",
+          "source",
+          "target_languages",
+          "phase",
+          "running",
+          "job_id",
+          "updated_at"
+        ]
+      },
+      "Batch": {
+        "type": "object",
+        "properties": {
+          "added": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dub_id": {
+                  "type": "string"
+                },
+                "job_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "target_languages": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "phase": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "dub_id",
+                "job_id",
+                "title",
+                "source",
+                "target_languages",
+                "phase"
+              ]
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "code",
+                "message"
+              ]
+            }
+          },
+          "queue": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dub_id": {
+                  "type": "string"
+                },
+                "job_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "target_languages": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "phase": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "dub_id",
+                "job_id",
+                "title",
+                "source",
+                "target_languages",
+                "phase"
+              ]
+            }
+          },
+          "watch_folder": {
+            "type": "object",
+            "properties": {
+              "folder": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              },
+              "paused": {
+                "type": "boolean"
+              },
+              "added": {
+                "type": "integer"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "active",
+              "added"
+            ]
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "target_languages": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "source_language": {
+                "type": "string"
+              },
+              "voice": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "keep_background": {
+                "type": "boolean"
+              },
+              "translator": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "target_languages",
+              "keep_background"
+            ]
+          }
+        }
+      },
+      "GalleryPage": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "next": {
+            "type": "integer"
+          },
+          "voices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "languages": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "attributes": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  }
+                },
+                "sample_text": {
+                  "type": "string"
+                },
+                "featured": {
+                  "type": "boolean"
+                },
+                "saved_voice_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "description",
+                "category",
+                "languages",
+                "attributes"
+              ]
+            }
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "value",
+                  "label",
+                  "count"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "next",
+          "voices"
+        ]
+      },
+      "GalleryVoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "attributes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "sample_text": {
+            "type": "string"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "saved_voice_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "category",
+          "languages",
+          "attributes"
+        ]
+      },
+      "GalleryUse": {
+        "type": "object",
+        "properties": {
+          "voice": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "object": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "speaker": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "style": {
+                "type": "string"
+              },
+              "design": {
+                "type": "string"
+              },
+              "seed": {
+                "type": "integer"
+              },
+              "ref_text": {
+                "type": "string"
+              },
+              "ref_seconds": {
+                "type": "number"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "verified": {
+                "type": "boolean"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "origin": {
+                "type": "string"
+              },
+              "has_audio": {
+                "type": "boolean"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "object",
+              "name",
+              "kind",
+              "has_audio",
+              "created_at",
+              "updated_at"
+            ]
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "model_downloaded": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "voice",
+          "created",
+          "model_downloaded"
+        ]
+      },
+      "Workflow": {
+        "type": "object",
+        "properties": {
+          "workflow_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "string"
+          },
+          "input": {
+            "type": "string"
+          },
+          "scripts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "export_folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "last_run": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string"
+              },
+              "items": {
+                "type": "integer"
+              },
+              "done": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "state",
+              "items",
+              "done"
+            ]
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id",
+          "name",
+          "steps",
+          "input",
+          "job_id",
+          "updated_at"
+        ]
+      },
+      "LongformCreate": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "description": "What is said (script markup works: [pause 500ms], tone tags); for a chapter line, its title."
+                },
+                "speaker": {
+                  "type": "string",
+                  "description": "The character who says it (a name; the cast gives it a voice); empty: the narrator."
+                },
+                "voice": {
+                  "type": "string",
+                  "description": "A voice for this line only (a saved voice's name or id, or a built-in speaker)."
+                },
+                "speed": {
+                  "type": "number",
+                  "description": "0.5–2; 0: the story's."
+                },
+                "pause_after_ms": {
+                  "type": "integer",
+                  "description": "Silence after the line, in milliseconds (0: the usual gap)."
+                },
+                "chapter": {
+                  "type": "boolean",
+                  "description": "true: the line starts a chapter titled text."
+                }
+              },
+              "required": [
+                "text"
+              ]
+            }
+          },
+          "split": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "voice": {
+            "type": "string"
+          },
+          "cast": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "language": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          }
+        },
+        "description": "One of path, text or lines (lines and split: stories only)."
+      },
+      "LongformUpdate": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "A new title."
+          },
+          "model": {
+            "type": "string",
+            "description": "Another speech model (voices that do not fit it are reported as problems)."
+          },
+          "voice": {
+            "type": "string",
+            "description": "The narrator (default voice): a saved voice's name or id, or a built-in speaker."
+          },
+          "cast": {
+            "type": "object",
+            "description": "Character name → voice; the voice default gives the character the narrator's voice.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "line_voices": {
+            "type": "object",
+            "description": "Stories: line id → voice for that line only (default: back to its character's).",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "language": {
+            "type": "string",
+            "description": "BCP-47 code; auto: automatic."
+          },
+          "speed": {
+            "type": "number",
+            "description": "Speaking rate 0.5–2."
+          },
+          "format": {
+            "type": "string",
+            "description": "wav or m4b (M4B needs the engine's encoder)."
+          },
+          "loudness": {
+            "type": "string",
+            "description": "The book's loudness target: acx (Audible, −19 LUFS), podcast (−16 LUFS) or off."
+          },
+          "author": {
+            "type": "string",
+            "description": "Book details for the M4B's tags."
+          },
+          "narrator": {
+            "type": "string",
+            "description": "The narrator's name, for the M4B's tags."
+          },
+          "year": {
+            "type": "string",
+            "description": "The book's year, for its tags."
+          },
+          "genre": {
+            "type": "string",
+            "description": "The book's genre, for its tags."
+          },
+          "description": {
+            "type": "string",
+            "description": "The book's description, for its tags."
+          },
+          "cover": {
+            "type": "string",
+            "description": "Absolute path of a PNG or JPEG cover (≤ 8 MB)."
+          }
+        }
+      },
+      "LongformRender": {
+        "type": "object",
+        "properties": {
+          "chapters": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Chapter numbers (1-based) to render; empty: the whole book or story."
+          }
+        }
+      },
+      "LongformExport": {
+        "type": "object",
+        "properties": {
+          "render_id": {
+            "type": "string",
+            "description": "Or a render of it (render_longform's job, without longform:)."
+          },
+          "format": {
+            "type": "string",
+            "description": "m4b (rendered with format m4b), wav (default), mp3 or opus (need ffmpeg), chapters (one WAV per chapter), cues (chapter times, .txt) or stems (one WAV per character)."
+          },
+          "bits": {
+            "type": "integer",
+            "description": "WAV bit depth: 16, 24 or 32 (float); 0: as rendered (32-bit float)."
+          },
+          "directory": {
+            "type": "string",
+            "description": "Absolute folder to write to; empty: AudioSmith's agents' folder."
+          },
+          "filename": {
+            "type": "string",
+            "description": "The file's name (no folders; for chapters and stems, the name of a folder made inside directory); empty: from the title."
+          }
+        }
+      },
+      "DubCreate": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path of the video or audio to dub (mp4, mov, mkv, mp3, wav, m4a…)."
+          },
+          "title": {
+            "type": "string",
+            "description": "The project's title; empty: the file's name."
+          },
+          "source_language": {
+            "type": "string",
+            "description": "BCP-47 code spoken in the file; empty: detected."
+          },
+          "target_languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "BCP-47 codes to dub into, the main one first; empty: AudioSmith's Dubbing settings."
+          },
+          "model": {
+            "type": "string",
+            "description": "The speech model (list_models); empty: AudioSmith's dubbing default (it clones each speaker)."
+          },
+          "voice": {
+            "type": "string",
+            "description": "One voice for every speaker (a saved voice's name or id); empty: each speaker's own voice, cloned."
+          },
+          "speakers": {
+            "type": "integer",
+            "description": "How many people speak (1–20); 0: detected."
+          },
+          "keep_background": {
+            "type": "boolean",
+            "description": "Keep the music and effects under the dub (default true)."
+          },
+          "through": {
+            "type": "string",
+            "description": "How far to run now: transcript, translation, dub (default: the whole dub) or none."
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "DubRun": {
+        "type": "object",
+        "properties": {
+          "through": {
+            "type": "string",
+            "description": "transcript, translation, dub (default) or verify (a second listen that flags lines)."
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only these target languages; empty: all."
+          },
+          "retranslate": {
+            "type": "boolean",
+            "description": "Translate every line again (edited lines too)."
+          },
+          "retranscribe": {
+            "type": "boolean",
+            "description": "Transcribe the source again (drops the lines and their edits)."
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only re-render these line ids; empty: the lines that changed."
+          }
+        }
+      },
+      "DubEdit": {
+        "type": "object",
+        "properties": {
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The line's id (get_dub)."
+                },
+                "text": {
+                  "type": "string",
+                  "description": "New source text (drops its translations, which are made again)."
+                },
+                "language": {
+                  "type": "string",
+                  "description": "With translation: its target language; empty: the main one."
+                },
+                "translation": {
+                  "type": "string",
+                  "description": "New translated text in language."
+                },
+                "speaker": {
+                  "type": "string",
+                  "description": "Another speaker label (S1, S2…)."
+                },
+                "voice": {
+                  "type": "string",
+                  "description": "A voice for this line only (a saved voice's name or id); default: the speaker's."
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "description": "Line edits."
+          },
+          "cast": {
+            "type": "object",
+            "description": "Speaker label (S1…) or * (everyone) → voice (name or id); default: the speaker's cloned voice.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "names": {
+            "type": "object",
+            "description": "Speaker label → display name.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DubExport": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "mp4 (the video with dubbed audio tracks), wav, m4a or mp3 (a dubbed track; mp3 needs ffmpeg), srt, vtt or ass (subtitles), stems or segments (ZIP), burn (MP4 with burnt-in subtitles; needs ffmpeg)."
+          },
+          "language": {
+            "type": "string",
+            "description": "The language of a track or subtitles (orig: the source's); empty: the main target."
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "mp4: the audio tracks, languages and orig; empty: the main target and orig."
+          },
+          "default_track": {
+            "type": "string",
+            "description": "mp4: the track players pick; empty: the first."
+          },
+          "subtitles": {
+            "type": "boolean",
+            "description": "mp4: add soft subtitle tracks."
+          },
+          "dual": {
+            "type": "boolean",
+            "description": "Subtitles with the translation and the original."
+          },
+          "bits": {
+            "type": "integer",
+            "description": "wav: 16, 24 (default) or 32."
+          },
+          "directory": {
+            "type": "string",
+            "description": "Absolute folder to write to; empty: AudioSmith's agents' folder."
+          },
+          "filename": {
+            "type": "string",
+            "description": "The file's name (no folders); empty: from the title and language."
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "BatchRequest": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Absolute paths of videos or audio files."
+          },
+          "folder": {
+            "type": "string",
+            "description": "Or an absolute folder: every video and audio file in it (not its subfolders)."
+          },
+          "target_languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "BCP-47 codes to dub into; empty: the Batch page's."
+          },
+          "source_language": {
+            "type": "string",
+            "description": "BCP-47 code spoken; empty: the Batch page's (or detected)."
+          },
+          "voice": {
+            "type": "string",
+            "description": "One voice for every speaker (a saved voice's name or id); empty: the Batch page's (or each speaker cloned)."
+          },
+          "model": {
+            "type": "string",
+            "description": "The speech model; empty: the Batch page's (or the dubbing default)."
+          },
+          "keep_background": {
+            "type": "boolean",
+            "description": "Keep music and effects; empty: the Batch page's."
+          }
+        }
+      },
+      "TakeExport": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "wav (default), m4a, mp3, flac or opus (mp3, flac and opus need ffmpeg; m4a the engine)."
+          },
+          "bits": {
+            "type": "integer",
+            "description": "wav: 16, 24 or 32 (float); flac: 16 or 24. Default 24 (wav), 16 (flac)."
+          },
+          "bitrate_kbps": {
+            "type": "integer",
+            "description": "m4a 128/192/256, mp3 128/192/320, opus 64/96/128; 0: the format's default."
+          },
+          "sample_rate": {
+            "type": "integer",
+            "description": "44100 or 48000; 0: the take's (opus is always 48000)."
+          },
+          "channels": {
+            "type": "integer",
+            "description": "1 (mono) or 2 (stereo); 0: the take's."
+          },
+          "loudness": {
+            "type": "string",
+            "description": "podcast (−16 LUFS), speech (−18 LUFS), broadcast (−23 LUFS) or off (default)."
+          },
+          "trim": {
+            "type": "boolean",
+            "description": "Trim leading and trailing silence."
+          },
+          "title": {
+            "type": "string",
+            "description": "Title tag (not wav)."
+          },
+          "artist": {
+            "type": "string",
+            "description": "Artist tag (not wav)."
+          },
+          "script": {
+            "type": "boolean",
+            "description": "Also save the text beside it (.txt)."
+          },
+          "subtitles": {
+            "type": "boolean",
+            "description": "Also save subtitles beside it (.srt), timed to the audio."
+          },
+          "directory": {
+            "type": "string",
+            "description": "Absolute folder to write to; empty: AudioSmith's agents' folder."
+          },
+          "filename": {
+            "type": "string",
+            "description": "The file's name (no folders); empty: from the text."
+          }
+        }
+      },
+      "TranscriptExport": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "txt (default), srt, vtt or json."
+          },
+          "directory": {
+            "type": "string",
+            "description": "Absolute folder to write to; empty: AudioSmith's agents' folder."
+          },
+          "filename": {
+            "type": "string",
+            "description": "The file's name (no folders); empty: from the transcript's title."
+          }
+        }
+      },
+      "WorkflowRun": {
+        "type": "object",
+        "properties": {
+          "scripts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Workflows that start with scripts: the scripts to run (each one an item; replaces the saved ones)."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Workflows that start with audio: absolute paths of the files to run (replace the saved ones)."
+          },
+          "again": {
+            "type": "boolean",
+            "description": "Make every result anew (default: keep results whose inputs did not change)."
+          }
+        }
+      },
+      "Accepted": {
+        "type": "object",
+        "description": "A job started: follow it with GET /api/jobs/{job_id}?wait=30 or its events.",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "description": "A queue job's id, or a group's: longform:<render id>, dub:<dub id>, workflow:<id>."
+          },
+          "state": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "job_url": {
+            "type": "string"
+          },
+          "events_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state"
         ]
       }
     },

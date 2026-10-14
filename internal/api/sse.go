@@ -65,6 +65,10 @@ var heartbeat = 15 * time.Second
 // events until it ends, then "done".
 func (s *Server) jobEvents(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if IsGroupJob(id) {
+		s.groupEvents(w, r, id)
+		return
+	}
 	x := s.w.job(id)
 	defer x.stop()
 	j, err := s.job(r.Context(), id)
@@ -123,6 +127,53 @@ func (s *Server) allJobEvents(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if err := out.event("job", jobJSON(u.Job, false)); err != nil {
+			return
+		}
+	}
+}
+
+// groupEvents is GET /api/jobs/{id}/events of a group job: its state at
+// once and whenever one of its jobs changes, then "done".
+func (s *Server) groupEvents(w http.ResponseWriter, r *http.Request, id string) {
+	x := s.w.owner(id)
+	defer x.stop()
+	j, err := s.jobState(r.Context(), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	out := newSSE(w)
+	last := ""
+	send := func(j JobJSON) bool {
+		data, _ := json.Marshal(j)
+		if string(data) == last {
+			return true
+		}
+		last = string(data)
+		return out.event("job", j) == nil
+	}
+	quiet := time.Duration(0)
+	for {
+		if !send(j) {
+			return
+		}
+		if j.Done {
+			out.event("done", j)
+			return
+		}
+		_, ok, err := x.next(r.Context(), time.Second)
+		if err != nil {
+			return
+		}
+		if ok {
+			quiet = 0
+		} else if quiet += time.Second; quiet >= heartbeat {
+			if out.comment() != nil {
+				return
+			}
+			quiet = 0
+		}
+		if j, err = s.jobState(r.Context(), id); err != nil {
 			return
 		}
 	}

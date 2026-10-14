@@ -268,7 +268,8 @@ func TestTools(t *testing.T) {
 		names = append(names, tl.Name)
 	}
 	slices.Sort(names)
-	want := []string{"check_health", "clone_voice", "describe_voice", "design_voice", "generate_speech", "list_languages", "list_models", "list_voices", "transcribe"}
+	want := append([]string{"check_health", "clone_voice", "describe_voice", "design_voice", "generate_speech", "list_languages", "list_models", "list_voices", "transcribe"}, StudioTools...)
+	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools %v", names)
 	}
@@ -426,6 +427,11 @@ func TestBindingsAndLAN(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("left: %v", entries)
 	}
+	// The tools over the app's modules touch this Mac's files: refused.
+	res = call(t, cs, "list_projects", nil)
+	if !res.IsError || !strings.Contains(textOf(res), api.CodeUnauthorized) {
+		t.Fatalf("LAN studio tool: %s", textOf(res))
+	}
 	// Without the PIN: refused.
 	c := sdk.NewClient(&sdk.Implementation{Name: "x"}, nil)
 	if _, err := c.Connect(context.Background(), &sdk.StreamableClientTransport{Endpoint: lan.URL + "/mcp", MaxRetries: -1}, nil); err == nil {
@@ -444,7 +450,7 @@ func TestStdioShim(t *testing.T) {
 	}
 	cs := shimSession(t, ProxyOptions{PortFile: pf, Client: "codex"})
 	tools, err := cs.ListTools(context.Background(), nil)
-	if err != nil || len(tools.Tools) != 9 {
+	if err != nil || len(tools.Tools) != 9+len(StudioTools) {
 		t.Fatalf("tools %v %v", err, tools)
 	}
 	res := call(t, cs, "generate_speech", map[string]any{"text": "Through the shim.", "output": "inline"})

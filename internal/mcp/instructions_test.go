@@ -49,6 +49,9 @@ func TestInstructions(t *testing.T) {
 		{"transcribe", "path"}, {"transcribe", "timestamps"},
 		{"clone_voice", "name"}, {"clone_voice", "path"}, {"clone_voice", "consent"},
 		{"design_voice", "description"}, {"describe_voice", "description"},
+		{"get_job", "wait_seconds"}, {"delete_item", "confirm"}, {"create_audiobook", "path"}, {"create_story", "text"},
+		{"create_dub", "path"}, {"create_dub", "target_languages"}, {"update_longform", "voice"}, {"update_longform", "cast"},
+		{"update_longform", "format"}, {"export_audio", "format"}, {"export_audio", "loudness"},
 	} {
 		if !props[ta[0]][ta[1]] {
 			t.Errorf("%s has no argument %s", ta[0], ta[1])
@@ -57,7 +60,8 @@ func TestInstructions(t *testing.T) {
 			t.Errorf("the instructions do not name %s", ta[1])
 		}
 	}
-	for _, s := range []string{"127.0.0.1", "licence_required", "model_not_downloaded", "needs_reference", "voice://{id}", "history://recent", "consent: true", "timestamps: true"} {
+	for _, s := range []string{"127.0.0.1", "licence_required", "model_not_downloaded", "needs_reference", "voice://{id}", "history://recent", "consent: true", "timestamps: true",
+		"job_id", "confirm: true", "confirm_required", "busy"} {
 		if !strings.Contains(Instructions, s) {
 			t.Errorf("the instructions lack %q", s)
 		}

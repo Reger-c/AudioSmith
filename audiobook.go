@@ -18,6 +18,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/hehehai/AudioSmith/internal/doc"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/text"
 	"github.com/hehehai/AudioSmith/internal/text/markup"
 )
@@ -154,16 +155,7 @@ func (a *app) importBookFrom(p *lfPage, path string) {
 				a.toast(bookImportError(path, err))
 				return
 			}
-			s := d.Script()
-			if p.doc.Title == "" && d.Title != "" {
-				p.doc.Title = d.Title
-			}
-			if p.doc.Book.Author == "" && d.Author != "" {
-				p.doc.Book.Author = d.Author
-			}
-			if d.Language != "" && p.doc.Language == "" {
-				p.doc.Language = d.Language
-			}
+			s := applyBook(&p.doc, d)
 			a.setManuscript(p, s)
 			n := len(markup.Parse(s, nil).Chapters())
 			a.composer.undoToast = "" // not the Studio's
@@ -173,6 +165,22 @@ func (a *app) importBookFrom(p *lfPage, path string) {
 			})
 		})
 	})
+}
+
+// applyBook takes an imported book's title, author and language into an
+// audiobook's document where it has none, and returns its manuscript
+// (the API's books use it too).
+func applyBook(d *services.LongformDoc, b *doc.Document) string {
+	if d.Title == "" && b.Title != "" {
+		d.Title = b.Title
+	}
+	if d.Book.Author == "" && b.Author != "" {
+		d.Book.Author = b.Author
+	}
+	if b.Language != "" && d.Language == "" {
+		d.Language = b.Language
+	}
+	return b.Script()
 }
 
 // bookImportError explains why a book could not be imported.

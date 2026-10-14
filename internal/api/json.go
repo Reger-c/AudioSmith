@@ -160,6 +160,12 @@ type JobJSON struct {
 	CreatedAt  time.Time       `json:"created_at"`
 	StartedAt  *time.Time      `json:"started_at,omitempty"`
 	FinishedAt *time.Time      `json:"finished_at,omitempty"`
+	// Done: it ended (succeeded, failed, cancelled or interrupted).
+	Done bool `json:"done"`
+	// Files are the absolute paths of what it made (thread #35).
+	Files []string `json:"files,omitempty"`
+	// Jobs are the queue jobs of a group job ("longform:<id>"…).
+	Jobs []string `json:"jobs,omitempty"`
 }
 
 // ProgressJSON is a running job's progress.
@@ -182,7 +188,7 @@ type JobErrorJSON struct {
 
 func jobJSON(j jobs.Job, withResult bool) JobJSON {
 	out := JobJSON{ID: j.ID, Object: "job", Kind: j.Kind, Lane: string(j.Lane), State: string(j.State), Title: j.Title,
-		Owner: j.Owner, Attempt: j.Attempt, CreatedAt: j.Created}
+		Owner: j.Owner, Attempt: j.Attempt, CreatedAt: j.Created, Done: ended(j)}
 	if !j.Started.IsZero() {
 		t := j.Started
 		out.StartedAt = &t

@@ -127,6 +127,9 @@ func errorOf(err error) *Error {
 	return &Error{Status: http.StatusInternalServerError, Code: proto.CodeInternal, Message: err.Error()}
 }
 
+// ErrorOf is errorOf for the app (an API error for any error).
+func ErrorOf(err error) *Error { return errorOf(err) }
+
 // jobErrorOf maps a failed job's error.
 func jobErrorOf(je *jobs.Error) *Error {
 	e := &Error{Code: je.Code, Message: je.Message}
