@@ -144,7 +144,9 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | `a.useVoiceInStories`, `a.useVoiceInAudiobook`, `a.projectUsageLink`, `a.longformVoiceItems`, `a.recordTakeExport`, `a.recordVoiceExport` | longform*.go, projects*.go (M3) | gallery, voice editor, studio output, history |
 | `a.voicePicker(c, p)`, `a.applyStudioVoice(&t, p)`, `a.studioUsesSavedVoice(p)`, `a.studioVoicePrompt(p)`, `a.useVoiceInStudio`, `a.openVoiceEditor`, `a.openDesignFor`, `a.startClone` | voices*.go, clone*.go, design*.go (M1-V) | studio, gallery, palette |
 | `a.probeMedia`, `a.captureDevices`, `a.startRecording(params, onLevel, then)`, `a.stopRecording`, `engineErrorText(err)`, `jobErrorText(*jobs.Error)` | enginelink.go (M1) | voices/clone (reference recorder, imports), studio |
-| Engine jobs: submit `proto` job kinds (`engine.ExecutorKinds`) on `jobs.Lane(proto.RoleOf(kind))`; listen/media workers start on demand (`engine.Config.OnDemand`); default models `catalog.DefaultSTT/DefaultAlign/DefaultVAD/DefaultEnhance` | internal/engine, internal/catalog (M1) | voices, studio, later dictation/dubbing |
+| Engine jobs: submit `proto` job kinds (`engine.ExecutorKinds`) on `jobs.Lane(proto.RoleOf(kind))`; listen/media workers start on demand (`engine.Config.OnDemand`); default models `catalog.DefaultSTT/DefaultAlign/DefaultVAD/DefaultEnhance/DefaultDictation` | internal/engine, internal/catalog (M1) | voices, studio, later dictation/dubbing |
+| Listen-role STT: app kinds `listen:stt.transcribe` / `listen:models.load` (`proto.KindFor`/`SplitKind`, `engine.KindExecutor`), `TranscribeRequest.Role` → dictation runs on `jobs.LaneListen`, never behind gpu renders; `media.encode` (WAV → M4B/M4A, AAC-LC, chapter track, iTunes tags, cover; MP3 → `unsupported {capability:"mp3"}`) | internal/engine, engine/ (M1-E) | dictation, longform |
+| Catalogue fields (M1-E, measured on M4 by the smoke suite): `rtf`, `maxChars` (hard limit for Kokoro/Kitten, recommended chunk size otherwise), `deterministic` (chunk cache ignores seed), `nonVerbal` (OmniVoice tags), `stream` (Qwen3-TTS only), `guidance`/`exaggeration` (Chatterbox) | internal/catalog/catalog.json | render, studio, dictation |
 
 ## 4. Contracts (summary)
 
@@ -221,6 +223,10 @@ Rules that stay:
 | Models | the Hugging Face cache, `~/.cache/huggingface/hub` (`HF_HUB_CACHE`/`HF_HOME`, or Settings → Models → Model folder) |
 | Secrets | the login Keychain, service "AudioSmith": account "huggingface-token" (HF token; or `$HF_TOKEN`, or huggingface-cli's token file), later "llm.<provider>", "mt.<service>" |
 
+### Engine dependencies (M1-E)
+
+The engine builds on upstream Blaizzy/mlx-audio-swift (pinned commit, see README Versions) with mlx-swift 0.32.3. AudioSmith's changes are a patch series in `engine/patches/mlx-audio-swift/` applied into `engine/.build/deps/` by `scripts/fetch-engine-deps.sh` (re-applies only after a change). Every catalogue model must pass `scripts/smoke-models.sh` (downloads with the app's hub, runs offline, reads TTS back with Whisper, F0 check for design gender, measures limits and streaming; report in `/tmp/audiosmith-smoke/`) before it is listed.
+
 ## 7. Testing
 
 | What | Command | Notes |
@@ -233,4 +239,6 @@ Rules that stay:
 | Engine smoke | `scripts/smoke-engine.sh` | Mac: the engine binary alone |
 | Real engine | `AUDIOSMITH_E2E=1 go test -run 'TestEndToEnd' -v .` and `… -run TestRealEngineConformance ./internal/engine` | Mac, built engine, Kokoro in the HF cache |
 | Model lifecycle | `AUDIOSMITH_E2E=1 AUDIOSMITH_E2E_MODELS=kokoro-82m-bf16,omnivoice-bf16 go test -run TestModelLifecycle -v -timeout 40m .` | Mac + network: download, cancel, resume, licence, generate offline under `sandbox-exec`, delete |
+| Model smoke | `scripts/smoke-models.sh [ids]` | Mac + network: every catalogue model, per-model report |
+| Dictation latency, long render, real media | `AUDIOSMITH_E2E=1 go test -run 'TestDictationLatency|TestLongRender|TestRealEngineMedia' -v ./...` | Mac (see README) |
 | Keychain, proxy | `AUDIOSMITH_MAC=1 go test -run TestMacKeychainAndProxy -v ./internal/hub` | Mac |
