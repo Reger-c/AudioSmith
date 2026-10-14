@@ -116,8 +116,18 @@ func (r *recorder) states(id string) []State {
 	return out
 }
 
-// waitState waits until the latest update of job id has state st.
+// waitState waits until the latest update of job id has state st. The
+// outbox publishes updates after the scheduler acts, so the latest update
+// may still be one from before (a failed attempt before a Retry): use
+// waitAttempt to wait for a state of a given attempt.
 func (r *recorder) waitState(t *testing.T, id string, st State) Job {
+	t.Helper()
+	return r.waitAttempt(t, id, st, 0)
+}
+
+// waitAttempt waits until the latest update of job id has state st and,
+// unless attempt is 0, that attempt.
+func (r *recorder) waitAttempt(t *testing.T, id string, st State, attempt int) Job {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	r.mu.Lock()
@@ -125,7 +135,7 @@ func (r *recorder) waitState(t *testing.T, id string, st State) Job {
 	for {
 		for i := len(r.updates) - 1; i >= 0; i-- {
 			if u := r.updates[i]; u.Job.ID == id {
-				if u.Job.State == st {
+				if u.Job.State == st && (attempt == 0 || u.Job.Attempt == attempt) {
 					return u.Job
 				}
 				break
@@ -430,7 +440,9 @@ func TestRetry(t *testing.T) {
 		t.Errorf("retry of a running job: %v", err)
 	}
 	g.end(id, "", errors.New("plain"))
-	j = rec.waitState(t, id, StateFailed)
+	// Attempt 3's failure, not attempt 2's (whose update may still be the
+	// latest published: the outbox runs behind the executor).
+	j = rec.waitAttempt(t, id, StateFailed, 3)
 	if j.Err.Code != CodeInternal || j.Err.Message != "plain" || j.Attempt != 3 {
 		t.Errorf("plain error %+v", j.Err)
 	}
@@ -447,7 +459,7 @@ func TestRetry(t *testing.T) {
 	s.Retry(ctx, id2)
 	g.next(t)
 	g.end(id2, "", nil)
-	rec.waitState(t, id2, StateSucceeded)
+	rec.waitAttempt(t, id2, StateSucceeded, 2)
 }
 
 func TestRestartInterrupts(t *testing.T) {
