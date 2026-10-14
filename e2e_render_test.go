@@ -44,7 +44,9 @@ func TestLongRender(t *testing.T) {
 	events := make(chan func(), 1<<16)
 	a.enginePost = func(fn func()) { events <- fn }
 	a.postQueue = a.enginePost
+	// The media worker on demand, as the app has it: the watermark runs there.
 	h.sup = engine.NewSupervisor(engine.Config{Bin: bin, Bus: a.bus, LogDir: h.logDir, Offline: true, CacheDir: modelCache(a.prefs),
+		OnDemand: []proto.Role{proto.RoleListen, proto.RoleMedia},
 		Log: func(e core.LogEntry) {
 			if e.Level != core.SeverityInfo && e.Level != core.SeverityDebug {
 				t.Logf("%s %s: %s", e.Level, e.Source, e.Message)
