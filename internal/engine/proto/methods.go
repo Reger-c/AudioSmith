@@ -71,7 +71,7 @@ var Reserved = []string{
 	"tts.batch",
 	"stt.stream.open", "stt.stream.push", "stt.stream.close", "stt.partial", "stt.final",
 	"lid.detect",
-	"llm.generate", "translate.run",
+	"translate.run",
 	"media.timePitch", "media.ocr", "doc.extractText",
 	"capture.pcm",
 }
@@ -112,7 +112,8 @@ func SplitKind(kind string) (Role, string) {
 // models.* go to whichever worker holds the model (gpu in M1).
 func RoleOf(method string) Role {
 	switch method {
-	case MethodMediaProbe, MethodMediaDecode, MethodMediaEncode, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode:
+	case MethodMediaProbe, MethodMediaDecode, MethodMediaEncode, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode,
+		MethodWatermarkEmbed, MethodWatermarkDetect:
 		return RoleMedia
 	case MethodCaptureDevices, MethodCaptureStart, MethodCaptureStop:
 		return RoleListen
@@ -365,6 +366,14 @@ func ParamsFor(method string) any {
 		return new(CaptureStopParams)
 	case MethodCaptureLevel:
 		return new(LevelParams)
+	case MethodLLMGenerate:
+		return new(LLMGenerateParams)
+	case MethodWatermarkEmbed:
+		return new(WatermarkEmbedParams)
+	case MethodWatermarkDetect:
+		return new(WatermarkDetectParams)
+	case MethodLLMToken:
+		return new(LLMTokenParams)
 	case MethodHello:
 		return new(HelloParams)
 	case MethodStats, MethodFlush, MethodShutdown, MethodModelsLoaded:
@@ -416,6 +425,12 @@ func ResultFor(method string) any {
 		return new(ThumbnailResult)
 	case MethodMediaTranscode:
 		return new(TranscodeResult)
+	case MethodLLMGenerate:
+		return new(LLMGenerateResult)
+	case MethodWatermarkEmbed:
+		return new(WatermarkEmbedResult)
+	case MethodWatermarkDetect:
+		return new(WatermarkDetectResult)
 	case MethodCaptureDevices:
 		return new(DevicesResult)
 	case MethodCaptureStart:
@@ -448,7 +463,8 @@ func IsJob(method string) bool {
 	case MethodModelsLoad, MethodTTSSynthesize, MethodTTSEncodeVoice,
 		MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
 		MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
-		MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode:
+		MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode,
+		MethodLLMGenerate, MethodWatermarkEmbed, MethodWatermarkDetect:
 		return true
 	}
 	return false
@@ -460,4 +476,5 @@ var JobMethods = []string{
 	MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
 	MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
 	MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode,
+	MethodLLMGenerate, MethodWatermarkEmbed, MethodWatermarkDetect,
 }

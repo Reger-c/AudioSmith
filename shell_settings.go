@@ -61,6 +61,7 @@ func settingsSections() []settingsSection {
 		{"permissions", i18n.T("Permissions"), "Permissions"},
 		dubSettingsSection(),                      // M4: dub_settings.go (thread #19)
 		{"api", i18n.T("Local API"), "Local API"}, // M5: api_settings.go (thread #20)
+		{"privacy", i18n.T("Privacy"), "Privacy"}, // watermark_app.go (thread #14)
 	}
 }
 
@@ -321,6 +322,10 @@ func (a *app) settingsPage(c *ui.Context, r *ui.Route) {
 						a.permissionsSettings(c)
 					case a.dubSettingsRoute(c, r): // M4: Settings → Dubbing (dub_pages.go, thread #19)
 					case a.apiSettingsRoute(c, r): // M5: api_settings.go (thread #20)
+					case r.Match("/privacy"): // watermark_app.go (thread #14)
+						r.Title(i18n.T("Privacy"))
+						a.lastSettings = "privacy"
+						a.privacySettings(c)
 					default:
 						ui.Text(c, i18n.T("There is no page at %s.", a.router.Path())).TextColor(t.TextMuted)
 					}

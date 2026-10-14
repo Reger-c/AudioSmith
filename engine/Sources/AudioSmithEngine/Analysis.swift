@@ -124,6 +124,9 @@ final class Analyzer: @unchecked Sendable {
                 return try await DeepFilterNetModel.fromPretrained(p.model)
             }
             rate = m.sampleRate
+        case "llm":
+            _ = try await llmModel(p.model, path: p.path, job: job, offline: offline)
+            rate = 0
         default:
             throw EngineError.badRequest("Unknown task \(task)")
         }

@@ -192,6 +192,9 @@ func (f *fake) Probe(ctx context.Context, path string) (proto.ProbeResult, error
 	return proto.ProbeResult{}, nil
 }
 func (f *fake) CanEncode() bool { return false }
+func (f *fake) DetectWatermark(context.Context, string) (proto.WatermarkDetectResult, error) {
+	return proto.WatermarkDetectResult{}, nil
+}
 func (f *fake) TempDir() string { return filepath.Join(f.dir, "tmp") }
 func (f *fake) DataDir() string { return f.dir }
 

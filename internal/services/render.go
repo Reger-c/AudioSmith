@@ -156,6 +156,8 @@ type renderer struct {
 	logf      func(string, ...any)
 	// cacheMax caps the chunk cache, in bytes.
 	cacheMax int64
+	// watermark marks finished renders (watermark.go).
+	watermark WatermarkFunc
 }
 
 func (r *renderer) model(repo string) ModelInfo {
@@ -372,6 +374,10 @@ func (r *renderer) renderOnce(ctx context.Context, job jobs.Job, pp *RenderParam
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
 	r.pruneCache()
+	marked, notice := r.watermarkOutput(ctx, p.Output, opts.Bits) // watermark.go
+	if notice != nil {
+		warnings = append(warnings, *notice)
+	}
 
 	res := RenderResult{
 		Output: p.Output, SampleRate: out.rate, Channels: out.channels, Frames: out.frames,
@@ -386,6 +392,7 @@ func (r *renderer) renderOnce(ctx context.Context, job jobs.Job, pp *RenderParam
 	res.Render.Channels, res.Render.Bytes = out.channels, out.bytes
 	res.Render.Chunks, res.Render.Warnings = takeChunks, warnings
 	res.Render.Issues, res.Render.QCDone = out.issues, out.qcDone
+	res.Render.Watermarked = marked
 	return json.Marshal(res)
 }
 
