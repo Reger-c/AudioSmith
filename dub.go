@@ -549,6 +549,10 @@ func (a *app) dubChanged(ev services.DubChanged) {
 		return
 	}
 	p := ev.Project
+	if i := slices.IndexFunc(a.dubList, func(r store.DubRecord) bool { return r.ID == p.ID }); i >= 0 && p.Batch == "" &&
+		a.dubList[i].Phase == string(dub.PhaseGenerating) && p.Phase() == dub.PhaseDone {
+		a.notify(core.SeveritySuccess, i18n.T("Dub finished"), firstOf(p.Title, p.Source.Name), "/dub")
+	}
 	a.dubPutRecord(p)
 	a.batchChanged(p)
 	if a.dub == nil || a.dub.ID != p.ID {

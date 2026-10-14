@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -90,6 +91,9 @@ func (a *app) batchChanged(p *dub.Project) {
 	b := &a.batch
 	if p.Batch == "" || b.docs == nil {
 		return
+	}
+	if old := b.docs[p.ID]; old != nil && !old.TracksReady() && p.TracksReady() && p.Run == nil {
+		a.notify(core.SeveritySuccess, i18n.T("Batch dub finished"), firstOf(p.Title, filepath.Base(p.Source.Path)), "/batch")
 	}
 	b.docs[p.ID] = p
 	r := store.DubRecord{ID: p.ID, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, Batch: p.Batch, Title: p.Title, Source: p.Source.Path,

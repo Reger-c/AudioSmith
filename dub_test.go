@@ -167,6 +167,28 @@ func TestDubPageEndToEnd(t *testing.T) {
 	if !tt.HasText("Dub · 🇪🇸 Spanish") && !slices.ContainsFunc(tt.Texts(), func(s string) bool { return strings.HasPrefix(s, "Dub · ") }) {
 		t.Errorf("A/B track missing: %q", tt.Texts())
 	}
+	// A/B: switching to the dub keeps the playhead.
+	a.dubSeek(3)
+	var dubLabel string
+	for _, x := range tt.Texts() {
+		if strings.HasPrefix(x, "Dub · ") {
+			dubLabel = x
+			break
+		}
+	}
+	if err := tt.Click(dubLabel); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.dubPlayer.track != "es" {
+		t.Errorf("track %q", a.dubPlayer.track)
+	}
+	a.dubTogglePlay()
+	tt.Frame()
+	if a.dubPlayer.p == nil || a.dubPosition() < 2.9 {
+		t.Errorf("player %v at %.2f", a.dubPlayer.p != nil, a.dubPosition())
+	}
+	a.dubStopPlayer()
 	// A changed line is counted and regenerates alone.
 	a.dubBeginEdit(id, "es")
 	a.dubBuf = "Hola."
