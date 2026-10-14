@@ -42,6 +42,7 @@ type Settings struct {
 	// M7a (thread #22, m7.go): the first-run setup and the media tools.
 	Setup Setup `json:"setup"`
 	Media Media `json:"media"`
+	Calls Calls `json:"calls"` // M6b (thread #23, calls.go)
 }
 
 // General: language and app behaviour.

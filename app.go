@@ -42,6 +42,8 @@ type app struct {
 	toolsState
 	wfState     // M6 (thread #21): workflow*.go — WorkflowStudio
 	watermarkUI // watermark_app.go (thread #14): Settings → Privacy, Tools → Watermark
+	// M6b (thread #23): calls*.go, twilio*.go — AI phone calls.
+	callsState
 }
 
 func newApp(eng *engineHost, lib *library) *app {
@@ -62,6 +64,7 @@ func newApp(eng *engineHost, lib *library) *app {
 	a.openTools(lib)       // M5: tools.go (thread #20)
 	a.openWorkflows(lib)   // M6: workflow.go (thread #21)
 	a.openWatermark(lib)   // watermark_app.go (thread #14)
+	a.openCalls(lib)       // M6b: calls.go (thread #23)
 	return a
 }
 
@@ -99,6 +102,7 @@ func (a *app) quit() {
 	a.stopAPI()        // M5: api.go (thread #20)
 	a.closeDictation() // M2: dictation.go
 	a.closeDubs()      // M4: dub.go
+	a.closeCalls()     // M6b: calls.go (thread #23)
 	a.eng.Stop()
 	a.closeShell()
 }

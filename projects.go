@@ -23,7 +23,7 @@ import (
 )
 
 // libCategories are the filters, in order.
-var libCategories = []string{store.LibAll, store.LibDub, store.LibStory, store.LibAudiobook, store.LibVoice, store.LibTranscript, store.LibTake, store.LibExport, store.LibWorkflow /* M6 */}
+var libCategories = []string{store.LibAll, store.LibDub, store.LibStory, store.LibAudiobook, store.LibVoice, store.LibTranscript, store.LibTake, store.LibExport, store.LibWorkflow /* M6 */, store.LibCall /* M6b */}
 
 // libPageSize is how many items the page reads at a time.
 const libPageSize = 200
@@ -119,6 +119,8 @@ func categoryLabel(cat string) string {
 		return i18n.T("Dubbing projects")
 	case store.LibWorkflow: // M6 (thread #21)
 		return i18n.T("Workflows")
+	case store.LibCall: // M6b (thread #23)
+		return i18n.T("Calls")
 	case store.LibStory:
 		return i18n.T("Stories")
 	case store.LibAudiobook:
@@ -184,6 +186,8 @@ func itemIcon(it store.LibraryItem) *ui.SVG {
 		return dubIcon
 	case "workflow": // M6 (thread #21)
 		return workflowsIcon
+	case "call": // M6b (thread #23)
+		return callsIcon
 	}
 	if it.Category == store.LibAudiobook {
 		return audiobookIcon
@@ -223,6 +227,8 @@ func (a *app) itemMeta(it store.LibraryItem) string {
 		parts = append(parts, dubItemPhase(it.Detail))
 	case "workflow": // M6: workflow_pages.go (thread #21)
 		parts = append(parts, wfItemState(it.Detail))
+	case "call": // M6b: calls_pages.go (thread #23)
+		parts = append(parts, callItemDetail(it.Detail))
 	}
 	parts = append(parts, i18n.DateTime(it.Updated))
 	return strings.Join(parts, " · ")
@@ -294,6 +300,8 @@ func (a *app) openItem(it store.LibraryItem) {
 		a.openDub(it.ID)
 	case "workflow": // M6: workflow.go (thread #21)
 		a.wfOpenPage(it.ID)
+	case "call": // M6b: calls_pages.go (thread #23)
+		a.callOpenPage(it.ID)
 	case "project":
 		kind := core.ProjectKind(it.Category)
 		if kind != core.ProjectStory && kind != core.ProjectAudiobook {
@@ -369,6 +377,8 @@ func (a *app) renameItem(it store.LibraryItem, title string) {
 func (a *app) deleteItems(items []store.LibraryItem) {
 	svc := a.lib.svc
 	wfs := a.wfSvc // M6 (thread #21)
+	// M6b (thread #23).
+	calls := a.callSvc
 	for _, it := range items {
 		if it.Source == "take" && a.pl.Current() == it.ID {
 			a.pl.Stop()
@@ -393,6 +403,8 @@ func (a *app) deleteItems(items []store.LibraryItem) {
 				err = svc.Library.DeleteExport(ctx, it.ID)
 			case "workflow": // M6 (thread #21)
 				err = wfs.Delete(ctx, it.ID)
+			case "call": // M6b (thread #23)
+				err = calls.Delete(ctx, it.ID)
 			}
 			if err != nil && !errors.Is(err, core.ErrNotFound) {
 				errs[libKey(it)] = err.Error()

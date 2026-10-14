@@ -14,6 +14,9 @@ func TestIntegrationSnippets(t *testing.T) {
 	base := integEnv{Base: "http://127.0.0.1:4000", Exe: "/Applications/AudioSmith.app/Contents/MacOS/AudioSmith"}
 	for _, env := range []integEnv{base, {Base: base.Base, Exe: base.Exe, NeedKey: true}, {Base: base.Base, Exe: base.Exe, Key: "as-SECRET"}} {
 		for _, in := range integrations {
+			if in.Slug == "twilio" { // M6b (thread #23): the call gateway's setup, not the Local API's
+				continue
+			}
 			blocks := in.Blocks(env)
 			if len(blocks) == 0 {
 				t.Fatalf("%s: no blocks", in.Slug)
