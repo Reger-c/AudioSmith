@@ -16,7 +16,7 @@ func TestStudioWithoutModules(t *testing.T) {
 	f := newFake(t)
 	_, ts := f.server()
 	for _, r := range [][2]string{{"GET", "/api/projects"}, {"GET", "/api/workflows"}, {"GET", "/api/batch"}, {"GET", "/api/gallery"},
-		{"GET", "/api/longform/x"}, {"GET", "/api/dubs/x"}, {"POST", "/api/takes/x/export"}, {"GET", "/api/jobs/dub:x"}} {
+		{"GET", "/api/longform/x"}, {"GET", "/api/dubs/x"}, {"GET", "/api/agent-skill?agent=codex"}, {"POST", "/api/takes/x/export"}, {"GET", "/api/jobs/dub:x"}} {
 		var e apiErr
 		resp := do(t, ts, r[0], r[1], nil, &e)
 		if resp.StatusCode != 501 || e.Error.Code != CodeUnsupported {

@@ -38,8 +38,9 @@ import (
 // skillName is the skill's name and folder.
 const skillName = "audiosmith"
 
-// skillEOF ends the skill's heredoc in the setup prompt's script.
-const skillEOF = "AUDIOSMITH_SKILL"
+// skillPath is the route the running app serves the skill's files at
+// (GET /api/agent-skill?agent=<slug>&file=SKILL.md|reference/tools.md).
+const skillPath = "/api/agent-skill"
 
 // skillDir is the user-level folder of an agent's skill, from the home
 // folder ("~/.claude/skills/audiosmith").
@@ -243,7 +244,7 @@ func skillTools() []skillTool {
 		{Name: "list_workflows", Lead: i18n.T("the saved workflows (WorkflowStudio): steps, inputs (scripts or files), export folders, last run. No arguments.")},
 		{Name: "run_workflow", Lead: i18n.T("run a saved workflow. Its steps cannot be changed here: the user edits them on the Workflows page."), Args: []skillArg{
 			must(i18n.T("The workflow (list_workflows)."), "workflow_id"),
-			arg(i18n.T("New inputs, saved as the workflow's: scripts (each one an item) for workflows that start with scripts, or absolute paths of audio files for those that start with audio."), "scripts", "files"),
+			arg(i18n.T("One-off inputs of this run (the saved ones stay): scripts (each one an item) for workflows that start with scripts, or absolute paths of audio files for those that start with audio."), "scripts", "files"),
 			arg(i18n.T("Make every result anew (default: keep the results whose inputs did not change)."), "again"),
 		}, After: i18n.T("Returns a job_id (workflow:<id>); its result lists each item's steps and files, and files the final results.")},
 		{Name: "get_job", Lead: i18n.T("follow a long job: state, stage, progress (0–1), error code and, when it ends, the absolute paths of the files it made."), Args: []skillArg{
@@ -407,6 +408,17 @@ func agentSkillFiles(slug string, p promptEnv) []skillDoc {
 		return nil
 	}
 	return []skillDoc{{"SKILL.md", agentSkill(slug, p)}, {skillRefPath, skillReference()}}
+}
+
+// agentSkillFile is one file of an agent's skill (the API's GET
+// /api/agent-skill): ok is false for an unknown agent or file.
+func agentSkillFile(slug, file string, p promptEnv) (string, bool) {
+	for _, f := range agentSkillFiles(slug, p) {
+		if f.Path == file {
+			return f.Text, true
+		}
+	}
+	return "", false
 }
 
 // agentSkillText is the skill as one text (Copy skill): SKILL.md, then
@@ -644,38 +656,59 @@ func skillReference() string {
 	return b.String()
 }
 
+// skillURL is where the running app serves an agent's skill files (the
+// file name follows).
+func skillURL(slug string, p promptEnv) string {
+	return p.Base + skillPath + "?agent=" + slug + "&file="
+}
+
 // skillScript is the setup prompt's shell script that installs the skill
-// at the agent's user level: it writes each file through a heredoc,
-// backs up a different file that is there, and changes nothing when run
-// again. It runs in bash and zsh.
+// at the agent's user level: it downloads each file from the running app
+// (GET /api/agent-skill), backs up a different file that is there, and
+// changes nothing when run again. It runs in bash and zsh.
 func skillScript(slug string, p promptEnv) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "D=\"$HOME/%s\"\n", strings.TrimPrefix(skillDir(slug), "~/"))
-	b.WriteString("mkdir -p \"$D/" + filepath.Dir(skillRefPath) + "\"\n")
-	for _, f := range agentSkillFiles(slug, p) {
-		b.WriteString("F=\"$D/" + f.Path + "\"\n")
-		b.WriteString("cat > \"$F.new\" <<'" + skillEOF + "'\n")
-		b.WriteString(f.Text)
-		b.WriteString(skillEOF + "\n")
-		b.WriteString("if [ -f \"$F\" ] && ! cmp -s \"$F\" \"$F.new\"; then cp \"$F\" \"$F.bak-$(date +%Y%m%d-%H%M%S)\"; fi\n")
-		b.WriteString("mv \"$F.new\" \"$F\"\n")
+	w := func(s string) { b.WriteString(s + "\n") }
+	w(fmt.Sprintf(`D="$HOME/%s"`, strings.TrimPrefix(skillDir(slug), "~/")))
+	w("U='" + skillURL(slug, p) + "'")
+	auth := ""
+	switch p.keyMode() {
+	case keyKeychain:
+		w(`AUTH="Authorization: Bearer $(` + keychainRead + `)"`)
+		auth = ` -H "$AUTH"`
+	case keyIncluded:
+		w("AUTH='Authorization: Bearer " + p.Key + "'")
+		auth = ` -H "$AUTH"`
 	}
-	b.WriteString("ls \"$D\" \"$D/" + filepath.Dir(skillRefPath) + "\"; head -n 3 \"$D/SKILL.md\"\n")
+	w(`mkdir -p "$D/` + filepath.Dir(skillRefPath) + `"; ok=1`)
+	w("for f in SKILL.md " + skillRefPath + "; do")
+	w(`  if ! curl -fsS` + auth + ` "$U$f" -o "$D/$f.new"; then ok=0; rm -f "$D/$f.new"; break; fi`)
+	w(`  if [ -f "$D/$f" ] && ! cmp -s "$D/$f" "$D/$f.new"; then cp "$D/$f" "$D/$f.bak-$(date +%Y%m%d-%H%M%S)"; fi`)
+	w(`  mv "$D/$f.new" "$D/$f"`)
+	w("done")
+	w(`if [ "$ok" = 1 ]; then ls "$D" "$D/` + filepath.Dir(skillRefPath) + `"; head -n 3 "$D/SKILL.md"; else echo "AudioSmith did not serve the skill"; fi`)
 	return b.String()
 }
 
-// promptSkillStep is the setup prompt's step 4: install the skill at
-// the user level, verify it, and tell the user to start a new chat. The
-// script is fenced with four backticks: the skill has fences of three.
+// promptSkillStep is the setup prompt's step 4: install the skill at the
+// user level from the running app, verify it, and tell the user to start
+// a new chat; if the app does not serve it, the Integrations page can.
 func promptSkillStep(b *strings.Builder, slug string, p promptEnv) {
 	w := func(s string) { b.WriteString(s + "\n") }
-	if promptAgents[slug].Client == "" {
-		w("4. " + i18n.T("Install AudioSmith's skill, so that you know how to use AudioSmith in every new chat (what it does, its tools, voices and recipes): a folder %s with SKILL.md and %s. If you read Agent Skills (folders with a SKILL.md), set D to that folder in your user-level skills folder (many agents read %s) and run this script as it is: it backs up a different file that is there, and running it again changes nothing. If you don't, put the texts between the %s lines, without SKILL.md's frontmatter (the lines from --- to ---), into your user-level instructions file in place of an earlier AudioSmith section, and tell me which file.", "`"+skillName+"`", "`"+skillRefPath+"`", "`~/.agents/skills`", skillEOF))
+	ag := promptAgents[slug]
+	page := pageTitle("/integrations") + " → " + ag.Name + " → " + i18n.T("Agent skill")
+	if ag.Client == "" {
+		w("4. " + i18n.T("Install AudioSmith's skill, so that you know how to use AudioSmith in every new chat (what it does, its tools, voices and recipes): a folder %s with SKILL.md and %s, which AudioSmith serves at %s. If you read Agent Skills (folders with a SKILL.md), set D to that folder in your user-level skills folder (many agents read %s) and run this script as it is: it downloads both files, backs up a different file that is there, and running it again changes nothing. If you don't, download both files the same way and put their text, without SKILL.md's frontmatter (the lines from --- to ---), into your user-level instructions file in place of an earlier AudioSmith section, and tell me which file.", "`"+skillName+"`", "`"+skillRefPath+"`", "`"+skillURL(slug, p)+"<file>`", "`~/.agents/skills`"))
 	} else {
-		w("4. " + i18n.T("Install AudioSmith's skill, so that you know how to use AudioSmith in every new chat (what it does, its tools, voices and recipes): the folder %s, with SKILL.md and %s (my user level, all projects); use %s in this project only if I ask. Run this script as it is: it backs up a different file that is there, and running it again changes nothing.", "`"+skillDir(slug)+"/`", "`"+skillRefPath+"`", "`"+strings.TrimPrefix(skillDir(slug), "~/")+"/`"))
+		w("4. " + i18n.T("Install AudioSmith's skill, so that you know how to use AudioSmith in every new chat (what it does, its tools, voices and recipes): the folder %s, with SKILL.md and %s (my user level, all projects); use %s in this project only if I ask. Run this script as it is: it downloads both files from AudioSmith, backs up a different file that is there, and running it again changes nothing.", "`"+skillDir(slug)+"/`", "`"+skillRefPath+"`", "`"+strings.TrimPrefix(skillDir(slug), "~/")+"/`"))
 	}
-	w("````sh\n" + skillScript(slug, p) + "````")
+	w("```sh\n" + skillScript(slug, p) + "```")
 	w("   " + i18n.T("Check that its output shows %s, then tell me that the skill is installed and that it works in new chats.", "`name: "+skillName+"`"))
+	if ag.Client == "" {
+		w("   " + i18n.T("If it prints that AudioSmith did not serve the skill, ask me to save it with AudioSmith → %s → Save skill… and to tell you where the ZIP is.", page))
+	} else {
+		w("   " + i18n.T("If it prints that AudioSmith did not serve the skill, ask me to install it with AudioSmith → %s → Install skill…, then check the folder.", page))
+	}
 }
 
 // skillHome is the home folder skills are installed under (tests set it).

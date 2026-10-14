@@ -5,6 +5,8 @@ package api
 // GET /api/jobs/{id}?wait=N long-polls it.
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -39,6 +41,8 @@ func (s *Server) studioRoutes() {
 
 	s.handle("POST /api/takes/{id}/export", accessAdmin, s.httpExportTake)
 	s.handle("POST /api/transcripts/{id}/export", accessAdmin, s.httpExportTranscript)
+
+	s.handle("GET /api/agent-skill", accessAdmin, s.httpAgentSkill)
 
 	s.handle("GET /api/workflows", accessAdmin, s.httpWorkflows)
 	s.handle("POST /api/workflows/{id}/run", accessAdmin, s.httpRunWorkflow)
@@ -347,4 +351,33 @@ func waitParam(r *http.Request) time.Duration {
 		return 0
 	}
 	return min(time.Duration(n*float64(time.Second)), MaxWait)
+}
+
+// SkillSource is implemented by backends that serve the agent skill of
+// the Integrations page (the setup prompt downloads it). It never holds
+// the API key.
+type SkillSource interface {
+	// AgentSkill is a file of an agent's skill ("SKILL.md",
+	// "reference/tools.md") in the UI's language: *Error not_found for an
+	// unknown agent, invalid_request for an unknown file.
+	AgentSkill(ctx context.Context, agent, file string) (string, error)
+}
+
+// httpAgentSkill is GET /api/agent-skill?agent=<slug>&file=<path>.
+func (s *Server) httpAgentSkill(w http.ResponseWriter, r *http.Request) {
+	src, ok := s.b.(SkillSource)
+	if !ok {
+		writeError(w, errNoStudio())
+		return
+	}
+	q := r.URL.Query()
+	text, err := src.AgentSkill(r.Context(), strings.TrimSpace(q.Get("agent")), firstNonEmpty(strings.TrimSpace(q.Get("file")), "SKILL.md"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, text)
 }

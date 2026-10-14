@@ -338,8 +338,8 @@ func wfDiagText(w *workflow.Workflow, d workflow.Diagnostic) string {
 	return s
 }
 
-// RunWorkflow runs a saved workflow, with new inputs if given (saved as
-// the workflow's inputs; its steps are not changed).
+// RunWorkflow runs a saved workflow, with one-off inputs if given (the
+// saved workflow, its steps and inputs, is not changed).
 func (b *apiBackend) RunWorkflow(ctx context.Context, req api.WorkflowRun) (api.JobJSON, error) {
 	if b.wf == nil {
 		return api.JobJSON{}, errNoModule("Workflows")
@@ -348,6 +348,7 @@ func (b *apiBackend) RunWorkflow(ctx context.Context, req api.WorkflowRun) (api.
 	if err != nil {
 		return api.JobJSON{}, notFound(err, "workflow", req.ID)
 	}
+	var inputs *services.WorkflowInputs
 	if len(req.Scripts) > 0 || len(req.Files) > 0 {
 		in := w.InputNode()
 		switch {
@@ -360,12 +361,13 @@ func (b *apiBackend) RunWorkflow(ctx context.Context, req api.WorkflowRun) (api.
 		case len(req.Scripts) > workflow.MaxScripts || len(req.Files) > workflow.MaxClips:
 			return api.JobJSON{}, errBadRequest("scripts", "At most %d inputs.", workflow.MaxScripts)
 		}
-		in.P.Scripts, in.P.Clips = nil, nil
+		// One-off inputs of this run: the saved workflow keeps its own.
+		inputs = &services.WorkflowInputs{}
 		for i, s := range req.Scripts {
 			if len([]rune(s)) > workflow.MaxScriptChars {
 				return api.JobJSON{}, errBadRequest("scripts", "Script %d is longer than %d characters.", i+1, workflow.MaxScriptChars)
 			}
-			in.P.Scripts = append(in.P.Scripts, workflow.Script{Text: s})
+			inputs.Scripts = append(inputs.Scripts, workflow.Script{Text: s})
 		}
 		for _, p := range req.Files {
 			fi, err := os.Stat(p)
@@ -375,15 +377,12 @@ func (b *apiBackend) RunWorkflow(ctx context.Context, req api.WorkflowRun) (api.
 			if fi.Size() > workflow.MaxClipBytes {
 				return api.JobJSON{}, errBadRequest("files", "%s is larger than 64 MB.", filepath.Base(p))
 			}
-			in.P.Clips = append(in.P.Clips, workflow.Clip{Name: filepath.Base(p), Path: p, Size: fi.Size(), Mod: fi.ModTime()})
-		}
-		if _, err := b.wf.Save(ctx, w); err != nil {
-			return api.JobJSON{}, err
+			inputs.Clips = append(inputs.Clips, workflow.Clip{Name: filepath.Base(p), Path: p, Size: fi.Size(), Mod: fi.ModTime()})
 		}
 	}
 	// A run with nothing to do (no input changed) ends at once: its
 	// job is done, with the results it kept.
-	if _, err := b.wf.Run(ctx, req.ID, services.RunOptions{Again: req.Again, Priority: jobs.PriorityNormal}); err != nil {
+	if _, err := b.wf.Run(ctx, req.ID, services.RunOptions{Again: req.Again, Priority: jobs.PriorityNormal, Inputs: inputs}); err != nil {
 		var inv *services.WorkflowInvalidError
 		switch {
 		case errors.As(err, &inv):

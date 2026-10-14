@@ -779,13 +779,20 @@ func TestStudioWorkflows(t *testing.T) {
 	if len(res.Items) != 2 || res.Items[0].State != "done" {
 		t.Fatalf("result %s", j.Result)
 	}
+	// One-off inputs: the saved workflow keeps its own.
+	after, run, err := e.a.wfSvc.Get(context.Background(), saved.ID)
+	if err != nil || len(after.InputNode().P.Scripts) != 1 || after.InputNode().P.Scripts[0].Text != saved.InputNode().P.Scripts[0].Text ||
+		!after.UpdatedAt.Equal(saved.UpdatedAt) || run == nil || len(run.Items) != 2 {
+		t.Fatalf("saved inputs changed: %v %+v", err, after.InputNode().P.Scripts)
+	}
+	e.fails(t, "run_workflow", map[string]any{"workflow_id": saved.ID, "scripts": []string{"x"}, "files": []string{"/a.wav"}}, api.CodeInvalid)
 	e.fails(t, "run_workflow", map[string]any{"workflow_id": saved.ID, "files": []string{"/no/such.wav"}}, api.CodeNotFound)
 	e.fails(t, "run_workflow", map[string]any{"workflow_id": "missing"}, api.CodeNotFound)
 	if status, body := e.rest(t, "POST", "/api/workflows/"+saved.ID+"/run", map[string]any{"again": true}); status != 202 {
 		t.Fatalf("POST run %d %s", status, body)
 	}
 	e.wait(t, "workflow:"+saved.ID)
-	if status, body := e.rest(t, "GET", "/api/workflows", nil); status != 200 || !strings.Contains(string(body), "Lessons") || !strings.Contains(string(body), "Lesson two.") {
+	if status, body := e.rest(t, "GET", "/api/workflows", nil); status != 200 || !strings.Contains(string(body), "Lessons") || strings.Contains(string(body), "Lesson two.") {
 		t.Fatalf("GET %d %s", status, body)
 	}
 	// Group job events end with "done".

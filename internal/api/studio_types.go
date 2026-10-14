@@ -534,7 +534,7 @@ type WorkflowRunOut struct {
 // WorkflowRun runs a saved workflow.
 type WorkflowRun struct {
 	ID      string   `json:"workflow_id" jsonschema:"The workflow (list_workflows)."`
-	Scripts []string `json:"scripts,omitempty" jsonschema:"Workflows that start with scripts: the scripts to run (each one an item; replaces the saved ones)."`
-	Files   []string `json:"files,omitempty" jsonschema:"Workflows that start with audio: absolute paths of the files to run (replace the saved ones)."`
+	Scripts []string `json:"scripts,omitempty" jsonschema:"Workflows that start with scripts: the scripts to run this time (each one an item); the saved ones stay."`
+	Files   []string `json:"files,omitempty" jsonschema:"Workflows that start with audio: absolute paths of the files to run this time; the saved ones stay."`
 	Again   bool     `json:"again,omitempty" jsonschema:"Make every result anew (default: keep results whose inputs did not change)."`
 }

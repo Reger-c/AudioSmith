@@ -15,7 +15,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -389,4 +391,37 @@ func since(t time.Time) string {
 		return ""
 	}
 	return t.Format(time.RFC3339)
+}
+
+// AgentSkill serves a file of an agent's skill (GET /api/agent-skill), as
+// the Integrations page makes it: the live port, voices and folder, the
+// UI's language, never the key.
+func (b *apiBackend) AgentSkill(ctx context.Context, agent, file string) (string, error) {
+	if _, ok := promptAgents[agent]; !ok {
+		var slugs []string
+		for k := range promptAgents {
+			slugs = append(slugs, k)
+		}
+		slices.Sort(slugs)
+		return "", apiErr(http.StatusNotFound, api.CodeNotFound, "agent", "There is no agent %q: agent is one of %s.", agent, strings.Join(slugs, ", "))
+	}
+	text, ok := agentSkillFile(agent, file, b.skillEnv(ctx))
+	if !ok {
+		return "", errBadRequest("file", "file is SKILL.md or %s.", skillRefPath)
+	}
+	return text, nil
+}
+
+// skillEnv is the skill's environment from the settings and the voice
+// library (promptEnvOf without the view state).
+func (b *apiBackend) skillEnv(ctx context.Context) promptEnv {
+	st := b.lib.settings.Get()
+	voices, _ := b.voices(ctx)
+	sortVoices(voices)
+	dir := strings.TrimSpace(st.API.MCPDir)
+	if dir == "" {
+		dir = filepath.Join(b.data, "mcp")
+	}
+	e := integEnv{Base: "http://127.0.0.1:" + strconv.Itoa(st.API.LoopbackPort()), Exe: appExecutable(), NeedKey: st.API.RequireKey}
+	return promptEnvFrom(e, st, voices, dir)
 }

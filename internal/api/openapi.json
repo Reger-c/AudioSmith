@@ -3078,7 +3078,7 @@
         ],
         "summary": "Run a workflow",
         "operationId": "runWorkflow",
-        "description": "Runs a saved workflow (new input scripts or files replace its inputs; its steps are not changed). Answers the job workflow:<id>.",
+        "description": "Runs a saved workflow, with one-off input scripts or files if given (the saved workflow, its steps and inputs, stays as it is). Answers the job workflow:<id>.",
         "parameters": [
           {
             "name": "id",
@@ -3124,6 +3124,65 @@
             "$ref": "#/components/responses/Error"
           },
           "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/agent-skill": {
+      "get": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "Get the agent skill",
+        "operationId": "getAgentSkill",
+        "description": "A file of the agent skill the Integrations page makes (the setup prompt downloads it into the agent's skills folder): the live port, voices and agents' folder, in the UI's language; never the API key.",
+        "parameters": [
+          {
+            "name": "agent",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "claude-code",
+                "codex",
+                "cursor",
+                "mcp"
+              ]
+            },
+            "description": "The agent's page."
+          },
+          {
+            "name": "file",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SKILL.md",
+                "reference/tools.md"
+              ],
+              "default": "SKILL.md"
+            },
+            "description": "The file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -6059,14 +6118,14 @@
             "items": {
               "type": "string"
             },
-            "description": "Workflows that start with scripts: the scripts to run (each one an item; replaces the saved ones)."
+            "description": "Workflows that start with scripts: the scripts to run this time (each one an item); the saved ones stay."
           },
           "files": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Workflows that start with audio: absolute paths of the files to run (replace the saved ones)."
+            "description": "Workflows that start with audio: absolute paths of the files to run this time; the saved ones stay."
           },
           "again": {
             "type": "boolean",

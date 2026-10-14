@@ -15,8 +15,10 @@ import (
 	"strings"
 
 	"github.com/hehehai/AudioSmith/internal/api"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	mcpsrv "github.com/hehehai/AudioSmith/internal/mcp"
+	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 // promptAgent is an agent that gets a setup prompt.
@@ -62,13 +64,19 @@ const promptVoices = 6
 
 // promptEnvOf is the prompt's environment of the app now.
 func (a *app) promptEnvOf() promptEnv {
-	p := promptEnv{integEnv: a.integEnvOf(), Bindings: map[string]string{}, Dir: a.apiSandbox()}
+	return promptEnvFrom(a.integEnvOf(), a.prefs, a.voices, a.apiSandbox())
+}
+
+// promptEnvFrom is a prompt's environment from the settings and the saved
+// voices (in the library's order), on any goroutine (the API's skill).
+func promptEnvFrom(e integEnv, st settings.Settings, voices []core.Voice, dir string) promptEnv {
+	p := promptEnv{integEnv: e, Bindings: map[string]string{}, Dir: dir}
 	names := map[string]string{}
-	for _, v := range a.voices {
+	for _, v := range voices {
 		p.Voices = append(p.Voices, v.Name)
 		names[v.ID] = v.Name
 	}
-	for _, b := range a.prefs.API.Bindings {
+	for _, b := range st.API.Bindings {
 		if n := names[b.Voice]; n != "" {
 			p.Bindings[b.Client] = n
 		}

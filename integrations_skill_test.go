@@ -228,9 +228,6 @@ func TestAgentSkill(t *testing.T) {
 				if strings.Contains(s, keychainRead) != (mode != "none") {
 					t.Errorf("%s %s: the key from the Keychain", slug, mode)
 				}
-				if strings.Contains(s, skillEOF) {
-					t.Errorf("%s: the skill holds its own heredoc end", slug)
-				}
 				if zh := strings.Contains(s, "检查"); zh != (lang == "zh-Hans") {
 					t.Errorf("%s %s: language", lang, slug)
 				}
@@ -261,23 +258,33 @@ print(json.dumps(yaml.safe_load(t), ensure_ascii=False))`)
 }
 
 // TestAgentSkillScript runs the setup prompt's install script in bash and
-// zsh with a temporary HOME: it writes the skill, is idempotent, backs up
-// a different file; and the skill's curl example speaks.
+// zsh with a temporary HOME against the real API server: it downloads
+// the skill's files (GET /api/agent-skill), is idempotent, backs up a
+// different file, and changes nothing when AudioSmith does not answer;
+// and the skill's curl example speaks.
 func TestAgentSkillScript(t *testing.T) {
 	e := newAPIEnv(t)
+	ctx := context.Background()
 	for _, slug := range promptSlugs {
 		p := promptEnv{integEnv: integEnv{Base: e.ts.URL, Exe: testExe}, Dir: "/tmp/x"}
 		prompt := agentPrompt(slug, p)
 		var script string
 		for _, blk := range promptBlocks(prompt) {
-			if strings.Contains(blk[1], "<<'"+skillEOF+"'") {
+			if strings.Contains(blk[1], skillPath+"?agent="+slug) {
 				script = blk[1]
 			}
 		}
-		if script == "" || !strings.Contains(prompt, "````sh\n") {
+		if script == "" {
 			t.Fatalf("%s: no install script:\n%s", slug, prompt)
 		}
-		want := agentSkillFiles(slug, p)
+		var want []skillDoc
+		for _, f := range []string{"SKILL.md", skillRefPath} {
+			text, err := e.b.AgentSkill(ctx, slug, f)
+			if err != nil || !strings.HasPrefix(text, map[bool]string{true: "---\nname: audiosmith\n", false: "# "}[f == "SKILL.md"]) {
+				t.Fatalf("%s %s: %v", slug, f, err)
+			}
+			want = append(want, skillDoc{f, text})
+		}
 		for _, sh := range []string{"bash", "zsh"} {
 			if _, err := exec.LookPath(sh); err != nil {
 				t.Logf("no %s", sh)
@@ -285,7 +292,7 @@ func TestAgentSkillScript(t *testing.T) {
 			}
 			home := t.TempDir()
 			dir := filepath.Join(home, strings.TrimPrefix(skillDir(slug), "~/"))
-			run := func() string {
+			run := func(script string) string {
 				cmd := exec.Command(sh, "-c", script)
 				cmd.Env = append(os.Environ(), "HOME="+home)
 				cmd.Dir = home
@@ -311,27 +318,67 @@ func TestAgentSkillScript(t *testing.T) {
 				}
 				return true
 			}
-			out := run()
+			out := run(script)
 			if !same() || skillState(dir, want) != "same" {
-				t.Fatalf("%s %s: wrote other files", sh, slug)
+				t.Fatalf("%s %s: wrote other files\n%s", sh, slug, out)
 			}
 			if !strings.Contains(out, "name: audiosmith") || !strings.Contains(out, "tools.md") {
 				t.Errorf("%s %s: output %s", sh, slug, out)
 			}
-			run()
+			run(script)
 			if f, r := files(""), files("reference"); !slices.Equal(f, []string{"SKILL.md", "reference"}) || !slices.Equal(r, []string{"tools.md"}) {
 				t.Errorf("%s %s: again: %v %v", sh, slug, f, r)
 			}
 			os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("old"), 0o644)
 			os.WriteFile(filepath.Join(dir, skillRefPath), []byte("old ref"), 0o644)
-			run()
+			run(script)
 			f, r := files(""), files("reference")
 			if !same() || len(f) != 3 || !strings.HasPrefix(f[1], "SKILL.md.bak-") || len(r) != 2 || !strings.HasPrefix(r[1], "tools.md.bak-") {
 				t.Errorf("%s %s: after different files: %v %v", sh, slug, f, r)
 			} else if b, _ := os.ReadFile(filepath.Join(dir, f[1])); string(b) != "old" {
 				t.Errorf("%s: backup %q", sh, b)
 			}
+			// AudioSmith not answering: nothing changes, and it says so.
+			down := strings.ReplaceAll(script, e.ts.URL, "http://127.0.0.1:1")
+			if out := run(down); !strings.Contains(out, "AudioSmith did not serve the skill") || !same() || len(files("")) != 3 || len(files("reference")) != 2 {
+				t.Errorf("%s %s: down: %s %v", sh, slug, out, files(""))
+			}
 		}
+	}
+	// The endpoint: the UI's language, no key, errors.
+	e.lib.settings.Update(ctx, func(s *settings.Settings) { s.API.RequireKey = true })
+	e.srv.SetKey("as-SECRET")
+	get := func(q string, key bool) (int, string) {
+		req, _ := http.NewRequest("GET", e.ts.URL+skillPath+q, nil)
+		if key {
+			req.Header.Set("Authorization", "Bearer as-SECRET")
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if code, _ := get("?agent=codex", false); code != 401 {
+		t.Errorf("without the required key: %d", code)
+	}
+	if code, body := get("?agent=codex", true); code != 200 || strings.Contains(body, "as-SECRET") || !strings.Contains(body, "security find-generic-password") {
+		t.Errorf("SKILL.md: %d", code)
+	}
+	if code, _ := get("?agent=nobody", true); code != 404 {
+		t.Errorf("unknown agent: %d", code)
+	}
+	if code, _ := get("?agent=codex&file=../../etc/passwd", true); code != 400 {
+		t.Errorf("unknown file: %d", code)
+	}
+	e.lib.settings.Update(ctx, func(s *settings.Settings) { s.API.RequireKey = false })
+	i18n.SetLocale("zh-Hans")
+	_, body := get("?agent=cursor&file="+skillRefPath, false)
+	i18n.SetLocale("en")
+	if !strings.Contains(body, "必填") {
+		t.Error("not in the UI's language")
 	}
 	// The skill's curl example (its first line) speaks.
 	for _, blk := range promptBlocks(agentSkill("claude-code", promptEnv{integEnv: integEnv{Base: e.ts.URL}})) {

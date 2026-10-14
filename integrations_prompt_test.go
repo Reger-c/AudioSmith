@@ -63,13 +63,25 @@ func TestAgentPrompts(t *testing.T) {
 			for mode, e := range envs {
 				p := promptEnv{integEnv: e, Voices: []string{"Narrator", "Ann"}, Bindings: map[string]string{"claude-code": "Narrator"}, Dir: "/Users/me/AudioSmith/mcp"}
 				s := agentPrompt(slug, p)
-				for _, w := range append(words, "http://127.0.0.1:4000/health", "curl -sS http://127.0.0.1:4000/health", "port 4000", "URL=http://127.0.0.1:4000/mcp", "tools/list", "list_voices", "Narrator, Ann", "/Users/me/AudioSmith/mcp", "<<'AUDIOSMITH_SKILL'\n---\nname: audiosmith\n", "name: audiosmith`", "reference/tools.md") {
+				for _, w := range append(words, "http://127.0.0.1:4000/health", "curl -sS http://127.0.0.1:4000/health", "port 4000", "URL=http://127.0.0.1:4000/mcp", "tools/list", "list_voices", "Narrator, Ann", "/Users/me/AudioSmith/mcp", "U='http://127.0.0.1:4000/api/agent-skill?agent="+slug+"&file='", "name: audiosmith`", "reference/tools.md", "Install skill…") {
+					if w == "Install skill…" {
+						if slug == "mcp" {
+							w = "Save skill…"
+						}
+						w = i18n.T(w)
+					}
 					if lang == "zh-Hans" && w == "port 4000" {
 						w = "端口 4000"
 					}
 					if !strings.Contains(s, w) {
 						t.Errorf("%s %s %s: no %q in\n%s", lang, slug, mode, w, s)
 					}
+				}
+				if n := len(s); n > 8<<10 {
+					t.Errorf("%s %s %s: the prompt is %d bytes: keep it under 8 KB", lang, slug, mode, n)
+				}
+				if strings.Contains(s, "## ") && strings.Contains(s, "What AudioSmith does") {
+					t.Errorf("%s: the prompt holds the skill itself", slug)
 				}
 				for _, tool := range mcpToolNames {
 					if !strings.Contains(s, tool) {
