@@ -64,7 +64,7 @@ func (a *app) workflowsPage(c *ui.Context) {
 		if railShown {
 			tip = i18n.T("Hide workflows and steps")
 		}
-		if iconToggle(c.Key("wf-rail-toggle"), icons.PanelLeft, railShown, tip).Clicked() {
+		if panelToggle(c.Key("wf-rail-toggle"), icons.PanelLeft, railShown, tip).Clicked() {
 			if railInline {
 				a.wfRailHide = !a.wfRailHide
 			} else {
@@ -76,7 +76,7 @@ func (a *app) workflowsPage(c *ui.Context) {
 			if panelShown {
 				tip = i18n.T("Hide the step and the run")
 			}
-			if iconToggle(c.Key("wf-panel-toggle"), icons.PanelRight, panelShown, tip).Clicked() {
+			if panelToggle(c.Key("wf-panel-toggle"), icons.PanelRight, panelShown, tip).Clicked() {
 				a.wfPanelOpen = !panelShown
 			}
 		}
@@ -115,7 +115,17 @@ func (a *app) workflowsPage(c *ui.Context) {
 				a.wfEmpty(c)
 				return
 			}
-			a.wfToolbar(c)
+			// While the step/run drawer is open, the toolbar's controls
+			// move left of it, so zoom and fit stay in reach.
+			right := float32(0)
+			if panelShown && !panelInline {
+				mid := a.pageWidth(c)
+				if railShown && railInline {
+					mid -= px(t, wfRailWidth) + 1
+				}
+				right = max(0, min(px(t, wfPanelWidth), mid-px(t, 260)))
+			}
+			a.wfToolbar(c, right)
 			ui.Box(c).Height(1).Background(k.Line)
 			a.wfCanvasView(c)
 		})
@@ -250,9 +260,7 @@ func (a *app) wfRail(c *ui.Context) {
 				b.Drag(kk)
 			}
 			b.Children(func() {
-				ui.Box(c).Size(px(t, 20), px(t, 20)).Radius(5).Background(wfKindColor(kk)).Center().Shrink(0).Children(func() {
-					ui.Icon(c, wfKindIcons[kk].Linear).Size(px(t, 13), px(t, 13)).TextColor(ui.RGB(255, 255, 255))
-				})
+				ui.Icon(c, wfKindIcons[kk].Linear).Size(px(t, 16), px(t, 16)).TextColor(kt.Text2).Shrink(0)
 				ui.Text(c, kk.Label()).FontSize(px(t, 13)).SingleLine().Grow(1).MinWidth(0)
 			})
 			if b.Clicked() {
@@ -352,11 +360,12 @@ func wfRecordState(r store.WorkflowRecord) string {
 	return ""
 }
 
-// wfToolbar is above the canvas: zoom, fit, remove.
-func (a *app) wfToolbar(c *ui.Context) {
+// wfToolbar is above the canvas: zoom, fit, remove; right is room kept
+// free at its right end (for the drawer over it).
+func (a *app) wfToolbar(c *ui.Context, right float32) {
 	t := c.Theme()
 	rep := a.wfReport()
-	ui.Row(c.Key("wf-toolbar")).Padding(px(t, sp1), px(t, sp3)).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("wf-toolbar")).Padding(px(t, sp1), px(t, sp3)+right, px(t, sp1), px(t, sp3)).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 		if n := rep.Errors(); n > 0 {
 			label := i18n.N(n, "%d problem", "%d problems", n)
 			b := ghostBase(c.Key("wf-errors")).Padding(px(t, 4), px(t, 8)).Gap(px(t, sp1)).AlignItems(ui.Center).Label(label).Shrink(1).MinWidth(0)

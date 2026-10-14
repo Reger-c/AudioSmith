@@ -67,23 +67,14 @@ var wfKindIcons = map[workflow.Kind]icons.Icon{
 	workflow.KindExport:     icons.Export,
 }
 
-// wfKindColor is a kind's color, the same in light and dark.
-func wfKindColor(k workflow.Kind) ui.Color {
-	switch k {
-	case workflow.KindStart, workflow.KindSource:
-		return ui.RGB(0x64, 0x74, 0x8B)
-	case workflow.KindSpeak, workflow.KindConvert:
-		return ui.RGB(0x10, 0xB9, 0x81)
-	case workflow.KindTranscribe, workflow.KindTranslate:
-		return ui.RGB(0x8B, 0x5C, 0xF6)
-	case workflow.KindNormalize:
-		return ui.RGB(0x0E, 0xA5, 0xE9)
-	case workflow.KindCondition:
-		return ui.RGB(0xF5, 0x9E, 0x0B)
-	case workflow.KindExport:
-		return ui.RGB(0x3B, 0x82, 0xF6)
-	}
-	return ui.RGB(0x88, 0x88, 0x88)
+// wfKindTile is a step kind's icon on a small grey tile (size DIPs,
+// unscaled: the canvas scales itself): the same for every kind, as the
+// 0.3 design keeps colour for state (links and ports keep their type's).
+func wfKindTile(c *ui.Context, k workflow.Kind, size, icon float32) {
+	kt := tok(c.Theme())
+	ui.Box(c).Size(size, size).Radius(size / 4).Background(kt.Hover).Center().Shrink(0).Children(func() {
+		ui.Icon(c, wfKindIcons[k].Linear).Size(icon, icon).TextColor(kt.Text)
+	})
 }
 
 // wfTypeColor is a value type's color (links, ports).
@@ -579,16 +570,13 @@ func (a *app) wfCard(c *ui.Context, n *workflow.Node, rep *workflow.Report) {
 	case errs > 0:
 		border, bw = t.Danger, 1.5
 	}
-	kc := wfKindColor(n.Kind)
 	name := n.StepName(n.Kind.Label())
 	card := ui.Column(c.Key("wf-node-"+n.ID)).Absolute().Left(float32(n.X)).Top(float32(n.Y)).Size(wfCardW, wfCardH).
 		Padding(8, 12).Gap(3).Radius(10).Background(tok(t).Bg).Border(bw, border).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.08)).
 		Label(i18n.T("Step %s", name)).Role(ui.RoleGroup)
 	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Size(24, 24).Radius(6).Background(kc).Center().Shrink(0).Children(func() {
-				ui.Icon(c, wfKindIcons[n.Kind].Linear).Size(15, 15).TextColor(ui.RGB(255, 255, 255))
-			})
+			wfKindTile(c, n.Kind, 24, 15)
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				ui.Text(c, name).Bold().FontSize(13).SingleLine().Ellipsis("…")
 				if n.Name != "" {
@@ -761,7 +749,7 @@ func (a *app) wfMinimap(c *ui.Context) {
 	sel := a.wfSel
 	m.Draw(func(p *ui.Painter, r ui.Rect) {
 		for _, n := range w.Nodes {
-			col := wfKindColor(n.Kind)
+			col := tok(t).G[5]
 			if n.ID == sel {
 				col = t.Accent
 			}
