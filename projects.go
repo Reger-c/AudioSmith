@@ -49,12 +49,6 @@ type projectsState struct {
 	deleteOpen bool
 	details    map[string]bool
 	asked      map[string]bool // renders read for their details
-
-	// Opening a project over a page with unsaved changes asks first.
-	confirmOpen  bool
-	confirmID    string
-	confirmTitle string
-	confirmKind  core.ProjectKind
 }
 
 // libKey is an item's key: source and id.

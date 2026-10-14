@@ -101,7 +101,6 @@ type lfPage struct {
 func newLfPage(kind core.ProjectKind, model string) *lfPage {
 	p := &lfPage{kind: kind, doc: services.NewLongformDoc(kind, model), auditions: map[string]string{}, sel: -1,
 		open: map[string]bool{"setup": true, "cast": true}}
-	p.lines.Selected = &p.sel
 	return p
 }
 
@@ -876,8 +875,12 @@ func (a *app) askOpenProject(id string, kind core.ProjectKind, title string) {
 		return
 	}
 	if p.unsaved() {
-		a.projects.confirmOpen, a.projects.confirmID, a.projects.confirmTitle = true, id, title
-		a.projects.confirmKind = kind
+		// The page asks (lfConfirm), over the draft it would replace.
+		a.navigate("/" + lfRoute(kind))
+		p.confirm, p.confirmOpen = id, true
+		if !slices.ContainsFunc(p.projects, func(x core.Project) bool { return x.ID == id }) {
+			p.projects = append(p.projects, core.Project{ID: id, Kind: kind, Title: title})
+		}
 		return
 	}
 	a.openLfProject(id)

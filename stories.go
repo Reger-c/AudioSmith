@@ -70,6 +70,9 @@ func (a *app) autoCastStory(p *lfPage) {
 		return
 	}
 	voices := a.lfVoices(entryFor(p.doc.Model))
+	if p.doc.Voice == "" && len(voices) > 0 {
+		p.doc.Voice = voices[0].ref // the narrator
+	}
 	used := map[string]bool{p.doc.Voice: true}
 	for _, m := range p.doc.Cast {
 		used[m.Voice] = true
@@ -118,9 +121,6 @@ func (a *app) autoCastStory(p *lfPage) {
 		p.doc.Lines = append(p.doc.Lines, line)
 	}
 	p.doc.ImportText = ""
-	if p.doc.Voice == "" && len(voices) > 0 {
-		p.doc.Voice = voices[0].ref
-	}
 	n := len(speakers) + 1
 	a.toast(i18n.N(len(res.Lines), "Auto-cast %[1]d line across %[2]d voices", "Auto-cast %[1]d lines across %[2]d voices", len(res.Lines), n))
 	p.open["cast"] = true

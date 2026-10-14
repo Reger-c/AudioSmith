@@ -385,7 +385,7 @@ func productionText(s services.RenderSummary) string {
 	return strings.Join(parts, " · ")
 }
 
-// libraryDialogs: delete the selection; open over unsaved changes.
+// libraryDialogs: delete the selection.
 func (a *app) libraryDialogs(c *ui.Context) {
 	t := c.Theme()
 	s := &a.projects
@@ -420,7 +420,7 @@ func (a *app) libraryDialogs(c *ui.Context) {
 					if ui.Button(c.Key("del-cancel"), i18n.T("Cancel")).AutoFocus().Clicked() {
 						s.deleteOpen = false
 					}
-					label := i18n.T("Delete")
+					label := i18n.N(len(items), "Delete %d item", "Delete %d items", len(items))
 					if len(s.errors) > 0 {
 						label = i18n.T("Retry")
 					}
@@ -430,13 +430,6 @@ func (a *app) libraryDialogs(c *ui.Context) {
 				})
 			})
 		})
-	}
-	if s.confirmOpen {
-		if ui.AlertDialog(c, &s.confirmOpen, i18n.T("Open “%s”?", s.confirmTitle),
-			i18n.T("It replaces the current draft, which has unsaved changes. Save your current work first."),
-			i18n.T("Cancel"), i18n.T("Open")) == 1 {
-			a.openLfProject(s.confirmID)
-		}
 	}
 }
 
