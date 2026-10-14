@@ -295,11 +295,14 @@ func (s fakeSup) Call(ctx context.Context, _ proto.Role, id, method string, para
 				notify(m)
 			}
 		}
-		note(proto.MethodJobProgress, proto.ProgressParams{Job: id, Stage: "recording"})
+		// The levels come before "recording" here (a real engine sends them
+		// after): StartCapture returns once "recording" arrives, so what the
+		// levels changed is visible to the test's goroutine, without a race.
 		for _, l := range levels {
 			l.Job = id
 			note(proto.MethodCaptureLevel, l)
 		}
+		note(proto.MethodJobProgress, proto.ProgressParams{Job: id, Stage: "recording"})
 		select {
 		case <-stop:
 		case <-ctx.Done():
