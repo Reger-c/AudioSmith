@@ -25,7 +25,7 @@ func TestBuiltin(t *testing.T) {
 		{"Qwen3-TTS 0.6B Base (voice clone)", "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit", "≈ 2 GB", nil,
 			[]string{"Chinese", "English", "Japanese", "Korean", "German", "French", "Spanish", "Italian", "Portuguese", "Russian"},
 			false, true, true, false},
-		{"Marvis TTS 250M", "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit", "≈ 672 MB", []string{"conversational_a", "conversational_b"}, nil, false, true, true, false},
+		{"Marvis TTS 250M", "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit", "≈ 672 MB", []string{"conversational_a", "conversational_b"}, nil, false, true, false, false}, // M1 smoke: cloning rambles past the text
 		{"Soprano 80M", "mlx-community/Soprano-80M-bf16", "≈ 221 MB", nil, nil, false, true, false, false},
 	}
 	labels := c.Labels(TaskTTS)

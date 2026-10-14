@@ -130,7 +130,7 @@
       "repo": "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit",
       "revision": "f564ede427b7ec816b229b8c1c2f129817dc4a95",
       "tasks": ["tts"],
-      "about": "English conversational voices; clones a voice from reference audio.",
+      "about": "Two English conversational voices.",
       "languages": [
         {"code": "en"}
       ],
@@ -138,7 +138,7 @@
         {"id": "conversational_a", "language": "en"},
         {"id": "conversational_b", "language": "en"}
       ],
-      "capabilities": ["sampling", "clone"],
+      "capabilities": ["sampling"],
       "sampleRate": 24000,
       "size": 672148432,
       "minMemoryGB": 2,
