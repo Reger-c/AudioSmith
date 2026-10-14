@@ -11,3 +11,9 @@ Solar icon set
   https://icon-sets.iconify.design/solar/). Only the icons AudioSmith uses are
   included, converted to Go source in internal/icons/solar_gen.go
   (internal/icons/gen); their shapes are unchanged.
+
+MyGo
+  Copyright (c) 2026 MyGo contributors — https://github.com/egoist/mygo
+  Licensed under the MIT License (third_party/mygo/LICENSE). AudioSmith
+  builds against a copy with its own patches (third_party/mygo-patches),
+  made by scripts/vendor-mygo.sh, until upstream releases the fixes.
