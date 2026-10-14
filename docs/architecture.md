@@ -48,6 +48,9 @@ Arrows point to what a package may import. No cycles. Leaves import nothing inte
 main ──▶ every internal package
 services ──▶ core, store, jobs, engine/proto (the job's params), i18n (job titles), voicedesign, gallery/persona (M1 voices), text/plan, text/lexicon, dsp/{edit,loudness,master,qc,resample,wav} (M1 render)
 text/plan ──▶ text, text/markup, text/normalize, text/lexicon
+services ──▶ doc/subtitle, dsp, dsp/{resample,wav} (M2 transcripts)
+main ──▶ dictation, llm, translate (M2)
+dictation ──▶ (nothing internal; mygo/transfer, purego, purego/objc)
 store ──▶ core, jobs            store/sqlitestore ──▶ core, jobs, store, store/historyjson
 engine ──▶ core, engine/proto, jobs (its executors)        engine/enginetest ──▶ engine/proto
 hub ──▶ catalog, jobs (the download executor)              catalog ──▶ lang
@@ -133,6 +136,9 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | `a.toast(msg)`, `a.notify(…)`, `a.post(fn)`, `a.async(fn)` | app.go, shell_status.go | everyone |
 | Render: one `take.render` job per take on the gpu lane (`services.KindRender`, `RenderParams/Result/Progress`); chunks run sequentially inside it via the engine executor, content-addressed chunk cache `<cache>/chunks/<key>.wav` (LRU 2 GB); `svc.Render.Preview/Check/ExportAs/Prune`, `svc.Pronunciation` (store.Documents key `pronunciation`) | internal/services/render*.go (M1-G) | studio, voices (Try this voice, design preview), later Stories/Audiobook |
 | `a.clipCard` (output panel), `a.scriptFocused()` | studio_output.go, studio*.go (M1-G) | design page, shell (`?` shortcut) |
+| `a.trSvc` (`*services.Transcripts`: Transcribe/Get/List/Update/Delete/AudioPath; `services.Export/ExportAll`), job kind `transcript.make` (owner `transcript:<id>`), event `core.TranscriptChanged` | transcribe*.go, internal/services/transcripts*.go (M2) | dictation, projects, later API `/v1/audio/transcriptions` |
+| `a.llmRouter`, `a.llmAvailable()` (registry/router from `settings.LLM`; HTTP via `hub.NewHTTPClient`, keys `hub.Secret("llm.<provider>")`) | transcribe_llm.go (M2) | dictation cleanup, M4 translation |
+| `a.dictToggle()`, `dictation.System`/`Inserter`, `sttEntries()`, `sttEntry(id, fallback)` | dictation*.go, internal/dictation (M2) | tray, palette, settings |
 | `a.voicePicker(c, p)`, `a.applyStudioVoice(&t, p)`, `a.studioUsesSavedVoice(p)`, `a.studioVoicePrompt(p)`, `a.useVoiceInStudio`, `a.openVoiceEditor`, `a.openDesignFor`, `a.startClone` | voices*.go, clone*.go, design*.go (M1-V) | studio, gallery, palette |
 | `a.probeMedia`, `a.captureDevices`, `a.startRecording(params, onLevel, then)`, `a.stopRecording`, `engineErrorText(err)`, `jobErrorText(*jobs.Error)` | enginelink.go (M1) | voices/clone (reference recorder, imports), studio |
 | Engine jobs: submit `proto` job kinds (`engine.ExecutorKinds`) on `jobs.Lane(proto.RoleOf(kind))`; listen/media workers start on demand (`engine.Config.OnDemand`); default models `catalog.DefaultSTT/DefaultAlign/DefaultVAD/DefaultEnhance` | internal/engine, internal/catalog (M1) | voices, studio, later dictation/dubbing |
@@ -204,6 +210,7 @@ Rules that stay:
 | MVP history | `…/AudioSmith/history.json`, imported once and kept |
 | Waveform cache | `~/Library/Caches/AudioSmith/peaks/<take id>.f32` |
 | Voices | `…/AudioSmith/voices/<voice id>/` (reference, locked.wav, sample, consent, portrait, prompts); unsaved clips in `…/AudioSmith/references/` |
+| Transcripts | `…/AudioSmith/transcripts/<id>.wav` (16 kHz mono copy; table `transcripts`, migration 003); dictation temp `…/AudioSmith/dictation/*.wav` |
 | Chunk cache | `~/Library/Caches/AudioSmith/chunks/<text.Key>.wav` (float32, pruned to 2 GB LRU) |
 | Gallery previews | `~/Library/Caches/AudioSmith/voice-previews/<key>.wav` (job owner `archetype:<id>`; voice jobs use owner `voicework:`) |
 | Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app, rotated at 5 MB) and `engine-gpu.log` (engine stderr) |
