@@ -94,7 +94,7 @@ func (a *app) transcribeToolbar(c *ui.Context, shown bool) {
 		a.updateSettings(func(s *settings.Settings) { s.Transcribe.Mode = m })
 	}
 	a.trLanguageButton(c, e)
-	a.trSide.toggle(c.Key("tr-list-toggle"), icons.History, shown, i18n.T("Show the transcripts"), i18n.T("Hide the transcripts"))
+	a.trSide.toggle(c.Key("tr-list-toggle"), icons.PanelLeft, shown, i18n.T("Show the transcripts"), i18n.T("Hide the transcripts"))
 	if a.trSel != "" {
 		label := i18n.T("New transcript")
 		var b ui.Element

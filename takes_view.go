@@ -107,27 +107,31 @@ func (a *app) historyPage(c *ui.Context) {
 			mygo.Shell.OpenPath(a.takeStore.AudioDir())
 		}
 	})
-	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Children(func() {
-		if searchField(c, "history-search", &h.query, i18n.T("Search the scripts"), 0).Label(i18n.T("Search takes")).Changed() {
-			a.searchTakes()
-		}
-		ui.Segmented(c.Key("history-filter"), &h.filter, i18n.T("All"), i18n.T("Starred")).Label(i18n.T("Show")).Shrink(0)
-		models := append([]string{i18n.T("All models")}, a.historyModels()...)
-		choice := h.model
-		if choice == "" {
-			choice = models[0]
-		}
-		if ui.Select(c.Key("history-model"), &choice, models).Label(i18n.T("Model")).Width(px(t, 180)).Shrink(1).MinWidth(px(t, 110)).Changed() {
-			h.model = choice
-			if choice == models[0] {
-				h.model = ""
-			}
-		}
-	})
 	takes := a.historyTakes()
 	sel := a.findTake(h.selected)
 	w := px(t, 360)
 	inline := a.panelFits(c, w)
+	var twoLines bool
+	ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Children(func() {
+		twoLines = filterBar(c, a.pageWidth(c)-px(t, 2*sp6), 320, func() {
+			if searchField(c, "history-search", &h.query, i18n.T("Search the scripts"), 0).Label(i18n.T("Search takes")).Changed() {
+				a.searchTakes()
+			}
+		}, func() {
+			ui.Segmented(c.Key("history-filter"), &h.filter, i18n.T("All"), i18n.T("Starred")).Label(i18n.T("Show")).Shrink(0)
+			models := append([]string{i18n.T("All models")}, a.historyModels()...)
+			choice := h.model
+			if choice == "" {
+				choice = models[0]
+			}
+			if ui.Select(c.Key("history-model"), &choice, models).Label(i18n.T("Model")).Width(px(t, 180)).Shrink(1).MinWidth(px(t, 110)).Changed() {
+				h.model = choice
+				if choice == models[0] {
+					h.model = ""
+				}
+			}
+		})
+	})
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		ui.List(c, &a.historyList, len(takes)).Grow(1).MinWidth(0).Padding(0, 0, px(t, sp4)).ItemKey(func(i int) any { return takes[i].ID }).Rows(func(r ui.ListRow) {
 			tk := &takes[r.Index]
@@ -142,7 +146,11 @@ func (a *app) historyPage(c *ui.Context) {
 		}
 	})
 	if len(takes) == 0 {
-		ui.Column(c).Absolute().Left(0).Top(titleBarHeight + px(t, 50)).Right(0).Bottom(0).Center().PassThrough().Children(func() {
+		bar := px(t, 50)
+		if twoLines {
+			bar += px(t, 40)
+		}
+		ui.Column(c).Absolute().Left(0).Top(titleBarHeight + bar).Right(0).Bottom(0).Center().PassThrough().Children(func() {
 			if len(a.takes) == 0 {
 				emptyState(c, icons.History, i18n.T("No takes yet"), i18n.T("What you generate in the studio shows up here."), nil)
 			} else {

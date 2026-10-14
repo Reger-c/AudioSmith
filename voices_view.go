@@ -53,6 +53,11 @@ func (a *app) voicesPage(c *ui.Context) {
 	t := c.Theme()
 	narrow := a.pageWidth(c) < px(t, 640)
 	pageHeader(c, i18n.T("Voices"), func() {
+		// The count, like History's and the Gallery's; it goes when the
+		// window leaves the actions little room.
+		if !narrow {
+			caption(c, i18n.N(len(a.voices), "%d voice", "%d voices", len(a.voices))).SingleLine().Shrink(0)
+		}
 		if iconButton(c.Key("voices-import"), icons.Import, i18n.T("Import…")).Tooltip(i18n.T("Import a .asvoice or .ovsvoice file")).Clicked() {
 			a.chooseVoiceFile()
 		}
@@ -71,7 +76,11 @@ func (a *app) voicesPage(c *ui.Context) {
 	}
 	body.Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			a.voicesToolbar(c)
+			room := a.pageWidth(c)
+			if a.edit != nil && inline {
+				room -= w + 1
+			}
+			a.voicesToolbar(c, room)
 			a.voicesGrid(c)
 		})
 		if a.edit != nil {
@@ -84,16 +93,16 @@ func (a *app) voicesPage(c *ui.Context) {
 	a.personaDialogs(c)
 }
 
-func (a *app) voicesToolbar(c *ui.Context) {
+// voicesToolbar is the search and the kind filter, on two lines when
+// the list is room wide and narrow.
+func (a *app) voicesToolbar(c *ui.Context, room float32) {
 	t := c.Theme()
-	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Children(func() {
-		searchField(c, "voices-search", &a.voiceQuery, i18n.T("Search voices"), px(t, 320))
-		ui.Segmented(c.Key("voices-kind"), &a.voiceKind, i18n.T("All"), i18n.T("Cloned"), i18n.T("Designed")).Label(i18n.T("Kind")).Shrink(0)
-		ui.Spacer(c)
-		// The count goes when the editor or the window leaves the search little room.
-		if a.edit == nil && a.pageWidth(c) >= px(t, 600) {
-			caption(c, i18n.N(len(a.voices), "%d voice", "%d voices", len(a.voices))).SingleLine().Shrink(0)
-		}
+	ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Children(func() {
+		filterBar(c, room-px(t, 2*sp6), 210, func() {
+			searchField(c, "voices-search", &a.voiceQuery, i18n.T("Search voices"), px(t, 320))
+		}, func() {
+			ui.Segmented(c.Key("voices-kind"), &a.voiceKind, i18n.T("All"), i18n.T("Cloned"), i18n.T("Designed")).Label(i18n.T("Kind")).Shrink(0)
+		})
 	})
 }
 

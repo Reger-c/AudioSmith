@@ -74,7 +74,14 @@ func (a *app) projectsPage(c *ui.Context) {
 func (a *app) libraryToolbar(c *ui.Context, narrow bool) {
 	t := c.Theme()
 	s := &a.projects
-	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(0).Children(func() {
+	room := a.pageWidth(c) - px(t, 2*sp6)
+	filtersW := float32(240)
+	if narrow {
+		filtersW = 300 // the category select, the view, the selection icon
+	} else {
+		room -= px(t, 190) + 1
+	}
+	filterBar(c, room, filtersW, func() {
 		if narrow {
 			labels := make([]string, len(libCategories))
 			for i, cat := range libCategories {
@@ -93,6 +100,7 @@ func (a *app) libraryToolbar(c *ui.Context, narrow bool) {
 		if searchField(c, "pj-search", &s.query, i18n.T("Search projects, voices, takes, exports…"), px(t, 380)).Label(i18n.T("Search the library")).Changed() {
 			clear(s.selected)
 		}
+	}, func() {
 		ui.Segmented(c.Key("pj-view"), &s.cards, i18n.T("List"), i18n.T("Cards")).Label(i18n.T("View")).Shrink(0)
 		ui.Spacer(c)
 		n := len(s.selected)
