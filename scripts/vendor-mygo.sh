@@ -45,6 +45,9 @@ done
 find "$out" -name '*_test.go' -delete
 find "$out" -type d -name testdata -prune -exec rm -rf {} +
 find "$out" \( -name .gitignore -o -name .gitattributes \) -delete
+# Directories that held only tests (internal/e2e) are left empty: git keeps
+# no empty directories, so drop them, or --check sees one git cannot hold.
+find "$out" -type d -empty -delete
 # AudioSmith's checks run gofmt -l over the tree; a file upstream left
 # unformatted is formatted here.
 unformatted="$(gofmt -l "$out")"
