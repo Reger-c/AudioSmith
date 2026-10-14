@@ -26,6 +26,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -194,6 +195,51 @@ func (r *renderer) modelReady(ctx context.Context, model string) (string, error)
 // longformChunkDir holds the chunks of longform renders: kept apart from
 // the Studio's cache, whose size cap would evict a long book's chunks.
 func (r *renderer) longformChunkDir() string { return filepath.Join(r.cacheDir, "longform", "chunks") }
+
+// Limits of the longform chunk cache: chunks unused for longformKeep are
+// deleted, and the oldest beyond longformCap.
+const (
+	longformKeep = 60 * 24 * time.Hour
+	longformCap  = 24 << 30
+)
+
+// pruneLongformChunks keeps the longform chunk cache within its limits
+// (after a book is assembled).
+func (r *renderer) pruneLongformChunks() {
+	type file struct {
+		path string
+		size int64
+		at   time.Time
+	}
+	var files []file
+	var total int64
+	entries, _ := os.ReadDir(r.longformChunkDir())
+	for _, e := range entries {
+		fi, err := e.Info()
+		if err != nil || e.IsDir() || !strings.HasSuffix(e.Name(), ".wav") {
+			continue
+		}
+		path := filepath.Join(r.longformChunkDir(), e.Name())
+		if time.Since(fi.ModTime()) > longformKeep {
+			os.Remove(path)
+			continue
+		}
+		files = append(files, file{path, fi.Size(), fi.ModTime()})
+		total += fi.Size()
+	}
+	if total <= longformCap {
+		return
+	}
+	slices.SortFunc(files, func(a, b file) int { return a.at.Compare(b.at) })
+	for _, f := range files {
+		if total <= longformCap*9/10 {
+			break
+		}
+		if os.Remove(f.path) == nil {
+			total -= f.size
+		}
+	}
+}
 
 // gapsOf are the joins of a production.
 func gapsOf(p Production) edit.GapPolicy {

@@ -106,7 +106,7 @@ func (a *app) libraryItems(c *ui.Context) {
 		return
 	}
 	if s.cards == 1 {
-		ui.GridView(c.Key("pj-grid"), &s.grid, len(items), px(t, 280), px(t, 120), func(i int) {
+		ui.GridView(c.Key("pj-grid"), &s.grid, len(items), px(t, 280), px(t, 150), func(i int) {
 			it := items[i]
 			a.libraryCard(c, it)
 		}).Grow(1).Gap(px(t, 10))

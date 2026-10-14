@@ -196,6 +196,9 @@ func (a *app) itemMeta(it store.LibraryItem) string {
 		if s.Words > 0 {
 			parts = append(parts, i18n.N(s.Words, "%d word", "%d words", s.Words))
 		}
+		if s.Chars > 0 {
+			parts = append(parts, i18n.N(s.Chars, "%d character", "%d characters", s.Chars))
+		}
 	case "render":
 		if r := a.lfRenders[it.ID]; r != nil {
 			parts = append(parts, a.renderRecipe(r))

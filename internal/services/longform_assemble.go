@@ -226,6 +226,7 @@ func (a assembler) Run(ctx context.Context, job jobs.Job, report func(jobs.Progr
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
 
+	a.s.render.pruneLongformChunks()
 	if spec.Format == FormatM4B {
 		res.Encoded, res.EncodeError = a.encode(ctx, job, &spec, rec.Title, &res, report)
 		if ctx.Err() != nil {
