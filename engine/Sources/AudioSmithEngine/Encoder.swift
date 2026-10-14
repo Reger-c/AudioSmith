@@ -53,6 +53,9 @@ extension MediaWorker {
             let t = AVAssetWriterInput(mediaType: .text, outputSettings: nil, sourceFormatHint: textFormat)
             t.marksOutputTrackAsEnabled = false
             t.expectsMediaDataInRealTime = false
+            // AVFoundation (and Apple Books) looks chapters up by language;
+            // "und" ones are not found by a language lookup.
+            t.languageCode = "eng"
             guard writer.canAdd(t) else { throw RPCError(Code.internal, "Could not add the chapter track") }
             writer.add(t)
             audio.addTrackAssociation(withTrackOf: t, type: AVAssetTrack.AssociationType.chapterList.rawValue)
@@ -80,7 +83,7 @@ extension MediaWorker {
                     if Task.isCancelled { throw CancellationError() }
                     Thread.sleep(forTimeInterval: 0.002)
                 }
-                guard text.append(sample) else { throw RPCError(Code.internal, "Could not write chapter \(next + 1): \(writer.error?.localizedDescription ?? "")") }
+                guard text.append(sample) else { throw RPCError(Code.internal, "Could not write chapter \(next + 1): \(describeError(writer.error))") }
                 next += 1
             }
         }
@@ -102,7 +105,7 @@ extension MediaWorker {
                     if Task.isCancelled { throw CancellationError() }
                     Thread.sleep(forTimeInterval: 0.002)
                 }
-                guard audio.append(buffer) else { throw RPCError(Code.internal, "AAC encoding failed: \(writer.error?.localizedDescription ?? "")") }
+                guard audio.append(buffer) else { throw RPCError(Code.internal, "AAC encoding failed: \(describeError(writer.error))") }
                 if duration > 0 {
                     progress.fraction = min(t / duration, 1)
                     progress.send("encoding")
@@ -116,7 +119,7 @@ extension MediaWorker {
             progress.send("writing", force: true)
             await writer.finishWriting()
             guard writer.status == .completed else {
-                throw RPCError(Code.internal, "Could not write \(p.output.path): \(writer.error?.localizedDescription ?? "unknown")")
+                throw RPCError(Code.internal, "Could not write \(p.output.path): \(describeError(writer.error))")
             }
         } catch {
             writer.cancelWriting()
@@ -166,33 +169,30 @@ extension MediaWorker {
         return items
     }
 
-    /// A QuickTime text sample description for chapter titles.
+    /// A QuickTime 'text' sample description for chapter titles, built as
+    /// the file format lays it out (big-endian): the CMTextFormatDescription
+    /// extension keys produce one AVAssetWriter rejects (-12715).
     static func chapterFormat() throws -> CMFormatDescription {
-        let ext: [String: Any] = [
-            kCMTextFormatDescriptionExtension_DisplayFlags as String: 0,
-            kCMTextFormatDescriptionExtension_BackgroundColor as String: [
-                kCMTextFormatDescriptionColor_Red as String: 0, kCMTextFormatDescriptionColor_Green as String: 0,
-                kCMTextFormatDescriptionColor_Blue as String: 0, kCMTextFormatDescriptionColor_Alpha as String: 255,
-            ],
-            kCMTextFormatDescriptionExtension_DefaultTextBox as String: [
-                kCMTextFormatDescriptionRect_Top as String: 0, kCMTextFormatDescriptionRect_Left as String: 0,
-                kCMTextFormatDescriptionRect_Bottom as String: 0, kCMTextFormatDescriptionRect_Right as String: 0,
-            ],
-            kCMTextFormatDescriptionExtension_DefaultStyle as String: [
-                kCMTextFormatDescriptionStyle_StartChar as String: 0, kCMTextFormatDescriptionStyle_EndChar as String: 0,
-                kCMTextFormatDescriptionStyle_Font as String: 1, kCMTextFormatDescriptionStyle_FontFace as String: 0,
-                kCMTextFormatDescriptionStyle_ForegroundColor as String: [
-                    kCMTextFormatDescriptionColor_Red as String: 255, kCMTextFormatDescriptionColor_Green as String: 255,
-                    kCMTextFormatDescriptionColor_Blue as String: 255, kCMTextFormatDescriptionColor_Alpha as String: 255,
-                ],
-                kCMTextFormatDescriptionStyle_FontSize as String: 12,
-            ],
-            kCMTextFormatDescriptionExtension_FontTable as String: ["1": "Sans-Serif"],
-        ]
+        var d: [UInt8] = []
+        func u32(_ v: UInt32) { d += [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
+        func u16(_ v: UInt16) { d += [UInt8(v >> 8), UInt8(v & 0xFF)] }
+        u32(0); d += Array("text".utf8); d += [0, 0, 0, 0, 0, 0]; u16(1) // size (set below), type, reserved, data reference
+        u32(0) // display flags
+        u32(0) // justification
+        u16(0); u16(0); u16(0) // background colour
+        u16(0); u16(0); u16(0); u16(0) // default text box
+        d += [UInt8](repeating: 0, count: 8) // reserved
+        u16(0); u16(0) // font number, face
+        d += [0]; u16(0) // reserved
+        u16(0); u16(0); u16(0) // foreground colour
+        d += [0] // text name: an empty Pascal string
+        let n = UInt32(d.count)
+        d[0] = UInt8(n >> 24); d[1] = UInt8((n >> 16) & 0xFF); d[2] = UInt8((n >> 8) & 0xFF); d[3] = UInt8(n & 0xFF)
         var fd: CMFormatDescription?
-        let status = CMFormatDescriptionCreate(allocator: kCFAllocatorDefault, mediaType: kCMMediaType_Text,
-                                               mediaSubType: kCMTextFormatType_QTText, extensions: ext as CFDictionary,
-                                               formatDescriptionOut: &fd)
+        let status = d.withUnsafeBufferPointer {
+            CMTextFormatDescriptionCreateFromBigEndianTextDescriptionData(allocator: kCFAllocatorDefault, bigEndianTextDescriptionData: $0.baseAddress!,
+                                                                         size: $0.count, flavor: nil, mediaType: kCMMediaType_Text, formatDescriptionOut: &fd)
+        }
         guard status == noErr, let fd else { throw RPCError(Code.internal, "Could not describe the chapter track (\(status))") }
         return fd
     }
@@ -220,4 +220,15 @@ extension MediaWorker {
         guard status == noErr, let sample else { throw RPCError(Code.internal, "chapter sample (\(status))") }
         return sample
     }
+}
+
+/// An NSError with its domain, code and underlying errors, for logs.
+func describeError(_ error: Error?) -> String {
+    guard let e = error as NSError? else { return "unknown error" }
+    var s = "\(e.localizedDescription) (\(e.domain) \(e.code))"
+    if let u = e.userInfo[NSUnderlyingErrorKey] as? NSError {
+        s += " ← " + describeError(u)
+    }
+    if let r = e.localizedFailureReason { s += ": \(r)" }
+    return s
 }
