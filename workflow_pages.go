@@ -17,16 +17,17 @@ func wfPageTitle(path string) (string, bool) {
 	return "", false
 }
 
-// wfSidebar is the sidebar's "Automate" section; a running workflow
-// shows as a badge.
-func (a *app) wfSidebar(c *ui.Context) {
-	ui.SidebarSection(c, i18n.T("Automate"), nil, func() {
-		item := ui.SidebarItem(c, "/workflows", workflowsIcon, i18n.T("Workflows"))
-		if a.wfBusy() && a.wfRun != nil {
-			done, _, total := a.wfRun.Counts()
-			item.Children(func() { ui.Badge(c, itoa(done)+"/"+itoa(total)) })
-		}
-	})
+// wfBadge is the sidebar badge of /workflows (M7a: the shell places the
+// page, shell.go navGroups): a running workflow's steps.
+func (a *app) wfBadge(path string) (string, bool) {
+	if path != "/workflows" {
+		return "", false
+	}
+	if a.wfBusy() && a.wfRun != nil {
+		done, _, total := a.wfRun.Counts()
+		return itoa(done) + "/" + itoa(total), true
+	}
+	return "", true
 }
 
 // wfRoute builds /workflows.
@@ -41,7 +42,7 @@ func (a *app) wfRoute(c *ui.Context, r *ui.Route) bool {
 
 // wfCommands adds the palette's entries of the M6 page.
 func (a *app) wfCommands(nav string, add func(id, group, title, en, keys string, enabled bool, run func())) {
-	add("go/workflows", nav, i18n.T("Workflows"), "Workflows", "", true, func() { a.navigate("/workflows") })
+	// "Go to" comes from the shell's page list (M7a).
 	group := i18n.T("Workflows")
 	add("wf-new", group, i18n.T("New workflow"), "New workflow", "", true, func() {
 		a.navigate("/workflows")

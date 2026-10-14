@@ -111,6 +111,7 @@ func (s *Store) Update(ctx context.Context, fn func(*Settings)) error {
 func clone(s Settings) Settings {
 	s.Models.Endpoints = slices.Clone(s.Models.Endpoints)
 	cloneM2(&s)
+	cloneM7(&s)
 	return s
 }
 
@@ -141,6 +142,7 @@ func normalize(s Settings) Settings {
 	s.Models.AutoUnload = max(s.Models.AutoUnload, 0)
 	s.Engine.MemoryBudgetGB = max(s.Engine.MemoryBudgetGB, 0)
 	normalizeM2(&s)
+	normalizeM7(&s)
 	return s
 }
 
