@@ -29,12 +29,13 @@ func (a *app) agentSkillCard(c *ui.Context, in integration) {
 	t := c.Theme()
 	k := tok(t)
 	ag := promptAgents[in.Slug]
-	text := agentSkill(in.Slug, a.promptEnvOf())
+	env := a.promptEnvOf()
+	files := agentSkillFiles(in.Slug, env)
 	name := ag.Name
 	if ag.Client == "" {
 		name = i18n.T("your agent")
 	}
-	path, perr := skillTarget(in.Slug)
+	dir, perr := skillTarget(in.Slug)
 	canInstall := ag.Client != "" && perr == nil
 	card(c.Key("integ-skill")).Children(func() {
 		ui.Column(c).Gap(px(t, sp1)).Children(func() {
@@ -42,7 +43,7 @@ func (a *app) agentSkillCard(c *ui.Context, in integration) {
 				sectionHeading(c, i18n.T("Agent skill"))
 				infoTip(c.Key("integ-skill-where"), skillWhere(in.Slug))
 			})
-			caption(c, i18n.T("A SKILL.md that tells %s, in every new chat, when and how to use AudioSmith: its tools, your voices, recipes and manners. The setup prompt installs it; you can also do it here.", name)).Wrap()
+			caption(c, i18n.T("A skill (SKILL.md and a tool reference) that tells %s, in every new chat, what AudioSmith does and how to use it: its pages and tools, your voices, long jobs, recipes and manners. The setup prompt installs it; you can also do it here.", name)).Wrap()
 		})
 		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
 			if canInstall {
@@ -53,35 +54,41 @@ func (a *app) agentSkillCard(c *ui.Context, in integration) {
 			}
 			save := i18n.T("Save skill…")
 			if secondaryIconButton(c.Key("integ-skill-save"), icons.Export, save).Label(save).Clicked() {
-				a.saveBlock(integBlock{Code: text, File: "SKILL.md"})
+				// A ZIP of the skill's folder: what claude.ai and Claude
+				// Desktop upload, and what any agent's skills folder unzips.
+				if data, err := agentSkillZip(in.Slug, env); err != nil {
+					a.toast(i18n.T("Could not save: %v", err))
+				} else {
+					a.saveBlock(integBlock{Code: string(data), File: skillName + "-skill.zip"})
+				}
 			}
 			cp := i18n.T("Copy skill")
 			if ghostIconButton(c.Key("integ-skill-copy"), icons.Copy, cp).Label(cp).Clicked() {
-				c.Services().WriteClipboard(text)
+				c.Services().WriteClipboard(agentSkillText(in.Slug, env))
 				a.toast(i18n.T("Copied"))
 			}
 		})
 		if canInstall {
-			switch skillState(path, text) {
+			switch skillState(dir, files) {
 			case "same":
 				ui.Row(c.Key("integ-skill-state")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 					ui.Icon(c, icons.CheckCircle.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Success).Shrink(0)
-					truncText(c, i18n.T("Installed: %s", skillFile(in.Slug))).FontSize(px(t, fsCaption)).TextColor(k.Text2)
+					truncText(c, i18n.T("Installed: %s", skillDir(in.Slug)+"/")).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 				})
 			case "differs":
-				caption(c.Key("integ-skill-state"), i18n.T("%s holds another version (your voices or settings changed since): install again to update it.", skillFile(in.Slug))).Wrap()
+				caption(c.Key("integ-skill-state"), i18n.T("%s holds another version (your voices or settings changed since): install again to update it.", skillDir(in.Slug)+"/")).Wrap()
 			}
 		}
 	})
 	if !canInstall {
 		return
 	}
-	state := skillState(path, text)
-	dialogFrame(c, "skill-dialog", &a.skillAsk, i18n.T("Install the skill for %s?", ag.Name), skillFile(in.Slug), px(t, 480), func() {
-		ui.Text(c, i18n.T("AudioSmith writes the skill to %s. %s reads it in every new chat; it holds no API key.", skillFile(in.Slug), ag.Name)).Wrap()
+	state := skillState(dir, files)
+	dialogFrame(c, "skill-dialog", &a.skillAsk, i18n.T("Install the skill for %s?", ag.Name), skillDir(in.Slug)+"/", px(t, 480), func() {
+		ui.Text(c, i18n.T("AudioSmith writes the skill to %s (SKILL.md and %s). %s reads it in every new chat; it holds no API key.", skillDir(in.Slug)+"/", skillRefPath, ag.Name)).Wrap()
 		switch state {
 		case "differs":
-			caption(c, i18n.T("A different SKILL.md is there: it is kept beside it as a backup (SKILL.md.bak-…).")).Wrap()
+			caption(c, i18n.T("Different files are there: each is kept beside it as a backup (SKILL.md.bak-…).")).Wrap()
 		case "same":
 			caption(c, i18n.T("This skill is already installed: nothing changes.")).Wrap()
 		}
@@ -92,7 +99,7 @@ func (a *app) agentSkillCard(c *ui.Context, in integration) {
 		}
 		if primaryButton(c.Key("skill-install"), i18n.T("Install")).Clicked() {
 			a.skillAsk = false
-			if _, err := installSkill(path, text); err != nil {
+			if _, err := installSkill(dir, files); err != nil {
 				a.toast(i18n.T("Could not save: %v", err))
 				return
 			}

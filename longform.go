@@ -301,10 +301,14 @@ type lfVoice struct{ ref, label string }
 
 // lfVoices are the voices model e can speak with: the saved voices it
 // can use, then its own speakers.
-func (a *app) lfVoices(e catalog.Entry) []lfVoice {
+func (a *app) lfVoices(e catalog.Entry) []lfVoice { return lfVoicesOf(a.voices, e) }
+
+// lfVoicesOf are the voices model e can speak with among voices, then
+// its own speakers (the API's projects use it too: api_studio*.go).
+func lfVoicesOf(voices []core.Voice, e catalog.Entry) []lfVoice {
 	var out []lfVoice
-	for i := range a.voices {
-		v := &a.voices[i]
+	for i := range voices {
+		v := &voices[i]
 		if ok, _ := voiceUsable(v, e); ok {
 			out = append(out, lfVoice{v.ID, v.Name})
 		}
@@ -333,9 +337,15 @@ func (a *app) lfVoiceLabel(ref string) string {
 // model: saved voices (by id or name) through the voice library's
 // fillVoice, the model's own speakers.
 func (a *app) lfResolver(d *services.LongformDoc) services.VoiceResolver {
+	return lfResolverOf(d, a.voices, a.fillVoice, a.lib.svc.Voices.FilePath)
+}
+
+// lfResolverOf is lfResolver over a list of voices, on any goroutine
+// (fill and path read only the library).
+func lfResolverOf(d *services.LongformDoc, all []core.Voice, fill func(*core.Take, *core.Voice, catalog.Entry), path func(core.Voice, string) string) services.VoiceResolver {
 	e := entryFor(d.Model)
 	lang := modelLanguage(e, d.Language)
-	voices := slices.Clone(a.voices)
+	voices := slices.Clone(all)
 	byName := map[string]int{}
 	for i, v := range voices {
 		if _, dup := byName[strings.ToLower(v.Name)]; !dup {
@@ -373,9 +383,9 @@ func (a *app) lfResolver(d *services.LongformDoc) services.VoiceResolver {
 		if ok, _ := voiceUsable(v, e); !ok {
 			return "", t, false
 		}
-		a.fillVoice(&t, v, e)
+		fill(&t, v, e)
 		if e.Has(catalog.CapVoicePrompt) && v.Kind == core.VoiceCloned && !v.Locked && v.Prompts[e.Repo] != "" {
-			t.VoicePrompt = a.voicePath(v, v.Prompts[e.Repo])
+			t.VoicePrompt = path(*v, v.Prompts[e.Repo])
 		}
 		return v.ID, t, true
 	}
@@ -751,6 +761,19 @@ func (a *app) projectChanged(ev core.ProjectChanged) {
 			pr := ev.Project
 			pr.Body = nil
 			p.projects = append([]core.Project{pr}, p.projects...)
+		}
+		if !ev.Deleted && p.project == ev.Project.ID && !p.unsaved() && len(ev.Project.Body) > 0 {
+			// Changed elsewhere (an agent, thread #35) while open here
+			// without changes of its own: show the saved one.
+			var d services.LongformDoc
+			if json.Unmarshal(ev.Project.Body, &d) == nil && d.Kind == p.kind && docJSON(&d) != p.savedJSON {
+				render := p.render
+				if d.Render != "" {
+					render = d.Render
+				}
+				a.setLfDoc(p, d, ev.Project.ID, "")
+				p.savedJSON, p.saveName, p.render = docJSON(&p.doc), ev.Project.Title, render
+			}
 		}
 		if !ev.Deleted && p.project == ev.Project.ID && p.doc.Title != ev.Project.Title {
 			// Renamed elsewhere (the Projects page).

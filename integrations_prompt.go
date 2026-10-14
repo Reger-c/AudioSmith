@@ -15,7 +15,10 @@ import (
 	"strings"
 
 	"github.com/hehehai/AudioSmith/internal/api"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	mcpsrv "github.com/hehehai/AudioSmith/internal/mcp"
+	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 // promptAgent is an agent that gets a setup prompt.
@@ -35,7 +38,8 @@ var promptAgents = map[string]promptAgent{
 
 // mcpToolNames are the MCP server's tools and resources (internal/mcp).
 var (
-	mcpToolNames     = []string{"generate_speech", "clone_voice", "design_voice", "describe_voice", "transcribe", "list_voices", "list_models", "list_languages", "check_health"}
+	mcpToolNames = append([]string{"generate_speech", "clone_voice", "design_voice", "describe_voice", "transcribe", "list_voices", "list_models", "list_languages", "check_health"},
+		mcpsrv.StudioTools...) // thread #35
 	mcpResourceNames = []string{"voice://{id}", "history://recent"}
 )
 
@@ -60,13 +64,19 @@ const promptVoices = 6
 
 // promptEnvOf is the prompt's environment of the app now.
 func (a *app) promptEnvOf() promptEnv {
-	p := promptEnv{integEnv: a.integEnvOf(), Bindings: map[string]string{}, Dir: a.apiSandbox()}
+	return promptEnvFrom(a.integEnvOf(), a.prefs, a.voices, a.apiSandbox())
+}
+
+// promptEnvFrom is a prompt's environment from the settings and the saved
+// voices (in the library's order), on any goroutine (the API's skill).
+func promptEnvFrom(e integEnv, st settings.Settings, voices []core.Voice, dir string) promptEnv {
+	p := promptEnv{integEnv: e, Bindings: map[string]string{}, Dir: dir}
 	names := map[string]string{}
-	for _, v := range a.voices {
+	for _, v := range voices {
 		p.Voices = append(p.Voices, v.Name)
 		names[v.ID] = v.Name
 	}
-	for _, b := range a.prefs.API.Bindings {
+	for _, b := range st.API.Bindings {
 		if n := names[b.Voice]; n != "" {
 			p.Bindings[b.Client] = n
 		}
@@ -132,11 +142,11 @@ func agentPrompt(slug string, p promptEnv) string {
 	if ag.Client == "" {
 		line("# " + i18n.T("Connect AudioSmith to your agent"))
 		line("")
-		line(i18n.T("You are an AI agent on my Mac that can use MCP servers. Connect AudioSmith (a speech app on this Mac: text to speech, voice cloning and design, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so."))
+		line(i18n.T("You are an AI agent on my Mac that can use MCP servers. Connect AudioSmith (a voice studio on this Mac: text to speech, audiobooks and stories, video dubbing, voices, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so."))
 	} else {
 		line("# " + i18n.T("Connect AudioSmith to %s", ag.Name))
 		line("")
-		line(i18n.T("You are %s on my Mac. Connect AudioSmith (a speech app on this Mac: text to speech, voice cloning and design, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so.", ag.Name))
+		line(i18n.T("You are %s on my Mac. Connect AudioSmith (a voice studio on this Mac: text to speech, audiobooks and stories, video dubbing, voices, transcription) to yourself as an MCP server, install its skill, check that it works, and report what you changed. Do every step yourself; ask me only where a step says so.", ag.Name))
 	}
 
 	// Facts.

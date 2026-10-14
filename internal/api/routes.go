@@ -67,6 +67,8 @@ func (s *Server) routes() {
 
 	s.handle("GET /ws/tts", accessConsume, s.wsTTS)
 
+	s.studioRoutes() // thread #35: studio_http.go — books, stories, dubs, batch, gallery, exports, workflows
+
 	s.handle("/mcp", accessConsume, s.serveMCP)
 	s.handle("/mcp/", accessConsume, s.serveMCP)
 }

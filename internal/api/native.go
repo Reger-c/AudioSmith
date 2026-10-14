@@ -523,27 +523,25 @@ func (s *Server) job(ctx context.Context, id string) (jobs.Job, error) {
 	return j, err
 }
 
+// getJob is a queue job or a group job ("longform:<id>"…, thread #35);
+// ?wait=N waits up to N seconds (≤ 60) for it to end.
 func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {
-	j, err := s.job(r.Context(), r.PathValue("id"))
+	j, err := s.Job(r.Context(), r.PathValue("id"), waitParam(r))
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, jobJSON(j, true))
+	writeJSON(w, http.StatusOK, j)
 }
 
 func (s *Server) cancelJob(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if _, err := s.job(r.Context(), id); err != nil {
+	j, err := s.CancelJob(r.Context(), r.PathValue("id"))
+	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if err := s.sched.Cancel(r.Context(), id); err != nil {
-		writeError(w, err)
-		return
-	}
-	j, _ := s.sched.Get(r.Context(), id)
-	writeJSON(w, http.StatusOK, jobJSON(j, false))
+	j.Result = nil
+	writeJSON(w, http.StatusOK, j)
 }
 
 // runEngineJob runs an engine method as a job of the queue (interactive)

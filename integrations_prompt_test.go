@@ -52,9 +52,9 @@ func TestAgentPrompts(t *testing.T) {
 		"included": {Base: "http://127.0.0.1:4000", Exe: testExe, Key: "as-SECRET"},
 	}
 	want := map[string][]string{
-		"claude-code": {"X-AudioSmith-Client: claude-code", "claude mcp add --transport http --scope user audiosmith http://127.0.0.1:4000/mcp", "claude mcp list", "claude mcp get audiosmith", "`~/.claude/skills/audiosmith/SKILL.md`", "`.claude/skills/audiosmith/SKILL.md`", `D="$HOME/.claude/skills/audiosmith"`},
-		"codex":       {`"X-AudioSmith-Client" = "codex-cli"`, "~/.codex/config.toml", "[mcp_servers.audiosmith]", `url = "http://127.0.0.1:4000/mcp"`, "tool_timeout_sec = 600", `"--mcp-stdio", "--client", "codex-cli"`, "codex mcp list", "`~/.agents/skills/audiosmith/SKILL.md`", `D="$HOME/.agents/skills/audiosmith"`},
-		"cursor":      {`"X-AudioSmith-Client": "cursor"`, "~/.cursor/mcp.json", ".cursor/mcp.json", `"url": "http://127.0.0.1:4000/mcp"`, "`~/.cursor/skills/audiosmith/SKILL.md`", `D="$HOME/.cursor/skills/audiosmith"`},
+		"claude-code": {"X-AudioSmith-Client: claude-code", "claude mcp add --transport http --scope user audiosmith http://127.0.0.1:4000/mcp", "claude mcp list", "claude mcp get audiosmith", "`~/.claude/skills/audiosmith/`", "`.claude/skills/audiosmith/`", `D="$HOME/.claude/skills/audiosmith"`},
+		"codex":       {`"X-AudioSmith-Client" = "codex-cli"`, "~/.codex/config.toml", "[mcp_servers.audiosmith]", `url = "http://127.0.0.1:4000/mcp"`, "tool_timeout_sec = 600", `"--mcp-stdio", "--client", "codex-cli"`, "codex mcp list", "`~/.agents/skills/audiosmith/`", `D="$HOME/.agents/skills/audiosmith"`},
+		"cursor":      {`"X-AudioSmith-Client": "cursor"`, "~/.cursor/mcp.json", ".cursor/mcp.json", `"url": "http://127.0.0.1:4000/mcp"`, "`~/.cursor/skills/audiosmith/`", `D="$HOME/.cursor/skills/audiosmith"`},
 		"mcp":         {`"X-AudioSmith-Client": "<your-name>"`, `"type": "http"`, testExe, `"--mcp-stdio"`, "`~/.agents/skills`", `D="$HOME/.agents/skills/audiosmith"`},
 	}
 	for _, lang := range []string{"en", "zh-Hans"} {
@@ -63,13 +63,25 @@ func TestAgentPrompts(t *testing.T) {
 			for mode, e := range envs {
 				p := promptEnv{integEnv: e, Voices: []string{"Narrator", "Ann"}, Bindings: map[string]string{"claude-code": "Narrator"}, Dir: "/Users/me/AudioSmith/mcp"}
 				s := agentPrompt(slug, p)
-				for _, w := range append(words, "http://127.0.0.1:4000/health", "curl -sS http://127.0.0.1:4000/health", "port 4000", "URL=http://127.0.0.1:4000/mcp", "tools/list", "list_voices", "Narrator, Ann", "/Users/me/AudioSmith/mcp", "<<'AUDIOSMITH_SKILL'\n---\nname: audiosmith\n", "name: audiosmith`") {
+				for _, w := range append(words, "http://127.0.0.1:4000/health", "curl -sS http://127.0.0.1:4000/health", "port 4000", "URL=http://127.0.0.1:4000/mcp", "tools/list", "list_voices", "Narrator, Ann", "/Users/me/AudioSmith/mcp", "U='http://127.0.0.1:4000/api/agent-skill?agent="+slug+"&file='", "name: audiosmith`", "reference/tools.md", "Install skill…") {
+					if w == "Install skill…" {
+						if slug == "mcp" {
+							w = "Save skill…"
+						}
+						w = i18n.T(w)
+					}
 					if lang == "zh-Hans" && w == "port 4000" {
 						w = "端口 4000"
 					}
 					if !strings.Contains(s, w) {
 						t.Errorf("%s %s %s: no %q in\n%s", lang, slug, mode, w, s)
 					}
+				}
+				if n := len(s); n > 8<<10 {
+					t.Errorf("%s %s %s: the prompt is %d bytes: keep it under 8 KB", lang, slug, mode, n)
+				}
+				if strings.Contains(s, "## ") && strings.Contains(s, "What AudioSmith does") {
+					t.Errorf("%s: the prompt holds the skill itself", slug)
 				}
 				for _, tool := range mcpToolNames {
 					if !strings.Contains(s, tool) {

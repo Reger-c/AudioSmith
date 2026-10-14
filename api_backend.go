@@ -46,7 +46,8 @@ type apiBackend struct {
 	// fillVoice, which reads only the library).
 	fill func(t *core.Take, v *core.Voice, e catalog.Entry)
 	// ffmpeg is the optional ffmpeg in use (M7a: MP3, Opus, FLAC).
-	ffmpeg func() *ffmpeg.Tool
+	ffmpeg      func() *ffmpeg.Tool
+	studioParts // thread #35: api_studio*.go
 }
 
 var _ api.Backend = (*apiBackend)(nil)
@@ -59,6 +60,7 @@ func (a *app) newAPIBackend(dataDir string) *apiBackend {
 	if a.eng != nil {
 		b.sup = a.eng.sup
 	}
+	b.useStudio(a.dubSvc, a.wfSvc, a.voiceCacheDir()) // thread #35
 	return b
 }
 

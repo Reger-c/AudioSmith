@@ -958,16 +958,7 @@ func (a *app) saveOutput(r *lfRender, kind, src, ext string, bits int) {
 
 // writeOutput copies (or converts) src to dst and records the export.
 func (a *app) writeOutput(lib *services.Library, rec core.Render, kind, src, dst, ext string, bits int) {
-	ctx := context.Background()
-	var err error
-	if bits > 0 {
-		err = services.ConvertWAV(ctx, src, dst, bits)
-	} else {
-		err = services.CopyFile(ctx, src, dst)
-	}
-	if err == nil {
-		_, err = lib.RecordExport(ctx, core.Export{Kind: kind, SourceID: rec.ID, ProjectID: rec.ProjectID, Title: rec.Title, Path: dst, Format: ext})
-	}
+	err := writeRenderFile(context.Background(), lib, rec, kind, src, dst, ext, bits)
 	a.post(func() {
 		if err != nil {
 			a.toast(i18n.T("Export failed: %v", err))
@@ -991,19 +982,7 @@ func (a *app) saveChapters(r *lfRender) {
 }
 
 func (a *app) writeChapters(lib *services.Library, rec core.Render, chs []services.BookChapter, dir string) {
-	ctx := context.Background()
-	var err error
-	for i, ch := range chs {
-		title := ch.Title
-		if title == "" {
-			title = services.Untitled(i + 1)
-		}
-		dst := filepath.Join(dir, fmt.Sprintf("%02d %s.wav", i+1, services.SafeFileName(title, "chapter")))
-		if err = services.CopyFile(ctx, ch.File, dst); err != nil {
-			break
-		}
-		lib.RecordExport(ctx, core.Export{Kind: "chapter", SourceID: rec.ID, ProjectID: rec.ProjectID, Title: rec.Title + " · " + title, Path: dst, Format: "wav"})
-	}
+	_, err := writeRenderChapters(context.Background(), lib, rec, chs, dir)
 	a.post(func() {
 		if err != nil {
 			a.toast(i18n.T("Export failed: %v", err))
@@ -1011,4 +990,39 @@ func (a *app) writeChapters(lib *services.Library, rec core.Render, chs []servic
 			a.toast(i18n.N(len(chs), "Saved %d chapter", "Saved %d chapters", len(chs)))
 		}
 	})
+}
+
+// writeRenderFile copies (or converts to a WAV of bits; 0 = as it is) a
+// render's file src to dst and records the export (Save and the API's
+// export_longform).
+func writeRenderFile(ctx context.Context, lib *services.Library, rec core.Render, kind, src, dst, ext string, bits int) error {
+	var err error
+	if bits > 0 {
+		err = services.ConvertWAV(ctx, src, dst, bits)
+	} else {
+		err = services.CopyFile(ctx, src, dst)
+	}
+	if err == nil {
+		_, err = lib.RecordExport(ctx, core.Export{Kind: kind, SourceID: rec.ID, ProjectID: rec.ProjectID, Title: rec.Title, Path: dst, Format: ext})
+	}
+	return err
+}
+
+// writeRenderChapters copies every chapter's WAV into dir as "NN Title.wav"
+// and records each export; it returns the files written.
+func writeRenderChapters(ctx context.Context, lib *services.Library, rec core.Render, chs []services.BookChapter, dir string) ([]string, error) {
+	var files []string
+	for i, ch := range chs {
+		title := ch.Title
+		if title == "" {
+			title = services.Untitled(i + 1)
+		}
+		dst := filepath.Join(dir, fmt.Sprintf("%02d %s.wav", i+1, services.SafeFileName(title, "chapter")))
+		if err := services.CopyFile(ctx, ch.File, dst); err != nil {
+			return files, err
+		}
+		files = append(files, dst)
+		lib.RecordExport(ctx, core.Export{Kind: "chapter", SourceID: rec.ID, ProjectID: rec.ProjectID, Title: rec.Title + " · " + title, Path: dst, Format: "wav"})
+	}
+	return files, nil
 }

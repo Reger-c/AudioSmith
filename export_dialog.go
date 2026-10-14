@@ -215,13 +215,18 @@ func (a *app) openExport(t *core.Take) {
 
 // exportAvailability says which formats can be written now, and why not.
 func (a *app) exportAvailability(f *exportForm) {
-	tool := a.mediaTool()
+	exportAvailable(f, a.lib.encodeExecutor() != nil && a.engineEncodes(), a.mediaTool())
+}
+
+// exportAvailable fills a form's formats that can be written: M4A when
+// m4a (the engine encodes), the others through ffmpeg (tool, nil = none).
+func exportAvailable(f *exportForm, m4a bool, tool *ffmpeg.Tool) {
 	for _, ef := range exportFormats {
 		switch ef.id {
 		case services.FormatWAV:
 			f.availOK[ef.id] = true
 		case services.FormatM4A:
-			f.availOK[ef.id] = a.lib.encodeExecutor() != nil && a.engineEncodes()
+			f.availOK[ef.id] = m4a
 			f.availWhy[ef.id] = i18n.T("M4A needs the speech engine; it is not running.")
 		default:
 			f.availOK[ef.id] = tool.CanEncode(ef.id)
@@ -739,8 +744,13 @@ func subtitleLang(t core.Take) string {
 // exportEncoder writes the formats other than WAV: M4A with the engine's
 // media.encode, MP3, FLAC and Opus with ffmpeg.
 func (a *app) exportEncoder() services.AudioEncoder {
-	tool := a.mediaTool()
-	ex := a.lib.encodeExecutor()
+	return exportEncoderOf(a.lib.encodeExecutor(), a.mediaTool())
+}
+
+// exportEncoderOf is the encoder of exports over the engine's
+// media.encode (ex, nil = none) and ffmpeg (tool, nil = none); the API's
+// export_audio uses it too.
+func exportEncoderOf(ex jobs.Executor, tool *ffmpeg.Tool) services.AudioEncoder {
 	return func(ctx context.Context, in, dst string, o services.AudioExport) error {
 		if o.Format == services.FormatM4A {
 			if ex == nil {

@@ -93,13 +93,21 @@ func (a *app) openGallery(lib *library) {
 // galleryQuery is the page's query.
 func (a *app) galleryQuery() gallery.Query {
 	g := &a.gallery
-	q := gallery.Query{Text: g.text, Limit: g.limit, FavoritesOnly: g.favOnly, Favorites: g.favs,
-		Gender: g.filters[gallery.FacetGender], Age: g.filters[gallery.FacetAge], Pitch: g.filters[gallery.FacetPitch],
-		Accent: g.filters[gallery.FacetAccent], Language: g.filters[gallery.FacetLanguage], Style: g.filters[gallery.FacetStyle]}
+	cat := ""
 	if cats := gallery.Categories(); g.tab > 0 && g.tab <= len(cats) {
-		q.Category = cats[g.tab-1].ID
+		cat = cats[g.tab-1].ID
 	}
+	q := galleryFilterQuery(g.text, cat, g.filters)
+	q.Limit, q.FavoritesOnly, q.Favorites = g.limit, g.favOnly, g.favs
 	return q
+}
+
+// galleryFilterQuery is the gallery's query for a search text, a
+// category and facet filters: the page's and the API's search_voices.
+func galleryFilterQuery(text, category string, f map[gallery.Facet]string) gallery.Query {
+	return gallery.Query{Text: text, Category: category,
+		Gender: f[gallery.FacetGender], Age: f[gallery.FacetAge], Pitch: f[gallery.FacetPitch],
+		Accent: f[gallery.FacetAccent], Language: f[gallery.FacetLanguage], Style: f[gallery.FacetStyle]}
 }
 
 // galleryResults searches when the query changed (in memory: about a
@@ -265,7 +273,7 @@ func (a *app) useArchetype(arch gallery.Archetype, inStudio bool) {
 // it to done (M3: Use in Stories, Narrate an audiobook).
 func (a *app) useArchetypeThen(arch gallery.Archetype, done func(*core.Voice)) {
 	g := &a.gallery
-	origin := "gallery:" + arch.ID
+	origin := galleryOrigin(arch.ID)
 	for i := range a.voices {
 		if a.voices[i].Origin == origin {
 			done(&a.voices[i])
@@ -276,20 +284,15 @@ func (a *app) useArchetypeThen(arch gallery.Archetype, done func(*core.Voice)) {
 		return
 	}
 	g.using = true
-	loc := i18n.Locale()
-	attrs, _ := json.Marshal(arch.Attrs)
-	v := core.Voice{Name: arch.Name.In(loc), Kind: core.VoiceDesigned, DesignAttrs: attrs, Seed: arch.Seed,
-		Language: arch.Languages[0], Origin: origin, Tags: arch.Tags}
+	model := ""
 	if e, ok := a.previewModel(); ok {
-		v.CreatedWith = e.Repo
+		model = e.Repo
 	}
+	sample := ""
 	if p := g.previews[arch.ID]; p != nil && !p.rendering && p.err == "" {
-		v.SampleText, _ = arch.PreviewLine()
+		sample = p.path
 	}
-	var files core.VoiceFiles
-	if p := g.previews[arch.ID]; p != nil && !p.rendering && p.err == "" {
-		files.Sample = p.path
-	}
+	v, files := archetypeVoice(arch, i18n.Locale(), model, sample)
 	svc := a.lib.svc.Voices
 	a.background(func() {
 		saved, err := svc.SaveFiles(context.Background(), v, files)
@@ -307,3 +310,23 @@ func (a *app) useArchetypeThen(arch gallery.Archetype, done func(*core.Voice)) {
 		})
 	})
 }
+
+// archetypeVoice is the designed voice "Use voice" saves for an
+// archetype: its name in the UI's language, attributes, seed, first
+// language and tags, the model it was previewed with, and the preview
+// (sample, "" = none) as its sample. The API's use_gallery_voice saves
+// the same.
+func archetypeVoice(arch gallery.Archetype, loc, model, sample string) (core.Voice, core.VoiceFiles) {
+	attrs, _ := json.Marshal(arch.Attrs)
+	v := core.Voice{Name: arch.Name.In(loc), Kind: core.VoiceDesigned, DesignAttrs: attrs, Seed: arch.Seed,
+		Language: arch.Languages[0], Origin: galleryOrigin(arch.ID), Tags: arch.Tags, CreatedWith: model}
+	var files core.VoiceFiles
+	if sample != "" {
+		v.SampleText, _ = arch.PreviewLine()
+		files.Sample = sample
+	}
+	return v, files
+}
+
+// galleryOrigin is the origin of a voice saved from an archetype.
+func galleryOrigin(id string) string { return "gallery:" + id }

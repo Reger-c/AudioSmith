@@ -310,6 +310,17 @@ type RunOptions struct {
 	// whose recipe changed.
 	Again    bool
 	Priority jobs.Priority
+	// Inputs, when set, are one-off inputs of this run in place of the
+	// input step's (an agent's run, thread #35): the saved workflow is not
+	// changed, and the results of its own inputs are kept.
+	Inputs *WorkflowInputs
+}
+
+// WorkflowInputs are a run's own inputs: scripts for a Start step, clips
+// for a Source step.
+type WorkflowInputs struct {
+	Scripts []workflow.Script
+	Clips   []workflow.Clip
 }
 
 // workflowStepParams are a step job's params.
@@ -334,6 +345,13 @@ func (s *Workflows) Run(ctx context.Context, id string, o RunOptions) (*workflow
 	if err != nil {
 		return nil, err
 	}
+	if o.Inputs != nil {
+		in := w.InputNode()
+		if in == nil {
+			return nil, fmt.Errorf("workflow %s: no input step: %w", id, core.ErrInvalid)
+		}
+		in.P.Scripts, in.P.Clips = o.Inputs.Scripts, o.Inputs.Clips
+	}
 	rep := s.Validate(w)
 	if !rep.OK() {
 		return nil, &WorkflowInvalidError{Report: rep}
@@ -357,7 +375,9 @@ func (s *Workflows) Run(ctx context.Context, id string, o RunOptions) (*workflow
 			return nil, err
 		}
 	}
-	s.prune(id, items)
+	if o.Inputs == nil {
+		s.prune(id, items)
+	}
 	if len(steps) == 0 {
 		run.State, run.EndedAt = workflow.RunDone, s.cfg.Now()
 		if err := s.putRun(ctx, id, run); err != nil {

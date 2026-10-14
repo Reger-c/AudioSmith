@@ -1,10 +1,12 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
 	"image/png"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -140,7 +142,9 @@ func TestAgentSkill(t *testing.T) {
 			} {
 				p := skillTestEnv(ie)
 				s := agentSkill(slug, p)
+				ref := skillReference()
 				fm, body := frontmatter(t, s)
+				all := body + ref
 				if len(fm) != 2 || fm["name"] != skillName || !skillNameRE.MatchString(fm["name"]) || len(fm["name"]) > 64 {
 					t.Errorf("%s %s: frontmatter %v", lang, slug, fm)
 				}
@@ -148,8 +152,10 @@ func TestAgentSkill(t *testing.T) {
 					t.Errorf("%s %s: description %q", lang, slug, d)
 				}
 				for _, w := range []string{"http://127.0.0.1:4000/health", "http://127.0.0.1:4000/mcp", "port 4000", "Narrator, Ann", "/Users/me/AudioSmith/mcp",
-					"open -a AudioSmith", "consent: true", "timestamps: true", `output: "file"`, "voice://{id}", "history://recent", "127.0.0.1", "MOSS-TTS-Nano",
-					"licence_required", "needs_reference", "/v1/audio/speech", "response_format=srt"} {
+					"open -a AudioSmith", "consent: true", "timestamps: true", `output: "file"`, "voice://{id}", "history://recent", "127.0.0.1",
+					"licence_required", "needs_reference", "/v1/audio/speech", "response_format=srt", "confirm: true", "wait_seconds: 30",
+					"confirm_required", "busy", "job_id", "longform:…", "dub:…", "workflow:…", "reference/tools.md", `format: "m4b"`,
+					`target_languages: ["en"]`, `loudness: "podcast"`, "/api/jobs/{id}?wait=30"} {
 					if lang == "zh-Hans" && w == "port 4000" {
 						w = "端口 4000"
 					}
@@ -157,17 +163,57 @@ func TestAgentSkill(t *testing.T) {
 						t.Errorf("%s %s %s: no %q in\n%s", lang, slug, mode, w, s)
 					}
 				}
+				if !strings.Contains(ref, "MOSS-TTS-Nano") {
+					t.Errorf("%s: the reference lacks MOSS-TTS-Nano", lang)
+				}
 				for _, tl := range skillTools() {
-					if !strings.Contains(body, "### `"+tl.Name+"`") {
+					if !strings.Contains(ref, "### `"+tl.Name+"`") {
 						t.Errorf("%s %s: no section for %s", lang, slug, tl.Name)
+					}
+					if !strings.Contains(body, "- `"+tl.Name+"`: ") {
+						t.Errorf("%s %s: SKILL.md does not list %s", lang, slug, tl.Name)
 					}
 					for _, a := range tl.Args {
 						for _, n := range a.Names {
-							if !strings.Contains(body, "`"+n+"`") {
+							if !strings.Contains(ref, "`"+n+"`") {
 								t.Errorf("%s %s: %s.%s missing", lang, slug, tl.Name, n)
 							}
 						}
 					}
+				}
+				// The map of the app: every page of the sidebar, Settings
+				// and Dictation, by the names the user sees, each with real
+				// tools or what stays in the app.
+				mods := skillModules()
+				for _, pg := range pages {
+					md, ok := mods[pg.path]
+					if !ok || !strings.Contains(body, "**"+pageTitle(pg.path)+"**: ") {
+						t.Errorf("%s %s: the map lacks %s", lang, slug, pg.path)
+					}
+					if len(md.Tools) == 0 && md.App == "" {
+						t.Errorf("%s: %s has neither tools nor where it is in the app", lang, pg.path)
+					}
+					for _, tn := range md.Tools {
+						if !slices.Contains(mcpToolNames, tn) {
+							t.Errorf("%s: %s names the tool %s, which the server lacks", lang, pg.path, tn)
+						}
+					}
+				}
+				for _, k := range []string{"settings", "dictation"} {
+					if md := mods[k]; md.Name == "" || !strings.Contains(body, "**"+md.Name+"**: ") {
+						t.Errorf("%s: the map lacks %s", lang, k)
+					}
+				}
+				for _, g := range navGroups {
+					if !strings.Contains(body, "### "+groupTitle(g.id)+"\n") {
+						t.Errorf("%s: no section %s", lang, g.id)
+					}
+				}
+				if n := len(s); n > 25<<10 {
+					t.Errorf("%s %s: SKILL.md is %d bytes: keep it under 25 KB (details go to %s)", lang, slug, n, skillRefPath)
+				}
+				if all == "" {
+					t.Fatal("empty")
 				}
 				ag := promptAgents[slug]
 				if hasClient := strings.Contains(s, "X-AudioSmith-Client: "+ag.Client+"'"); hasClient != (ag.Client != "") {
@@ -181,9 +227,6 @@ func TestAgentSkill(t *testing.T) {
 				}
 				if strings.Contains(s, keychainRead) != (mode != "none") {
 					t.Errorf("%s %s: the key from the Keychain", slug, mode)
-				}
-				if strings.Contains(s, skillEOF) {
-					t.Errorf("%s: the skill holds its own heredoc end", slug)
 				}
 				if zh := strings.Contains(s, "检查"); zh != (lang == "zh-Hans") {
 					t.Errorf("%s %s: language", lang, slug)
@@ -215,31 +258,41 @@ print(json.dumps(yaml.safe_load(t), ensure_ascii=False))`)
 }
 
 // TestAgentSkillScript runs the setup prompt's install script in bash and
-// zsh with a temporary HOME: it writes the skill, is idempotent, backs up
-// a different file; and the skill's curl example speaks.
+// zsh with a temporary HOME against the real API server: it downloads
+// the skill's files (GET /api/agent-skill), is idempotent, backs up a
+// different file, and changes nothing when AudioSmith does not answer;
+// and the skill's curl example speaks.
 func TestAgentSkillScript(t *testing.T) {
 	e := newAPIEnv(t)
+	ctx := context.Background()
 	for _, slug := range promptSlugs {
 		p := promptEnv{integEnv: integEnv{Base: e.ts.URL, Exe: testExe}, Dir: "/tmp/x"}
 		prompt := agentPrompt(slug, p)
 		var script string
 		for _, blk := range promptBlocks(prompt) {
-			if strings.Contains(blk[1], "<<'"+skillEOF+"'") {
+			if strings.Contains(blk[1], skillPath+"?agent="+slug) {
 				script = blk[1]
 			}
 		}
-		if script == "" || !strings.Contains(prompt, "````sh\n") {
+		if script == "" {
 			t.Fatalf("%s: no install script:\n%s", slug, prompt)
 		}
-		want := agentSkill(slug, p)
+		var want []skillDoc
+		for _, f := range []string{"SKILL.md", skillRefPath} {
+			text, err := e.b.AgentSkill(ctx, slug, f)
+			if err != nil || !strings.HasPrefix(text, map[bool]string{true: "---\nname: audiosmith\n", false: "# "}[f == "SKILL.md"]) {
+				t.Fatalf("%s %s: %v", slug, f, err)
+			}
+			want = append(want, skillDoc{f, text})
+		}
 		for _, sh := range []string{"bash", "zsh"} {
 			if _, err := exec.LookPath(sh); err != nil {
 				t.Logf("no %s", sh)
 				continue
 			}
 			home := t.TempDir()
-			path := filepath.Join(home, strings.TrimPrefix(skillFile(slug), "~/"))
-			run := func() string {
+			dir := filepath.Join(home, strings.TrimPrefix(skillDir(slug), "~/"))
+			run := func(script string) string {
 				cmd := exec.Command(sh, "-c", script)
 				cmd.Env = append(os.Environ(), "HOME="+home)
 				cmd.Dir = home
@@ -249,34 +302,83 @@ func TestAgentSkillScript(t *testing.T) {
 				}
 				return string(out)
 			}
-			files := func() []string {
-				es, _ := os.ReadDir(filepath.Dir(path))
+			files := func(sub string) []string {
+				es, _ := os.ReadDir(filepath.Join(dir, sub))
 				var n []string
 				for _, e := range es {
 					n = append(n, e.Name())
 				}
 				return n
 			}
-			out := run()
-			if got, err := os.ReadFile(path); err != nil || string(got) != want {
-				t.Fatalf("%s %s: wrote %v\n%s", sh, slug, err, got)
+			same := func() bool {
+				for _, f := range want {
+					if got, err := os.ReadFile(filepath.Join(dir, f.Path)); err != nil || string(got) != f.Text {
+						return false
+					}
+				}
+				return true
 			}
-			if !strings.Contains(out, "name: audiosmith") {
+			out := run(script)
+			if !same() || skillState(dir, want) != "same" {
+				t.Fatalf("%s %s: wrote other files\n%s", sh, slug, out)
+			}
+			if !strings.Contains(out, "name: audiosmith") || !strings.Contains(out, "tools.md") {
 				t.Errorf("%s %s: output %s", sh, slug, out)
 			}
-			run()
-			if f := files(); !slices.Equal(f, []string{"SKILL.md"}) {
-				t.Errorf("%s %s: again: %v", sh, slug, f)
+			run(script)
+			if f, r := files(""), files("reference"); !slices.Equal(f, []string{"SKILL.md", "reference"}) || !slices.Equal(r, []string{"tools.md"}) {
+				t.Errorf("%s %s: again: %v %v", sh, slug, f, r)
 			}
-			os.WriteFile(path, []byte("old"), 0o644)
-			run()
-			f := files()
-			if got, _ := os.ReadFile(path); string(got) != want || len(f) != 2 || !strings.HasPrefix(f[1], "SKILL.md.bak-") {
-				t.Errorf("%s %s: after a different file: %v", sh, slug, f)
-			} else if b, _ := os.ReadFile(filepath.Join(filepath.Dir(path), f[1])); string(b) != "old" {
+			os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("old"), 0o644)
+			os.WriteFile(filepath.Join(dir, skillRefPath), []byte("old ref"), 0o644)
+			run(script)
+			f, r := files(""), files("reference")
+			if !same() || len(f) != 3 || !strings.HasPrefix(f[1], "SKILL.md.bak-") || len(r) != 2 || !strings.HasPrefix(r[1], "tools.md.bak-") {
+				t.Errorf("%s %s: after different files: %v %v", sh, slug, f, r)
+			} else if b, _ := os.ReadFile(filepath.Join(dir, f[1])); string(b) != "old" {
 				t.Errorf("%s: backup %q", sh, b)
 			}
+			// AudioSmith not answering: nothing changes, and it says so.
+			down := strings.ReplaceAll(script, e.ts.URL, "http://127.0.0.1:1")
+			if out := run(down); !strings.Contains(out, "AudioSmith did not serve the skill") || !same() || len(files("")) != 3 || len(files("reference")) != 2 {
+				t.Errorf("%s %s: down: %s %v", sh, slug, out, files(""))
+			}
 		}
+	}
+	// The endpoint: the UI's language, no key, errors.
+	e.lib.settings.Update(ctx, func(s *settings.Settings) { s.API.RequireKey = true })
+	e.srv.SetKey("as-SECRET")
+	get := func(q string, key bool) (int, string) {
+		req, _ := http.NewRequest("GET", e.ts.URL+skillPath+q, nil)
+		if key {
+			req.Header.Set("Authorization", "Bearer as-SECRET")
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if code, _ := get("?agent=codex", false); code != 401 {
+		t.Errorf("without the required key: %d", code)
+	}
+	if code, body := get("?agent=codex", true); code != 200 || strings.Contains(body, "as-SECRET") || !strings.Contains(body, "security find-generic-password") {
+		t.Errorf("SKILL.md: %d", code)
+	}
+	if code, _ := get("?agent=nobody", true); code != 404 {
+		t.Errorf("unknown agent: %d", code)
+	}
+	if code, _ := get("?agent=codex&file=../../etc/passwd", true); code != 400 {
+		t.Errorf("unknown file: %d", code)
+	}
+	e.lib.settings.Update(ctx, func(s *settings.Settings) { s.API.RequireKey = false })
+	i18n.SetLocale("zh-Hans")
+	_, body := get("?agent=cursor&file="+skillRefPath, false)
+	i18n.SetLocale("en")
+	if !strings.Contains(body, "必填") {
+		t.Error("not in the UI's language")
 	}
 	// The skill's curl example (its first line) speaks.
 	for _, blk := range promptBlocks(agentSkill("claude-code", promptEnv{integEnv: integEnv{Base: e.ts.URL}})) {
@@ -298,24 +400,29 @@ func TestAgentSkillScript(t *testing.T) {
 // TestInstallSkill: a new file, the same (nothing), a different one
 // (kept as a backup).
 func TestInstallSkill(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "a", "audiosmith", "SKILL.md")
-	if s := skillState(path, "x"); s != "" {
+	dir := filepath.Join(t.TempDir(), "a", "audiosmith")
+	one := []skillDoc{{"SKILL.md", "one"}, {skillRefPath, "ref one"}}
+	if s := skillState(dir, one); s != "" {
 		t.Fatal(s)
 	}
-	if b, err := installSkill(path, "one"); err != nil || b != "" {
+	if b, err := installSkill(dir, one); err != nil || len(b) != 0 {
 		t.Fatal(b, err)
 	}
-	if b, err := installSkill(path, "one"); err != nil || b != "" || skillState(path, "one") != "same" {
+	if b, err := installSkill(dir, one); err != nil || len(b) != 0 || skillState(dir, one) != "same" {
 		t.Fatal(b, err)
 	}
-	b, err := installSkill(path, "two")
-	if got, _ := os.ReadFile(b); err != nil || string(got) != "one" {
-		t.Fatalf("backup %s %v %q", b, err, got)
+	two := []skillDoc{{"SKILL.md", "one"}, {skillRefPath, "ref two"}}
+	if s := skillState(dir, two); s != "differs" {
+		t.Fatal(s)
 	}
-	if got, _ := os.ReadFile(path); string(got) != "two" {
+	b, err := installSkill(dir, two)
+	if got, _ := os.ReadFile(b[0]); err != nil || len(b) != 1 || string(got) != "ref one" {
+		t.Fatalf("backup %v %v %q", b, err, got)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, skillRefPath)); string(got) != "ref two" {
 		t.Fatal(string(got))
 	}
-	es, _ := os.ReadDir(filepath.Dir(path))
+	es, _ := os.ReadDir(filepath.Join(dir, "reference"))
 	if len(es) != 2 {
 		t.Errorf("left %d files", len(es))
 	}
@@ -334,7 +441,7 @@ func TestAgentSkillPage(t *testing.T) {
 	tt.SetSize(1100, 1400)
 	a.navigate("/integrations/claude-code")
 	tt.Frame()
-	if !tt.HasText("Agent skill") || tt.HasText("Installed: ~/.claude/skills/audiosmith/SKILL.md") {
+	if !tt.HasText("Agent skill") || tt.HasText("Installed: ~/.claude/skills/audiosmith/") {
 		t.Fatal("skill card")
 	}
 	if err := tt.Click("Install skill…"); err != nil {
@@ -348,29 +455,32 @@ func TestAgentSkillPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	path := filepath.Join(home, ".claude", "skills", "audiosmith", "SKILL.md")
+	dir := filepath.Join(home, ".claude", "skills", "audiosmith")
 	want := agentSkill("claude-code", a.promptEnvOf())
-	if got, err := os.ReadFile(path); err != nil || string(got) != want || !strings.Contains(want, "http://127.0.0.1:4123/mcp") || !strings.Contains(want, "Narrator") {
+	if got, err := os.ReadFile(filepath.Join(dir, "SKILL.md")); err != nil || string(got) != want || !strings.Contains(want, "http://127.0.0.1:4123/mcp") || !strings.Contains(want, "Narrator") {
 		t.Fatalf("installed %v:\n%s", err, got)
 	}
+	if got, err := os.ReadFile(filepath.Join(dir, skillRefPath)); err != nil || string(got) != skillReference() {
+		t.Fatalf("reference %v", err)
+	}
 	tt.Frame()
-	if !tt.HasText("Skill installed: start a new chat in Claude Code") || !tt.HasText("Installed: ~/.claude/skills/audiosmith/SKILL.md") {
+	if !tt.HasText("Skill installed: start a new chat in Claude Code") || !tt.HasText("Installed: ~/.claude/skills/audiosmith/") {
 		t.Error("toast or state")
 	}
 	// The voices change: the card says so; installing again keeps a backup.
 	a.voices = append(a.voices, core.Voice{ID: "v2", Name: "Ann"})
 	tt.Frame()
-	if !tt.HasText("~/.claude/skills/audiosmith/SKILL.md holds another version (your voices or settings changed since): install again to update it.") {
+	if !tt.HasText("~/.claude/skills/audiosmith/ holds another version (your voices or settings changed since): install again to update it.") {
 		t.Error("no out-of-date note")
 	}
 	tt.Click("Install skill…")
 	tt.Frame()
-	if !tt.HasText("A different SKILL.md is there: it is kept beside it as a backup (SKILL.md.bak-…).") {
+	if !tt.HasText("Different files are there: each is kept beside it as a backup (SKILL.md.bak-…).") {
 		t.Error("no backup note")
 	}
 	tt.Click("Install")
 	tt.Frame()
-	if es, _ := os.ReadDir(filepath.Dir(path)); len(es) != 2 {
+	if es, _ := os.ReadDir(dir); len(es) != 3 {
 		t.Errorf("files %v", es)
 	}
 	// Save skill… and Copy skill.
@@ -380,15 +490,31 @@ func TestAgentSkillPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	want = agentSkill("claude-code", a.promptEnvOf())
-	if data, err := os.ReadFile(filepath.Join(integSaveDir, "SKILL.md")); err != nil || string(data) != want {
-		t.Fatalf("saved %v", err)
+	zr, err := zip.OpenReader(filepath.Join(integSaveDir, "audiosmith-skill.zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+		if f.Name == "audiosmith/SKILL.md" {
+			rc, _ := f.Open()
+			data, _ := io.ReadAll(rc)
+			rc.Close()
+			if string(data) != agentSkill("claude-code", a.promptEnvOf()) {
+				t.Error("zipped SKILL.md")
+			}
+		}
+	}
+	zr.Close()
+	if !slices.Equal(names, []string{"audiosmith/SKILL.md", "audiosmith/" + skillRefPath}) {
+		t.Errorf("zip %v", names)
 	}
 	if err := tt.Click("Copy skill"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if tt.Clipboard() != want {
+	if tt.Clipboard() != agentSkillText("claude-code", a.promptEnvOf()) || !strings.Contains(tt.Clipboard(), "### `generate_speech`") {
 		t.Error("clipboard")
 	}
 	// The generic page: no Install; the other pages: no card.
@@ -428,6 +554,7 @@ func TestSnapshotsAgentSkill(t *testing.T) {
 			Bindings: map[string]string{"claude-code": "Narrator"}, Dir: "/Users/me/Library/Application Support/AudioSmith/mcp"}
 		for _, slug := range promptSlugs {
 			os.WriteFile(filepath.Join(out, fmt.Sprintf("SKILL-%s-%s.md", slug, lang)), []byte(agentSkill(slug, p)), 0o644)
+			os.WriteFile(filepath.Join(out, fmt.Sprintf("tools-%s.md", lang)), []byte(skillReference()), 0o644)
 			os.WriteFile(filepath.Join(out, fmt.Sprintf("prompt-%s-%s.txt", slug, lang)), []byte(agentPrompt(slug, p)), 0o644)
 		}
 	}
@@ -470,8 +597,8 @@ func TestSnapshotsAgentSkill(t *testing.T) {
 				a.skillAsk = true
 				shot("agent-skill-dialog", 1100, 720)
 				a.skillAsk = false
-				path, _ := skillTarget("claude-code")
-				installSkill(path, agentSkill("claude-code", a.promptEnvOf()))
+				dir, _ := skillTarget("claude-code")
+				installSkill(dir, agentSkillFiles("claude-code", a.promptEnvOf()))
 				shot("agent-skill-installed", 1100, 1100)
 				a.navigate("/integrations/mcp")
 				shot("agent-skill-mcp", 1100, 1100)

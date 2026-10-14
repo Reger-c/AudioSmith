@@ -120,23 +120,28 @@ func (a *app) ffmpegBookItems(m *ui.Menu, r *lfRender) {
 		return
 	}
 	rec, spec := r.rec, r.body.Spec
-	src, chapters := out.Book, out.Chapters
 	a.ffmpegMenuItems(m, []string{ffmpeg.MP3, ffmpeg.Opus}, func(f string) {
-		o := ffmpeg.EncodeOptions{Input: src, Format: f, Cover: spec.Book.Cover, Duration: out.Seconds,
-			Metadata: map[string]string{"title": rec.Title, "album": rec.Title, "artist": spec.Book.Author, "album_artist": spec.Book.Author,
-				"composer": spec.Book.Narrator, "date": spec.Book.Year, "genre": spec.Book.Genre, "comment": spec.Book.Description}}
-		if f == ffmpeg.MP3 {
-			o.Bitrate = 128000 // speech: smaller books, as audiobook stores ask
-		}
-		for i, c := range chapters {
-			title := c.Title
-			if title == "" {
-				title = services.Untitled(i + 1)
-			}
-			o.Chapters = append(o.Chapters, ffmpeg.Chapter{Title: title, Start: c.Start, End: c.Start + c.Seconds})
-		}
-		a.saveRenderEncoded(r, "book", o, services.SafeFileName(rec.Title, "audiobook"))
+		a.saveRenderEncoded(r, "book", bookEncodeOptions(rec, &spec, out, f), services.SafeFileName(rec.Title, "audiobook"))
 	})
+}
+
+// bookEncodeOptions encode a render's book as f (MP3, Opus) with its
+// chapters, cover and tags (the API's export_longform uses it too).
+func bookEncodeOptions(rec core.Render, spec *services.LongformSpec, out *services.AssembleResult, f string) ffmpeg.EncodeOptions {
+	o := ffmpeg.EncodeOptions{Input: out.Book, Format: f, Cover: spec.Book.Cover, Duration: out.Seconds,
+		Metadata: map[string]string{"title": rec.Title, "album": rec.Title, "artist": spec.Book.Author, "album_artist": spec.Book.Author,
+			"composer": spec.Book.Narrator, "date": spec.Book.Year, "genre": spec.Book.Genre, "comment": spec.Book.Description}}
+	if f == ffmpeg.MP3 {
+		o.Bitrate = 128000 // speech: smaller books, as audiobook stores ask
+	}
+	for i, c := range out.Chapters {
+		title := c.Title
+		if title == "" {
+			title = services.Untitled(i + 1)
+		}
+		o.Chapters = append(o.Chapters, ffmpeg.Chapter{Title: title, Start: c.Start, End: c.Start + c.Seconds})
+	}
+	return o
 }
 
 // ffmpegStemItems adds a stem in ffmpeg's formats to the Stems menu.
