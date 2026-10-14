@@ -358,7 +358,7 @@ func (a *app) storyCast(c *ui.Context, p *lfPage, locked bool) {
 	remove := ""
 	for i := range p.doc.Cast {
 		m := &p.doc.Cast[i]
-		fillCard(c.Key("cast-"+m.ID)).Padding(px(t, sp2)).Gap(px(t, 6)).Children(func() {
+		fillCard(c.Key("cast-" + m.ID)).Padding(px(t, sp2)).Gap(px(t, 6)).Children(func() {
 			ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
 				ui.TextInput(c.Key("name"), &m.Name).Placeholder(i18n.T("Character name")).Label(i18n.T("Character name")).Grow(1).MinWidth(0).Disabled(locked)
 				n := 0

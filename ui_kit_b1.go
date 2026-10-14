@@ -79,8 +79,8 @@ func (sp *sidePanel) view(c *ui.Context, key, label string, inline, shown, left 
 	ui.Overlay(c, func() {
 		w, h := c.Size()
 		width := min(width, w-px(t, 48))
-		panel := ui.Scroll(c.Key(key+"-drawer")).Absolute().Top(titleBarHeight).Width(width).
-			Height(h-titleBarHeight-px(t, statusBarHeight)-1).Background(k.Bg).Label(label)
+		panel := ui.Scroll(c.Key(key + "-drawer")).Absolute().Top(titleBarHeight).Width(width).
+			Height(h - titleBarHeight - px(t, statusBarHeight) - 1).Background(k.Bg).Label(label)
 		if left {
 			panel.Left(0).BorderWidth(0, 1, 0, 0).Shadow(8, 0, 24, 0, ui.RGBA(0, 0, 0, 0.12))
 		} else {
