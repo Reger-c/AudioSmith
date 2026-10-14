@@ -342,6 +342,7 @@ func (a *app) dubStepper(c *ui.Context) {
 	t := c.Theme()
 	k := tok(t)
 	names := []string{i18n.T("Source"), i18n.T("Transcribe"), i18n.T("Translate"), i18n.T("Cast"), i18n.T("Generate"), i18n.T("Export")}
+	compact := a.dubNarrow || a.pageWidth(c) < px(t, 760)
 	ui.Row(c.Key("dub-steps")).Gap(px(t, 2)).Padding(px(t, 2), px(t, sp5), px(t, sp2)).AlignItems(ui.Center).FocusGroup(ui.Horizontal).Shrink(0).ClipX().Children(func() {
 		for i, name := range names {
 			done, running, failed := a.dubStepState(i)
@@ -371,7 +372,7 @@ func (a *app) dubStepper(c *ui.Context) {
 						ui.Text(c, strconv.Itoa(i+1)).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(col)
 					}
 				})
-				if cur || !a.dubNarrow {
+				if cur || !compact {
 					txt := ui.Text(c, name).SingleLine().TextColor(col)
 					if cur {
 						txt.FontWeight(600)

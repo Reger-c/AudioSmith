@@ -49,7 +49,7 @@ func (a *app) dubToolbar(c *ui.Context) {
 				ids = append(ids, l)
 			}
 			cur := names[max(slices.Index(ids, a.dubLang), 0)]
-			if ui.Select(c.Key("dub-showlang"), &cur, names).Label(i18n.T("Language shown")).Tooltip(i18n.T("Language shown")).Width(px(t, 180)).Shrink(1).MinWidth(px(t, 90)).Changed() {
+			if ui.Select(c.Key("dub-showlang"), &cur, names).Label(i18n.T("Language shown")).Tooltip(i18n.T("Language shown")).Width(px(t, 180)).Shrink(1).MinWidth(px(t, 120)).Changed() {
 				a.dubCommitEdit()
 				a.dubLang = ids[slices.Index(names, cur)]
 				a.dubPaste.parsed = ""
@@ -63,7 +63,7 @@ func (a *app) dubToolbar(c *ui.Context) {
 		}
 		ui.Spacer(c)
 		if n := a.dubFailedCount(a.dubLang); n > 0 && a.dubLang != "" {
-			if ghostIconButton(c.Key("dub-retry"), icons.Restart, i18n.N(n, "Retry %d failed", "Retry %d failed", n)).Label(i18n.N(n, "Retry %d failed", "Retry %d failed", n)).
+			if labelOrIcon(c.Key("dub-retry"), icons.Restart, i18n.N(n, "Retry %d failed", "Retry %d failed", n), a.dubNarrow).
 				Disabled(a.dubBusy()).Shrink(0).Clicked() {
 				a.dubTranslate(false)
 			}

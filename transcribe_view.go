@@ -54,6 +54,7 @@ func (a *app) transcribePage(c *ui.Context) {
 		w -= width
 	}
 	a.trNarrow = w < px(t, 560)
+	a.trTight = a.pageWidth(c) < px(t, 760)
 	page := ui.Column(c.Key("transcribe-page")).Grow(1).MinHeight(0).AlignItems(ui.Stretch)
 	if files := page.DroppedFiles(); files != nil {
 		a.transcribeDropped(files)
@@ -97,7 +98,7 @@ func (a *app) transcribeToolbar(c *ui.Context, shown bool) {
 	if a.trSel != "" {
 		label := i18n.T("New transcript")
 		var b ui.Element
-		if a.trNarrow {
+		if a.trNarrow || a.trTight {
 			b = primaryButton(c.Key("tr-new"), "").Label(label).Tooltip(label).Children(func() {
 				ui.Icon(c, icons.AddCircle.Linear).Size(px(c.Theme(), 16), px(c.Theme(), 16))
 			})
@@ -130,7 +131,7 @@ func (a *app) trLanguageButton(c *ui.Context, e catalog.Entry) {
 	p := &a.trLang
 	name := langName(a.prefs.Transcribe.Language)
 	var btn ui.Element
-	if a.trNarrow {
+	if a.trNarrow || a.trTight {
 		btn = iconButton(c.Key("tr-lang"), icons.Global, name)
 	} else {
 		btn = dropButton(c.Key("tr-lang"), icons.Global, name).MaxWidth(px(t, 180))

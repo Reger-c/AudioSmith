@@ -72,6 +72,7 @@ type transcribeState struct {
 	trShown   int        // segments shown (long transcripts show more on demand)
 	trSide    panelState // the history list: beside the page, or a drawer
 	trNarrow  bool       // the page is narrow: actions show as icons
+	trTight   bool       // the header is short of room: its buttons show icons
 }
 
 // trPage is how many more segments "Show more" shows.
