@@ -14,13 +14,13 @@ import "github.com/hehehai/AudioSmith/internal/engine/proto"
 
 // Proposed methods. All are job requests.
 const (
-	MethodSeparate  = "separate.run"    // gpu: voices / background (HTDemucs; Mel-RoFormer for quality)
-	MethodDiarize   = "diarize.run"     // gpu: who speaks when (Sortformer ≤ 4; FluidAudio pyannote later)
-	MethodMux       = "media.mux"       // media: MP4 with the source's video and N audio tracks
-	MethodEncode    = "media.encode"    // media: AAC (M4A); M3's M4B uses the same method
-	MethodTimePitch = "media.timePitch" // media: tempo change keeping pitch (AVAudioUnitTimePitch)
-	MethodThumbnail = "media.thumbnail" // media: video frames as images
-	MethodTranscode = "media.transcode" // media: an H.264 preview of a video the web view cannot play
+	MethodSeparate  = "separate.run"          // gpu: voices / background (HTDemucs; Mel-RoFormer for quality)
+	MethodDiarize   = "diarize.run"           // gpu: who speaks when (Sortformer ≤ 4; FluidAudio pyannote later)
+	MethodMux       = "media.mux"             // media: MP4 with the source's video and N audio tracks
+	MethodEncode    = proto.MethodMediaEncode // media: AAC (M4A), protocol 2 since m1
+	MethodTimePitch = "media.timePitch"       // media: tempo change keeping pitch (AVAudioUnitTimePitch)
+	MethodThumbnail = "media.thumbnail"       // media: video frames as images
+	MethodTranscode = "media.transcode"       // media: an H.264 preview of a video the web view cannot play
 )
 
 // RoleOf is the role a proposed method runs in (proto.RoleOf for the
@@ -144,24 +144,12 @@ type MuxResult struct {
 	Reencoded bool `json:"reencoded,omitempty"`
 }
 
-// EncodeParams: media.encode, as thread #18 (M3) proposed it for M4B
-// (services.EncodeParams); dubbing uses format "m4a" without chapters.
-type EncodeParams struct {
-	Input      string       `json:"input"`
-	Output     proto.Output `json:"output"` // format "m4a" ("m4b", later "mp3")
-	Codec      string       `json:"codec,omitempty"`
-	Bitrate    int          `json:"bitrate,omitempty"`
-	SampleRate int          `json:"sampleRate,omitempty"`
-}
-
-// EncodeResult: as M3's.
-type EncodeResult struct {
-	Output   string  `json:"output"`
-	Format   string  `json:"format"`
-	Bytes    int64   `json:"bytes"`
-	Duration float64 `json:"duration"`
-	Bitrate  int     `json:"bitrate,omitempty"`
-}
+// EncodeParams and EncodeResult are media.encode's (protocol 2 since m1);
+// dubbing uses format "m4a" without chapters.
+type (
+	EncodeParams = proto.EncodeParams
+	EncodeResult = proto.EncodeResult
+)
 
 // TimePitchParams: media.timePitch. Rate > 1 is faster (AVAudioUnitTimePitch
 // rate, 1/32–32); Pitch shifts by semitones (0 = none). The pipeline

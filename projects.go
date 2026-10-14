@@ -136,6 +136,8 @@ func categoryLabel(cat string) string {
 // itemKind names what an item is.
 func itemKind(it store.LibraryItem) string {
 	switch it.Source {
+	case "dub": // M4 (thread #19)
+		return i18n.T("Dubbing project")
 	case "render":
 		if it.Category == store.LibAudiobook {
 			return i18n.T("Audiobook render")
@@ -174,6 +176,8 @@ func itemIcon(it store.LibraryItem) *ui.SVG {
 		return exportIcon
 	case "render":
 		return renderIcon
+	case "dub": // M4 (thread #19)
+		return dubIcon
 	}
 	if it.Category == store.LibAudiobook {
 		return audiobookIcon
@@ -209,6 +213,8 @@ func (a *app) itemMeta(it store.LibraryItem) string {
 		parts = append(parts, modelName(it.Detail))
 	case "export":
 		parts = append(parts, it.Detail)
+	case "dub": // M4: dub_pages.go (thread #19)
+		parts = append(parts, dubItemPhase(it.Detail))
 	}
 	parts = append(parts, i18n.DateTime(it.Updated))
 	return strings.Join(parts, " · ")
@@ -276,6 +282,8 @@ func (a *app) renderFor(id string) *lfRender {
 // a take in the Studio, a render's page.
 func (a *app) openItem(it store.LibraryItem) {
 	switch it.Source {
+	case "dub": // M4: dub.go (thread #19)
+		a.openDub(it.ID)
 	case "project":
 		kind := core.ProjectKind(it.Category)
 		if kind != core.ProjectStory && kind != core.ProjectAudiobook {
