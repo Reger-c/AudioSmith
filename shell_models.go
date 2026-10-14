@@ -117,6 +117,7 @@ func (a *app) setLocal(e catalog.Entry, l hub.Local, err error) {
 	if err != nil {
 		m.err = err.Error()
 	}
+	a.localLLMChanged(e) // local_llm.go
 }
 
 // download queues the download of e, asking for its licence first when it

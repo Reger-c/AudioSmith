@@ -27,6 +27,9 @@ type LLM struct {
 	Skills map[string][]LLMRoute `json:"skills,omitempty"`
 	// Manual: Default was chosen by the user (even empty: no LLM).
 	Manual bool `json:"manual,omitempty"`
+	// LocalModel is the catalogue id of the engine's own language model
+	// (provider "local"); "" = catalog.DefaultLLM.
+	LocalModel string `json:"localModel,omitempty"`
 }
 
 // LLMProvider mirrors llm.ProviderConfig.
