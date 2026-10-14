@@ -97,6 +97,11 @@ func TestStudioNeedsReferenceSavedVoice(t *testing.T) {
 	if ok, _ := voiceUsable(&clone, moss); !ok {
 		t.Fatal("a cloned voice with its clip is refused")
 	}
+	for _, v := range a.lfVoices(moss) { // Stories / Audiobook
+		if v.ref != clone.ID {
+			t.Errorf("Stories offer %+v on MOSS", v)
+		}
+	}
 	_, ids := a.studioVoiceOptions(moss)
 	if !strings.Contains(strings.Join(ids, ","), clone.ID) || strings.Contains(strings.Join(ids, ","), designed.ID) {
 		t.Errorf("picker ids %q", ids)

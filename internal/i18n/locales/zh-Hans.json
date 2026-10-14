@@ -146,6 +146,7 @@
   "%s only clones voices, and this voice has no reference clip.": "%s 只能克隆声音，而这个音色没有参考音频。",
   "%s only clones voices: choose a reference clip under Voice cloning in the inspector, or a saved cloned voice.": "%s 只能克隆声音：先在右侧“声音克隆”里选一段参考音频，或选一个已保存的克隆音色。",
   "%s only clones voices: choose a saved cloned voice.": "%s 只能克隆声音：请选一个已保存的克隆音色。",
+  "%s only clones voices: each line needs a saved cloned voice.": "%s 只能克隆声音：每句都需要一个已保存的克隆音色。",
   "%s only clones voices: each line speaks in its speaker's own voice or a saved cloned voice.": "%s 只能克隆声音：每句台词用说话人自己的声音或已保存的克隆音色。",
   "%s only clones voices: it needs a reference clip or a saved cloned voice.": "%s 只能克隆声音：需要一段参考音频，或一个已保存的克隆音色。",
   "%s removes fillers and applies self-corrections; after 4 seconds the polished text is used instead.": "%s 会去掉口头禅并执行自我更正；超过 4 秒则改用润色后的文字。",
