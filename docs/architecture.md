@@ -35,6 +35,7 @@ github.com/hehehai/AudioSmith
 │   ├── llm/             provider-agnostic chat-model layer (M2/M4; not wired yet)
 │   ├── translate/       translation over LLMs and MT services, glossaries (M4; not wired yet)
 │   ├── voicedesign/     Voice Design: description ⇄ attributes, recipes per model (M1; not wired yet)
+│   ├── ffmpeg/          the optional ffmpeg (M7a): inspect, pinned download, probe/decode/encode/transcode/mux/burn (leaf)
 │   └── gallery/         the Voice Gallery: ~1,100 archetypes, facets, presets, preview planner (M1; not wired yet)
 │       └── persona/     the .asvoice voice file (and VoiceStudio .ovsvoice import)
 └── engine/              the Swift helper (audiosmith-engine), Fixtures/, Tests/
@@ -59,6 +60,7 @@ api ──▶ core, jobs, services, catalog, settings, engine/proto, translate, 
 mcp ──▶ api, core, settings, voicedesign + modelcontextprotocol/go-sdk (M5)
 main ──▶ api, mcp
 dictation ──▶ (nothing internal; mygo/transfer, purego, purego/objc)
+main ──▶ ffmpeg (M7a; ffmpeg imports nothing internal)
 store ──▶ core, jobs            store/sqlitestore ──▶ core, jobs, store, store/historyjson
 engine ──▶ core, engine/proto, jobs (its executors)        engine/enginetest ──▶ engine/proto
 hub ──▶ catalog, jobs (the download executor)              catalog ──▶ lang
@@ -157,6 +159,10 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | `a.probeMedia`, `a.captureDevices`, `a.startRecording(params, onLevel, then)`, `a.stopRecording`, `engineErrorText(err)`, `jobErrorText(*jobs.Error)` | enginelink.go (M1) | voices/clone (reference recorder, imports), studio |
 | Engine jobs: submit `proto` job kinds (`engine.ExecutorKinds`) on `jobs.Lane(proto.RoleOf(kind))`; listen/media workers start on demand (`engine.Config.OnDemand`); default models `catalog.DefaultSTT/DefaultAlign/DefaultVAD/DefaultEnhance/DefaultDictation` | internal/engine, internal/catalog (M1) | voices, studio, later dictation/dubbing |
 | Listen-role STT: app kinds `listen:stt.transcribe` / `listen:models.load` (`proto.KindFor`/`SplitKind`, `engine.KindExecutor`), `TranscribeRequest.Role` → dictation runs on `jobs.LaneListen`, never behind gpu renders; `media.encode` (WAV → M4B/M4A, AAC-LC, chapter track, iTunes tags, cover; MP3 → `unsupported {capability:"mp3"}`) | internal/engine, engine/ (M1-E) | dictation, longform |
+| Sidebar (M7a): `navGroups` (sections Create, Voices, Library, Automate, Utilities, System) and `shortcutPages` (⌘1–9) in shell.go place every page; areas answer `a.longformBadge/dubBadge/wfBadge(path)` for their badge and keep their routes (`longformRoute`, `dubRoute`, `m5Route`, `wfRoute`); the palette's "Go to" and the Go menu come from the same list; icon rail, width and closed sections in `settings.Appearance` (shell_nav.go) | shell*.go | every area with a page |
+| Settings pages (M7a): `settingsSections()` + `m7SettingsRoute` (settings_pages.go): audio-tools, network, privacy (holds #14's `watermarkSettings`), storage, usage, about; the wizard `a.openOnboarding()` (onboarding.go; model packs = catalogue ids) | shell_settings.go, settings_*.go, onboarding.go | palette, Settings → General |
+| ffmpeg (M7a): `a.mediaTool()` (`*ffmpeg.Tool`, nil = none); the engine supervisor is wrapped (`withMediaTools`, ffmpeg_engine.go): media.probe/decode/thumbnail/transcode/mux fall back to ffmpeg on `unsupported_media`, media.encode to mp3/opus/flac/ogg runs on ffmpeg, app-level `media.burn` (`services.MethodBurn`); without ffmpeg `unsupported {capability:"ffmpeg"}`; `api.FormatEncoder` for the API's formats | ffmpeg_*.go, internal/ffmpeg | dub exports, books, Studio Save as…, API |
+| Data folder (M7a): `resolveDataDir(home)` in main finishes a pending move or erase before the library opens; `location.json` in the default folder points to a moved one (`dataFolder` for the MCP stdio shim) | storage_move.go | main.go, api_stdio.go |
 | Catalogue fields (M1-E, measured on M4 by the smoke suite): `rtf`, `maxChars` (hard limit for Kokoro/Kitten, recommended chunk size otherwise), `deterministic` (chunk cache ignores seed), `nonVerbal` (OmniVoice tags), `stream` (Qwen3-TTS only), `guidance`/`exaggeration` (Chatterbox) | internal/catalog/catalog.json | render, studio, dictation |
 
 ## 4. Contracts (summary)
