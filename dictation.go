@@ -166,6 +166,15 @@ func (a *app) openDictation() {
 // menu bar icon; it runs in App.WhenReady.
 func (a *app) connectDictation() {
 	a.dictKeys = mygoHotkeys{}
+	win := a.win
+	dictation.MainThread = func(fn func()) {
+		done := make(chan struct{})
+		win.Update(func() {
+			defer close(done)
+			fn()
+		})
+		<-done
+	}
 	if err := a.dictSys.OnHotkeyReleased(func() { a.post(a.dictReleased) }); err != nil && !errors.Is(err, dictation.ErrUnsupported) {
 		a.logs.Append(core.LogEntry{Level: core.SeverityWarning, Source: "dictation", Message: "hold-to-talk: " + err.Error()})
 	}

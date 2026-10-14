@@ -230,17 +230,19 @@ func (native) Activate(t Target, wait time.Duration) bool {
 	if frontPID() == t.PID {
 		return true
 	}
-	pooled(func() {
-		app := objc.ID(objc.GetClass("NSRunningApplication")).Send(selRunningByPID, int32(t.PID))
-		if app == 0 {
-			return
-		}
-		// macOS 14 activates cooperatively: an active app yields first.
-		nsApp := objc.ID(objc.GetClass("NSApplication")).Send(selSharedApp)
-		if nsApp != 0 && objc.Send[bool](nsApp, selIsActive) && objc.Send[bool](nsApp, selResponds, selYield) {
-			nsApp.Send(selYield, app)
-		}
-		objc.Send[bool](app, selActivate, uint64(nsActivateIgnoringOtherApp))
+	onMain(func() {
+		pooled(func() {
+			app := objc.ID(objc.GetClass("NSRunningApplication")).Send(selRunningByPID, int32(t.PID))
+			if app == 0 {
+				return
+			}
+			// macOS 14 activates cooperatively: an active app yields first.
+			nsApp := objc.ID(objc.GetClass("NSApplication")).Send(selSharedApp)
+			if nsApp != 0 && objc.Send[bool](nsApp, selIsActive) && objc.Send[bool](nsApp, selResponds, selYield) {
+				nsApp.Send(selYield, app)
+			}
+			objc.Send[bool](app, selActivate, uint64(nsActivateIgnoringOtherApp))
+		})
 	})
 	deadline := time.Now().Add(wait)
 	for {

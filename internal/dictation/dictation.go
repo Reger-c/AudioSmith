@@ -44,6 +44,20 @@ const (
 	PermissionGranted
 )
 
+// MainThread runs fn on the app's main thread and waits for it; the app
+// sets it (MyGo's Window.Update). Activate makes its AppKit calls through
+// it, so Activate must not be called on the main thread. Nil runs them
+// where Activate is called.
+var MainThread func(fn func())
+
+func onMain(fn func()) {
+	if MainThread != nil {
+		MainThread(fn)
+		return
+	}
+	fn()
+}
+
 // ErrUnsupported: the platform cannot do it (Linux, tests).
 var ErrUnsupported = errors.New("dictation: not supported on this system")
 
