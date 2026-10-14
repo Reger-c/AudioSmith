@@ -581,15 +581,16 @@ func modelInMessage(msg string) string {
 // (MLXAudioTTS.MossTTSNanoError error 0.)", what engines before 0.3.1
 // sent) into one that at least names the error; other messages pass.
 func readableEngineMessage(msg string) string {
-	const generic = "The operation couldn"
-	if !strings.HasPrefix(msg, generic) {
+	// Its English and Chinese forms (the engine runs in the Mac's language).
+	if !strings.HasPrefix(msg, "The operation couldn") && !strings.HasPrefix(msg, "未能完成操作") {
 		return msg
 	}
+	msg = strings.NewReplacer("（", "(", "）", ")", "错误", " error ", "。", ".").Replace(msg)
 	i, j := strings.LastIndex(msg, "("), strings.LastIndex(msg, ")")
 	if i < 0 || j < i {
 		return i18n.T("The engine failed without saying why.")
 	}
-	name := strings.TrimSuffix(strings.TrimSpace(msg[i+1:j]), ".")
+	name := strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSpace(msg[i+1:j]), ".")), " ")
 	return i18n.T("The engine failed: %s.", name)
 }
 

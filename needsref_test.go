@@ -177,6 +177,8 @@ func TestEngineErrorWords(t *testing.T) {
 			"internal: The operation couldn’t be completed. (MLXAudioTTS.MossTTSNanoError error 0.)"},
 		{jobs.Error{Code: proto.CodeInternal, Message: "The operation couldn’t be completed. (MLXAudioTTS.MossTTSNanoError error 0.)"},
 			"The engine failed: MLXAudioTTS.MossTTSNanoError error 0."},
+		{jobs.Error{Code: proto.CodeInternal, Message: "未能完成操作。（MLXAudioTTS.MossTTSNanoError错误0。）"},
+			"The engine failed: MLXAudioTTS.MossTTSNanoError error 0."},
 		{jobs.Error{Code: proto.CodeInternal, Message: "Generation failed: no audio"}, "Generation failed: no audio"},
 	} {
 		if got := jobErrorText(&c.err); got != c.want {
