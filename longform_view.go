@@ -781,7 +781,7 @@ func (a *app) lfOutputs(c *ui.Context, p *lfPage) {
 				truncText(c, meta).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 			})
 			dropButton(c.Key("out-save"), icons.Export, i18n.T("Save")).Shrink(0).Menu(func(m *ui.Menu) {
-				m.Submenu(i18n.T("Save book…"), func(m *ui.Menu) {
+				m.Submenu(i18n.T("Whole book"), func(m *ui.Menu) {
 					if out.Encoded != "" && m.Item(i18n.T("M4B audiobook")).Chosen() {
 						a.saveOutput(r, "book", out.Encoded, "m4b", 0)
 					}
@@ -792,10 +792,10 @@ func (a *app) lfOutputs(c *ui.Context, p *lfPage) {
 					}
 					a.ffmpegBookItems(m, r) // M7a: MP3/Opus with chapters (ffmpeg_formats.go)
 				})
-				if m.Item(i18n.T("Save chapters…")).Chosen() {
+				if m.Item(i18n.T("One WAV per chapter…")).Chosen() {
 					a.saveChapters(r)
 				}
-				if m.Item(i18n.T("Save cue sheet…")).Chosen() {
+				if m.Item(i18n.T("Chapter times (.txt)…")).Chosen() {
 					a.saveOutput(r, "cues", out.Cues, "txt", 0)
 				}
 				if len(out.Stems) > 0 {

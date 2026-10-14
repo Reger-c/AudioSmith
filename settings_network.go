@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -155,12 +156,12 @@ func (a *app) networkSettings(c *ui.Context) {
 	})
 	for _, r := range a.netChecks {
 		ui.Row(c.Key("net-" + r.host)).Gap(px(t, 8)).Children(func() {
-			mark, col := "✓", t.Success
+			mark, col := icons.CheckCircle, t.Success
 			detail := i18n.T("%d ms", r.latency.Milliseconds())
 			if !r.ok {
-				mark, col, detail = "✗", t.Danger, r.err
+				mark, col, detail = icons.CloseCircle, t.Danger, r.err
 			}
-			ui.Text(c, mark).TextColor(col)
+			ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0)
 			ui.Text(c, strings.TrimPrefix(r.host, "https://")).Width(px(t, 160))
 			ui.Text(c, detail).TextColor(t.TextMuted).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 		})
