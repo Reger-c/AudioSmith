@@ -89,7 +89,7 @@ func (a *app) galleryPage(c *ui.Context) {
 	}
 	items := page.Items
 	g.moreAsked = false
-	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), px(t, 158), func(i int) {
+	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), g.cardHeight(t), func(i int) {
 		if i == len(items) {
 			// The grid builds only the rows in view: this cell is built
 			// when the end scrolls into view, so the next page loads then
@@ -192,7 +192,9 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 	card(c.Key("arch-"+arch.ID)).Grow(1).Gap(px(t, sp2)).Padding(px(t, sp3), px(t, sp3), px(t, sp2)).Children(func() {
 		name := arch.Name.In(loc)
 		desc := arch.Description.In(loc)
-		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Start).Children(func() {
+		head := ui.Row(c.Key("head")).Gap(px(t, sp2)).AlignItems(ui.Start)
+		defer g.measure(c, &g.headH, head)
+		head.Children(func() {
 			ui.Avatar(c, name, nil)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 				ui.Text(c, name).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Tooltip(name)
@@ -220,19 +222,19 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 		// size vary: Chinese runs taller than English).
 		meta := ui.Row(c.Key("meta")).Gap(px(t, 4)).Wrap().AlignContent(ui.Start).Shrink(0).Tooltip(strings.Join(tags, " · "))
 		if g.tagH > 0 {
-			meta.MaxHeight(2*g.tagH + px(t, 4)).ClipY()
+			meta.Height(2*g.tagH + px(t, 4)).ClipY() // footers line up across cards
 		}
 		meta.Children(func() {
 			for i, l := range tags {
 				chip := tagChip(c, l)
-				if h := chip.Bounds().H; i == 0 && h > 0 && h != g.tagH {
-					g.tagH = h
-					c.Invalidate() // lay the cards out again with this height
+				if i == 0 {
+					g.measure(c, &g.tagH, chip)
 				}
 			}
 		})
-		ui.Spacer(c)
-		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+		foot := ui.Row(c.Key("foot")).Gap(px(t, sp1)).AlignItems(ui.Center)
+		defer g.measure(c, &g.footH, foot)
+		foot.Children(func() {
 			p := g.previews[arch.ID]
 			switch {
 			case p != nil && p.rendering:
@@ -299,4 +301,25 @@ func archetypeAttrLabels(attrs vd.Attributes, locale string) []string {
 		}
 	}
 	return out
+}
+
+// measure keeps the height a card part (its header, a tag, its footer) had
+// as last laid out, and lays the grid out again when it changed: the
+// cards' fixed height is made of them, so there is no slack whatever the
+// fonts (Mac and Linux lines differ).
+func (g *galleryState) measure(c *ui.Context, dst *float32, e ui.Element) {
+	if h := e.Bounds().H; h > 0 && h != *dst {
+		*dst = h
+		c.Invalidate()
+	}
+}
+
+// cardHeight is a Discover voices card's height: padding, header, two
+// rows of tags and the footer, with the gaps between them; a guess until
+// they were measured.
+func (g *galleryState) cardHeight(t *ui.Theme) float32 {
+	if g.headH <= 0 || g.tagH <= 0 || g.footH <= 0 {
+		return px(t, 158)
+	}
+	return g.headH + 2*g.tagH + px(t, 4) + g.footH + px(t, sp3+sp2) + 2*px(t, sp2) + 2
 }
