@@ -1,5 +1,5 @@
 {"to":"engine","msg":{"id":"c1","method":"engine.hello","params":{"protocol":2,"app":"0.3.0","role":"media","offline":true}}}
-{"to":"app","msg":{"id":"c1","result":{"protocol":2,"version":"0.3.0","role":"media","pid":4243,"concurrency":2,"methods":["engine.hello","engine.stats","engine.flush","engine.shutdown","job.cancel","media.probe","media.decode"],"families":[],"device":{"name":"Apple M2 Pro","memory":34359738368,"os":"macOS 15.1"}}}}
+{"to":"app","msg":{"id":"c1","result":{"protocol":2,"version":"0.3.0","role":"media","pid":4243,"concurrency":2,"methods":["engine.hello","engine.stats","engine.flush","engine.shutdown","job.cancel","media.probe","media.decode","media.encode"],"families":[],"device":{"name":"Apple M2 Pro","memory":34359738368,"os":"macOS 15.1"}}}}
 {"to":"engine","msg":{"id":"c2","method":"media.probe","params":{"input":"/Users/me/Movies/interview.mov"}}}
 {"to":"app","msg":{"id":"c2","result":{"format":"mov","duration":754.32,"hasAudio":true,"hasVideo":true,"audioTracks":1,"codec":"aac","sampleRate":48000,"channels":2,"bitRate":256000,"video":{"codec":"hevc","width":3840,"height":2160,"fps":29.97}}}}
 {"to":"engine","msg":{"id":"c3","method":"media.probe","params":{"input":"/Users/me/Library/Application Support/AudioSmith/voices/01JB0V0000000000000000000/reference.wav"}}}
@@ -12,5 +12,11 @@
 {"to":"app","msg":{"id":"c4","error":{"code":"unsupported_media","message":"AVFoundation cannot open /Users/me/Downloads/talk.mkv","data":{"path":"/Users/me/Downloads/talk.mkv"}}}}
 {"to":"engine","msg":{"id":"01JB0M2000000000000000000A","method":"media.decode","params":{"input":"/Users/me/Desktop/gone.m4a","output":{"path":"/Users/me/Library/Caches/AudioSmith/work/gone.wav"}}}}
 {"to":"app","msg":{"id":"01JB0M2000000000000000000A","error":{"code":"file_not_found","message":"No such file: /Users/me/Desktop/gone.m4a","data":{"path":"/Users/me/Desktop/gone.m4a"}}}}
+{"to":"engine","msg":{"id":"01JB0M3000000000000000000A","method":"media.encode","params":{"input":"/Users/me/Library/Application Support/AudioSmith/renders/01JB0R/book.wav","output":{"path":"/Users/me/Music/The Night Train.m4b","format":"m4b"},"codec":"aac","bitrate":64000,"chapters":[{"title":"Opening Credits","start":0,"end":12.5},{"title":"Chapter 1","start":12.5,"end":1834.2}],"metadata":{"title":"The Night Train","author":"M. Example","narrator":"Aria (AudioSmith)","year":"2026","genre":"Fiction","description":"A short novel."},"cover":"/Users/me/Library/Application Support/AudioSmith/covers/01JB0C.jpg"}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JB0M3000000000000000000A","stage":"encoding","fraction":0.5}}}
+{"to":"app","msg":{"method":"job.progress","params":{"job":"01JB0M3000000000000000000A","stage":"writing","fraction":1}}}
+{"to":"app","msg":{"id":"01JB0M3000000000000000000A","result":{"output":"/Users/me/Music/The Night Train.m4b","format":"m4b","bytes":14820311,"duration":1834.2,"bitrate":64000}}}
+{"to":"engine","msg":{"id":"01JB0M4000000000000000000A","method":"media.encode","params":{"input":"/tmp/book.wav","output":{"path":"/tmp/book.mp3","format":"mp3"},"metadata":{}}}}
+{"to":"app","msg":{"id":"01JB0M4000000000000000000A","error":{"code":"unsupported","message":"This engine cannot encode MP3","data":{"capability":"mp3"}}}}
 {"to":"engine","msg":{"id":"c5","method":"tts.synthesize","params":{"model":"mlx-community/Kokoro-82M-bf16","text":"Hi","output":{"path":"/tmp/x.wav"}}}}
 {"to":"app","msg":{"id":"c5","error":{"code":"method_not_found","message":"tts.synthesize is not served by the media role"}}}

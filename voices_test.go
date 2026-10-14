@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -766,8 +767,10 @@ func TestStudioSeam(t *testing.T) {
 	os.WriteFile(pr, []byte("prompt"), 0o644)
 	cc, _ := a.lib.svc.Voices.SaveFiles(context.Background(), *a.findVoice(c.ID), core.VoiceFiles{Prompt: pr, PromptModel: qwenBase})
 	withPrompt := base
-	withPrompt.Capabilities = append(withPrompt.Capabilities, catalog.CapVoicePrompt)
-	if got := a.studioVoicePrompt(withPrompt); got != a.voicePath(&cc, cc.Prompts[qwenBase]) || got == "" || a.studioVoicePrompt(base) != "" {
+	withPrompt.Capabilities = append(slices.Clone(withPrompt.Capabilities), catalog.CapVoicePrompt)
+	without := base // the catalogue gives Qwen3 Base voicePrompt since M1-E: take it away
+	without.Capabilities = slices.DeleteFunc(slices.Clone(without.Capabilities), func(c catalog.Capability) bool { return c == catalog.CapVoicePrompt })
+	if got := a.studioVoicePrompt(withPrompt); got != a.voicePath(&cc, cc.Prompts[qwenBase]) || got == "" || a.studioVoicePrompt(without) != "" {
 		t.Errorf("voice prompt %q", got)
 	}
 

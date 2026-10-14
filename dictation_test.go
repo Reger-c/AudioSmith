@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dictation"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
@@ -72,7 +73,7 @@ func TestDictationToggle(t *testing.T) {
 		t.Fatalf("phase %v", s.phase)
 	}
 	_, req := transcribeReq(t, m.eng)
-	if req.Source != core.SourceDictation || req.Model != whisperRepo || !req.RemoveInput || req.App != "Slack" || req.Mode != settings.TranscribeFast {
+	if req.Source != core.SourceDictation || req.Model != qwenASRRepo || !req.RemoveInput || req.App != "Slack" || req.Mode != settings.TranscribeFast {
 		t.Fatalf("request %+v", req)
 	}
 	// Presses while it transcribes are ignored.
@@ -179,7 +180,7 @@ func TestDictationCopiesAndCancels(t *testing.T) {
 	sys.Mic = dictation.PermissionGranted
 
 	// The model is not downloaded: the pill says so, with Open Models.
-	removeModel(t, a, "whisper-large-v3-turbo-4bit")
+	removeModel(t, a, catalog.DefaultDictation)
 	keys.press(t, defaultAcc)
 	keys.press(t, defaultAcc)
 	if a.dict.phase != dictError || a.dict.need == nil {

@@ -160,7 +160,7 @@ func TestDesignPage(t *testing.T) {
 }
 
 func TestDesignModels(t *testing.T) {
-	if ms := designModels(); len(ms) != 1 || ms[0].Repo != omni {
+	if ms := designModels(); len(ms) != 2 || ms[0].Repo != omni { // OmniVoice, and Qwen3 VoiceDesign since the M1 smoke
 		t.Fatalf("built-in design models %v", ms)
 	}
 	vdm := withDesignCatalog(t)

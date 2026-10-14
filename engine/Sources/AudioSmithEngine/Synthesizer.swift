@@ -5,211 +5,142 @@ import MLXAudioCore
 import MLXAudioTTS
 import MLXLMCommon
 
-/// Keeps TTS models resident (least recently used beyond a cap are
-/// dropped; the app's supervisor also unloads idle ones to stay within its
-/// memory budget) and runs synthesis jobs. Jobs are serialized by the
-/// Server (concurrency 1): MLX models must not generate from two jobs at once.
+/// Runs the TTS jobs (tts.synthesize, tts.encodeVoice, models.load of TTS
+/// models) on models kept in the shared ModelStore.
 final class Synthesizer: @unchecked Sendable {
     /// Model families this build loads (catalog.Entry.Family names).
     static let families = [
         "kokoro", "kitten", "qwen3_tts", "qwen3", "marvis", "soprano", "omnivoice", "chatterbox", "pocket_tts",
         "llama_tts", "fish_speech", "echo_tts", "irodori_tts", "moss_tts", "moss_tts_nano", "indextts", "spark", "breeze",
+        "voxcpm2", "dia",
     ]
 
-    struct Resident {
-        var model: SpeechGenerationModel
-        var sampleRate: Int
-        var bytes: Int64
-        var lastUsed: Date
-        var inUse: Int
-    }
-
     private let out: Writer
-    private let lock = NSLock()
-    private var resident: [String: Resident] = [:]
-    /// Most models kept at once (AUDIOSMITH_MAX_MODELS, default 3).
-    private let maxResident: Int
+    let store: ModelStore
 
-    init(out: Writer) {
+    init(out: Writer, store: ModelStore) {
         self.out = out
-        maxResident = Int(ProcessInfo.processInfo.environment["AUDIOSMITH_MAX_MODELS"] ?? "") ?? 3
-        // Keep MLX's buffer cache small: this process lives as long as the
-        // app, and an uncapped cache grows to gigabytes (spike: OmniVoice 6–8 GB → 4.9 GB).
-        MLX.Memory.cacheLimit = 256 * 1024 * 1024
+        self.store = store
     }
 
-    // MARK: Residency
-
-    func loaded() -> [LoadedModel] {
-        lock.lock()
-        defer { lock.unlock() }
-        let now = Date()
-        return resident.sorted { $0.value.lastUsed > $1.value.lastUsed }.map { id, r in
-            LoadedModel(model: id, task: "tts", sampleRate: r.sampleRate, bytes: r.bytes,
-                        idleSeconds: r.inUse > 0 ? 0 : max(now.timeIntervalSince(r.lastUsed), 0.001))
-        }
-    }
-
-    /// Drops model (all when nil) and returns what was dropped. A model a
-    /// job is using stays alive until the job ends.
-    func unload(_ model: String?) -> [String] {
-        lock.lock()
-        let ids = resident.keys.filter { model == nil || model == "" || $0 == model }.sorted()
-        for id in ids { resident[id] = nil }
-        lock.unlock()
-        if !ids.isEmpty { MLX.Memory.clearCache() }
-        return ids
-    }
-
-    /// Returns model, loading it (stage "loading") when it is not resident.
-    private func acquire(_ model: String, path: String?, job: String, offline: Bool) async throws -> (SpeechGenerationModel, Resident) {
-        if let r = take(model) {
-            return (r.model, r)
-        }
-
+    /// Returns the TTS model, loading it (stage "loading") when it is not resident.
+    private func acquire(_ model: String, path: String?, job: String, offline: Bool) async throws -> SpeechGenerationModel {
         if offline && (path ?? "").isEmpty, let missing = missingFromCache(model) {
             throw EngineError.notDownloaded(model: model, missing: missing)
         }
-        let short = model.split(separator: "/").last.map(String.init) ?? model
-        out.notify(Method.jobProgress, ProgressParams(
-            job: job, stage: "loading",
-            message: offline ? "Loading \(short)" : "Loading \(short) (the first use downloads it from Hugging Face)"))
-        let started = Date()
-        let before = MLX.Memory.activeMemory
-        let loaded: SpeechGenerationModel
         let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
-        do {
+        let (m, _) = try await store.acquire(model, task: "tts", job: job, as: SpeechGenerationModel.self,
+                                             sampleRate: { $0.sampleRate }) {
             if let path, !path.isEmpty {
                 do {
-                    loaded = try await TTS.loadModel(modelRepo: path, hfToken: token)
+                    return try await TTS.loadModel(modelRepo: path, hfToken: token)
                 } catch TTSModelError.unsupportedModelType(let type) where (type ?? "").hasSuffix("from local directory") {
                     // Families without a directory loader in mlx-audio-swift
-                    // (Marvis, OmniVoice, Spark) resolve the repo id in the
-                    // HF cache instead, where the app downloaded the same
+                    // (Marvis, OmniVoice, Spark, Dia) resolve the repo id in
+                    // the HF cache instead, where the app downloaded the same
                     // snapshot (standard layout, found without the network).
                     if offline, let missing = missingFromCache(model) {
                         throw EngineError.notDownloaded(model: model, missing: missing)
                     }
                     log("\(model): no directory loader for its family, loading it from the cache by id")
-                    loaded = try await TTS.loadModel(modelRepo: model, hfToken: token)
+                    return try await TTS.loadModel(modelRepo: model, hfToken: token)
                 }
-            } else {
-                loaded = try await TTS.loadModel(modelRepo: model, hfToken: token)
             }
-        } catch let error as EngineError {
-            throw error
-        } catch {
-            if Task.isCancelled { throw CancellationError() }
-            throw EngineError.loadFailed(error.localizedDescription)
+            return try await TTS.loadModel(modelRepo: model, hfToken: token)
         }
-        try Task.checkCancellation()
-        let r = Resident(model: loaded, sampleRate: loaded.sampleRate,
-                         bytes: Int64(max(MLX.Memory.activeMemory - before, 0)), lastUsed: Date(), inUse: 1)
-        insert(model, r)
-        out.logLine("info", String(format: "Loaded %@ in %.1f s", model, Date().timeIntervalSince(started)), job: job)
-        return (loaded, r)
-    }
-
-    /// Marks a resident model in use and returns it.
-    private func take(_ model: String) -> Resident? {
-        lock.withLock {
-            guard var r = resident[model] else { return nil }
-            r.inUse += 1
-            r.lastUsed = Date()
-            resident[model] = r
-            return r
-        }
-    }
-
-    /// Adds a loaded model; over the cap, drops the least recently used idle ones.
-    private func insert(_ model: String, _ r: Resident) {
-        lock.withLock {
-            resident[model] = r
-            while resident.count > maxResident,
-                  let lru = resident.filter({ $0.value.inUse == 0 }).min(by: { $0.value.lastUsed < $1.value.lastUsed })?.key {
-                resident[lru] = nil
-                log("dropped \(lru): more than \(maxResident) models resident")
-            }
-        }
-    }
-
-    private func release(_ model: String) {
-        lock.lock()
-        if var r = resident[model] {
-            r.inUse = max(r.inUse - 1, 0)
-            r.lastUsed = Date()
-            resident[model] = r
-        }
-        lock.unlock()
-    }
-
-    /// What is missing from the HF cache for model, or nil when a complete
-    /// copy is there (the layouts mlx-audio-swift resolves offline).
-    private func missingFromCache(_ model: String) -> [String]? {
-        let env = ProcessInfo.processInfo.environment
-        let hub = env["HF_HUB_CACHE"].map { URL(fileURLWithPath: $0) }
-            ?? env["HF_HOME"].map { URL(fileURLWithPath: $0).appendingPathComponent("hub") }
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/huggingface/hub")
-        let fm = FileManager.default
-        let flat = hub.appendingPathComponent("mlx-audio").appendingPathComponent(model.replacingOccurrences(of: "/", with: "_"))
-        if fm.fileExists(atPath: flat.appendingPathComponent("config.json").path) {
-            return nil
-        }
-        let snapshots = hub.appendingPathComponent("models--" + model.replacingOccurrences(of: "/", with: "--"))
-            .appendingPathComponent("snapshots")
-        if let shas = try? fm.contentsOfDirectory(atPath: snapshots.path),
-           shas.contains(where: { !((try? fm.contentsOfDirectory(atPath: snapshots.appendingPathComponent($0).path)) ?? []).isEmpty }) {
-            return nil
-        }
-        return ["config.json"]
+        return m
     }
 
     // MARK: Jobs
 
     func load(_ p: LoadParams, job: String, offline: Bool) async throws -> LoadResult {
         let started = Date()
-        let (model, r) = try await acquire(p.model, path: p.path, job: job, offline: offline)
-        defer { release(p.model) }
-        var caps = ["stream"]
-        if model is KokoroModel { caps.append("speed") }
-        if model is OmniVoiceModel { caps.append(contentsOf: ["speed", "duration", "steps", "clone", "design"]) }
+        let model = try await acquire(p.model, path: p.path, job: job, offline: offline)
+        defer { store.release(p.model) }
+        let bytes = store.loaded().first { $0.model == p.model }?.bytes
         return LoadResult(model: p.model, task: p.task ?? "tts", sampleRate: model.sampleRate,
-                          seconds: Date().timeIntervalSince(started), bytes: r.bytes > 0 ? r.bytes : nil, capabilities: caps)
+                          seconds: Date().timeIntervalSince(started), bytes: (bytes ?? 0) > 0 ? bytes : nil,
+                          capabilities: capabilities(model, repo: p.model))
+    }
+
+    /// What the loaded model supports, named as in catalog.Capability.
+    func capabilities(_ model: SpeechGenerationModel, repo: String) -> [String] {
+        var caps = ["seed"]
+        switch model {
+        case is KokoroModel, is KittenTTSModel:
+            caps.append("speed")
+        case is OmniVoiceModel:
+            caps += ["stream", "speed", "duration", "steps", "guidance", "clone", "design", "voiceStyle", "language", "nonVerbal"]
+        case is Qwen3TTSModel:
+            caps += ["stream", "sampling", "language"]
+            let l = repo.lowercased()
+            if l.contains("base") { caps += ["clone", "voicePrompt"] }
+            if l.contains("voicedesign") { caps += ["design", "voiceStyle", "instruct"] }
+            if l.contains("customvoice") { caps += ["voiceStyle", "instruct"] }
+        case is ChatterboxModel:
+            caps += ["stream", "sampling", "clone", "guidance", "exaggeration"]
+        default:
+            caps += ["stream", "sampling"]
+        }
+        return caps
     }
 
     func synthesize(_ p: SynthesizeParams, job: String, offline: Bool) async throws -> SynthesizeResult {
         guard !p.model.isEmpty else { throw EngineError.badRequest("Missing model") }
         let text = p.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw EngineError.badRequest("Missing text") }
-        guard p.output.path.hasPrefix("/") else { throw EngineError.badRequest("output.path must be an absolute path") }
-        guard (p.output.format ?? "wav") == "wav" else { throw EngineError.badRequest("Unsupported output format \(p.output.format!)") }
-        let bits = p.output.bits ?? 16
-        guard [16, 24, 32].contains(bits) else { throw EngineError.badRequest("Unsupported bits \(bits)") }
+        let (outURL, bits) = try outputURL(p.output)
 
-        let (model, _) = try await acquire(p.model, path: p.modelPath, job: job, offline: offline)
-        defer { release(p.model) }
+        let model = try await acquire(p.model, path: p.modelPath, job: job, offline: offline)
+        defer { store.release(p.model) }
 
-        let refPath = nonEmpty(p.refAudio)
+        var refPath = nonEmpty(p.refAudio)
+        var refText = nonEmpty(p.refText)
+        // A voice prompt from tts.encodeVoice replaces the reference.
+        var conditioning: Qwen3TTSModel.Qwen3TTSReferenceConditioning?
+        if let prompt = nonEmpty(p.voicePrompt) {
+            do {
+                conditioning = try loadVoicePrompt(prompt, model: p.model, into: model)
+                refPath = nil
+                refText = nil
+            } catch {
+                guard refPath != nil else {
+                    throw EngineError.badRequest("Voice prompt \(prompt) is not usable: \(error.localizedDescription)")
+                }
+                out.logLine("warning", "Voice prompt not usable, using the reference audio: \(error.localizedDescription)", job: job)
+            }
+        }
         if let kokoro = model as? KokoroModel {
             if refPath != nil {
-                throw EngineError.unsupported("\(p.model.split(separator: "/").last ?? "") cannot clone voices", capability: "clone")
+                throw EngineError.unsupported("\(shortName(p.model)) cannot clone voices", capability: "clone")
             }
             kokoro.speed = Float(p.speed ?? 1.0)
+        }
+        if let qwen = model as? Qwen3TTSModel, refPath != nil, !p.model.lowercased().contains("base") {
+            _ = qwen
+            throw EngineError.unsupported("\(shortName(p.model)) cannot clone voices", capability: "clone")
         }
         var params = model.defaultGenerationParameters
         if let maxTokens = p.maxTokens, maxTokens > 0 { params.maxTokens = maxTokens }
         if let temperature = p.temperature { params.temperature = Float(temperature) }
         if let topP = p.topP { params.topP = Float(topP) }
         // Seeded every time, so a take can be reproduced from its result.
-        let seed = p.seed ?? Int64.random(in: 0 ... Int64.max)
+        let seed = p.seed ?? Int64.random(in: 0 ... Int64(Int32.max))
         MLXRandom.seed(UInt64(bitPattern: seed))
 
         var refAudio: MLXArray?
         if let refPath {
-            do {
-                (_, refAudio) = try loadAudioArray(from: URL(fileURLWithPath: refPath), sampleRate: model.sampleRate)
-            } catch {
-                throw EngineError.badRequest("Could not read the reference audio \(refPath): \(error.localizedDescription)")
+            refAudio = MLXArray(try await decodeMono(refPath, sampleRate: model.sampleRate))
+        }
+
+        // The voice field: a speaker, or a design description; instruct is
+        // CustomVoice's instruction, or the description when voice is empty.
+        var voice = nonEmpty(p.voice)
+        if let instruct = nonEmpty(p.instruct) {
+            if let v = voice, p.model.lowercased().contains("customvoice") {
+                voice = "\(v), \(instruct)"
+            } else if voice == nil {
+                voice = instruct
             }
         }
 
@@ -236,36 +167,7 @@ final class Synthesizer: @unchecked Sendable {
             progress.audioSeconds = Double(samples.count) / Double(sampleRate)
             progress.send("generating")
         }
-
-        if let omni = model as? OmniVoiceModel {
-            // OmniVoice takes its own parameters (diffusion steps, a target
-            // duration, speed, seed), which only this entry point accepts.
-            // It runs in the job's task and checks for cancellation at each
-            // diffusion step, so a cancelled job stops within a step.
-            var ov = OmniVoiceGenerateParameters()
-            if let steps = p.steps, steps > 0 { ov.numStep = steps }
-            if let duration = p.duration, duration > 0 { ov.duration = Float(duration) }
-            if let speed = p.speed, speed > 0 { ov.speed = Float(speed) }
-            ov.seed = UInt64(bitPattern: seed)
-            let chunk = try await omni.generate(
-                text: text, voice: nonEmpty(p.voice), refAudio: refAudio, refText: nonEmpty(p.refText),
-                language: nonEmpty(p.language), ovParameters: ov)
-            try Task.checkCancellation()
-            try audio(chunk)
-        } else if model is KokoroModel || model is KittenTTSModel {
-            // These make the whole take in one call; their generateStream
-            // only runs it in a Task of its own, which a cancelled job
-            // would leave computing on the GPU while the next job starts.
-            // Run here instead, so the job ends when the computation does.
-            let chunk = try await model.generate(
-                text: text, voice: nonEmpty(p.voice), refAudio: refAudio, refText: nonEmpty(p.refText),
-                language: nonEmpty(p.language), generationParameters: params)
-            try Task.checkCancellation()
-            try audio(chunk)
-        } else {
-            let stream = model.generateStream(
-                text: text, voice: nonEmpty(p.voice), refAudio: refAudio, refText: nonEmpty(p.refText),
-                language: nonEmpty(p.language), generationParameters: params, streamingInterval: 1.0)
+        func consume(_ stream: AsyncThrowingStream<AudioGeneration, Error>) async throws {
             do {
                 for try await event in stream {
                     try Task.checkCancellation()
@@ -291,6 +193,60 @@ final class Synthesizer: @unchecked Sendable {
                 throw error
             }
         }
+
+        do {
+            if let omni = model as? OmniVoiceModel {
+                // OmniVoice takes its own parameters (diffusion steps, a
+                // target duration, speed, guidance, seed), which only this
+                // entry point accepts. It runs in the job's task and checks
+                // for cancellation at each diffusion step.
+                var ov = OmniVoiceGenerateParameters()
+                if let steps = p.steps, steps > 0 { ov.numStep = steps }
+                if let duration = p.duration, duration > 0 { ov.duration = Float(duration) }
+                if let speed = p.speed, speed > 0 { ov.speed = Float(speed) }
+                if let g = p.guidance, g > 0 { ov.guidanceScale = Float(g) }
+                ov.seed = UInt64(bitPattern: seed)
+                let (instruct, dropped) = omniVoiceInstruct(voice, text: text)
+                if !dropped.isEmpty {
+                    out.logLine("warning", "OmniVoice does not know the voice attributes \(dropped.joined(separator: ", ")): ignored", job: job)
+                }
+                let chunk = try await omni.generate(
+                    text: text, voice: instruct, refAudio: refAudio, refText: refText,
+                    language: nonEmpty(p.language), ovParameters: ov)
+                try Task.checkCancellation()
+                try audio(chunk)
+            } else if model is KokoroModel || model is KittenTTSModel {
+                // These make the whole take in one call; their generateStream
+                // only runs it in a Task of its own, which a cancelled job
+                // would leave computing on the GPU while the next job starts.
+                // Run here instead, so the job ends when the computation does.
+                let chunk = try await model.generate(
+                    text: text, voice: voice, refAudio: refAudio, refText: refText,
+                    language: nonEmpty(p.language), generationParameters: params)
+                try Task.checkCancellation()
+                try audio(chunk)
+            } else if let qwen = model as? Qwen3TTSModel, let conditioning {
+                try await consume(qwen.generateStream(text: text, conditioning: conditioning,
+                                                      generationParameters: params, streamingInterval: 1.0))
+            } else {
+                if let cb = model as? ChatterboxModel {
+                    cb.cfgWeightOverride = p.guidance.map { Float($0) }
+                    cb.emotionAdvOverride = p.exaggeration.map { Float($0) }
+                }
+                defer {
+                    if let cb = model as? ChatterboxModel {
+                        cb.cfgWeightOverride = nil
+                        cb.emotionAdvOverride = nil
+                    }
+                }
+                try await consume(model.generateStream(
+                    text: text, voice: voice, refAudio: refAudio, refText: refText,
+                    language: nonEmpty(p.language), generationParameters: params, streamingInterval: 1.0))
+            }
+        } catch AudioGenerationError.invalidInput(let message) {
+            if let tooLong = inputTooLong(message) { throw tooLong }
+            throw EngineError.badRequest(message)
+        }
         try Task.checkCancellation()
         guard !samples.isEmpty else { throw RPCError(Code.internal, "The model produced no audio") }
         if p.stream == true {
@@ -301,7 +257,7 @@ final class Synthesizer: @unchecked Sendable {
         progress.fraction = 1
         progress.send("writing", force: true)
         do {
-            try writeWAV(samples, sampleRate: sampleRate, bits: bits, to: URL(fileURLWithPath: p.output.path))
+            try writeWAV(samples, sampleRate: sampleRate, bits: bits, to: outURL)
         } catch {
             throw RPCError(Code.internal, "Could not write \(p.output.path): \(error.localizedDescription)")
         }
@@ -312,6 +268,71 @@ final class Synthesizer: @unchecked Sendable {
                                 frames: Int64(samples.count), audioSeconds: audioSeconds, seconds: seconds,
                                 rtf: seconds > 0 ? audioSeconds / seconds : 0, seed: seed)
     }
+
+    // MARK: Voice prompts
+
+    static let qwenPromptFormat = "qwen3_tts/1"
+
+    func encodeVoice(_ p: EncodeVoiceParams, job: String, offline: Bool) async throws -> EncodeVoiceResult {
+        guard !p.model.isEmpty else { throw EngineError.badRequest("Missing model") }
+        guard p.promptPath.hasPrefix("/") else { throw EngineError.badRequest("promptPath must be an absolute path") }
+        guard p.model.lowercased().contains("base") else {
+            throw EngineError.unsupported("\(shortName(p.model)) cannot encode voices", capability: "voicePrompt")
+        }
+        let model = try await acquire(p.model, path: p.modelPath, job: job, offline: offline)
+        defer { store.release(p.model) }
+        guard let qwen = model as? Qwen3TTSModel else {
+            throw EngineError.unsupported("\(shortName(p.model)) cannot encode voices", capability: "voicePrompt")
+        }
+        guard let refText = nonEmpty(p.refText) else {
+            throw EngineError.badRequest("\(shortName(p.model)) needs the reference's transcript (refText)")
+        }
+        let samples = try await decodeMono(p.refAudio, sampleRate: model.sampleRate)
+        JobProgress(out: out, job: job).send("encoding", force: true)
+        let started = Date()
+        let c = try qwen.prepareReferenceConditioning(refAudio: MLXArray(samples), refText: refText, language: nonEmpty(p.language))
+        var arrays = ["referenceSpeechCodes": c.referenceSpeechCodes, "referenceTextTokenIDs": c.referenceTextTokenIDs]
+        if let e = c.speakerEmbedding { arrays["speakerEmbedding"] = e }
+        var meta = ["format": Self.qwenPromptFormat, "model": p.model, "resolvedLanguage": c.resolvedLanguage]
+        if let id = c.codecLanguageID { meta["codecLanguageID"] = String(id) }
+        let url = URL(fileURLWithPath: p.promptPath)
+        let dir = url.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).\(getpid()).safetensors")
+        do {
+            try MLX.save(arrays: arrays, metadata: meta, url: tmp)
+            guard rename(tmp.path, url.path) == 0 else { throw RPCErrorWrap.rename(String(cString: strerror(errno))) }
+        } catch {
+            try? FileManager.default.removeItem(at: tmp)
+            throw RPCError(Code.internal, "Could not write \(p.promptPath): \(error.localizedDescription)")
+        }
+        let bytes = ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber)?.int64Value ?? 0
+        return EncodeVoiceResult(voicePrompt: url.path, model: p.model, format: Self.qwenPromptFormat, bytes: bytes,
+                                 audioSeconds: Double(samples.count) / Double(model.sampleRate),
+                                 seconds: Date().timeIntervalSince(started))
+    }
+
+    /// Reads a voice prompt made for model; throws when it is not one.
+    private func loadVoicePrompt(_ path: String, model: String, into m: SpeechGenerationModel) throws -> Qwen3TTSModel.Qwen3TTSReferenceConditioning {
+        guard m is Qwen3TTSModel else { throw EngineError.badRequest("\(shortName(model)) takes no voice prompts") }
+        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        let (arrays, meta) = try MLX.loadArraysAndMetadata(data: data)
+        guard meta["format"] == Self.qwenPromptFormat else { throw EngineError.badRequest("format \(meta["format"] ?? "?")") }
+        guard meta["model"] == model else { throw EngineError.badRequest("made for \(meta["model"] ?? "?")") }
+        guard let codes = arrays["referenceSpeechCodes"], let ids = arrays["referenceTextTokenIDs"] else {
+            throw EngineError.badRequest("incomplete")
+        }
+        return Qwen3TTSModel.Qwen3TTSReferenceConditioning(
+            speakerEmbedding: arrays["speakerEmbedding"], referenceSpeechCodes: codes, referenceTextTokenIDs: ids,
+            resolvedLanguage: meta["resolvedLanguage"] ?? "auto", codecLanguageID: meta["codecLanguageID"].flatMap { Int($0) })
+    }
+}
+
+/// Recognises Kokoro's "Input too long: 731 tokens exceeds max 510".
+func inputTooLong(_ message: String) -> EngineError? {
+    let numbers = message.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+    guard message.lowercased().contains("too long"), numbers.count >= 2 else { return nil }
+    return .inputTooLong(limit: numbers[1], actual: numbers[0], unit: "phonemes")
 }
 
 /// Waits ~200 ms even in a cancelled task.

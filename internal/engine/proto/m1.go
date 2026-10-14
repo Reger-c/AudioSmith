@@ -234,6 +234,51 @@ type DecodeResult struct {
 	Seconds float64     `json:"seconds"`
 }
 
+// ---- media.encode (job, media; M3) ----
+
+// EncodeParams encode a WAV (RF64 allowed) into an M4B/M4A audiobook or
+// track: AAC-LC, with a QuickTime chapter track (what Apple Books and
+// QuickTime show), iTunes tags and cover art. services.EncodeParams is the
+// same JSON.
+type EncodeParams struct {
+	Input  string `json:"input"`
+	Output Output `json:"output"` // path; format "m4b" or "m4a" ("mp3": unsupported, capability "mp3")
+	Codec  string `json:"codec,omitempty"` // "aac" (default, the only one)
+	// Bitrate in bits per second; 0 = 64 kb/s mono, 96 kb/s stereo.
+	Bitrate    int             `json:"bitrate,omitempty"`
+	SampleRate int             `json:"sampleRate,omitempty"` // 0 = the input's (at most 48 kHz)
+	Chapters   []EncodeChapter `json:"chapters,omitempty"`
+	Metadata   EncodeMetadata  `json:"metadata"`
+	Cover      string          `json:"cover,omitempty"` // PNG or JPEG path, written as covr
+}
+
+// EncodeChapter is a chapter mark, seconds into the input.
+type EncodeChapter struct {
+	Title string  `json:"title"`
+	Start float64 `json:"start"`
+	End   float64 `json:"end"`
+}
+
+// EncodeMetadata are the file's tags: ©nam (title), ©ART and aART
+// (author), ©alb (title), ©wrt (narrator), ©day, ©gen, desc and ©cmt.
+type EncodeMetadata struct {
+	Title       string `json:"title,omitempty"`
+	Author      string `json:"author,omitempty"`
+	Narrator    string `json:"narrator,omitempty"`
+	Year        string `json:"year,omitempty"`
+	Genre       string `json:"genre,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// EncodeResult describes the file written.
+type EncodeResult struct {
+	Output   string  `json:"output"`
+	Format   string  `json:"format"`
+	Bytes    int64   `json:"bytes"`
+	Duration float64 `json:"duration"`
+	Bitrate  int     `json:"bitrate,omitempty"`
+}
+
 // ---- capture.* (listen) ----
 
 // DevicesResult answers capture.devices: the audio inputs, the system

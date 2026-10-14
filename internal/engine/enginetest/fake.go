@@ -78,21 +78,23 @@ func Methods(role proto.Role) []string {
 	common := []string{proto.MethodHello, proto.MethodStats, proto.MethodFlush, proto.MethodShutdown, proto.MethodJobCancel}
 	switch role {
 	case proto.RoleMedia:
-		return append(common, proto.MethodMediaProbe, proto.MethodMediaDecode)
+		return append(common, proto.MethodMediaProbe, proto.MethodMediaDecode, proto.MethodMediaEncode)
 	case proto.RoleListen:
-		return append(common, proto.MethodCaptureDevices, proto.MethodCaptureStart, proto.MethodCaptureStop)
+		return append(common, proto.MethodCaptureDevices, proto.MethodCaptureStart, proto.MethodCaptureStop,
+			proto.MethodModelsLoad, proto.MethodModelsUnload, proto.MethodModelsLoaded, proto.MethodSTTTranscribe)
 	}
 	return append(common, proto.MethodModelsLoad, proto.MethodModelsUnload, proto.MethodModelsLoaded,
 		proto.MethodTTSSynthesize, proto.MethodTTSEncodeVoice, proto.MethodSTTTranscribe, proto.MethodSTTAlign,
 		proto.MethodVADDetect, proto.MethodEnhanceRun)
 }
 
-// Concurrency is the jobs an engine of role runs at once.
+// Concurrency is the jobs an engine of role runs at once: gpu 1, listen 2
+// (a recording and a transcription), media 2.
 func Concurrency(role proto.Role) int {
-	if role == proto.RoleMedia {
-		return 2
+	if role == proto.RoleGPU {
+		return 1
 	}
-	return 1
+	return 2
 }
 
 type fakeEngine struct {
@@ -307,6 +309,8 @@ func (f *fakeEngine) startJob(m proto.Message) {
 			f.enhance(m)
 		case proto.MethodMediaDecode:
 			f.decode(m)
+		case proto.MethodMediaEncode:
+			f.encode(m)
 		case proto.MethodCaptureStart:
 			f.capture(m)
 		default:
@@ -330,6 +334,9 @@ func (f *fakeEngine) handleHello(m proto.Message) {
 		role = proto.RoleGPU
 	}
 	families := []string{}
+	if role == proto.RoleListen {
+		families = []string{"whisper", "qwen3_asr", "parakeet"}
+	}
 	if role == proto.RoleGPU {
 		families = []string{"kokoro", "qwen3_tts", "omnivoice", "chatterbox", "whisper", "qwen3_asr", "qwen3_forced_aligner", "silero_vad", "deepfilternet"}
 	}

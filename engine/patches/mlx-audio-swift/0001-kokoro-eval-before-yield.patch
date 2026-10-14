@@ -1,0 +1,12 @@
+diff --git a/Sources/MLXAudioTTS/Models/StyleTTS2/Kokoro/KokoroModel.swift b/Sources/MLXAudioTTS/Models/StyleTTS2/Kokoro/KokoroModel.swift
+index b3b6828..393575f 100644
+--- a/Sources/MLXAudioTTS/Models/StyleTTS2/Kokoro/KokoroModel.swift
++++ b/Sources/MLXAudioTTS/Models/StyleTTS2/Kokoro/KokoroModel.swift
+@@ -237,6 +237,7 @@ public final class KokoroModel: Module, SpeechGenerationModel, @unchecked Sendab
+                     refText: refText, language: language,
+                     generationParameters: generationParameters
+                 )
++                eval(audio)  // AudioSmith: materialize on the producer thread (mlx-swift 0.32 streams are thread-local)
+                 continuation.yield(.audio(audio))
+                 continuation.finish()
+             } catch {

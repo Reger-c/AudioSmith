@@ -113,7 +113,7 @@ func (a *app) openTranscripts(lib *library) {
 			if a.eng == nil || a.eng.sup == nil {
 				return nil
 			}
-			return engine.Executor(a.eng.sup, proto.RoleOf(method), method)
+			return engine.KindExecutor(a.eng.sup, method) // a method, or "listen:stt.transcribe"
 		},
 	})
 	core.On(lib.bus, func(ev core.TranscriptChanged) { a.post(func() { a.transcriptChanged(ev) }) })
