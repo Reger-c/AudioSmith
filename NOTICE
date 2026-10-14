@@ -1,0 +1,13 @@
+AudioSmith
+Copyright 2026 the AudioSmith authors. Licensed under the Apache License 2.0 (LICENSE).
+
+This product includes third-party material:
+
+Solar icon set
+  by 480 Design — https://www.figma.com/community/file/1166831539721848736
+  Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0),
+  https://creativecommons.org/licenses/by/4.0/
+  Taken from the npm package @iconify-json/solar 1.2.13 (Iconify,
+  https://icon-sets.iconify.design/solar/). Only the icons AudioSmith uses are
+  included, converted to Go source in internal/icons/solar_gen.go
+  (internal/icons/gen); their shapes are unchanged.
