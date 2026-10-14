@@ -10,13 +10,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/dsp/analysis"
 )
 
-// Turn is a stretch of one speaker's speech, as diarization finds it.
-type Turn struct {
-	Start   float64 `json:"start"`
-	End     float64 `json:"end"`
-	Speaker string  `json:"speaker"`
-}
-
 // AssignSpeakers gives each segment the speaker whose turns overlap it
 // most, splitting a segment with timed words where the speaker changes
 // for at least two words and half a second. Speakers are relabelled S1,
