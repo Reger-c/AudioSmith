@@ -812,13 +812,14 @@ func (p *lfPage) empty() bool {
 
 // saveLf saves a page as its project, or as a new one (copy).
 func (a *app) saveLf(p *lfPage, copy bool) {
-	name := strings.TrimSpace(p.saveName)
+	// The title is the project's name (an older page may only have a
+	// name to save under).
+	name := strings.TrimSpace(p.doc.Title)
 	if name == "" {
-		name = strings.TrimSpace(p.doc.Title)
+		name = strings.TrimSpace(p.saveName)
 	}
 	if name == "" {
-		a.toast(i18n.T("Name the project first."))
-		return
+		name = lfProjectName(p)
 	}
 	doc := p.doc
 	if doc.Title == "" {

@@ -38,10 +38,8 @@ func (a *app) audiobookPage(c *ui.Context) {
 			a.lfSection(c, p, "setup", i18n.T("Setup"), entryFor(p.doc.Model).Label, func() { a.lfSetup(c, p, locked) })
 			a.lfSection(c, p, "cast", i18n.T("Cast"), lfCount(len(bookCast(p))), func() { a.bookCastCard(c, p, locked) })
 			a.lfSection(c, p, "plan", i18n.T("Chapters"), lfCount(len(p.spec.Chapters)), func() { a.chapterPlan(c, p) })
-			a.lfSection(c, p, "lexicon", i18n.T("Pronunciation"), lfCount(len(p.doc.Lexicon)), func() { a.lexiconCard(c, p, locked) })
-			a.lfSection(c, p, "production", i18n.T("Production"), "", func() { a.lfProduction(c, p, locked) })
 			a.lfSection(c, p, "book", i18n.T("Cover & details"), "", func() { a.lfBookCard(c, p, locked) })
-			a.lfSection(c, p, "project", i18n.T("Project"), "", func() { a.lfProjectCard(c, p, locked) })
+			a.lfAdvanced(c, p, locked) // longform_advanced.go: production, stems, pronunciations
 		})
 	})
 	a.lfConfirm(c, p)
@@ -62,6 +60,7 @@ func (a *app) bookHeader(c *ui.Context, p *lfPage, locked, shown bool) {
 	if b.Tooltip(i18n.T("TXT, Markdown, EPUB or DOCX, up to 64 MB, split into chapters")).Disabled(locked).Clicked() {
 		a.importBook(p)
 	}
+	a.lfProjectMenu(c, p, locked)
 	p.panel.toggle(c.Key("ab-panel"), icons.PanelRight, shown, i18n.T("Show the inspector"), i18n.T("Hide the inspector"))
 	moreMenu(c.Key("ab-more"), "", func(m *ui.Menu) {
 		if m.Item(i18n.T("Load sample")).Disabled(locked).Chosen() {

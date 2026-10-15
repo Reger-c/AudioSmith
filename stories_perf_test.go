@@ -68,6 +68,9 @@ func TestStoryPerformanceUI(t *testing.T) {
 	kittenDoc(&p.doc)
 	p.open["scene"] = true
 	tt.Frame()
+	a.setAdvancedOpen("story", true)
+	tt.SetSize(1100, 1600)
+	tt.Frame()
 	for _, s := range []string{"Performance", "Directed delivery", "Pacing", "Dialogue (tight)", "Scene", "AI director", "Merge a character's lines", "Even out each voice"} {
 		if !tt.HasText(s) {
 			t.Errorf("no %q: %q", s, tt.Texts())
@@ -150,8 +153,8 @@ func TestStoryPerformanceUI(t *testing.T) {
 		t.Errorf("kokoro: %q", tt.Texts())
 	}
 
-	// Production: gaps follow the pacing; the fixed gap brings its slider back.
-	p.open["production"] = true
+	// Production (Advanced): gaps follow the pacing; the fixed gap brings its slider back.
+	p.open["scene"] = false
 	tt.Frame()
 	if !tt.HasText("Gaps between lines follow the pacing: Dialogue (tight) (Performance).") || tt.HasText("Gap between lines 400 ms") {
 		t.Errorf("production: %q", tt.Texts())

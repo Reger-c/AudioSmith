@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Simpler Stories, Audiobook and Dub
+- Stories and Audiobook: the inspector keeps Setup, Cast, Performance (Stories) or Chapters and Cover & details (Audiobook), and one Advanced section for the rest — language, merging and evening out voices, refinement and guidance, gaps, trimming, seed, a stem per character, a story's M4B with its cover and details, an audiobook's own pronunciations — with N changes and Restore recommended (your pacing stays).
+- The Project section moved to a Project ▾ menu in the header: Save (under the title — the title is the project's name), Save a copy, New, recent projects, All projects…
+- A story shows only what its model hears: personas, the scene, the AI director and line directions disappear on models that say lines as written, and a line's speed on models without one.
+- Dub: each step keeps its main choices; the rest folds into Advanced at the foot of the step (speakers and review, more languages and the translator's options, voice match, the voice model's parameters, a WAV's bit depth). The buttons the editor's ⋯ menu already had left the panels; Transcribe again… and Translate everything again joined that menu.
+
 ### A simpler Studio
 - The inspector shows what most takes need: the model, one Voice list (the model's speakers, your saved voices, a clip to clone, Manage voices…) and the speed. Everything else — style, reference transcript, length, refinement, guidance, expressiveness, sampling, seed, reading numbers, evening out the volume — is under Advanced, filled with the model's recommended settings; its header says "Recommended settings" or how many you changed, with Restore recommended inside. Advanced stays open or closed as you left it.
 - The Voice controls and Audio quality buttons are gone, and so are the WAV precision (takes are kept at 24-bit; choose the file's bit depth in Export audio), Preload / Unload (in the ⌘E engine switcher, now with Unload), the autoplay switch (Settings → Studio) and the steps slider (three tiers remain).

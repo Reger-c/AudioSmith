@@ -218,8 +218,10 @@ func (a *app) dubExportPanel(c *ui.Context) {
 		ui.Checkbox(c.Key("dx-dual"), &ex.dual, i18n.T("Dual subtitles (translated + original)"))
 	}
 	if ex.format == dub.ExportWAV {
-		ui.Field(c, i18n.T("Bit depth"), func() {
-			segmentedFit(c.Key("dx-bits"), &ex.bits, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float"))
+		a.dubAdvanced(c, dubStepExport, false, func() {
+			ui.Field(c, i18n.T("Bit depth"), func() {
+				segmentedFit(c.Key("dx-bits"), &ex.bits, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float"))
+			})
 		})
 	}
 	k := tok(t)

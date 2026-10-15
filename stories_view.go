@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
@@ -35,9 +36,7 @@ func (a *app) storiesPage(c *ui.Context) {
 			a.lfSection(c, p, "setup", i18n.T("Setup"), entryFor(p.doc.Model).Label, func() { a.lfSetup(c, p, locked) })
 			a.lfSection(c, p, "cast", i18n.T("Cast"), lfCount(len(p.doc.Cast)), func() { a.storyCast(c, p, locked) })
 			a.lfSection(c, p, "scene", i18n.X("story", "Performance"), personaSummary(&p.doc), func() { a.storyPerformance(c, p, locked) }) // stories_perf_view.go
-			a.lfSection(c, p, "production", i18n.T("Production"), "", func() { a.lfProduction(c, p, locked) })
-			a.lfSection(c, p, "book", i18n.T("Cover & details"), "", func() { a.lfBookCard(c, p, locked) })
-			a.lfSection(c, p, "project", i18n.T("Project"), "", func() { a.lfProjectCard(c, p, locked) })
+			a.lfAdvanced(c, p, locked)                                                                                                      // longform_advanced.go
 		})
 	})
 	a.lfConfirm(c, p)
@@ -71,6 +70,7 @@ func (a *app) storyHeader(c *ui.Context, p *lfPage, locked, shown bool) {
 			a.addLine(p, true)
 		}
 	})
+	a.lfProjectMenu(c, p, locked)
 	p.panel.toggle(c.Key("st-panel"), icons.PanelRight, shown, i18n.T("Show the inspector"), i18n.T("Hide the inspector"))
 	moreMenu(c.Key("st-more"), "", func(m *ui.Menu) {
 		if m.Item(i18n.T("Paste or import text")).Checked(a.reviewOpen(p)).Disabled(locked).Chosen() {
@@ -309,7 +309,9 @@ func (a *app) lineOptions(c *ui.Context, p *lfPage, l *services.StoryLine, locke
 	t := c.Theme()
 	e := entryFor(p.doc.Model)
 	ui.Column(c.Key("opts")).Gap(px(t, sp1)).Padding(px(t, sp1), 0, 0, px(t, 26)).Children(func() {
-		a.lineDirection(c, p, l, locked) // stories_perf_view.go
+		if storyContinuity(p.doc.Model) != services.ContinuityLines {
+			a.lineDirection(c, p, l, locked) // stories_perf_view.go: heard as an instruction or an intensity
+		}
 		formRow(c, "opt-voice", i18n.T("Voice of this line"), "", func() {
 			ui.Box(c).Width(px(t, 220)).Shrink(1).MinWidth(0).Children(func() {
 				a.lfVoiceSelect(c, "line-voice", &l.Voice, e, i18n.T("The character's voice"), locked)
@@ -322,14 +324,16 @@ func (a *app) lineOptions(c *ui.Context, p *lfPage, l *services.StoryLine, locke
 				sp = 1
 			}
 		}
-		formRow(c, "opt-speed", i18n.T("Speed %.2f×", sp), "", func() {
-			if snapped(ui.Slider(c.Key("line-speed"), &sp, 0.5, 2).Label(i18n.T("Speed")).Width(px(t, 160)).Shrink(1).Disabled(locked), &sp, 0.05).Changed() {
-				l.Speed = sp
-			}
-			if l.Speed > 0 && iconButton(c.Key("speed-reset"), icons.Restart, i18n.T("Reset")).Disabled(locked).Clicked() {
-				l.Speed = 0
-			}
-		})
+		if e.Has(catalog.CapSpeed) {
+			formRow(c, "opt-speed", i18n.T("Speed %.2f×", sp), "", func() {
+				if snapped(ui.Slider(c.Key("line-speed"), &sp, 0.5, 2).Label(i18n.T("Speed")).Width(px(t, 160)).Shrink(1).Disabled(locked), &sp, 0.05).Changed() {
+					l.Speed = sp
+				}
+				if l.Speed > 0 && iconButton(c.Key("speed-reset"), icons.Restart, i18n.T("Reset")).Disabled(locked).Clicked() {
+					l.Speed = 0
+				}
+			})
+		}
 		formRow(c, "opt-pause", i18n.T("Pause after (ms)"), "", func() {
 			ms := float64(l.PauseAfter)
 			if numberInput(c.Key("pause-after"), &ms, 0, 10000, 50, numOpts{Label: i18n.T("Pause after (ms)"), Width: px(t, 150), Disabled: locked}) {
@@ -377,6 +381,9 @@ func (a *app) storyCast(c *ui.Context, p *lfPage, locked bool) {
 				}
 			})
 			a.lfVoiceSelect(c, "voice", &m.Voice, e, i18n.T("Default voice"), locked)
+			if storyContinuity(p.doc.Model) != services.ContinuityInstruct {
+				return // a persona is an instruction: only models that take one hear it
+			}
 			ui.TextInput(c.Key("persona"), &m.Persona).Placeholder(i18n.T("Persona: age, temperament, way of speaking")).
 				Label(i18n.T("Persona of %s", m.Name)).Tooltip(i18n.T("How this character speaks, for models that take instructions: “seven, lively, coaxing”. Never spoken.")).Disabled(locked)
 		})
