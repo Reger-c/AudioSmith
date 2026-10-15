@@ -1,0 +1,107 @@
+{
+ "source": "thread #44 evidence pack release/model-eval/stt-llm/data/raw-llm-*.jsonl.gz (kind call_agent): replies of local models to the calls.go prompt at temperature 0.4; reply i answers the first i caller lines (reply 0 is the opening turn)",
+ "callers": {
+  "call-en": [
+   "Good evening, Luigi's, how can I help you?",
+   "Friday at seven... I'm sorry, we're fully booked at seven. I have seven forty-five.",
+   "Great. Any dietary requirements?",
+   "Perfect, see you Friday."
+  ],
+  "call-zh": [
+   "您好，阳光口腔，请问有什么可以帮您？",
+   "明天上午十点已经约满了，十点半可以吗？",
+   "好的，请问贵姓，联系电话是多少？",
+   "好的，已经给您登记了，明天见。"
+  ]
+ },
+ "runs": [
+  {
+   "model": "qwen3-4b-instruct-2507-4bit",
+   "call": "call-en",
+   "replies": [
+    "SAY: Hi, I'm calling on behalf of Sam to book a table for two this Friday at 7 pm.  \nSAY: Would 7 pm work, or would 7:30 or 8 be better?  \nOUTCOME: needs_you — Sam needs to confirm preferred time  \nHANGUP",
+    "SAY: We'd like to book a table for two this Friday at 7 pm, or if that's not available, 7:30 or 8.  \nSAY: Could you please confirm the availability?  \nOUTCOME: needs_you — Sam needs to confirm preferred time  \nHANGUP",
+    "SAY: Thank you for letting me know. Would 7:45 work for Sam?  \nOUTCOME: needs_you — Sam needs to confirm 7:45 or another time  \nHANGUP",
+    "SAY: Sam doesn't have any specific dietary requirements.  \nOUTCOME: needs_you — Sam needs to confirm preferred time  \nHANGUP",
+    "SAY: Thank you, Sam. We’ll see you Friday at 7:45.  \nOUTCOME: booked — Table confirmed for 7:45 Friday  \nHANGUP"
+   ]
+  },
+  {
+   "model": "qwen3-4b-instruct-2507-4bit",
+   "call": "call-zh",
+   "replies": [
+    "SAY: 您好，我是李明的AI助理，想为他预约明天上午的洗牙，时间希望在十点左右。  \nOUTCOME: needs_you — 需要确认李明是否同意预约明天上午十点的洗牙",
+    "SAY: 我们想为李明预约明天上午的洗牙，时间希望在十点左右，请问可以安排吗？  \nOUTCOME: needs_you — 需要确认李明是否同意预约明天上午十点的洗牙",
+    "SAY: 十点半可以吗？我们看看是否能为您调整。  \nOUTCOME: needs_you — 需要确认李明是否同意预约明天十点半的洗牙",
+    "SAY: 我是李明的AI助理，他的联系电话是13800001111。  \nOUTCOME: needs_you — 需要确认李明是否同意预约明天十点半的洗牙",
+    "SAY: 谢谢您，会转告李明。明天见。  \nOUTCOME: done — 已确认李明预约明天十点半洗牙  \nHANGUP"
+   ]
+  },
+  {
+   "model": "gemma-4-e2b-it-4bit",
+   "call": "call-en",
+   "replies": [
+    "SAY: Hello, I am calling to book a table for two this Friday at 7 pm under the name Sam.\nOUTCOME:\nHANGUP",
+    "SAY: I need to make a reservation for two people this Friday at seven o'clock.\nOUTCOME:\n",
+    "SAY: Thank you for letting me know. I will try for seven thirty or eight o'clock instead.\nOUTCOME:",
+    "SAY: No, there are no special dietary requirements for the booking.\nOUTCOME:",
+    "SAY: Thank you. I will confirm the booking details.\nOUTCOME:"
+   ]
+  },
+  {
+   "model": "gemma-4-e2b-it-4bit",
+   "call": "call-zh",
+   "replies": [
+    "SAY: 您好，我需要帮李明预约明天上午十点左右的洗牙。\nOUTCOME:\nHANGUP",
+    "SAY: 我需要预约明天上午十点左右的洗牙。\nOUTCOME:\nHANGUP",
+    "SAY: 十点半可以吗？\nOUTCOME: needs_you - Check availability for 10:30 AM for the cleaning.",
+    "SAY: 名字是李明，电话是13800001111。\nOUTCOME:\nHANGUP",
+    "SAY: 好的，谢谢您。再见。\nOUTCOME: done\nHANGUP"
+   ]
+  },
+  {
+   "model": "gemma-4-e4b-it-4bit",
+   "call": "call-en",
+   "replies": [
+    "SAY: I'm calling to book a table for two this Friday under the name Sam.\nOUTCOME: not_done - Waiting for availability",
+    "SAY: Do you have a table available for two this Friday at 7 pm?\nOUTCOME: not_done - Waiting for availability",
+    "SAY: Would 7:45 pm work for Sam?\nOUTCOME: not_done - Waiting for availability",
+    "SAY: No, there are no dietary requirements.\nOUTCOME: not_done - Waiting for availability",
+    "SAY: Thank you very much.\nOUTCOME: booked - Table confirmed for Friday at 7:45 pm\nHANGUP"
+   ]
+  },
+  {
+   "model": "gemma-4-e4b-it-4bit",
+   "call": "call-zh",
+   "replies": [
+    "SAY: 我想帮李先生预约明天的洗牙，请问还有空位吗？\nOUTCOME: -",
+    "SAY: 是的，我想帮李先生预约明天上午的洗牙，最好是十点左右。\nOUTCOME: -",
+    "SAY: 那我再看看有没有其他时间段的呢。\nOUTCOME: -",
+    "SAY: 我的名字是李明，电话是13800001111。\nOUTCOME: -",
+    "SAY: 好的，非常感谢您。再见。\nOUTCOME: booked-\nHANGUP"
+   ]
+  },
+  {
+   "model": "qwen3-1.7b-4bit",
+   "call": "call-en",
+   "replies": [
+    "SAY: Hi, this is an AI assistant calling on behalf of Sam.  \nOUTCOME: needs_you",
+    "SAY: I need to book a table for two at 7 pm this Friday.  \nOUTCOME: needs_you",
+    "SAY: I'll check for an available time.  \nOUTCOME: needs_you",
+    "SAY: Yes, both guests have dietary requirements.  \nOUTCOME: needs_you",
+    "SAY: Thank you, see you Friday.  \nOUTCOME: done  \nHANGUP"
+   ]
+  },
+  {
+   "model": "qwen3-1.7b-4bit",
+   "call": "call-zh",
+   "replies": [
+    "SAY: 我们在为您预约明天上午的洗牙，时间最好在十点左右。  \nOUTCOME: needs_you",
+    "SAY: 您好，我需要预约明天上午的洗牙，时间最好在十点左右，名字是李明，电话13800001111。  \nOUTCOME: needs_you",
+    "SAY: 明天上午十点已满，十点半可以吗？  \nOUTCOME: needs_you",
+    "SAY: 我叫李明，电话13800001111。  \nOUTCOME: done",
+    "HANGUP"
+   ]
+  }
+ ]
+}

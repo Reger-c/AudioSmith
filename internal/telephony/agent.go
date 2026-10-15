@@ -658,7 +658,11 @@ func (st *agentRun) turnDone(m agentMsg) {
 			st.event(AgentEvent{Kind: EvOutcome, Outcome: r.Outcome, Note: r.Note})
 		}
 		if r.Hangup && st.ending == "" {
-			st.ending = EndAgent
+			if ok, why := AllowHangup(st.hangupCheck(r)); ok {
+				st.ending = EndAgent
+			} else {
+				st.a.Logf("calls: ignored the model's HANGUP (%s)", why)
+			}
 		}
 		if !wasLocked {
 			st.failures = 0
@@ -684,6 +688,25 @@ func (st *agentRun) turnDone(m agentMsg) {
 		return
 	}
 	st.maybeReply()
+}
+
+// hangupCheck is the state a HANGUP request is judged on.
+func (st *agentRun) hangupCheck(r Reply) HangupCheck {
+	c := HangupCheck{Say: strings.Join(r.Say, " "), Outcome: st.res.Outcome, WrapUp: st.wrapUp}
+	lastAgent := ""
+	for _, l := range st.res.Transcript {
+		switch l.Speaker {
+		case SpeakerCaller:
+			c.CallerTurns++
+			c.LastCaller = l.Text
+		case SpeakerAgent:
+			lastAgent = l.Text
+		}
+	}
+	if strings.TrimSpace(c.Say) == "" {
+		c.Say = lastAgent // a bare HANGUP after an earlier goodbye
+	}
+	return c
 }
 
 // cancelTurn stops the turn in progress; clear also drops its queued

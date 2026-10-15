@@ -97,9 +97,15 @@ func SystemPrompt(b Brief) string {
 		fmt.Fprintf(&s, "- This was already said at the start of the call: %q. Do not repeat it unless asked.\n", b.Disclosure)
 	}
 	s.WriteString("\nWrite each reply as lines:\n")
-	s.WriteString("SAY: what you say next (always, except when you only end the call)\n")
-	s.WriteString("OUTCOME: booked | done | not_done | needs_you, then a dash and a short note for " + user + " — only once the result is clear\n")
-	s.WriteString("HANGUP — on its own line, after your goodbye, to end the call\n")
+	s.WriteString("SAY: what you say next, on one line (always, except when you only end the call)\n")
+	s.WriteString("OUTCOME: booked | done | not_done | needs_you, then a dash and a short note for " + user + " — only in your last reply, once the result is clear\n")
+	s.WriteString("HANGUP — on its own last line, only in your last reply, after you said goodbye and the other person has answered your request. Never in your first reply, never after a question, never while the conversation goes on.\n")
+	s.WriteString("\nMost replies are a single SAY line, for example:\n")
+	s.WriteString("SAY: <one or two short sentences>\n")
+	s.WriteString("\nOnly the last reply of the call adds the outcome and HANGUP, for example:\n")
+	s.WriteString("SAY: <thanks and goodbye>\n")
+	s.WriteString("OUTCOME: <booked | done | not_done | needs_you> — <short note>\n")
+	s.WriteString("HANGUP\n")
 	return s.String()
 }
 
@@ -286,13 +292,13 @@ func (p *ReplyParser) sentences(final bool) []string {
 		if i < 0 {
 			break
 		}
-		if s := cleanSpeech(text[:i]); s != "" {
+		if s := p.speech(text[:i]); s != "" {
 			out = append(out, s)
 		}
 		text = text[i:]
 	}
 	if final {
-		if s := cleanSpeech(text); s != "" {
+		if s := p.speech(text); s != "" {
 			out = append(out, s)
 		}
 		text = ""
@@ -301,6 +307,21 @@ func (p *ReplyParser) sentences(final bool) []string {
 	p.say.WriteString(text)
 	p.reply.Say = append(p.reply.Say, out...)
 	return out
+}
+
+// hangupTokenRE matches an end-of-call token written inside speech
+// ("Goodbye! HANGUP", "[END_CALL]"): upper case only, so that "hang up"
+// in a sentence stays.
+var hangupTokenRE = regexp.MustCompile(`[\[(<*]*\b(?:HANGUP|HANG UP|END_CALL|END CALL)\b[\])>*]*[.!。！]?`)
+
+// speech cleans a sentence to say; an end-of-call token in it is not
+// spoken but noted as a hangup request.
+func (p *ReplyParser) speech(s string) string {
+	if hangupTokenRE.MatchString(s) {
+		p.reply.Hangup = true
+		s = hangupTokenRE.ReplaceAllString(s, "")
+	}
+	return cleanSpeech(s)
 }
 
 // sentenceEnd is the index just after the first complete sentence of s
