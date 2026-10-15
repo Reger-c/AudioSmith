@@ -199,7 +199,7 @@ func (a *app) voiceEditor(c *ui.Context) {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, sp1)).Children(func() {
 				sectionHeading(c, v.Name).Tooltip(v.Name)
 				ui.Row(c).Gap(px(t, sp2)).Wrap().Children(func() { voiceBadges(c, v) })
-				truncText(c, voiceKindText(v.Kind)+" · "+i18n.DateTime(v.CreatedAt)).FontSize(px(t, fsCaption)).TextColor(k.Text2)
+				truncText(c, voiceKindLabel(v)+" · "+i18n.DateTime(v.CreatedAt)).FontSize(px(t, fsCaption)).TextColor(k.Text2)
 			})
 		})
 		a.editorAudio(c, v)

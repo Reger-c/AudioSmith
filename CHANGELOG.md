@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Portable voices, and simpler Design, Clone and Export
+- Make a portable copy of a model's built-in speaker or of a designed voice (My voices → ⋯, the Studio's voice list, or Make portable where a voice can't be used): its model says a ten-second line, evened out, and the take is saved as a cloned voice "<name> (approximate)" that every model that clones can speak with. It sounds close to the original, not the same, and says so.
+- When a voice can't be used with a model, the message says why and what to do (make a portable copy, or pick a model that designs).
+- Design shows only what the model can't express; what it will hear is behind ⓘ, and the seed moved into Details. Clone: style and language are under Advanced. Export audio: format, loudness, file name and extras in view; bit depth or bitrate, sample rate, channels and trimming under Advanced.
+
 ### Simpler Stories, Audiobook and Dub
 - Stories and Audiobook: the inspector keeps Setup, Cast, Performance (Stories) or Chapters and Cover & details (Audiobook), and one Advanced section for the rest — language, merging and evening out voices, refinement and guidance, gaps, trimming, seed, a stem per character, a story's M4B with its cover and details, an audiobook's own pronunciations — with N changes and Restore recommended (your pacing stays).
 - The Project section moved to a Project ▾ menu in the header: Save (under the title — the title is the project's name), Save a copy, New, recent projects, All projects…
