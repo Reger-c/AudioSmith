@@ -442,7 +442,7 @@ func (a *app) modelInfo(c *ui.Context, e catalog.Entry, m *modelState, loaded bo
 	if n := len(e.Languages); n > 0 {
 		facts = append(facts, i18n.N(n, "%d language", "%d languages", n))
 	}
-	if n := len(e.Voices); n > 0 {
+	if n := len(e.VoiceIDs()); n > 0 {
 		facts = append(facts, i18n.N(n, "%d voice", "%d voices", n))
 	}
 	if e.MinMemoryGB > 0 {

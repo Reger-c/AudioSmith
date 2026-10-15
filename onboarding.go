@@ -47,10 +47,24 @@ type modelPack struct {
 
 // modelPacks go from small to large; each holds the ones before it.
 var modelPacks = []modelPack{
-	{"fast", 0, []string{"kokoro-82m-bf16", catalog.DefaultDictation, catalog.DefaultVAD, catalog.DefaultWatermark}},
+	{"fast", 0, []string{packStudioModel, catalog.DefaultDictation, catalog.DefaultVAD, catalog.DefaultWatermark}},
 	{"balanced", 16, []string{"qwen3-tts-0.6b-base-8bit", catalog.DefaultSTT, catalog.DefaultAlign, catalog.DefaultEnhance}},
 	{"quality", 24, []string{"qwen3-tts-1.7b-base-8bit", "qwen3-tts-1.7b-voicedesign-4bit", catalog.DefaultSeparate, catalog.DefaultDiarize, catalog.DefaultLLM}},
 	{"max", 48, []string{"omnivoice-bf16", "mel-roformer-kim-vocal-2"}},
+}
+
+// packStudioModel stands for the Studio's model of a new user in the
+// interface's language (presets: Kokoro in English, Qwen3-TTS
+// CustomVoice in Chinese).
+const packStudioModel = "studio-default"
+
+// packModelID resolves a pack's model id.
+func packModelID(id string) string {
+	if id != packStudioModel {
+		return id
+	}
+	e, _ := catalog.Builtin().DefaultModel(catalog.WorkflowStudio, i18n.Locale(), false)
+	return e.ID
 }
 
 // packTitle and packAbout describe a pack.
@@ -71,7 +85,10 @@ func packTitle(id string) string {
 func packAbout(id string) string {
 	switch id {
 	case "fast":
-		return i18n.T("Kokoro's 54 voices in 9 languages, and dictation. Light on memory.")
+		if packModelID(packStudioModel) != "kokoro-82m-bf16" {
+			return i18n.T("Qwen3-TTS CustomVoice's named voices for Chinese and English, and dictation.")
+		}
+		return i18n.T("Kokoro's natural English voices, and dictation. Light on memory.")
 	case "balanced":
 		return i18n.T("Adds voice cloning (Qwen3-TTS 0.6B), Whisper transcription with word times, and noise removal.")
 	case "quality":
@@ -99,7 +116,7 @@ func packEntries(id string) []catalog.Entry {
 	var out []catalog.Entry
 	for _, p := range modelPacks {
 		for _, eid := range p.adds {
-			if e, ok := catalog.Builtin().ByID(eid); ok && !e.Hidden && !slices.ContainsFunc(out, func(x catalog.Entry) bool { return x.ID == e.ID }) {
+			if e, ok := catalog.Builtin().ByID(packModelID(eid)); ok && !e.Hidden && !slices.ContainsFunc(out, func(x catalog.Entry) bool { return x.ID == e.ID }) {
 				out = append(out, e)
 			}
 		}
@@ -228,14 +245,15 @@ func (a *app) skipOnboarding() {
 	a.updateSettings(func(s *settings.Settings) { s.Setup.Done = true })
 }
 
-// welcomeTake is the first sound: a Kokoro line in the UI's language.
+// welcomeTake is the first sound: a line in the UI's language by the
+// Studio's model for it (the fast pack's), in its recommended voice.
 func welcomeTake() core.Take {
-	t := core.Take{Text: i18n.T("Welcome to AudioSmith. This voice was made on your Mac, and nothing left it."), Voice: "af_heart", Speed: 1}
-	if i18n.Locale() == "zh-Hans" {
-		t.Voice = "zf_xiaobei"
-	}
-	if e, ok := catalog.Builtin().ByID("kokoro-82m-bf16"); ok {
+	t := core.Take{Text: i18n.T("Welcome to AudioSmith. This voice was made on your Mac, and nothing left it."), Speed: 1}
+	if e, ok := catalog.Builtin().ByID(packModelID(packStudioModel)); ok {
 		t.Model = e.Repo
+		if p, ok := catalog.PresetFor(e.ID); ok {
+			t.Voice = p.VoiceFor(i18n.Locale())
+		}
 	}
 	return t
 }
@@ -247,7 +265,7 @@ func (a *app) maybeFirstSound() {
 	if !a.firstSound || a.obOpen || a.licenceOpen {
 		return
 	}
-	e, ok := catalog.Builtin().ByID("kokoro-82m-bf16")
+	e, ok := catalog.Builtin().ByRepo(welcomeTake().Model)
 	if !ok {
 		a.firstSound = false
 		return

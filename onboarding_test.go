@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/hub"
+	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
@@ -40,7 +41,7 @@ func TestModelPacks(t *testing.T) {
 	// Every id is in the catalogue and listed: a renamed entry fails here.
 	for _, p := range modelPacks {
 		for _, id := range p.adds {
-			e, ok := catalog.Builtin().ByID(id)
+			e, ok := catalog.Builtin().ByID(packModelID(id))
 			if !ok || e.Hidden {
 				t.Errorf("pack %s: %s is not listed", p.id, id)
 			}
@@ -182,5 +183,27 @@ func TestOnboardingDownloadsAndMirror(t *testing.T) {
 	tt.Frame()
 	if !a.obOpen {
 		t.Error("not reopened")
+	}
+}
+
+// TestPacksFollowTheLanguage: the fast pack and the first sound use the
+// Studio's model for the interface's language (presets): Kokoro and
+// af_heart in English, Qwen3-TTS CustomVoice and Serena in Chinese
+// (Kokoro's Chinese voices are hidden).
+func TestPacksFollowTheLanguage(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLocale("en") })
+	for _, w := range []struct{ lang, model, voice string }{
+		{"en", "kokoro-82m-bf16", "af_heart"},
+		{"zh-Hans", "qwen3-tts-0.6b-customvoice-8bit", "Serena"},
+	} {
+		i18n.SetLocale(w.lang)
+		fast := packEntries("fast")
+		if !slices.ContainsFunc(fast, func(e catalog.Entry) bool { return e.ID == w.model }) {
+			t.Errorf("%s: fast pack %v", w.lang, fast)
+		}
+		e, _ := catalog.Builtin().ByID(w.model)
+		if tk := welcomeTake(); tk.Model != e.Repo || tk.Voice != w.voice {
+			t.Errorf("%s: welcome %s %q", w.lang, tk.Model, tk.Voice)
+		}
 	}
 }

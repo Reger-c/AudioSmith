@@ -314,8 +314,8 @@ func lfVoicesOf(voices []core.Voice, e catalog.Entry) []lfVoice {
 			out = append(out, lfVoice{v.ID, v.Name})
 		}
 	}
-	for _, v := range e.Voices {
-		out = append(out, lfVoice{services.SpeakerRef + v.ID, v.ID})
+	for _, id := range e.VoiceIDs() {
+		out = append(out, lfVoice{services.SpeakerRef + id, id})
 	}
 	return out
 }

@@ -363,8 +363,8 @@ func (a *app) dubVoiceChoices() []dubVoiceChoice {
 		}
 		out = append(out, dubVoiceChoice{dub.PresetPrefix + pr.ID, pr.Name.In(i18n.Locale()), i18n.T("Design presets")})
 	}
-	for _, v := range e.Voices {
-		out = append(out, dubVoiceChoice{dub.SpeakerPrefix + v.ID, v.ID, i18n.T("Model voices")})
+	for _, id := range e.VoiceIDs() {
+		out = append(out, dubVoiceChoice{dub.SpeakerPrefix + id, id, i18n.T("Model voices")})
 	}
 	return out
 }
