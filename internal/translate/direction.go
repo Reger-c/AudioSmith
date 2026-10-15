@@ -35,11 +35,16 @@ var Taxonomy = []string{
 	"whisper", "shout",
 }
 
+// DefaultDirectionBudget bounds a direction reading. Qwen3 4B takes
+// 4.6–5.6 s for its ~1k-token prompt on a busy Mac (thread #44 §4.4), too
+// close to the 6 s it had.
+const DefaultDirectionBudget = 10 * time.Second
+
 // Director parses directions, with the direction_parse skill when routed
 // and the keyword parser otherwise (or when the model fails).
 type Director struct {
 	Router *llm.Router   // nil: keywords only
-	Budget time.Duration // 0: 6 s
+	Budget time.Duration // 0: DefaultDirectionBudget
 }
 
 var directionSchema = func() *llm.Schema {
@@ -75,7 +80,7 @@ func (d *Director) Parse(ctx context.Context, note string) Direction {
 	}
 	budget := d.Budget
 	if budget <= 0 {
-		budget = 6 * time.Second
+		budget = DefaultDirectionBudget
 	}
 	bctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()

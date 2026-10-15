@@ -272,12 +272,18 @@ func (a *app) directionTool(c *ui.Context) {
 	ui.Field(c, i18n.T("Note"), func() {
 		ui.TextInput(c.Key("dir-note"), &d.note).Placeholder(i18n.T("warm and slow, like a bedtime story")).Label(i18n.T("Note"))
 	})
+	if strings.TrimSpace(d.note) != "" {
+		a.warmLocalLLM(llm.SkillDirectionParse) // a note is being written: load the model meanwhile (local_llm_warm.go)
+	}
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 		if primaryButton(c.Key("dir-run"), i18n.T("Read the note")).Disabled(d.busy || strings.TrimSpace(d.note) == "").Clicked() {
 			a.runDirection()
 		}
 		if d.busy {
 			ui.Spinner(c)
+			if d.warming {
+				caption(c, i18n.T("Loading model…"))
+			}
 		}
 		via := i18n.T("Keywords (set up a language model in Settings → Writing help for finer readings)")
 		if a.llmCan(llm.SkillDirectionParse) {

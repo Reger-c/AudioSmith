@@ -96,6 +96,7 @@ type toolRateFit struct {
 type toolDirection struct {
 	note    string
 	busy    bool
+	warming bool // the language model was not loaded when the note was read
 	res     *translate.Direction
 	preview *toolRun
 }
@@ -529,9 +530,14 @@ func (a *app) runDirection() {
 		return
 	}
 	router := a.llmRouter
+	budget := coachBudget
+	d.warming = a.localLLMCold(llm.SkillDirectionParse)
+	if d.warming {
+		budget = coldCoachBudget // the model still loads (local_llm_warm.go)
+	}
 	d.busy = true
 	a.async(func() {
-		res := (&translate.Director{Router: router}).Parse(context.Background(), note)
+		res := (&translate.Director{Router: router, Budget: budget}).Parse(context.Background(), note)
 		a.post(func() {
 			a.dir.busy = false
 			a.dir.res = &res
