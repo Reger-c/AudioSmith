@@ -44,7 +44,9 @@ func (a *app) localLLMEntry() catalog.Entry {
 	return e
 }
 
-// localLLMOptions are the language models offered on this Mac.
+// localLLMOptions are the language models offered on this Mac: Qwen3 4B
+// only since thread #46 (Gemma 4 E4B, E2B and Qwen3 1.7B were removed);
+// Settings then names it instead of offering a select.
 func localLLMOptions() []catalog.Entry {
 	return catalog.Builtin().ForTask(catalog.TaskLLM)
 }
@@ -173,7 +175,9 @@ func (a *app) localLLMSettings(c *ui.Context) {
 		desc = m.err
 	}
 	settingRowNote(c, "llm-engine", i18n.T("Language model"), desc, func() {
-		if ui.Select(c.Key("llm-engine-select"), &f.localPick, labels).Label(i18n.T("Language model")).Width(px(t, 260)).Changed() {
+		if len(opts) == 1 {
+			ui.Text(c, labels[0]).Tooltip(cur.TechnicalSummary()).SingleLine().Ellipsis("…").MinWidth(0)
+		} else if ui.Select(c.Key("llm-engine-select"), &f.localPick, labels).Label(i18n.T("Language model")).Width(px(t, 260)).Changed() {
 			e := opts[max(slices.Index(labels, f.localPick), 0)]
 			id := e.ID
 			if id == catalog.DefaultLLM {

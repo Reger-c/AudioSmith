@@ -333,7 +333,7 @@ func (a *app) dictationSettings(c *ui.Context) {
 
 	sectionTitle(c, i18n.T("Speech recognition"))
 	e := a.dictModel()
-	desc := i18n.T("Smaller models answer sooner.")
+	desc := i18n.T("%s answers fastest; %s covers the other languages.", modelRef(catalog.Builtin().STTFor("", false)), modelRef(catalog.Builtin().STTFor("", true)))
 	if ready, known := a.modelOnDisk(e); known && !ready {
 		desc = i18n.T("%s is not downloaded yet.", modelRef(e))
 	}

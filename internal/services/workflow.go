@@ -81,6 +81,20 @@ func (WorkflowChanged) Topic() string { return "workflow.changed" }
 type WorkflowSTT struct {
 	Model, Aligner string
 	Words          bool // the model times words itself
+	// Languages, Other and OtherWords: as DubModels' STTLanguages,
+	// OtherSTT and OtherWordTimes.
+	Languages  []string
+	Other      string
+	OtherWords bool
+}
+
+// For is the model for a language (BCP-47; "" = detected) and whether
+// it times words itself.
+func (m WorkflowSTT) For(lang string) (string, bool) {
+	if pickOther(m.Languages, m.Other, lang) {
+		return m.Other, m.OtherWords
+	}
+	return m.Model, m.Words
 }
 
 // WorkflowsConfig wires the workflow service. Store, Bus and Scheduler
@@ -465,7 +479,7 @@ func (s *Workflows) salt() workflow.Salt {
 	return func(n *workflow.Node) string {
 		switch n.Kind {
 		case workflow.KindTranscribe, workflow.KindConvert:
-			return stt.Model + "|" + stt.Aligner
+			return stt.Model + "|" + stt.Other + "|" + stt.Aligner
 		}
 		return ""
 	}

@@ -483,7 +483,8 @@ func (st *wfStep) speak(ctx context.Context, ri *workflow.RunItem, in *workflow.
 // times (the aligner when the model has none).
 func (st *wfStep) stt(ctx context.Context, item string, in *workflow.Value, language string) (core.Transcript, []string, error) {
 	m := st.s.cfg.STT()
-	if m.Model == "" {
+	model, wordTimes := m.For(language)
+	if model == "" {
 		return core.Transcript{}, nil, wfErr(WorkflowCodeNoSTT, "No speech-to-text model.")
 	}
 	speech := st.path("out/" + item + "/" + st.n.ID + ".16k.wav")
@@ -492,24 +493,29 @@ func (st *wfStep) stt(ctx context.Context, item string, in *workflow.Value, lang
 		return core.Transcript{}, nil, err
 	}
 	report := func(pg jobs.Progress) {}
-	tp := proto.TranscribeParams{Model: m.Model, Audio: speech, Language: language, Words: m.Words}
+	tp := proto.TranscribeParams{Model: model, Audio: speech, Language: language, Words: wordTimes}
 	var tr proto.TranscribeResult
-	if err := st.call(ctx, proto.MethodSTTTranscribe, m.Model, &tp, &tp.ModelPath, &tr, report); err != nil {
+	if err := st.call(ctx, proto.MethodSTTTranscribe, model, &tp, &tp.ModelPath, &tr, report); err != nil {
 		return core.Transcript{}, nil, err
 	}
+	if tr.AudioSeconds <= 0 {
+		tr.AudioSeconds = in.Seconds
+	}
+	CleanTranscription(model, &tr)
 	var warnings []string
 	words := segmentWords(tr.Segments)
 	if len(words) == 0 && m.Aligner != "" && strings.TrimSpace(tr.Text) != "" {
 		ap := proto.AlignParams{Model: m.Aligner, Audio: speech, Text: strings.TrimSpace(tr.Text), Language: dubFirst(tr.Language, language)}
-		var ar proto.AlignResult
-		err := st.call(ctx, proto.MethodSTTAlign, m.Aligner, &ap, &ap.ModelPath, &ar, report)
+		aw, err := alignWords(ctx, func(ap *proto.AlignParams, out *proto.AlignResult) error {
+			return st.call(ctx, proto.MethodSTTAlign, m.Aligner, ap, &ap.ModelPath, out, report)
+		}, ap, tr.Segments, tr.AudioSeconds)
 		switch {
 		case ctx.Err() != nil:
 			return core.Transcript{}, nil, ctx.Err()
 		case err != nil:
 			warnings = append(warnings, WarnNoWordTimes)
 		default:
-			words = ar.Words
+			words = aw
 		}
 	}
 	lang := tr.Language
@@ -521,7 +527,7 @@ func (st *wfStep) stt(ctx context.Context, item string, in *workflow.Value, lang
 		secs = tr.AudioSeconds
 	}
 	now := st.s.cfg.Now()
-	t := core.Transcript{ID: item, CreatedAt: now, UpdatedAt: now, Source: core.SourceFile, Model: m.Model, Language: lang,
+	t := core.Transcript{ID: item, CreatedAt: now, UpdatedAt: now, Source: core.SourceFile, Model: model, Language: lang,
 		Duration: secs, Raw: strings.TrimSpace(tr.Text), Seconds: tr.Seconds}
 	t.Segments = BuildSegments(tr.Segments, words, secs)
 	if strings.TrimSpace(t.Preferred()) == "" {

@@ -122,6 +122,11 @@ type fakeEngineCalls struct {
 	segments []proto.Segment
 	align    []proto.Word
 	alignErr *jobs.Error
+	// seconds is the audio's length stt.transcribe reports (0: 2 s);
+	// aligns are the stt.align calls, and when align is nil they time
+	// the text's words evenly over the audio they got.
+	seconds float64
+	aligns  []proto.AlignParams
 }
 
 func (f *fakeEngineCalls) executor(method string) jobs.Executor {
@@ -139,10 +144,32 @@ func (f *fakeEngineCalls) executor(method string) jobs.Executor {
 			return json.Marshal(proto.DecodeResult{AudioOut: proto.AudioOut{Output: p.Output.Path, SampleRate: p.SampleRate, Channels: 1, AudioSeconds: 2}})
 		case proto.MethodSTTTranscribe:
 			report(jobs.Progress{Stage: "transcribing", Fraction: 0.5})
-			return json.Marshal(proto.TranscribeResult{Model: "m", Text: f.text, Language: "en", Segments: f.segments, AudioSeconds: 2, Seconds: 0.2})
+			secs := f.seconds
+			if secs == 0 {
+				secs = 2
+			}
+			return json.Marshal(proto.TranscribeResult{Model: "m", Text: f.text, Language: "en", Segments: f.segments, AudioSeconds: secs, Seconds: 0.2})
 		case proto.MethodSTTAlign:
 			if f.alignErr != nil {
 				return nil, f.alignErr
+			}
+			var p proto.AlignParams
+			json.Unmarshal(job.Params, &p)
+			f.mu.Lock()
+			f.aligns = append(f.aligns, p)
+			f.mu.Unlock()
+			if f.align == nil {
+				b, _, err := wav.ReadFile(p.Audio)
+				if err != nil {
+					return nil, err
+				}
+				ws := strings.Fields(p.Text)
+				var out []proto.Word
+				for i, w := range ws {
+					d := b.Seconds() / float64(len(ws))
+					out = append(out, proto.Word{Text: w, Start: float64(i) * d, End: float64(i+1) * d})
+				}
+				return json.Marshal(proto.AlignResult{Model: "a", Words: out, AudioSeconds: b.Seconds()})
 			}
 			return json.Marshal(proto.AlignResult{Model: "a", Words: f.align, AudioSeconds: 2})
 		}

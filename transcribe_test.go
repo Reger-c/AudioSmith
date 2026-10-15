@@ -40,7 +40,7 @@ func TestTranscribeFileAccurate(t *testing.T) {
 	a, eng, tt := m.a, m.eng, m.tt
 	a.navigate("/transcripts")
 	tt.Frame()
-	if !tt.HasText("No transcripts yet") || !tt.HasText("Drop audio or video here, or click to choose") || !tt.HasText("Multilingual transcription + word timings") {
+	if !tt.HasText("No transcripts yet") || !tt.HasText("Drop audio or video here, or click to choose") || !tt.HasText("Chinese & English transcription + word timings") {
 		t.Fatalf("empty page: %q", tt.Texts())
 	}
 	a.updateSettings(func(s *settings.Settings) { s.Transcribe.Language = "en" })
@@ -51,7 +51,7 @@ func TestTranscribeFileAccurate(t *testing.T) {
 		t.Fatalf("refused: %s", a.trErr)
 	}
 	r, req := transcribeReq(t, eng)
-	if req.Model != whisperRepo || req.Aligner != alignerRepo || req.Mode != settings.TranscribeAccurate || req.Language != "en" ||
+	if req.Model != qwenASRRepo || req.Aligner != alignerRepo || req.Mode != settings.TranscribeAccurate || req.Language != "en" ||
 		req.Input != src || req.Title != "interview.m4a" || r.Spec.Owner != services.TranscriptOwner+req.ID {
 		t.Fatalf("request %+v", req)
 	}
@@ -198,14 +198,14 @@ func TestTranscribeErrors(t *testing.T) {
 	a.navigate("/transcripts")
 	e := removeModel(t, a, catalog.DefaultSTT)
 	tt.Frame()
-	if !tt.HasText("Transcribing needs “Multilingual transcription”, which is not downloaded yet.") {
+	if !tt.HasText("Transcribing needs “Chinese & English transcription”, which is not downloaded yet.") {
 		t.Fatalf("banner: %q", tt.Texts())
 	}
 	src := filepath.Join(t.TempDir(), "a.wav")
 	writeTestWAV(t, src, 16000, 1)
 	a.transcribeFile(src)
 	tt.Frame()
-	if a.trJob != nil || a.trNeed == nil || a.trNeed.ID != e.ID || !tt.HasText("Transcription failed") || !tt.HasText("Download “Multilingual transcription”") {
+	if a.trJob != nil || a.trNeed == nil || a.trNeed.ID != e.ID || !tt.HasText("Transcription failed") || !tt.HasText("Download “Chinese & English transcription”") {
 		t.Fatalf("refused: %q", tt.Texts())
 	}
 	tt.Click("Dismiss")

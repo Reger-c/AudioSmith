@@ -48,9 +48,9 @@ type modelPack struct {
 // modelPacks go from small to large; each holds the ones before it.
 var modelPacks = []modelPack{
 	{"fast", 0, []string{packStudioModel, catalog.DefaultDictation, catalog.DefaultVAD, catalog.DefaultWatermark}},
-	{"balanced", 16, []string{"qwen3-tts-0.6b-base-8bit", catalog.DefaultSTT, catalog.DefaultAlign, catalog.DefaultEnhance}},
+	{"balanced", 16, []string{"qwen3-tts-0.6b-base-8bit", catalog.DefaultAlign, catalog.DefaultEnhance}},
 	{"quality", 24, []string{"qwen3-tts-1.7b-base-8bit", "qwen3-tts-1.7b-voicedesign-4bit", catalog.DefaultSeparate, catalog.DefaultDiarize, catalog.DefaultLLM}},
-	{"max", 48, []string{"omnivoice-bf16", "mel-roformer-kim-vocal-2"}},
+	{"max", 48, []string{"omnivoice-bf16", catalog.FallbackSTT}},
 }
 
 // packStudioModel stands for the Studio's model of a new user in the
@@ -90,11 +90,11 @@ func packAbout(id string) string {
 		}
 		return i18n.T("Natural English voices, and dictation. Light on memory.")
 	case "balanced":
-		return i18n.T("Adds voice cloning, multilingual transcription with word times, and noise removal.")
+		return i18n.T("Adds voice cloning, word times for transcripts, and noise removal.")
 	case "quality":
 		return i18n.T("Adds high-fidelity cloning and voice design, dubbing (voice separation, speakers) and a local writing assistant.")
 	case "max":
-		return i18n.T("Adds a multilingual model (600+ languages, non-commercial licence) and the finest voice separation.")
+		return i18n.T("Adds a multilingual voice model (600+ languages, non-commercial licence) and transcription of 99 languages.")
 	}
 	return ""
 }

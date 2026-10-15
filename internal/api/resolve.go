@@ -116,26 +116,19 @@ func defaultTTS(st settings.Settings) catalog.Entry {
 	return catalog.Entry{}
 }
 
-// fastSTT is the Fast mode's model when Settings → Transcribe names none.
-const fastSTT = "qwen3-asr-0.6b-4bit"
-
-// defaultSTT is Transcribe's Accurate model (fast: its Fast model).
-func defaultSTT(st settings.Settings, fast bool) catalog.Entry {
+// defaultSTT is Transcribe's Accurate model (fast: its Fast model) when
+// Settings → Transcribe names one, else the default for language (""
+// detects it): Qwen3-ASR, or Whisper for a language Qwen3-ASR does not
+// know (catalog.STTFor, thread #46).
+func defaultSTT(st settings.Settings, fast bool, language string) catalog.Entry {
 	id := st.Transcribe.AccurateModel
 	if fast {
 		id = st.Transcribe.FastModel
-		if id == "" {
-			id = fastSTT
-		}
 	}
-	if id == "" {
-		id = catalog.DefaultSTT
-	}
-	if e, ok := catalog.Builtin().ByID(id); ok {
+	if e, ok := catalog.Builtin().ByID(id); ok && slices.Contains(e.Tasks, catalog.TaskSTT) {
 		return e
 	}
-	e, _ := catalog.Builtin().ByID(catalog.DefaultSTT)
-	return e
+	return catalog.Builtin().STTFor(language, false)
 }
 
 // voiceRef is a request's voice: a string, or OpenAI's {"id": "…"}.
@@ -312,15 +305,21 @@ func apiCode(err error) string {
 	return ""
 }
 
-// resolveSTT picks the speech-to-text model.
-func (s *Server) resolveSTT(model string) (catalog.Entry, error) {
+// resolveSTT picks the speech-to-text model for speech in language (""
+// detects it): OpenAI's names and "" the default, a catalogue model by
+// any of its names, a removed one (Parakeet) the default for the
+// language (rep says so).
+func (s *Server) resolveSTT(model, language string) (catalog.Entry, *Replacement, error) {
 	st := s.b.Settings()
 	if isSTTAlias(model) {
-		return defaultSTT(st, fastSTTAlias(model)), nil
+		return defaultSTT(st, fastSTTAlias(model), language), nil, nil
 	}
 	e, ok := findEntry(model, catalog.TaskSTT)
-	if !ok {
-		return e, errNotFound(CodeModelNotFound, "There is no speech-to-text model %q: GET /v1/models lists them.", model)
+	if ok {
+		return e, nil, nil
 	}
-	return e, nil
+	if e, r, ok := catalog.Builtin().ReplaceTask(model, catalog.TaskSTT, language); ok {
+		return e, &Replacement{Model: r.ID, ReplacedBy: e.ID, Warning: r.Warning(e)}, nil
+	}
+	return e, nil, errNotFound(CodeModelNotFound, "There is no speech-to-text model %q: GET /v1/models lists them.", model)
 }

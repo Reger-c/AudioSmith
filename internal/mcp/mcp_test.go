@@ -376,12 +376,17 @@ func TestTools(t *testing.T) {
 	if res.IsError || !strings.Contains(textOf(res), `"text": "hello world"`) || !strings.Contains(textOf(res), `"words"`) {
 		t.Fatalf("transcribe: %s", textOf(res))
 	}
+	// A removed speech-to-text model (thread #46): Qwen3-ASR answers.
+	res = call(t, cs, "transcribe", map[string]any{"path": ref, "model": "parakeet-tdt-0.6b-v3"})
+	if res.IsError || !strings.Contains(textOf(res), `"replaced_by": "qwen3-asr-0.6b-4bit"`) || !strings.Contains(textOf(res), "Parakeet TDT 0.6B v3 was removed") {
+		t.Fatalf("transcribe on Parakeet: %s", textOf(res))
+	}
 	res = call(t, cs, "list_voices", nil)
 	if !strings.Contains(textOf(res), `"Me"`) || !strings.Contains(textOf(res), "alloy") {
 		t.Fatalf("voices: %s", textOf(res))
 	}
 	res = call(t, cs, "list_models", map[string]any{"task": "stt"})
-	if strings.Contains(textOf(res), "kokoro") || !strings.Contains(textOf(res), "whisper") {
+	if strings.Contains(textOf(res), "kokoro") || !strings.Contains(textOf(res), "whisper") || !strings.Contains(textOf(res), "qwen3-asr") || strings.Contains(textOf(res), "parakeet") {
 		t.Fatalf("models: %s", textOf(res))
 	}
 	res = call(t, cs, "list_languages", map[string]any{"model": "kokoro-82m-bf16"})

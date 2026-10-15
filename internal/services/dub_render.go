@@ -715,7 +715,8 @@ func (s *Dubs) qc(ctx context.Context, sc *stageCtx) error {
 		return stageErr(proto.CodeModelNotDownloaded, "No speech-to-text model.")
 	}
 	t := p.Track(l)
-	rep := &dub.QCReport{At: s.cfg.Now(), Keys: dub.QCKeys{}, Model: m.STT}
+	trackSTT, _ := m.STTFor(baseLang(l))
+	rep := &dub.QCReport{At: s.cfg.Now(), Keys: dub.QCKeys{}, Model: trackSTT}
 	type placed struct {
 		id         string
 		start, end float64
@@ -731,9 +732,11 @@ func (s *Dubs) qc(ctx context.Context, sc *stageCtx) error {
 		seg, _ := p.Segment(id)
 		r := t.Lines[id]
 		sc.progress("transcribing", float64(n)/float64(max(len(ids), 1)), fmt.Sprintf("%d/%d", n+1, len(ids)))
-		tp := proto.TranscribeParams{Model: m.STT, Audio: sc.path(r.File), Language: baseLang(dub.LangFor(*seg, l))}
+		lineLang := baseLang(dub.LangFor(*seg, l))
+		stt, _ := m.STTFor(lineLang)
+		tp := proto.TranscribeParams{Model: stt, Audio: sc.path(r.File), Language: lineLang}
 		var tr proto.TranscribeResult
-		if err := sc.call(ctx, proto.MethodSTTTranscribe, m.STT, &tp, &tp.ModelPath, &tr, nil); err != nil {
+		if err := sc.call(ctx, proto.MethodSTTTranscribe, stt, &tp, &tp.ModelPath, &tr, nil); err != nil {
 			return err
 		}
 		q := dub.CheckLine(id, r.Text, tr.Text, r.Length, seg.Duration())

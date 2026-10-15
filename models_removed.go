@@ -1,7 +1,8 @@
 package main
 
 // Models AudioSmith removed (thread #43: KittenTTS, MOSS-TTS-Nano,
-// Chatterbox multilingual, Marvis, Soprano, Pocket TTS). The catalogue
+// Chatterbox multilingual, Marvis, Soprano, Pocket TTS; thread #46:
+// Parakeet, Mel-RoFormer, Gemma 4 E4B and E2B, Qwen3 1.7B). The catalogue
 // keeps an alias table (catalog.Removed): whatever still names one of
 // them — the Studio's draft, a story or audiobook, a dub, a workflow, the
 // settings, a history recipe, an API or MCP call — uses its replacement,
@@ -41,9 +42,24 @@ type removedState struct {
 }
 
 // replaceRemoved maps ref (a repo, id or label) when it names a removed
-// model: the entry to use instead (clone: the work clones voices).
+// speech model: the entry to use instead (clone: the work clones voices).
 func replaceRemoved(ref string, clone bool) (catalog.Entry, catalog.Removed, bool) {
 	return catalog.Builtin().Replace(ref, clone)
+}
+
+// replaceRemovedAny maps ref when it names a removed model of any task:
+// speech models as replaceRemoved (without cloning), speech-to-text ones
+// to the default for detected speech, the others to their replacement.
+func replaceRemovedAny(ref string) (catalog.Entry, catalog.Removed, bool) {
+	c := catalog.Builtin()
+	r, ok := c.RemovedModel(ref)
+	if !ok {
+		return catalog.Entry{}, catalog.Removed{}, false
+	}
+	if r.Did() == catalog.TaskTTS {
+		return c.Replace(ref, false)
+	}
+	return c.ReplaceTask(ref, r.Did(), "")
 }
 
 // noteRemoved tells the user, once per model while the app runs, that r
@@ -209,9 +225,12 @@ func replacementLanguage(e catalog.Entry, language string) string {
 
 // replaceRemovedSettings moves the settings off removed models: the
 // Studio's default, the dubbing default, the AI calls' model and the
-// agents' bindings; the Studio's changes for a removed model go. It
-// returns the models replaced, each with the first model that replaced
-// it.
+// agents' bindings; the Studio's changes for a removed model go. Speech
+// recognition (dictation, Transcribe's modes, calls) and the local
+// language model go back to their defaults (""), which follow the
+// language (Qwen3-ASR, or Whisper; thread #46); routes of writing help
+// that named a removed model use the provider's default. It returns the
+// models replaced, each with the first model that replaced it.
 func replaceRemovedSettings(s *settings.Settings) []removedPair {
 	var out []removedPair
 	note := func(r catalog.Removed, by catalog.Entry) {
@@ -240,6 +259,37 @@ func replaceRemovedSettings(s *settings.Settings) []removedPair {
 			note(r, by)
 		}
 	}
+	c := catalog.Builtin()
+	reset := func(ref *string, task catalog.Task, language string) {
+		if by, r, ok := c.ReplaceTask(*ref, task, language); ok {
+			*ref = ""
+			note(r, by)
+		}
+	}
+	reset(&s.Dictation.Model, catalog.TaskSTT, s.Dictation.Language)
+	reset(&s.Transcribe.FastModel, catalog.TaskSTT, s.Transcribe.Language)
+	reset(&s.Transcribe.AccurateModel, catalog.TaskSTT, s.Transcribe.Language)
+	reset(&s.Calls.STTModel, catalog.TaskSTT, "")
+	reset(&s.LLM.LocalModel, catalog.TaskLLM, "")
+	routes := func(rs []settings.LLMRoute) []settings.LLMRoute {
+		if !slices.ContainsFunc(rs, func(r settings.LLMRoute) bool {
+			_, ok := c.RemovedModel(r.Model)
+			return ok && r.Provider == localProvider
+		}) {
+			return rs
+		}
+		rs = slices.Clone(rs)
+		for i := range rs {
+			if rs[i].Provider == localProvider {
+				reset(&rs[i].Model, catalog.TaskLLM, "")
+			}
+		}
+		return rs
+	}
+	s.LLM.Default = routes(s.LLM.Default)
+	for k, v := range s.LLM.Skills {
+		s.LLM.Skills[k] = routes(v)
+	}
 	return out
 }
 
@@ -255,6 +305,7 @@ func (a *app) migrateRemovedSettings() {
 	probe := a.prefs
 	probe.Studio.Overrides = maps.Clone(probe.Studio.Overrides)
 	probe.API.Bindings = slices.Clone(probe.API.Bindings)
+	probe.LLM.Skills = maps.Clone(probe.LLM.Skills)
 	rs := replaceRemovedSettings(&probe)
 	if len(rs) == 0 {
 		return
@@ -304,6 +355,25 @@ func (a *app) removedBytes() int64 {
 		n += l.Bytes
 	}
 	return n
+}
+
+// removedKind is the Models page's tab (modelKinds) of a removed model.
+func removedKind(r catalog.Removed) int {
+	return modelKindOf(catalog.Entry{Tasks: []catalog.Task{r.Did()}})
+}
+
+// removedShows reports whether the clean-up row shows on tab kind: on
+// All, and on the tab of a removed model with files on disk.
+func (a *app) removedShows(kind int) bool {
+	if kind == 0 {
+		return true
+	}
+	for _, r := range catalog.Builtin().Removed {
+		if removedKind(r) == kind && slices.ContainsFunc(a.removedLeft, func(l hub.Leftover) bool { return slices.Contains(r.Repos(), l.Repo) }) {
+			return true
+		}
+	}
+	return false
 }
 
 // removedOnDisk are the removed models with files on disk, and the bytes

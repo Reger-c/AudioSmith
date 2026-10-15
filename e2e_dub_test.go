@@ -26,7 +26,7 @@ import (
 
 // TestDubEngine checks the M4 engine methods on a Mac on a 30 s clip of
 // two speakers (macOS voices) over synthetic music:
-//   - separate.run (HTDemucs; Mel-RoFormer too unless AUDIOSMITH_DUB_FAST):
+//   - separate.run (HTDemucs; Mel-RoFormer was removed in thread #46):
 //     the vocals stem must be much closer to the speech than the mix is
 //     (scale-invariant SDR), the background close to the music;
 //   - diarize.run (Sortformer): two speakers, turns matching who spoke;
@@ -168,9 +168,6 @@ func TestDubEngine(t *testing.T) {
 	base := siSDR(speechMono, mixMono)
 	t.Logf("mix vs speech: %.1f dB; mix vs music %.1f dB", base, siSDR(musicMono, mixMono))
 	sepModels := []string{catalog.DefaultSeparate}
-	if os.Getenv("AUDIOSMITH_DUB_FAST") == "" {
-		sepModels = append(sepModels, "mel-roformer-kim-vocal-2")
-	}
 	var vocalsPath string
 	for _, id := range sepModels {
 		e, snap := ensure(id)

@@ -26,6 +26,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/services"
 )
 
 // refRate is the sample rate references are kept at (mono, 16-bit WAV).
@@ -208,7 +209,8 @@ var errNoASR = errors.New("no speech-to-text model is installed")
 
 // transcribeClip asks the engine for what a WAV says; lang "" detects it.
 func (a *app) transcribeClip(path, lang string, then func(string, error)) {
-	a.engineJob(proto.MethodSTTTranscribe, proto.TranscribeParams{Model: defaultModel(catalog.DefaultSTT), Audio: path, Language: lang},
+	model := sttEntry("", lang).Repo // Qwen3-ASR, or Whisper for a language it does not know
+	a.engineJob(proto.MethodSTTTranscribe, proto.TranscribeParams{Model: model, Audio: path, Language: lang},
 		func(raw json.RawMessage, err error) {
 			var je *jobs.Error
 			if errors.As(err, &je) && je.Code == proto.CodeModelNotDownloaded {
@@ -223,6 +225,7 @@ func (a *app) transcribeClip(path, lang string, then func(string, error)) {
 				then("", err)
 				return
 			}
+			services.CleanTranscription(model, &res)
 			then(strings.TrimSpace(res.Text), nil)
 		})
 }

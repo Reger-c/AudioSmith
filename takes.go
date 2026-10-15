@@ -268,7 +268,7 @@ func entryFor(repo string) catalog.Entry {
 	if e, ok := catalog.Builtin().ByRepo(repo); ok {
 		return e
 	}
-	if e, _, ok := replaceRemoved(repo, false); ok {
+	if e, _, ok := replaceRemovedAny(repo); ok {
 		return e
 	}
 	return catalog.Custom(repo)

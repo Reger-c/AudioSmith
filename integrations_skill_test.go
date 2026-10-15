@@ -167,6 +167,10 @@ func TestAgentSkill(t *testing.T) {
 				if !strings.Contains(ref, "replaced_by") {
 					t.Errorf("%s: the reference does not say removed models are replaced", lang)
 				}
+				// Speech to text: Qwen3-ASR, then Whisper (thread #46).
+				if !strings.Contains(ref, "`"+catalog.DefaultSTT+"`") || !strings.Contains(ref, "`"+catalog.FallbackSTT+"`") {
+					t.Errorf("%s: the reference does not name the speech-to-text defaults", lang)
+				}
 				for _, r := range catalog.Builtin().Removed {
 					for _, name := range []string{r.ID, r.Repo, removedName(r)} {
 						if name != "" && (strings.Contains(ref, name) || strings.Contains(body, name)) {

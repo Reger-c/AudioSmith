@@ -435,6 +435,10 @@ func (s *Server) v1Transcribe(w http.ResponseWriter, r *http.Request, translateI
 		writeError(w, err)
 		return
 	}
+	if r := tr.Replaced; r != nil {
+		w.Header().Set("X-AudioSmith-Replaced-By", r.ReplacedBy)
+		w.Header().Set("X-AudioSmith-Warning", r.Warning)
+	}
 	t := tr.Transcript
 	task := "transcribe"
 	if translateIt {
@@ -513,7 +517,7 @@ func (s *Server) openAIModels(ctx context.Context) ([]openAIModel, error) {
 	if err != nil {
 		return nil, err
 	}
-	tts, stt, fast := defaultTTS(st), defaultSTT(st, false), defaultSTT(st, true)
+	tts, stt, fast := defaultTTS(st), defaultSTT(st, false, ""), defaultSTT(st, true, "")
 	var out []openAIModel
 	for _, a := range ttsAliases {
 		out = append(out, openAIModel{ID: a, Object: "model", OwnedBy: "audiosmith",

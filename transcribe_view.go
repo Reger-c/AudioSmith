@@ -85,7 +85,7 @@ func (a *app) transcribeToolbar(c *ui.Context, shown bool) {
 	busy := a.trJob != nil || a.trMic.phase != ""
 	e := a.trModel(a.trMode == 0)
 	mode := ui.Segmented(c.Key("tr-mode"), &a.trMode, i18n.T("Fast"), i18n.T("Accurate")).Label(i18n.T("Transcription quality")).Disabled(busy).Shrink(0).
-		Tooltip(i18n.T("Fast uses a smaller model without word timings. Accurate uses the best model, then times every word."))
+		Tooltip(i18n.T("Fast gives the text without word timings. Accurate also times every word, for subtitles and editing."))
 	if mode.Changed() {
 		m := settings.TranscribeAccurate
 		if a.trMode == 0 {
@@ -145,8 +145,9 @@ func (a *app) trLanguageButton(c *ui.Context, e catalog.Entry) {
 		if q := strings.TrimSpace(p.query); q != "" {
 			langs = lang.Search(q)
 		}
-		opts := lang.Annotate(langs, sttLanguages(e))
-		if len(sttLanguages(e)) == 0 {
+		supported := a.trLanguages(a.trMode == 0)
+		opts := lang.Annotate(langs, supported)
+		if len(supported) == 0 {
 			for i := range opts {
 				opts[i].Supported = true
 			}

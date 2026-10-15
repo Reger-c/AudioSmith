@@ -320,8 +320,8 @@ func (a *app) modelsPage(c *ui.Context) {
 	ui.Scroll(c.Key("models-scroll-" + itoa(a.modelsKind))).Grow(1).Children(func() {
 		ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp2)).MaxWidth(px(t, 880)).Children(func() {
 			find := strings.TrimSpace(a.modelsFind)
-			if a.modelsKind <= 1 && find == "" {
-				a.removedRow(c) // removed speech models still on disk
+			if find == "" && a.removedShows(a.modelsKind) {
+				a.removedRow(c) // removed models still on disk
 			}
 			n := 0
 			for _, e := range entries {

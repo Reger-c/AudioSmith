@@ -203,7 +203,9 @@ func (a *app) closeDubs() {
 
 // dubModels are the pipeline's models: the catalogue's defaults, and
 // the first diarization and separation entries once the catalogue has
-// them (thread #14).
+// them (thread #14). Speech to text is Qwen3-ASR, and Whisper for the
+// languages Qwen3-ASR does not know (thread #46), unless Settings →
+// Transcribe names an Accurate model: that one for every language.
 func dubModels(lib *library) services.DubModels {
 	c := catalog.Builtin()
 	repo := func(id string) string {
@@ -218,16 +220,23 @@ func dubModels(lib *library) services.DubModels {
 		}
 		return ""
 	}
-	m := services.DubModels{STT: repo(catalog.DefaultSTT), Align: repo(catalog.DefaultAlign), Enhance: repo(catalog.DefaultEnhance),
+	m := services.DubModels{Align: repo(catalog.DefaultAlign), Enhance: repo(catalog.DefaultEnhance),
 		Diarize: first(catalog.TaskDiarize), Separate: first(catalog.TaskSeparate)}
 	if e, ok := c.ByID(catalog.DefaultSTT); ok {
-		m.WordTimes = e.Has(catalog.CapWordTimes)
+		m.STT, m.WordTimes = e.Repo, e.Has(catalog.CapWordTimes)
+		for _, l := range e.Languages {
+			m.STTLanguages = append(m.STTLanguages, catalog.BaseLanguage(l.Code))
+		}
+	}
+	if e, ok := c.ByID(catalog.FallbackSTT); ok && m.STTLanguages != nil {
+		m.OtherSTT, m.OtherWordTimes = e.Repo, e.Has(catalog.CapWordTimes)
 	}
 	if lib != nil {
 		s := lib.settings.Get()
 		if s.Transcribe.AccurateModel != "" {
-			if e, ok := c.ByID(s.Transcribe.AccurateModel); ok {
+			if e, ok := c.ByID(s.Transcribe.AccurateModel); ok && slices.Contains(e.Tasks, catalog.TaskSTT) {
 				m.STT, m.WordTimes = e.Repo, e.Has(catalog.CapWordTimes)
+				m.STTLanguages, m.OtherSTT, m.OtherWordTimes = nil, "", false
 			}
 		}
 	}

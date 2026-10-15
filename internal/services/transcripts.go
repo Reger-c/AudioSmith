@@ -267,7 +267,7 @@ func (s *Transcripts) run(ctx context.Context, job jobs.Job, req TranscribeReque
 	}
 
 	// Speech to text.
-	tp := proto.TranscribeParams{Model: req.Model, Audio: audio, Language: req.Language, Words: req.Words, Prompt: req.Prompt}
+	tp := proto.TranscribeParams{Model: req.Model, Audio: audio, Language: req.Language, Words: req.Words, Prompt: ASRPrompt(req.Model, req.Prompt, seconds)}
 	var tr proto.TranscribeResult
 	if err := s.call(ctx, job, proto.KindFor(req.Role, proto.MethodSTTTranscribe), req.Model, &tp, &tp.ModelPath, &tr, func(p jobs.Progress) {
 		if p.Stage == "" {
@@ -284,16 +284,20 @@ func (s *Transcripts) run(ctx context.Context, job jobs.Job, req TranscribeReque
 	}
 	if tr.AudioSeconds > 0 {
 		seconds = tr.AudioSeconds
+	} else {
+		tr.AudioSeconds = seconds
 	}
+	CleanTranscription(req.Model, &tr)
 	words := segmentWords(tr.Segments)
 	aligner := ""
 	if req.Aligner != "" && len(words) == 0 && strings.TrimSpace(tr.Text) != "" {
 		ap := proto.AlignParams{Model: req.Aligner, Audio: audio, Text: strings.TrimSpace(tr.Text), Language: lang}
-		var ar proto.AlignResult
-		err := s.call(ctx, job, proto.MethodSTTAlign, req.Aligner, &ap, &ap.ModelPath, &ar, func(p jobs.Progress) {
-			p.Stage = "aligning"
-			report(p)
-		})
+		aw, err := alignWords(ctx, func(p *proto.AlignParams, out *proto.AlignResult) error {
+			return s.call(ctx, job, proto.MethodSTTAlign, req.Aligner, p, &p.ModelPath, out, func(p jobs.Progress) {
+				p.Stage = "aligning"
+				report(p)
+			})
+		}, ap, tr.Segments, seconds)
 		switch {
 		case ctx.Err() != nil:
 			keep(false)
@@ -307,7 +311,7 @@ func (s *Transcripts) run(ctx context.Context, job jobs.Job, req TranscribeReque
 			}
 			res.AlignError = je
 		default:
-			words, aligner = ar.Words, req.Aligner
+			words, aligner = aw, req.Aligner
 		}
 	}
 	report(jobs.Progress{Stage: "writing", Fraction: -1})

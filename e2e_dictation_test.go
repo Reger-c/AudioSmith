@@ -37,7 +37,7 @@ func TestDictationLatency(t *testing.T) {
 	}
 	ids := os.Getenv("AUDIOSMITH_DICT_MODELS")
 	if ids == "" {
-		ids = "qwen3-asr-0.6b-4bit,whisper-large-v3-turbo-4bit,parakeet-tdt-0.6b-v3"
+		ids = "qwen3-asr-0.6b-4bit,whisper-large-v3-turbo-4bit"
 	}
 	ctx := context.Background()
 	dir := t.TempDir()

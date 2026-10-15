@@ -40,6 +40,8 @@ type TranscribeParams struct {
 type Transcription struct {
 	Transcript core.Transcript
 	Warnings   []string
+	// Replaced is set when the request named a removed model.
+	Replaced *Replacement
 }
 
 // Transcribe transcribes a file through the queue and waits for it. The
@@ -48,7 +50,7 @@ func (s *Server) Transcribe(ctx context.Context, p TranscribeParams) (Transcript
 	if err := s.engineGate(); err != nil {
 		return Transcription{}, err
 	}
-	e, err := s.resolveSTT(p.Model)
+	e, rep, err := s.resolveSTT(p.Model, p.Language)
 	if err != nil {
 		return Transcription{}, err
 	}
@@ -56,8 +58,8 @@ func (s *Server) Transcribe(ctx context.Context, p TranscribeParams) (Transcript
 		return Transcription{}, errInvalid("file", "There is no file to transcribe.")
 	}
 	mode := "accurate"
-	if e.ID == defaultSTT(s.b.Settings(), true).ID && e.ID != defaultSTT(s.b.Settings(), false).ID {
-		mode = "fast"
+	if isSTTAlias(p.Model) && fastSTTAlias(p.Model) {
+		mode = "fast" // gpt-4o-mini-transcribe: Transcribe's Fast mode
 	}
 	req := services.TranscribeRequest{ID: core.NewID(time.Now()), Input: p.File, Source: core.SourceFile,
 		Title: p.Title, Mode: mode, Model: e.Repo, Words: p.Words, Language: strings.TrimSpace(p.Language), Prompt: p.Prompt}
@@ -80,7 +82,7 @@ func (s *Server) Transcribe(ctx context.Context, p TranscribeParams) (Transcript
 	if err := jobOutcome(job, &res); err != nil {
 		return Transcription{}, err
 	}
-	return Transcription{Transcript: res.Transcript, Warnings: res.Warnings}, nil
+	return Transcription{Transcript: res.Transcript, Warnings: res.Warnings, Replaced: rep}, nil
 }
 
 // TranslateToEnglish translates a transcript's segments into English with

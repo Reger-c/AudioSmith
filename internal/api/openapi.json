@@ -342,7 +342,7 @@
                   },
                   "model": {
                     "type": "string",
-                    "description": "whisper-1 / gpt-4o-transcribe (Transcribe's Accurate model), gpt-4o-mini-transcribe (its Fast model), or a catalogue model."
+                    "description": "whisper-1 / gpt-4o-transcribe (Transcribe's Accurate model), gpt-4o-mini-transcribe (its Fast model), or a catalogue model. By default Qwen3-ASR (qwen3-asr-0.6b-4bit), or Whisper (whisper-large-v3-turbo-4bit) for a language Qwen3-ASR does not know. A removed model (parakeet-tdt-0.6b-v3) is answered by the default, with the X-AudioSmith-Replaced-By and X-AudioSmith-Warning headers."
                   },
                   "language": {
                     "type": "string"

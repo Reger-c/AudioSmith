@@ -48,7 +48,7 @@ func TestModelPacks(t *testing.T) {
 		}
 	}
 	fast, max := packEntries("fast"), packEntries("max")
-	if len(fast) != 4 || len(max) != 4+4+5+2 {
+	if len(fast) != 4 || len(max) != 4+3+5+2 {
 		t.Errorf("fast %d, max %d", len(fast), len(max))
 	}
 	if !slices.ContainsFunc(max, func(e catalog.Entry) bool { return e.ID == "kokoro-82m-bf16" }) {
