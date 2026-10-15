@@ -334,7 +334,7 @@ func (a *app) settingsDialog(c *ui.Context) {
 	margin := px(t, sp6)
 	ui.DialogBase(c.Key("settings-dialog"), &a.settingsOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.32))
-		panel.Width(min(w-2*margin, px(t, 820))).Height(min(h-2*margin, px(t, 620))).Radius(px(t, radiusCard)).Background(k.Bg).Clip().
+		panel.Width(min(w-2*margin, px(t, 820))).Height(h-4*margin).Radius(px(t, radiusCard)).Background(k.Bg).Clip().
 			Shadow(0, 16, 48, 0, ui.RGBA(0, 0, 0, 0.28)).Label(i18n.T("Settings"))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 			ui.Column(c).Width(min(px(t, 196), (w-2*margin)*0.28)).Shrink(0).Background(k.Sidebar).Children(func() {
