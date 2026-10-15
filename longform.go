@@ -78,7 +78,8 @@ type lfPage struct {
 	render    string // the render whose progress and outputs show
 	auditions map[string]string
 	importing bool
-	scriptRev int // bumped when the manuscript changes
+	directing bool // the AI director is at work (stories_director.go)
+	scriptRev int  // bumped when the manuscript changes
 
 	// Derived from the document when its fingerprint changes.
 	fp       string

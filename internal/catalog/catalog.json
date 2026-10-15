@@ -90,7 +90,7 @@
         {"id": "Ryan"},
         {"id": "Aiden"}
       ],
-      "capabilities": ["sampling", "voiceStyle", "language", "stream"],
+      "capabilities": ["sampling", "voiceStyle", "instruct", "language", "stream"],
       "sampleRate": 24000,
       "maxChars": 600,
       "rtf": 2,
@@ -209,7 +209,7 @@
         {"code": "pt", "value": "Portuguese"},
         {"code": "ru", "value": "Russian"}
       ],
-      "capabilities": ["sampling", "design", "voiceStyle", "language", "stream"],
+      "capabilities": ["sampling", "design", "voiceStyle", "instruct", "language", "stream"],
       "sampleRate": 24000,
       "maxChars": 600,
       "rtf": 1.8,

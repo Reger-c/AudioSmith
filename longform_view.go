@@ -252,12 +252,16 @@ func (a *app) lfProduction(c *ui.Context, p *lfPage, locked bool) {
 	formRow(c, "lf-vary-row", i18n.T("Vary repeated lines"), i18n.T("Give identical lines takes of their own instead of reusing one recording."), func() {
 		ui.Switch(c.Key("lf-vary"), &pr.VaryRepeats).Label(i18n.T("Vary repeated lines")).Disabled(locked)
 	})
-	lg := float64(pr.LineGapMs)
-	ui.Field(c, i18n.T("Gap between lines %d ms", pr.LineGapMs), func() {
-		if snapped(ui.Slider(c.Key("lf-line-gap"), &lg, 0, 2000).Label(i18n.T("Gap between lines")).Disabled(locked), &lg, 50).Changed() {
-			pr.LineGapMs = int(lg)
-		}
-	})
+	if _, paced := services.GapsOf(pr.Pacing); paced && p.kind == core.ProjectStory {
+		caption(c.Key("lf-paced"), i18n.T("Gaps between lines follow the pacing: %s (Performance).", pacingLabel(pr.Pacing)))
+	} else {
+		lg := float64(pr.LineGapMs)
+		ui.Field(c, i18n.T("Gap between lines %d ms", pr.LineGapMs), func() {
+			if snapped(ui.Slider(c.Key("lf-line-gap"), &lg, 0, 2000).Label(i18n.T("Gap between lines")).Disabled(locked), &lg, 50).Changed() {
+				pr.LineGapMs = int(lg)
+			}
+		})
+	}
 	pg := float64(pr.ParagraphGapMs)
 	ui.Field(c, i18n.T("Gap between paragraphs %d ms", pr.ParagraphGapMs), func() {
 		if snapped(ui.Slider(c.Key("lf-para-gap"), &pg, 0, 3000).Label(i18n.T("Gap between paragraphs")).Disabled(locked), &pg, 50).Changed() {
@@ -277,8 +281,12 @@ func (a *app) lfProduction(c *ui.Context, p *lfPage, locked bool) {
 		}
 	})
 	ui.Row(c).Children(func() {
-		if secondaryIconButton(c.Key("lf-prod-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Disabled(locked || *pr == services.DefaultProduction()).Clicked() {
-			*pr = services.DefaultProduction()
+		def := services.DefaultProduction()
+		if p.kind == core.ProjectStory {
+			def = services.DefaultStoryProduction()
+		}
+		if secondaryIconButton(c.Key("lf-prod-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Disabled(locked || *pr == def).Clicked() {
+			*pr = def
 		}
 	})
 }

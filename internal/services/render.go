@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp"
 	"github.com/hehehai/AudioSmith/internal/dsp/edit"
 	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
 	"github.com/hehehai/AudioSmith/internal/dsp/master"
@@ -710,28 +711,45 @@ func (st *renderState) silence(seconds float64) error {
 // appendChunk reads a chunk's audio, trims its edges and joins it. It
 // returns where the chunk landed (seconds) and how much of it is sound.
 func (st *renderState) appendChunk(path string, b plan.Break) (start, end, voiced float64, err error) {
-	buf, _, err := wav.ReadFile(path)
+	buf, trimmed, _, err := st.loadChunk(path)
 	if err != nil {
 		return 0, 0, 0, err
 	}
+	start, end, err = st.appendLoaded(buf, trimmed, b)
+	return start, end, trimmed.Seconds(), err
+}
+
+// loadChunk reads a chunk's audio in the joined stream's format (which
+// the first chunk sets) and trims its edges: lead is how many frames
+// went from its start.
+func (st *renderState) loadChunk(path string) (buf, trimmed dsp.Buffer, lead int, err error) {
+	buf, _, err = wav.ReadFile(path)
+	if err != nil {
+		return buf, buf, 0, err
+	}
 	if buf.Frames() == 0 || buf.Rate <= 0 {
-		return 0, 0, 0, fmt.Errorf("%s: no audio", filepath.Base(path))
+		return buf, buf, 0, fmt.Errorf("%s: no audio", filepath.Base(path))
 	}
 	if st.joiner == nil {
 		if err := st.open(buf.Rate, buf.Channels); err != nil {
-			return 0, 0, 0, err
+			return buf, buf, 0, err
 		}
 		if st.leading > 0 {
 			if _, err := st.joiner.Silence(st.leading); err != nil {
-				return 0, 0, 0, err
+				return buf, buf, 0, err
 			}
 		}
 	}
 	if buf.Rate != st.rate || buf.Channels != st.channels {
 		buf = resample.Convert(buf, st.rate, st.channels, resample.Good)
 	}
-	trimmed := edit.Trim(buf, edit.TrimOptions{})
-	voiced = trimmed.Seconds()
+	lead, _ = edit.TrimRange(buf, edit.TrimOptions{})
+	return buf, edit.Trim(buf, edit.TrimOptions{}), lead, nil
+}
+
+// appendLoaded joins a loaded chunk (as trimmed, or whole when the edges
+// are kept) and returns where it landed (seconds).
+func (st *renderState) appendLoaded(buf, trimmed dsp.Buffer, b plan.Break) (start, end float64, err error) {
 	if st.keepEdge {
 		trimmed = buf
 	}
@@ -744,11 +762,11 @@ func (st *renderState) appendChunk(path string, b plan.Break) (start, end, voice
 	}
 	span, err := st.joiner.Append(trimmed.Samples, join)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, err
 	}
 	st.flushStream(false)
 	rg := span.Range(st.rate)
-	return rg.Start, rg.End, voiced, nil
+	return rg.Start, rg.End, nil
 }
 
 // dropCheck compares a chunk's length with what its text should take.

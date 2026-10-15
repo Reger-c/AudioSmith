@@ -165,15 +165,21 @@ func (l *library) synthExecutor() jobs.Executor {
 	return fn()
 }
 
+// capNames are a catalogue entry's capabilities as the services name them.
+func capNames(e catalog.Entry) []string {
+	caps := make([]string, len(e.Capabilities))
+	for i, c := range e.Capabilities {
+		caps[i] = string(c)
+	}
+	return caps
+}
+
 // modelInfo describes a model to the services: its render traits (by
 // family), pinned revision, and the languages of its language values and
 // voices.
 func modelInfo(repo string) services.ModelInfo {
 	e := entryFor(repo)
-	caps := make([]string, len(e.Capabilities))
-	for i, c := range e.Capabilities {
-		caps[i] = string(c)
-	}
+	caps := capNames(e)
 	info := services.ModelInfo{Traits: services.TraitsFor(e.Family, caps).WithCatalog(e.MaxChars, e.NonVerbal), Revision: e.Revision,
 		Languages: map[string]string{}, VoiceLanguages: map[string]string{}}
 	info.NeedsReference = e.NeedsReference

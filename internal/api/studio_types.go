@@ -112,6 +112,7 @@ type CastJSON struct {
 	Voice     string `json:"voice,omitempty"` // a reference: a voice id, "speaker:<id>"
 	VoiceName string `json:"voice_name,omitempty"`
 	Lines     int    `json:"lines,omitempty"`
+	Persona   string `json:"persona,omitempty"` // stories: the character's performance baseline
 }
 
 // StoryLineJSON is a line of a story.
@@ -123,6 +124,8 @@ type StoryLineJSON struct {
 	Speed      float64 `json:"speed,omitempty"`
 	PauseAfter int     `json:"pause_after_ms,omitempty"`
 	Chapter    bool    `json:"chapter,omitempty"`
+	Direction  string  `json:"direction,omitempty"` // how the line is said (never spoken)
+	Intensity  int     `json:"intensity,omitempty"` // of the direction: 1 restrained, 2 clear, 3 strong
 }
 
 // ProblemJSON is something that stops (Blocking) or affects a render.
@@ -186,12 +189,18 @@ type LongformJSON struct {
 	Chapters  []ChapterJSON   `json:"chapters"`
 	Cast      []CastJSON      `json:"cast,omitempty"`
 	Lines     []StoryLineJSON `json:"lines,omitempty"`
-	Words     int             `json:"words"`
-	Estimate  float64         `json:"estimated_seconds"`
-	Problems  []ProblemJSON   `json:"problems,omitempty"`
-	Book      BookJSON        `json:"book"`
-	Render    *RenderJSON     `json:"last_render,omitempty"`
-	Updated   time.Time       `json:"updated_at"`
+	// Stories: the scene, the pacing (dialogue, reading, relaxed or
+	// fixed) and what the model does with scene, personas and directions
+	// (continuity: instruct, intensity or lines).
+	Scene      string        `json:"scene,omitempty"`
+	Pacing     string        `json:"pacing,omitempty"`
+	Continuity string        `json:"continuity,omitempty"`
+	Words      int           `json:"words"`
+	Estimate   float64       `json:"estimated_seconds"`
+	Problems   []ProblemJSON `json:"problems,omitempty"`
+	Book       BookJSON      `json:"book"`
+	Render     *RenderJSON   `json:"last_render,omitempty"`
+	Updated    time.Time     `json:"updated_at"`
 }
 
 // LongformUpdate changes a project; empty fields stay as they are.
@@ -213,6 +222,15 @@ type LongformUpdate struct {
 	About    string            `json:"description,omitempty" jsonschema:"The book's description, for its tags."`
 	Cover    string            `json:"cover,omitempty" jsonschema:"Absolute path of a PNG or JPEG cover (≤ 8 MB)."`
 	Stems    *bool             `json:"stems,omitempty" jsonschema:"true: renders also write one WAV per character (stems)."`
+	// Stories' performance.
+	Scene       *string           `json:"scene,omitempty" jsonschema:"Stories: where and when, who the characters are to each other, the mood (\"\" clears). Models that take instructions hear it with every line; never spoken."`
+	Personas    map[string]string `json:"personas,omitempty" jsonschema:"Stories: character name → persona, its performance baseline (\"seven, lively, coaxing\"; \"\" clears)."`
+	Directions  map[string]string `json:"directions,omitempty" jsonschema:"Stories: line id → direction, how that line is said (\"pleading\", \"softly, holding back tears\"; \"\" clears). Never spoken."`
+	Intensities map[string]int    `json:"intensities,omitempty" jsonschema:"Stories: line id → the direction's intensity: 1 restrained, 2 clear, 3 strong (0 clears)."`
+	Pacing      string            `json:"pacing,omitempty" jsonschema:"Stories: gaps between lines: dialogue (tight turns), reading, relaxed, or fixed (one gap for every line)."`
+	Merge       *bool             `json:"merge_turns,omitempty" jsonschema:"Stories, with a pacing: say consecutive lines of one character in one go (default true)."`
+	Level       *bool             `json:"even_out_voices,omitempty" jsonschema:"Stories, with a pacing: bring each character's lines toward one loudness (default true)."`
+	Direct      string            `json:"direct,omitempty" jsonschema:"Stories: run the AI director (the writing-help language model reads the story and writes the scene, personas and directions) after the other changes: fill (only what is empty) or all (replace). Takes up to a minute or two."`
 }
 
 // LongformRender starts a render.

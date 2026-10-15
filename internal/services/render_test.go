@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp"
 	"github.com/hehehai/AudioSmith/internal/dsp/dsptest"
 	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
@@ -36,6 +37,9 @@ type fakeSynth struct {
 	started chan string
 	rate    int
 	limit   int // texts longer fail with input_too_long
+	// pauses: 0.35 s of silence between the sentences of a text, as
+	// speech has (merged story turns split there).
+	pauses bool
 }
 
 func (f *fakeSynth) Run(ctx context.Context, job jobs.Job, report func(jobs.Progress), _ func(json.RawMessage)) (json.RawMessage, error) {
@@ -78,7 +82,19 @@ func (f *fakeSynth) Run(ctx context.Context, job jobs.Job, report func(jobs.Prog
 	if strings.Contains(p.Text, "short") {
 		secs /= 10
 	}
-	buf := dsptest.Concat(dsptest.Silence(rate, 1, 0.1), dsptest.Sine(rate, 1, 220, -12, secs, 0), dsptest.Silence(rate, 1, 0.2))
+	speech := dsptest.Sine(rate, 1, 220, -12, secs, 0)
+	if f.pauses {
+		var parts []dsp.Buffer
+		for i, s := range fakeSentences(p.Text) {
+			if i > 0 {
+				parts = append(parts, dsptest.Silence(rate, 1, 0.35))
+			}
+			w, c := text.Count(s)
+			parts = append(parts, dsptest.Sine(rate, 1, 220, -12, text.Estimate(w, c).Seconds(), 0))
+		}
+		speech = dsptest.Concat(parts...)
+	}
+	buf := dsptest.Concat(dsptest.Silence(rate, 1, 0.1), speech, dsptest.Silence(rate, 1, 0.2))
 	if err := wav.WriteFile(p.Output.Path, buf, wav.Float32, wav.Options{}); err != nil {
 		return nil, err
 	}
@@ -88,6 +104,23 @@ func (f *fakeSynth) Run(ctx context.Context, job jobs.Job, report func(jobs.Prog
 	}
 	return json.Marshal(proto.SynthesizeResult{Output: p.Output.Path, Model: p.Model, SampleRate: rate, Channels: 1,
 		Frames: int64(buf.Frames()), AudioSeconds: buf.Seconds(), Seconds: 0.1, Seed: &seed})
+}
+
+// fakeSentences splits a text after . ? ! 。 ？ ！ followed by more.
+func fakeSentences(s string) []string {
+	var out []string
+	start := 0
+	rs := []rune(s)
+	for i, r := range rs {
+		if strings.ContainsRune(".?!。？！", r) && i+1 < len(rs) && !strings.ContainsRune(".?!。？！", rs[i+1]) {
+			out = append(out, strings.TrimSpace(string(rs[start:i+1])))
+			start = i + 1
+		}
+	}
+	if t := strings.TrimSpace(string(rs[start:])); t != "" {
+		out = append(out, t)
+	}
+	return out
 }
 
 func (f *fakeSynth) texts() []string {

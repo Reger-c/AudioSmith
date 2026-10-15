@@ -101,7 +101,7 @@ func autoCastText(d *services.LongformDoc, src string, voices []lfVoice) (lines,
 	}
 	spoke := map[string]bool{}
 	for _, l := range res.Lines {
-		line := services.StoryLine{ID: newLineID(), Text: l.Text}
+		line := services.StoryLine{ID: newLineID(), Text: l.Text, Direction: l.Direction}
 		if text.IsHeading(l.Text) {
 			line.Chapter, line.Text = true, strings.TrimSpace(strings.TrimLeft(l.Text, "#"))
 			d.Lines = append(d.Lines, line)

@@ -3,6 +3,7 @@ package autocast
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -89,5 +90,30 @@ func TestOptions(t *testing.T) {
 	want := []string{`-|[Robot] Beep.`, `Ann|"Hi,"`, "-|said Ann."}
 	if got := view(r); !slices.Equal(got, want) {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestStageDirections(t *testing.T) {
+	src := "妈妈（温柔地）：宝贝，过来。\nMOM (softly): Come here.\n[Mia] (pleading) Please?\n孩子：（小声）我可以养它吗？\nJOHN (V.O.): Years later.\n妈妈：（叹气）\n好吧。"
+	res := Detect(src, nil)
+	want := []struct{ speaker, text, dir string }{
+		{"妈妈", "宝贝，过来。", "温柔地"},
+		{"Mom", "Come here.", "softly"},
+		{"Mia", "Please?", "pleading"},
+		{"孩子", "我可以养它吗？", "小声"},
+		{"John", "Years later.", ""},
+		{"妈妈", "好吧。", "叹气"},
+	}
+	if len(res.Lines) != len(want) {
+		t.Fatalf("lines %+v", res.Lines)
+	}
+	for i, w := range want {
+		l := res.Lines[i]
+		if l.Speaker != w.speaker || l.Text != w.text || l.Direction != w.dir || l.Span.Of(src) != l.Text {
+			t.Errorf("line %d = %q %q %q, want %+v", i, l.Speaker, l.Text, l.Direction, w)
+		}
+		if strings.ContainsAny(l.Text, "()（）") {
+			t.Errorf("line %d speaks its direction: %q", i, l.Text)
+		}
 	}
 }

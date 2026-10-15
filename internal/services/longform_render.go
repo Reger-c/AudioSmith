@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -75,6 +76,7 @@ type ChapterParams struct {
 	Production Production           `json:"production"`
 	Lexicon    []LexiconEntry       `json:"lexicon,omitempty"`
 	Loudness   string               `json:"loudness,omitempty"`
+	Scene      string               `json:"scene,omitempty"` // the story's (instructions)
 	// Output is the chapter's WAV (absolute); its sidecar is Output+".json".
 	Output string `json:"output"`
 }
@@ -91,7 +93,14 @@ type ChapterResult struct {
 	Chunks       int     `json:"chunks"`
 	Cached       int     `json:"cached"` // chunks from the cache
 	// Reused: the file of an earlier run of this render was kept.
-	Reused   bool              `json:"reused,omitempty"`
+	Reused bool `json:"reused,omitempty"`
+	// Turns are the merged turns (lines of one character made as one)
+	// split back into their lines; TurnsUnsplit the ones that could not
+	// be, made line by line instead.
+	Turns        int `json:"turns,omitempty"`
+	TurnsUnsplit int `json:"turnsUnsplit,omitempty"`
+	// Levelled counts the lines brought toward their character's loudness.
+	Levelled int               `json:"levelled,omitempty"`
 	Report   LoudnessReport    `json:"report"`
 	Warnings []core.TakeNotice `json:"warnings,omitempty"`
 	Lines    []LinePlace       `json:"lines"`
@@ -127,13 +136,23 @@ func ReadChapter(wavPath string) (ChapterResult, error) {
 	return r, err
 }
 
-// chapterStep is one step of a chapter's program: a silence, or a chunk.
+// chapterStep is one step of a chapter's program: a silence, or a chunk,
+// or a merged turn (a chunk saying several lines, split back into them).
 type chapterStep struct {
 	silence float64 // seconds; used when chunk is nil
 	chunk   *renderChunk
 	brk     plan.Break
 	line    int
 	span    int
+	turn    *turnStep
+}
+
+// turnStep is a merged turn: its lines, their expected lengths, and the
+// steps that make them one by one when the turn cannot be split.
+type turnStep struct {
+	lines    []int
+	weights  []float64
+	fallback []chapterStep
 }
 
 // chapterRenderer runs longform.chapter jobs.
@@ -250,96 +269,213 @@ func gapsOf(p Production) edit.GapPolicy {
 }
 
 // program plans every line of the chapter into steps, with its key.
+// Under a pacing preset (story_pacing.go) the gaps follow the turns, the
+// lines carry their delivery, and turns of one character are merged.
 func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info ModelInfo, modelPath string) ([]chapterStep, string, []core.TakeNotice, error) {
 	r := cr.r
 	dict := cr.dictionary(ctx, p)
 	gaps := gapsOf(p.Production)
+	turns, paced := GapsOf(p.Production.Pacing)
 	var steps []chapterStep
 	var warnings []core.TakeNotice
 	reported := map[string]bool{}
 	h := sha256.New()
 	fmt.Fprintf(h, "%s\x00%s\x00%g\x00%g\x00%g\x00%g\x00%v\x00%s\x00%s\x00", chapterKeyVersion, p.Loudness, gaps.Sentence, gaps.Line,
 		gaps.Paragraph, gaps.Crossfade, p.Production.KeepEdges, p.Model, info.Revision)
-	for li, l := range p.Lines {
-		if li > 0 {
-			gap := gaps.Line
-			if prev := p.Lines[li-1]; prev.PauseAfter > 0 {
-				gap = float64(prev.PauseAfter) / 1000
-			} else if l.Paragraph {
-				gap = gaps.Paragraph
-			}
-			steps = append(steps, chapterStep{silence: gap, line: li})
-			fmt.Fprintf(h, "gap %g\x00", gap)
+	if paced {
+		fmt.Fprintf(h, "pacing %s level %v\x00", p.Production.Pacing, !p.Production.NoLevel)
+	}
+	// take is the recipe of span sp of line li, saying text.
+	take := func(li int, sp SpanSpec, say string) (core.Take, *int64, map[string]string, error) {
+		l := p.Lines[li]
+		v, ok := p.Voices[sp.Voice]
+		if !ok {
+			return core.Take{}, nil, nil, &jobs.Error{Code: proto.CodeBadRequest, Message: fmt.Sprintf("line %d: no voice %q", li+1, sp.Voice)}
 		}
-		for si, sp := range l.Spans {
-			v, ok := p.Voices[sp.Voice]
-			if !ok {
-				return nil, "", nil, &jobs.Error{Code: proto.CodeBadRequest, Message: fmt.Sprintf("line %d: no voice %q", li+1, sp.Voice)}
+		t := v
+		t.Model, t.Text = p.Model, say
+		if l.Speed > 0 && l.Speed != 1 {
+			t.Speed = l.Speed
+		}
+		if p.Production.Steps > 0 {
+			t.Steps = p.Production.Steps
+		}
+		if p.Production.Guidance > 0 {
+			t.Guidance = p.Production.Guidance
+		}
+		if l.Direction != "" || l.Persona != "" || p.Scene != "" {
+			prev := ""
+			if li > 0 && paced && !sameSpeaker(p.Lines[li-1], l) && p.Lines[li-1].Character != "" && StoryPrevDirection {
+				prev = p.Lines[li-1].Direction
 			}
-			if si > 0 && !strings.HasPrefix(strings.ToLower(sp.Text), "[pause") {
-				steps = append(steps, chapterStep{silence: spanGap, line: li, span: si})
-				fmt.Fprintf(h, "span\x00")
-			}
-			t := v
-			t.Model, t.Text = p.Model, sp.Text
-			if l.Speed > 0 && l.Speed != 1 {
-				t.Speed = l.Speed
-			}
-			if p.Production.Steps > 0 {
-				t.Steps = p.Production.Steps
-			}
-			if p.Production.Guidance > 0 {
-				t.Guidance = p.Production.Guidance
-			}
-			seed := p.Seed
-			if v.Seed != 0 {
-				seed = v.Seed // a designed or locked voice's identity
-			}
-			var extra map[string]string
-			if p.Production.VaryRepeats && l.Repeat > 0 {
-				seed += int64(l.Repeat)
-				extra = map[string]string{"repeat": strconv.Itoa(l.Repeat)}
-			}
-			lang := p.Lang
-			if lang == "" {
-				lang = info.Lang(t.Language, t.Voice)
-			}
-			pl := plan.Build(sp.Text, plan.Options{
-				Lang: lang, NonVerbal: info.NonVerbal, NonVerbalTags: info.NonVerbalTags, Speed: info.Speed, Voices: true,
-				MaxChars: info.MaxChars, MaxCharsCJK: info.MaxCharsCJK, Lexicon: dict,
-			})
-			for _, d := range pl.Diags {
-				if d.Severity >= text.Warning && d.Code != plan.CodeNothingToSay {
-					k := d.Code
-					for _, v := range d.Params {
-						k += "\x00" + v
-					}
-					if !reported[k] {
-						reported[k] = true
-						warnings = append(warnings, core.TakeNotice{Code: d.Code, Severity: "warning", Params: d.Params})
-					}
+			withDelivery(&t, info, StoryInstruct(say, p.Scene, l.Persona, l.Direction, l.Intensity, prev), l.Direction, l.Intensity)
+		}
+		seed := p.Seed
+		if v.Seed != 0 {
+			seed = v.Seed // a designed or locked voice's identity
+		}
+		var extra map[string]string
+		if p.Production.VaryRepeats && l.Repeat > 0 {
+			seed += int64(l.Repeat)
+			extra = map[string]string{"repeat": strconv.Itoa(l.Repeat)}
+		}
+		return t, &seed, extra, nil
+	}
+	// planOf plans what t says.
+	planOf := func(t core.Take, say string) plan.Plan {
+		lang := p.Lang
+		if lang == "" {
+			lang = info.Lang(t.Language, t.Voice)
+		}
+		pl := plan.Build(say, plan.Options{
+			Lang: lang, NonVerbal: info.NonVerbal, NonVerbalTags: info.NonVerbalTags, Speed: info.Speed, Voices: true,
+			MaxChars: info.MaxChars, MaxCharsCJK: info.MaxCharsCJK, Lexicon: dict,
+		})
+		for _, d := range pl.Diags {
+			if d.Severity >= text.Warning && d.Code != plan.CodeNothingToSay {
+				k := d.Code
+				for _, v := range d.Params {
+					k += "\x00" + v
+				}
+				if !reported[k] {
+					reported[k] = true
+					warnings = append(warnings, core.TakeNotice{Code: d.Code, Severity: "warning", Params: d.Params})
 				}
 			}
-			chunks, err := r.chunks(&RenderParams{Take: t}, &pl, info, modelPath, &seed, r.longformChunkDir(), extra)
+		}
+		return pl
+	}
+	// lineSteps are the steps of line li's spans, each step's key part
+	// written to key.
+	lineSteps := func(li int, key io.Writer) ([]chapterStep, error) {
+		l := p.Lines[li]
+		var out []chapterStep
+		for si, sp := range l.Spans {
+			if si > 0 && !strings.HasPrefix(strings.ToLower(sp.Text), "[pause") {
+				out = append(out, chapterStep{silence: spanGap, line: li, span: si})
+				fmt.Fprintf(key, "span\x00")
+			}
+			t, seed, extra, err := take(li, sp, sp.Text)
 			if err != nil {
-				return nil, "", nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
+				return nil, err
+			}
+			pl := planOf(t, sp.Text)
+			chunks, err := r.chunks(&RenderParams{Take: t}, &pl, info, modelPath, seed, r.longformChunkDir(), extra)
+			if err != nil {
+				return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 			}
 			k := 0
 			for _, seg := range pl.Segments {
 				if seg.Kind == plan.Silence {
-					steps = append(steps, chapterStep{silence: float64(seg.Millis) / 1000, line: li, span: si})
-					fmt.Fprintf(h, "pause %d\x00", seg.Millis)
+					out = append(out, chapterStep{silence: float64(seg.Millis) / 1000, line: li, span: si})
+					fmt.Fprintf(key, "pause %d\x00", seg.Millis)
 					continue
 				}
 				c := chunks[k]
 				k++
-				steps = append(steps, chapterStep{chunk: &c, brk: seg.Break, line: li, span: si})
-				fmt.Fprintf(h, "chunk %s %d\x00", c.key, seg.Break)
+				out = append(out, chapterStep{chunk: &c, brk: seg.Break, line: li, span: si})
+				fmt.Fprintf(key, "chunk %s %d\x00", c.key, seg.Break)
 			}
 		}
+		return out, nil
+	}
+	// gapBefore is the silence before line li.
+	gapBefore := func(li int) float64 {
+		l, prev := p.Lines[li], p.Lines[li-1]
+		if paced {
+			return TurnGap(turns, prev, l)
+		}
+		gap := gaps.Line
+		if prev.PauseAfter > 0 {
+			gap = float64(prev.PauseAfter) / 1000
+		} else if l.Paragraph {
+			gap = gaps.Paragraph
+		}
+		return gap
+	}
+	// The merged turns, by their first line.
+	merged := map[int][]int{}
+	if paced && !p.Production.NoMerge {
+		for _, g := range mergeGroups(p.Lines, info, p.Production.VaryRepeats) {
+			merged[g[0]] = g
+		}
+	}
+	for li := 0; li < len(p.Lines); li++ {
+		if li > 0 {
+			gap := gapBefore(li)
+			steps = append(steps, chapterStep{silence: gap, line: li})
+			fmt.Fprintf(h, "gap %g\x00", gap)
+		}
+		if g, ok := merged[li]; ok {
+			st, err := cr.turn(p, g, take, planOf, lineSteps, gapBefore, info, modelPath)
+			if err != nil {
+				return nil, "", nil, err
+			}
+			if st != nil {
+				steps = append(steps, *st)
+				fmt.Fprintf(h, "turn %s %d\x00", st.chunk.key, len(g))
+				li = g[len(g)-1]
+				continue
+			}
+		}
+		ls, err := lineSteps(li, h)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		steps = append(steps, ls...)
 	}
 	return steps, hex.EncodeToString(h.Sum(nil)), warnings, nil
 }
+
+// turn plans the lines g of one character as one chunk; nil when their
+// text does not make exactly one chunk (the lines are made one by one).
+func (cr chapterRenderer) turn(p *ChapterParams, g []int,
+	take func(int, SpanSpec, string) (core.Take, *int64, map[string]string, error), planOf func(core.Take, string) plan.Plan,
+	lineSteps func(int, io.Writer) ([]chapterStep, error), gapBefore func(int) float64, info ModelInfo, modelPath string) (*chapterStep, error) {
+	texts := make([]string, len(g))
+	for i, li := range g {
+		texts[i] = p.Lines[li].Spans[0].Text
+	}
+	joined := joinTurn(texts)
+	// The turn speaks as its first line, with the directions of all.
+	saved := p.Lines[g[0]]
+	lines := make([]LineSpec, len(g))
+	for i, li := range g {
+		lines[i] = p.Lines[li]
+	}
+	p.Lines[g[0]].Direction, p.Lines[g[0]].Intensity = turnDirection(lines)
+	t, seed, extra, err := take(g[0], p.Lines[g[0]].Spans[0], joined)
+	p.Lines[g[0]] = saved
+	if err != nil {
+		return nil, err
+	}
+	pl := planOf(t, joined)
+	if len(pl.Segments) != 1 || pl.Segments[0].Kind == plan.Silence {
+		return nil, nil
+	}
+	chunks, err := cr.r.chunks(&RenderParams{Take: t}, &pl, info, modelPath, seed, cr.r.longformChunkDir(), extra)
+	if err != nil {
+		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
+	}
+	c := chunks[0]
+	ts := &turnStep{lines: g, weights: turnWeights(texts)}
+	for i, li := range g {
+		if i > 0 {
+			ts.fallback = append(ts.fallback, chapterStep{silence: gapBefore(li), line: li})
+		}
+		ls, err := lineSteps(li, io.Discard)
+		if err != nil {
+			return nil, err
+		}
+		ts.fallback = append(ts.fallback, ls...)
+	}
+	return &chapterStep{chunk: &c, brk: pl.Segments[0].Break, line: g[0], turn: ts}, nil
+}
+
+// StoryPrevDirection adds the other character's last direction to a
+// line's instruction ("对方刚才…"): an experiment of the A/B listening
+// (e2e_story_ab_test.go), off in the app.
+var StoryPrevDirection = false
 
 // dictionary is the pronunciation dictionary with the book's lexicon on
 // top (its words win).
@@ -417,34 +553,100 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
 	i := 0
-	for _, s := range steps {
+	var run func(s chapterStep) error
+	run = func(s chapterStep) error {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
 		if s.chunk == nil {
 			if err := st.silence(s.silence); err != nil {
-				return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
+				return &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 			}
-			continue
+			return nil
 		}
 		i++
 		c := *s.chunk
 		_, hit, err := st.synthesize(ctx, i, n, c)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if hit {
 			res.Cached++
 		}
-		start, end, voiced, err := st.appendChunk(c.path, s.brk)
+		buf, trimmed, lead, err := st.loadChunk(c.path)
 		if err != nil {
 			os.Remove(c.path) // unreadable: made again next time
-			return nil, &jobs.Error{Code: CodeRenderFailed, Message: fmt.Sprintf("chunk %d of %d: %v", i, n, err), Retryable: true}
+			return &jobs.Error{Code: CodeRenderFailed, Message: fmt.Sprintf("chunk %d of %d: %v", i, n, err), Retryable: true}
+		}
+		if s.turn != nil {
+			cuts, ok := splitMerged(trimmed, s.turn.weights)
+			if !ok {
+				// Lines the turn cannot be split into are made one by one.
+				r.logf("chapter %s: lines %v could not be split from their merged turn; making them one by one", job.ID, s.turn.lines)
+				res.TurnsUnsplit++
+				for _, f := range s.turn.fallback {
+					if f.chunk != nil {
+						n++
+						st.total += f.chunk.chars
+					}
+				}
+				for _, f := range s.turn.fallback {
+					if err := run(f); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			res.Turns++
+			if turns, ok := GapsOf(p.Production.Pacing); ok && !st.keepEdge {
+				trimmed, cuts = tightenTurn(trimmed, cuts, float64(turns.Same)/1000+turnPauseSlack)
+			}
+			start, end, err := st.appendLoaded(buf, trimmed, s.brk)
+			if err != nil {
+				return &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
+			}
+			off := 0
+			if st.keepEdge {
+				off = lead
+			}
+			at := func(frame int) float64 { return start + float64(frame+off)/float64(st.rate) }
+			for k, li := range s.turn.lines {
+				a, b := 0, trimmed.Frames()
+				if k > 0 {
+					a = cuts[k-1].end
+				}
+				if k < len(cuts) {
+					b = cuts[k].start
+				}
+				ls, le := at(a), at(b)
+				if k == 0 {
+					ls = start
+				}
+				if k == len(s.turn.lines)-1 {
+					le = end
+				}
+				place(chapterStep{line: li}, ls, le)
+			}
+			for _, w := range dropCheck(i, c, p.Lines[s.line].Speed, start, end, trimmed.Seconds()) {
+				w.Params["line"] = strconv.Itoa(s.line + 1)
+				warnings = append(warnings, w)
+			}
+			return nil
+		}
+		start, end, err := st.appendLoaded(buf, trimmed, s.brk)
+		if err != nil {
+			return &jobs.Error{Code: CodeRenderFailed, Message: fmt.Sprintf("chunk %d of %d: %v", i, n, err), Retryable: true}
 		}
 		place(s, start, end)
-		for _, w := range dropCheck(i, c, p.Lines[s.line].Speed, start, end, voiced) {
+		for _, w := range dropCheck(i, c, p.Lines[s.line].Speed, start, end, trimmed.Seconds()) {
 			w.Params["line"] = strconv.Itoa(s.line + 1)
 			warnings = append(warnings, w)
+		}
+		return nil
+	}
+	for _, s := range steps {
+		if err := run(s); err != nil {
+			return nil, err
 		}
 	}
 	if st.joiner == nil {
@@ -454,7 +656,30 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
 	report(jobs.Progress{Stage: "writing", Fraction: 1, AudioSeconds: st.seconds()})
-	out, rep, err := st.finishChapter(ctx, loudnessTarget(p.Loudness))
+	var level func([]LinePlace) ([]float64, error)
+	if _, paced := GapsOf(p.Production.Pacing); paced && !p.Production.NoLevel {
+		level = func(places []LinePlace) ([]float64, error) { return st.lineLoudness(ctx, places) }
+	}
+	out, rep, err := st.finishChapter(ctx, loudnessTarget(p.Loudness), func() []lineGain {
+		if level == nil {
+			return nil
+		}
+		lufs, err := level(res.Lines)
+		if err != nil {
+			r.logf("chapter %s: levelling: %v", job.ID, err)
+			return nil
+		}
+		who := make([]string, len(p.Lines))
+		for i, l := range p.Lines {
+			who[i] = l.Character
+			if len(l.Spans) > 0 {
+				who[i] += "\x00" + l.Spans[0].Voice
+			}
+		}
+		g := levelGains(res.Lines, who, lufs)
+		res.Levelled = len(g)
+		return g
+	})
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -489,10 +714,11 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 	return data, nil
 }
 
-// finishChapter closes the joined audio and writes the chapter: gain and
-// a true-peak limiter to target (nil: as joined), 16 bits with dither,
+// finishChapter closes the joined audio and writes the chapter: lines
+// levelled by the gains level returns (nil: none), then gain and a
+// true-peak limiter to target (nil: as joined), 16 bits with dither,
 // measured for the report.
-func (st *renderState) finishChapter(ctx context.Context, target *loudness.Target) (finalAudio, LoudnessReport, error) {
+func (st *renderState) finishChapter(ctx context.Context, target *loudness.Target, level func() []lineGain) (finalAudio, LoudnessReport, error) {
 	if err := st.joiner.Close(); err != nil {
 		return finalAudio{}, LoudnessReport{}, err
 	}
@@ -502,6 +728,15 @@ func (st *renderState) finishChapter(ctx context.Context, target *loudness.Targe
 	}
 	st.tmp = nil
 	st.files = append(st.files, st.tmpPath)
+	if level != nil {
+		if gains := level(); len(gains) > 0 {
+			lv, err := st.applyLevel(ctx, gains)
+			if err != nil {
+				return finalAudio{}, LoudnessReport{}, err
+			}
+			integrated = lv
+		}
+	}
 	var stage *loudness.Stream
 	gain := 0.0
 	if target != nil && integrated > loudness.Floor {
@@ -549,3 +784,77 @@ func (st *renderState) finishChapter(ctx context.Context, target *loudness.Targe
 }
 
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
+
+// lineLoudness measures each placed line of the joined audio (LUFS;
+// −Inf for lines too short to measure).
+func (st *renderState) lineLoudness(ctx context.Context, places []LinePlace) ([]float64, error) {
+	meters := make([]*loudness.Meter, len(places))
+	for i, pl := range places {
+		if pl.End-pl.Start >= levelMinS {
+			meters[i] = loudness.NewMeter(st.rate, st.channels, loudness.Options{SkipTruePeak: true})
+		}
+	}
+	var at int64
+	err := eachBlock(ctx, st.tmpPath, func(s []float32) error {
+		n := int64(len(s) / st.channels)
+		t0, t1 := float64(at)/float64(st.rate), float64(at+n)/float64(st.rate)
+		for i, pl := range places {
+			if meters[i] == nil || pl.End <= t0 || pl.Start >= t1 {
+				continue
+			}
+			a := max(int64(math.Round(pl.Start*float64(st.rate)))-at, 0)
+			b := min(int64(math.Round(pl.End*float64(st.rate)))-at, n)
+			if b > a {
+				meters[i].Write(s[a*int64(st.channels) : b*int64(st.channels)])
+			}
+		}
+		at += n
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]float64, len(places))
+	for i, m := range meters {
+		out[i] = math.Inf(-1)
+		if m != nil {
+			out[i] = m.Integrated()
+		}
+	}
+	return out, nil
+}
+
+// applyLevel rewrites the joined audio with the levelling gains and
+// returns its new integrated loudness.
+func (st *renderState) applyLevel(ctx context.Context, gains []lineGain) (float64, error) {
+	path := filepath.Join(st.r.tmpDir(), st.job.ID+"-levelled.wav")
+	st.files = append(st.files, path)
+	w, err := wav.Create(path, wav.Format{Rate: st.rate, Channels: st.channels, Encoding: wav.Float32}, wav.Options{Large: true})
+	if err != nil {
+		return 0, err
+	}
+	m := loudness.NewMeter(st.rate, st.channels, loudness.Options{SkipTruePeak: true})
+	var at int64
+	err = eachBlock(ctx, st.tmpPath, func(s []float32) error {
+		for f := 0; f < len(s)/st.channels; f++ {
+			g := float32(gainAt(gains, float64(at+int64(f))/float64(st.rate)))
+			if g != 1 {
+				for c := range st.channels {
+					s[f*st.channels+c] *= g
+				}
+			}
+		}
+		at += int64(len(s) / st.channels)
+		m.Write(s)
+		return w.Write(s)
+	})
+	if err != nil {
+		w.Abort()
+		return 0, err
+	}
+	if err := w.Close(); err != nil {
+		return 0, err
+	}
+	st.tmpPath = path
+	return m.Integrated(), nil
+}

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Stories: dialogue that flows
+- Turn-aware pacing: the silence between lines follows the conversation — shorter when a character goes on or answers a question, a little longer after a statement, shortest when a line is cut off (… —), longer around narration. Three presets (Dialogue, Reading, Relaxed) in the new Performance section; new stories use Dialogue, stories made before keep their fixed gap until you pick a preset. A line's own "pause after" still wins.
+- Consecutive lines of one character are said in one go, so the voice flows from one sentence into the next, then split back into lines at their pauses (player, stems and the sidecar see lines as before; a turn that cannot be split is made line by line). The pause inside a turn is kept close to the preset's.
+- Each character's lines are brought toward one loudness (measured 4–7 LU apart on Qwen3-TTS before, about 1 after).
+- A scene for the story, a persona for each character and a direction (with an intensity) for each line. Qwen3-TTS CustomVoice and VoiceDesign hear them as an instruction with every line; Chatterbox takes a direction's intensity; other models say lines as written, and the page says so ("Line by line"). Never spoken.
+- AI director: the writing-help language model (Qwen3 4B on this Mac by default) reads the story and fills in the scene, personas and directions; edit any of them, Undo, or direct again.
+- Imported scripts keep stage directions out of the spoken text: `妈妈（温柔地）：…`, `MOM (softly): …`, `[Mia] (pleading) …` become the line's direction.
+- Agents: `update_longform` sets a story's scene, personas, directions, intensities and pacing, and `direct: fill | all` runs the AI director; `get_longform` shows them with the model's continuity level.
+- The catalogue marks Qwen3-TTS CustomVoice and VoiceDesign as taking instructions, as the engine reports them; dubs and stories ask one predicate.
+
 ### Export audio
 - History's takes have an Export button (and Export… in ⋯); the Studio's latest take, a take's details and Projects open the same Export audio dialog, which replaces the Save as… menu.
 - Choose the format (WAV; M4A through the engine; MP3, FLAC and Opus with ffmpeg, greyed out with a pointer to Settings → Audio tools without it), the bit depth or bitrate, the sample rate and the channels; bring the file to −16, −18 or −23 LUFS with a true-peak ceiling; trim the silence at both ends; name the file and its title and artist tags; save the script and subtitles beside it. The dialog shows the size and length before you export, and remembers your choices for each kind of take (Studio, voice preview, converted recording, Local API).

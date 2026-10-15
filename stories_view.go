@@ -34,6 +34,7 @@ func (a *app) storiesPage(c *ui.Context) {
 		a.lfInspector(c, p, inline, shown, func() {
 			a.lfSection(c, p, "setup", i18n.T("Setup"), entryFor(p.doc.Model).Label, func() { a.lfSetup(c, p, locked) })
 			a.lfSection(c, p, "cast", i18n.T("Cast"), lfCount(len(p.doc.Cast)), func() { a.storyCast(c, p, locked) })
+			a.lfSection(c, p, "scene", i18n.X("story", "Performance"), personaSummary(&p.doc), func() { a.storyPerformance(c, p, locked) }) // stories_perf_view.go
 			a.lfSection(c, p, "production", i18n.T("Production"), "", func() { a.lfProduction(c, p, locked) })
 			a.lfSection(c, p, "book", i18n.T("Cover & details"), "", func() { a.lfBookCard(c, p, locked) })
 			a.lfSection(c, p, "project", i18n.T("Project"), "", func() { a.lfProjectCard(c, p, locked) })
@@ -150,6 +151,7 @@ func (a *app) reviewBuffer(c *ui.Context, p *lfPage, locked bool) {
 func (a *app) storyLines(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
 	lines := p.doc.Lines
+	heard := storyContinuity(p.doc.Model) != services.ContinuityLines
 	if len(lines) == 0 {
 		emptyState(c.Key("st-empty"), icons.Dialog2, i18n.T("New story"), i18n.T("Start your story with dialogue and narration lines, and give each character a voice in the Cast."), func() {
 			if ui.Button(c.Key("st-empty-sample"), i18n.T("Load sample")).Disabled(locked).Clicked() {
@@ -174,7 +176,7 @@ func (a *app) storyLines(c *ui.Context, p *lfPage, locked bool) {
 			return
 		}
 		l := &p.doc.Lines[i]
-		if f := a.storyLine(c, p, i, l, locked); f != nil {
+		if f := a.storyLine(c, p, i, l, locked, heard); f != nil {
 			after = f
 		}
 	})
@@ -186,7 +188,7 @@ func (a *app) storyLines(c *ui.Context, p *lfPage, locked bool) {
 // storyLine is one line's row; it returns a change to make after the
 // list. A flat row: number, character, what the line overrides, then
 // preview, options and ⋯ (moving and removing; icons when there is room).
-func (a *app) storyLine(c *ui.Context, p *lfPage, i int, l *services.StoryLine, locked bool) (after func()) {
+func (a *app) storyLine(c *ui.Context, p *lfPage, i int, l *services.StoryLine, locked, heard bool) (after func()) {
 	t := c.Theme()
 	k := tok(t)
 	sel := p.sel == i && !l.Chapter
@@ -207,6 +209,9 @@ func (a *app) storyLine(c *ui.Context, p *lfPage, i int, l *services.StoryLine, 
 				ui.Text(c, strconv.Itoa(a.lineNumber(p, i))).FontSize(px(t, fsMicro)).TextColor(k.Text3).Width(px(t, 20)).Shrink(0)
 				a.characterSelect(c, p, l, locked)
 				ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Grow(1).MinWidth(0).ClipX().Children(func() {
+					if l.Direction != "" {
+						directionChip(c, l, heard)
+					}
 					if l.Voice != "" {
 						tagChip(c, i18n.T("voice · %s", a.lfVoiceLabel(l.Voice))).Shrink(1).MinWidth(0).Ellipsis("…")
 					}
@@ -298,12 +303,13 @@ func (a *app) characterSelect(c *ui.Context, p *lfPage, l *services.StoryLine, l
 	}
 }
 
-// lineOptions: voice override, speed, pause after, and Insert ▾ (tones,
-// a pause).
+// lineOptions: direction, voice override, speed, pause after, and
+// Insert ▾ (tones, a pause).
 func (a *app) lineOptions(c *ui.Context, p *lfPage, l *services.StoryLine, locked bool) {
 	t := c.Theme()
 	e := entryFor(p.doc.Model)
 	ui.Column(c.Key("opts")).Gap(px(t, sp1)).Padding(px(t, sp1), 0, 0, px(t, 26)).Children(func() {
+		a.lineDirection(c, p, l, locked) // stories_perf_view.go
 		formRow(c, "opt-voice", i18n.T("Voice of this line"), "", func() {
 			ui.Box(c).Width(px(t, 220)).Shrink(1).MinWidth(0).Children(func() {
 				a.lfVoiceSelect(c, "line-voice", &l.Voice, e, i18n.T("The character's voice"), locked)
@@ -371,6 +377,8 @@ func (a *app) storyCast(c *ui.Context, p *lfPage, locked bool) {
 				}
 			})
 			a.lfVoiceSelect(c, "voice", &m.Voice, e, i18n.T("Default voice"), locked)
+			ui.TextInput(c.Key("persona"), &m.Persona).Placeholder(i18n.T("Persona: age, temperament, way of speaking")).
+				Label(i18n.T("Persona of %s", m.Name)).Tooltip(i18n.T("How this character speaks, for models that take instructions: “seven, lively, coaxing”. Never spoken.")).Disabled(locked)
 		})
 	}
 	if remove != "" {

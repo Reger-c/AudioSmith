@@ -87,7 +87,7 @@ const Instructions = "AudioSmith is a speech app on this Mac, all local (MLX mod
 	"- Voices: design_voice (a description), describe_voice, clone_voice (name + path; consent: true only after the user " +
 	"confirms the speaker agreed), search_voices and use_gallery_voice (Discover voices).\n" +
 	"- Books and stories: create_audiobook (path of an EPUB, TXT, MD or DOCX), create_story (text of 'Name: line' lines), " +
-	"get_longform, update_longform (voice, cast, format m4b), render_longform, export_longform.\n" +
+	"get_longform, update_longform (voice, cast, format m4b; stories: scene, directions, direct: AI director), render_longform, export_longform.\n" +
 	"- Dubbing: create_dub (path, target_languages), get_dub, edit_dub, run_dub, export_dub (mp4, wav, srt…); batch_dub, list_batch.\n" +
 	"- Library: list_projects, list_takes, export_audio (format, loudness…), list_workflows, run_workflow.\n" +
 	"- Long work returns a job_id at once: call get_job with wait_seconds (≤ 60) until done, then report its files; " +

@@ -431,7 +431,7 @@ func (s *Server) addStudioTools() {
 	sdk.AddTool(s.srv, add("get_longform", "Read a story or audiobook",
 		"A story or audiobook project: chapters, cast and voices, problems that stop a render, and the last render's files."), s.getLongform)
 	sdk.AddTool(s.srv, add("update_longform", "Change a story or audiobook",
-		"Set a story's or audiobook's narrator, cast voices, model, language, format (wav or m4b), loudness and book details."), s.updateLongform)
+		"Set a story's or audiobook's narrator, cast voices, model, language, format (wav or m4b), loudness and book details; a story's scene, personas, line directions and pacing, or let the AI director write them (direct)."), s.updateLongform)
 	sdk.AddTool(s.srv, add("render_longform", "Render a story or audiobook",
 		"Render a story or audiobook (or some chapters) in the background; returns a job_id for get_job."), s.renderLongform)
 	sdk.AddTool(s.srv, add("export_longform", "Export a story or audiobook",

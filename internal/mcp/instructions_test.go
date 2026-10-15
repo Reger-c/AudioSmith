@@ -51,7 +51,8 @@ func TestInstructions(t *testing.T) {
 		{"design_voice", "description"}, {"describe_voice", "description"},
 		{"get_job", "wait_seconds"}, {"delete_item", "confirm"}, {"create_audiobook", "path"}, {"create_story", "text"},
 		{"create_dub", "path"}, {"create_dub", "target_languages"}, {"update_longform", "voice"}, {"update_longform", "cast"},
-		{"update_longform", "format"}, {"export_audio", "format"}, {"export_audio", "loudness"},
+		{"update_longform", "format"}, {"update_longform", "scene"}, {"update_longform", "directions"}, {"update_longform", "direct"},
+		{"export_audio", "format"}, {"export_audio", "loudness"},
 	} {
 		if !props[ta[0]][ta[1]] {
 			t.Errorf("%s has no argument %s", ta[0], ta[1])

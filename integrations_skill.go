@@ -166,6 +166,9 @@ func skillTools() []skillTool {
 			arg(i18n.T("true: renders also write one WAV per character (stems)."), "stems"),
 			arg(i18n.T("Title, language (BCP-47, or auto) and speaking rate (0.5–2)."), "title", "language", "speed"),
 			arg(i18n.T("Book details for the M4B's tags; cover is the absolute path of a PNG or JPEG (≤ 8 MB)."), "author", "narrator", "year", "genre", "description", "cover"),
+			arg(i18n.T("Stories' performance, never spoken: the scene (where, who, the mood), character → persona (%s), line id → direction (%s) and line id → its intensity 1–3. Models that take instructions (Qwen3-TTS CustomVoice and VoiceDesign) hear them; get_longform's continuity says what the model does with them.", "`seven, lively, coaxing`", "`pleading`"), "scene", "personas", "directions", "intensities"),
+			arg(i18n.T("Stories: the gaps between lines: dialogue (tight turns, the default of new stories), reading, relaxed or fixed (one gap); merge_turns says a character's consecutive lines in one go, even_out_voices levels each character (both default true)."), "pacing", "merge_turns", "even_out_voices"),
+			arg(i18n.T("Stories: %s or %s runs the AI director: the writing-help language model reads the story and writes the scene, personas and directions (only what is empty, or replacing all). Takes up to a minute or two; %s if no language model is set up.", "`fill`", "`all`", "`llm_unavailable`"), "direct"),
 		}},
 		{Name: "render_longform", Lead: i18n.T("render a story or audiobook in the background."), Args: []skillArg{
 			must(i18n.T("The project; it must have no blocking problems (get_longform)."), "project_id"),
