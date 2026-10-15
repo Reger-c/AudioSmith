@@ -84,17 +84,15 @@ func TestSnapshotsStudio(t *testing.T) {
 		save("m1-insert")
 		a.composer.insertOpen = false
 
-		a.composer.voiceOpen = true
+		a.setAdvancedOpen("studio", true)
 		a.seedPinned, a.seed = true, 81723
 		save("m1-voice-controls")
-		a.composer.voiceOpen = false
 
 		a.selectModel(entry(t, "omnivoice-bf16"))
 		a.text = script
-		a.bitsIndex, a.steps = 1, 48
-		a.composer.qualityOpen = true
+		a.steps = 48
 		save("m1-audio-quality")
-		a.composer.qualityOpen = false
+		a.setAdvancedOpen("studio", false)
 
 		a.selectModel(entry(t, "qwen3-tts-0.6b-customvoice-8bit"))
 		a.languageChosen("en", "English")

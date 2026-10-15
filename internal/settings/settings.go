@@ -70,6 +70,9 @@ type Appearance struct {
 	Rail           bool     `json:"rail,omitempty"`
 	SidebarWidth   float64  `json:"sidebarWidth,omitempty"`
 	ClosedSections []string `json:"closedSections,omitempty"`
+	// Advanced lists the pages whose 「高级」 section is open ("studio",
+	// "story", "audiobook", "dub", "export", "clone").
+	Advanced []string `json:"advanced,omitempty"`
 }
 
 // Studio: defaults of the TTS form.

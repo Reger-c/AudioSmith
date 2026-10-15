@@ -170,7 +170,9 @@ func TestGalleryPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if len(a.voices) != 1 || a.studioVoice != v.ID || a.router.Path() != "/studio" || a.preset().Repo != omni {
+	// The recommended model that speaks it (a designed voice: cloned from
+	// its sample on Qwen3-TTS 1.7B Base, thread #41).
+	if len(a.voices) != 1 || a.studioVoice != v.ID || a.router.Path() != "/studio" || a.preset().ID != "qwen3-tts-1.7b-base-8bit" {
 		t.Errorf("use in studio: %d %s %s", len(a.voices), a.router.Path(), a.preset().Repo)
 	}
 	if _, err := os.Stat(filepath.Join(a.voiceCacheDir(), filepath.Base(req.Output.Path))); err != nil {

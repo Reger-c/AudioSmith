@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### A simpler Studio
+- The inspector shows what most takes need: the model, one Voice list (the model's speakers, your saved voices, a clip to clone, Manage voices…) and the speed. Everything else — style, reference transcript, length, refinement, guidance, expressiveness, sampling, seed, reading numbers, evening out the volume — is under Advanced, filled with the model's recommended settings; its header says "Recommended settings" or how many you changed, with Restore recommended inside. Advanced stays open or closed as you left it.
+- The Voice controls and Audio quality buttons are gone, and so are the WAV precision (takes are kept at 24-bit; choose the file's bit depth in Export audio), Preload / Unload (in the ⌘E engine switcher, now with Unload), the autoplay switch (Settings → Studio) and the steps slider (three tiers remain).
+- A clip chosen to clone is transcribed for you when it is a WAV.
+- The bar beside Generate says which model and voice will speak, and how many settings you changed; a click shows the inspector.
+
 ### Recommended models and settings
 - Every speech model was measured on a MacBook Air (intelligibility with two recognisers, naturalness, voice stability, speed, memory). Each page now recommends two or three models for its job and your language, with a one-line "best for" and a speed and quality hint; the others are one click away under "Show all models", and the ones that can't do the job (no cloning for a dub) are greyed out with the reason.
 - Tuned defaults: Qwen3-TTS uses temperature 0.7 and top-p 0.8 unless you (or an API request) set them — the models' own 0.9 / 1.0 sounded worse and less stable; OmniVoice uses guidance 1.5 with 32 steps (16 for dubbing). The Local API and MCP tools follow the same defaults. Rendered chunks from before are made again once with the new settings.

@@ -799,11 +799,13 @@ func TestStudioSeam(t *testing.T) {
 	// It renders in a view, and Manage voices… opens the library.
 	a.studioVoice = c.ID
 	tt := ui.NewTester(func(ctx *ui.Context) {
-		ui.Column(ctx).Fill().Children(func() { a.voicePicker(ctx, kok) })
-	}, 400, 300)
+		ui.Column(ctx).Fill().Children(func() { a.studioVoiceField(ctx, kok) })
+	}, 400, 1400) // the list shows all of Kokoro's voices
 	if !tt.HasText("Kokoro 82M can't clone voices. Choose a model that clones, such as Qwen3-TTS Base or OmniVoice.") && !strings.Contains(strings.Join(tt.Texts(), "|"), "can't clone voices") {
 		t.Errorf("picker: %q", tt.Texts())
 	}
+	a.inspectorUI.voiceListOpen = true
+	tt.Frame()
 	tt.Click("Manage voices…")
 	if a.router.Path() != "/voices" {
 		t.Errorf("manage: %s", a.router.Path())

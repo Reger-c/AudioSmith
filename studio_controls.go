@@ -1,12 +1,11 @@
 package main
 
-// The composer's controls: the "+ Insert" menu of markup (Alt+/), the
-// language picker, and the Audio quality and Voice controls popovers.
-// What they offer follows the model: its catalogue capabilities and its
-// render traits (services.TraitsFor).
+// The composer's controls: the "+ Insert" menu of markup (Alt+/) and the
+// language picker. What they offer follows the model: its catalogue
+// capabilities and its render traits (services.TraitsFor). The voice and
+// generation settings are in the inspector (studio_inspector.go).
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
@@ -21,12 +20,10 @@ import (
 
 // composerState is the composer's view state.
 type composerState struct {
-	insertOpen  bool
-	langOpen    bool
-	qualityOpen bool
-	voiceOpen   bool
-	langQuery   string
-	langList    ui.ListState
+	insertOpen bool
+	langOpen   bool
+	langQuery  string
+	langList   ui.ListState
 	// undoToast, when set, is shown as a toast with Undo (an import).
 	undoToast string
 	// panel: the inspector shown or hidden by its toggle; panelAuto
@@ -312,173 +309,5 @@ func (a *app) languagePicker(c *ui.Context) {
 	})
 }
 
-// mbPerMinute is how much a minute of mono audio takes at bits and rate.
-func mbPerMinute(bits, rate int) float64 {
-	if rate == 0 {
-		rate = 24000
-	}
-	return float64(bits/8*rate*60) / 1e6
-}
-
 // tierSteps are the performance tiers' steps, in the Segmented's order.
 var tierSteps = []float64{services.StepsFast, services.StepsBalanced, services.StepsQuality}
-
-// qualityPopover is the Audio quality button and its popover.
-func (a *app) qualityPopover(c *ui.Context) {
-	t := c.Theme()
-	p := a.preset()
-	tr := a.traits()
-	btn := a.composerButton(c, "quality", icons.TuningSquare2, i18n.T("Audio quality")).Tooltip(i18n.T("Bit depth, refinement and volume"))
-	if btn.Clicked() {
-		a.composer.qualityOpen = !a.composer.qualityOpen
-	}
-	ui.Popover(c, btn, &a.composer.qualityOpen, func() {
-		popoverWithFooter(c, "quality", func() {
-			a.restoreButton(c, "quality-reset")
-		}, func() {
-			ui.Column(c.Key("quality-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
-				ui.Text(c, i18n.T("WAV precision")).FontWeight(600)
-				segmentedFit(c.Key("bits"), &a.bitsIndex, i18n.T("16-bit"), i18n.T("24-bit"), i18n.T("32-bit float")).Label(i18n.T("WAV precision"))
-				desc := []string{i18n.T("Standard: plays everywhere."), i18n.T("For editing: more headroom."), i18n.T("Original: the model's own samples.")}
-				bits := bitDepths[min(max(a.bitsIndex, 0), 2)]
-				caption(c, desc[min(max(a.bitsIndex, 0), 2)]+" "+i18n.T("About %.1f MB a minute.", mbPerMinute(bits, p.SampleRate)))
-				if tr.Steps {
-					ui.Divider(c)
-					steps := a.shownSteps()
-					ui.Text(c, i18n.T("Voice refinement  %d steps", int(steps))).FontWeight(600)
-					tier := slices.Index(tierSteps, steps)
-					if segmentedFit(c.Key("tier"), &tier, i18n.T("Fast"), i18n.T("Balanced"), i18n.T("Quality")).Label(i18n.T("Performance")).Changed() && tier >= 0 {
-						a.steps = tierSteps[tier]
-					}
-					if ui.StepSlider(c.Key("steps"), &steps, 8, 64, 4).Label(i18n.T("Refinement steps")).Changed() {
-						a.steps = steps
-					}
-					caption(c, i18n.T("More steps sound cleaner and take longer."))
-				}
-				ui.Divider(c)
-				formRow(c, "even-out-row", i18n.T("Even out volume"), i18n.T("Masters the take to broadcast loudness (−18 LUFS)."), func() {
-					ui.Switch(c.Key("even-out"), &a.evenOut).Label(i18n.T("Even out volume"))
-				})
-				formRow(c, "normalize-row", i18n.T("Read numbers as words"), i18n.T("Numbers, times, dates, money and abbreviations, before the model reads them."), func() {
-					ui.Switch(c.Key("normalize"), &a.normalize).Label(i18n.T("Read numbers as words"))
-				})
-			})
-		})
-	})
-}
-
-// voicePopover is the Voice controls button and its popover.
-func (a *app) voicePopover(c *ui.Context) {
-	t := c.Theme()
-	p := a.preset()
-	btn := a.composerButton(c, "voice-controls", icons.Tuning2, i18n.T("Voice controls")).Tooltip(i18n.T("Speed, length, seed and sampling"))
-	if btn.Clicked() {
-		a.composer.voiceOpen = !a.composer.voiceOpen
-	}
-	ui.Popover(c, btn, &a.composer.voiceOpen, func() {
-		popoverWithFooter(c, "voice", func() {
-			a.restoreButton(c, "voice-reset")
-		}, func() {
-			ui.Column(c.Key("voice-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
-				if p.Has(catalog.CapSpeed) {
-					ui.Field(c, i18n.T("Speed  %.2f×", a.speed), func() {
-						snapped(ui.Slider(c.Key("speed"), &a.speed, 0.5, 2).Label(i18n.T("Speed")), &a.speed, 0.05)
-					})
-				}
-				if p.Has(catalog.CapDuration) {
-					ui.Field(c, i18n.T("Duration (seconds, 0 = natural)"), func() {
-						numberInput(c.Key("duration"), &a.duration, 0, 600, 0.5, numOpts{Label: i18n.T("Duration")})
-					})
-					if a.duration > 0 && p.Has(catalog.CapSpeed) {
-						caption(c, i18n.T("A duration overrides the speed."))
-					}
-				}
-				formRow(c, "seed-pin-row", i18n.T("Pin the seed"), i18n.T("The same seed and settings make the same take."), func() {
-					ui.Switch(c.Key("seed-pin"), &a.seedPinned).Label(i18n.T("Pin the seed"))
-				})
-				if a.seedPinned {
-					ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-						numberInput(c.Key("seed"), &a.seed, 1, 1<<31-1, 1, numOpts{Label: i18n.T("Seed"), Grow: true})
-						if ui.Button(c.Key("new-seed"), i18n.T("New seed")).Clicked() {
-							a.newSeed()
-						}
-					})
-				}
-				if p.Has(catalog.CapGuidance) {
-					g := shown(a.guidance, a.recommended().Guidance, 2)
-					ui.Field(c, i18n.T("Prompt guidance  %.1f", g), func() {
-						if snapped(ui.Slider(c.Key("guidance"), &g, 1, 4).Label(i18n.T("Prompt guidance")), &g, 0.1).Changed() {
-							a.guidance = g
-						}
-					})
-				}
-				if p.Has(catalog.CapExaggeration) {
-					x := shown(a.exaggeration, a.recommended().Exaggeration, 0.5)
-					ui.Field(c, i18n.T("Expressiveness  %.2f", x), func() {
-						if snapped(ui.Slider(c.Key("exaggeration"), &x, 0.25, 2).Label(i18n.T("Expressiveness")), &x, 0.05).Changed() {
-							a.exaggeration = x
-						}
-					})
-				}
-				if p.Has(catalog.CapSampling) {
-					ui.Divider(c)
-					rec := a.recommended()
-					temp, topP := shown(a.temperature, rec.Temperature, 0.9), shown(a.topP, rec.TopP, 1)
-					ui.Field(c, i18n.T("Temperature  %.2f", temp), func() {
-						if snapped(ui.Slider(c.Key("temperature"), &temp, 0.05, 1.5).Label(i18n.T("Temperature")), &temp, 0.05).Changed() {
-							a.temperature = temp
-						}
-					})
-					ui.Field(c, i18n.T("Top P  %.2f", topP), func() {
-						if snapped(ui.Slider(c.Key("topp"), &topP, 0.05, 1).Label(i18n.T("Top P")), &topP, 0.05).Changed() {
-							a.topP = topP
-						}
-					})
-				}
-			})
-		})
-	})
-}
-
-// voiceControlsSummary says what the Voice controls change, for the bar.
-func (a *app) voiceControlsSummary() string {
-	p := a.preset()
-	var parts []string
-	if p.Has(catalog.CapDuration) && a.duration > 0 {
-		parts = append(parts, i18n.T("%.1f s", a.duration))
-	} else if p.Has(catalog.CapSpeed) && a.speed != 1 {
-		parts = append(parts, fmt.Sprintf("%.2f×", a.speed))
-	}
-	if a.seedPinned && a.seed > 0 {
-		parts = append(parts, i18n.T("seed %d", int64(a.seed)))
-	}
-	return strings.Join(parts, " · ")
-}
-
-// composerButton is a button of the composer that opens a popover: its
-// icon and label, or its icon alone when the composer is narrow.
-func (a *app) composerButton(c *ui.Context, key string, ic icons.Icon, label string) ui.Element {
-	if a.studioNarrow(c) {
-		return iconButton(c.Key(key), ic, label)
-	}
-	return secondaryIconButton(c.Key(key), ic, label).Label(label)
-}
-
-// restoreButton is 「恢复推荐设置」 with how many settings differ from the
-// model's recommendation (「已改 N 项」), at the foot of the Studio's
-// popovers.
-func (a *app) restoreButton(c *ui.Context, key string) {
-	t := c.Theme()
-	changes := a.studioChanges()
-	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
-		label := i18n.T("Recommended settings")
-		if n := len(changes); n > 0 {
-			label = i18n.N(n, "%d change", "%d changes", n)
-		}
-		caption(c, label).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").Tooltip(strings.Join(changes, " · "))
-		if secondaryIconButton(c.Key(key), icons.Restart, i18n.T("Restore recommended")).Label(i18n.T("Restore recommended")).
-			Tooltip(i18n.T("Use the model's tuned settings again")).Disabled(len(changes) == 0).Clicked() {
-			a.restoreRecommended()
-		}
-	})
-}
