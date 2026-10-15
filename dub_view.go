@@ -827,25 +827,27 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 	if p.Detected != "" && p.SourceLang == "" {
 		caption(c, i18n.T("Detected: %s", dubLangName(p.Detected)))
 	}
-	fieldInfo(c, i18n.T("Speakers"), i18n.T("How many people speak? Leave it on Auto to detect them; the speaker model tells up to 4 apart."), func() {
-		names := []string{i18n.T("Auto-detect")}
-		for i := 1; i <= dub.MaxSpeakers; i++ {
-			names = append(names, strconv.Itoa(i))
+	a.dubAdvanced(c, dubStepSource, locked, func() {
+		fieldInfo(c, i18n.T("Speakers"), i18n.T("How many people speak? Leave it on Auto to detect them; the speaker model tells up to 4 apart."), func() {
+			names := []string{i18n.T("Auto-detect")}
+			for i := 1; i <= dub.MaxSpeakers; i++ {
+				names = append(names, strconv.Itoa(i))
+			}
+			cur := names[min(max(p.Speakers, 0), dub.MaxSpeakers)]
+			if ui.Select(c.Key("src-speakers"), &cur, names).Label(i18n.T("Speakers")).Disabled(locked).Changed() {
+				n := slices.Index(names, cur)
+				a.dubSet(func(p *dub.Project) { p.Speakers = n })
+			}
+		})
+		review := p.Settings.Review
+		if dubSwitch(c, "src-review", i18n.T("Review after each step"), i18n.T("Stops after the transcript and after the translation, so they can be checked first."), &review, false) {
+			a.dubSettings(func(s *dub.Settings) { s.Review = review })
 		}
-		cur := names[min(max(p.Speakers, 0), dub.MaxSpeakers)]
-		if ui.Select(c.Key("src-speakers"), &cur, names).Label(i18n.T("Speakers")).Disabled(locked).Changed() {
-			n := slices.Index(names, cur)
-			a.dubSet(func(p *dub.Project) { p.Speakers = n })
+		if ghostIconButton(c.Key("src-import"), icons.Import, i18n.T("Import subtitles (SRT/VTT)…")).Label(i18n.T("Import subtitles (SRT/VTT)…")).Disabled(locked || p.Source.Path == "" && p.Source.URL == "").
+			Tooltip(i18n.T("Use a subtitle file as the transcript instead of recognising speech")).Clicked() {
+			a.dubImportSubtitles()
 		}
 	})
-	review := p.Settings.Review
-	if dubSwitch(c, "src-review", i18n.T("Review after each step"), i18n.T("Stops after the transcript and after the translation, so they can be checked first."), &review, false) {
-		a.dubSettings(func(s *dub.Settings) { s.Review = review })
-	}
-	if ghostIconButton(c.Key("src-import"), icons.Import, i18n.T("Import subtitles (SRT/VTT)…")).Label(i18n.T("Import subtitles (SRT/VTT)…")).Disabled(locked || p.Source.Path == "" && p.Source.URL == "").
-		Tooltip(i18n.T("Use a subtitle file as the transcript instead of recognising speech")).Clicked() {
-		a.dubImportSubtitles()
-	}
 }
 
 // dubTranscribePanel: the preparation stages, speakers and their names.
@@ -895,19 +897,6 @@ func (a *app) dubTranscribePanel(c *ui.Context) {
 				tagChip(c, i18n.N(n, "%d line", "%d lines", n))
 			})
 		}
-		ui.Column(c).Gap(px(t, 2)).Children(func() {
-			if ghostIconButton(c.Key("tr-again"), icons.Restart, i18n.T("Transcribe again")).Label(i18n.T("Transcribe again")).Disabled(a.dubBusy()).
-				Tooltip(i18n.T("Recognise the speech again: edits to the transcript are lost")).Clicked() {
-				a.dubConfirm, a.dubConfirmOpen = "transcribe", true
-			}
-			if ghostIconButton(c.Key("tr-mirror"), icons.Pulse2, i18n.T("Mirror source delivery")).Label(i18n.T("Mirror source delivery")).Disabled(a.dubLocked()).
-				Tooltip(i18n.T("Give lines that stand out a direction (whispered, quick…) from how they are said")).Clicked() {
-				a.dubMirror()
-			}
-			if ghostIconButton(c.Key("tr-cleanup"), icons.MagicStick3, i18n.T("Clean up fragments")).Label(i18n.T("Clean up fragments")).Disabled(a.dubLocked()).Clicked() {
-				a.dubCleanup()
-			}
-		})
 	}
 }
 
@@ -981,45 +970,8 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 			}
 		})
 	}
-	// More languages.
-	ui.Text(c, i18n.T("More languages"))
-	ui.Row(c.Key("tl-more")).Gap(px(t, 4)).Wrap().AlignItems(ui.Center).Children(func() {
-		for _, l := range p.Targets[min(1, len(p.Targets)):] {
-			ll := l
-			ui.Row(c.Key("chip-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 2), px(t, 2), px(t, sp2)).Radius(px(t, radiusControl)).Background(tok(t).Hover).Children(func() {
-				ui.Text(c, dubLangName(ll)).FontSize(px(t, fsCaption)).SingleLine()
-				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Size(px(t, 22), px(t, 22)).Disabled(locked).Clicked() {
-					a.dubSet(func(p *dub.Project) { p.Targets = slices.DeleteFunc(p.Targets, func(x string) bool { return x == ll }) })
-				}
-			})
-		}
-		dropButton(c.Key("tl-add"), icons.AddCircle, i18n.T("Add")).Shrink(0).Menu(func(m *ui.Menu) {
-			for _, l := range dubTargetLangs {
-				if slices.Contains(p.Targets, l) {
-					continue
-				}
-				if m.Item(dubLangName(l)).Disabled(locked).Chosen() {
-					ll := l
-					a.dubSet(func(p *dub.Project) { p.Targets = append(p.Targets, ll) })
-				}
-			}
-		})
-	})
-	// The translator.
-	engines := []string{"llm", "deepl", "google", "microsoft"}
-	names := []string{i18n.T("Language model"), "DeepL", "Google Cloud Translation", "Microsoft Translator"}
-	cur := names[max(slices.Index(engines, p.Settings.Translator), 0)]
-	ui.Field(c, i18n.T("Translator"), func() {
-		if ui.Select(c.Key("tl-engine"), &cur, names).Label(i18n.T("Translator")).Disabled(locked).Changed() {
-			e := engines[slices.Index(names, cur)]
-			a.dubSettings(func(s *dub.Settings) { s.Translator = e })
-		}
-	})
 	ok, name := a.dubTranslatorReady(p.Settings)
-	switch {
-	case ok && name != "":
-		caption(c, i18n.T("Uses %s", name))
-	case !ok:
+	if !ok {
 		fillCard(c.Key("tl-needs")).Gap(px(t, sp2)).Padding(px(t, sp3)).Children(func() {
 			ui.Row(c).Gap(px(t, 6)).Children(func() {
 				iconMark(c, icons.DangerTriangle, t.Warning, "")
@@ -1030,58 +982,82 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 			}
 		})
 	}
-	if p.Settings.Translator != "llm" && p.Settings.Translator != "" {
-		caption(c, i18n.T("The service's API key is kept in the Keychain as “mt.%s”.", p.Settings.Translator)).TextColor(tok(t).Text3)
-	}
-	if p.Settings.Translator == "llm" || p.Settings.Translator == "" {
-		quals := []translate.Quality{translate.Fast, translate.Autofit, translate.Cinematic}
-		qi := max(slices.Index(quals, p.Settings.Quality), 0)
-		fieldInfo(c, i18n.T("Quality"), i18n.T("Fast is one literal pass; Autofit rewrites lines that would not fit their time; Cinematic drafts, critiques and adapts for natural phrasing."), func() {
-			if segmentedFit(c.Key("tl-quality"), &qi, i18n.T("Fast"), i18n.T("Autofit"), i18n.T("Cinematic")).Label(i18n.T("Quality")).Disabled(locked).Changed() {
-				q := quals[qi]
-				a.dubSettings(func(s *dub.Settings) { s.Quality = q })
+	a.dubAdvanced(c, dubStepTranslate, locked, func() {
+		// More languages.
+		ui.Text(c, i18n.T("More languages"))
+		ui.Row(c.Key("tl-more")).Gap(px(t, 4)).Wrap().AlignItems(ui.Center).Children(func() {
+			for _, l := range p.Targets[min(1, len(p.Targets)):] {
+				ll := l
+				ui.Row(c.Key("chip-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 2), px(t, 2), px(t, sp2)).Radius(px(t, radiusControl)).Background(tok(t).Hover).Children(func() {
+					ui.Text(c, dubLangName(ll)).FontSize(px(t, fsCaption)).SingleLine()
+					if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Size(px(t, 22), px(t, 22)).Disabled(locked).Clicked() {
+						a.dubSet(func(p *dub.Project) { p.Targets = slices.DeleteFunc(p.Targets, func(x string) bool { return x == ll }) })
+					}
+				})
+			}
+			dropButton(c.Key("tl-add"), icons.AddCircle, i18n.T("Add")).Shrink(0).Menu(func(m *ui.Menu) {
+				for _, l := range dubTargetLangs {
+					if slices.Contains(p.Targets, l) {
+						continue
+					}
+					if m.Item(dubLangName(l)).Disabled(locked).Chosen() {
+						ll := l
+						a.dubSet(func(p *dub.Project) { p.Targets = append(p.Targets, ll) })
+					}
+				}
+			})
+		})
+		// The translator.
+		engines := []string{"llm", "deepl", "google", "microsoft"}
+		names := []string{i18n.T("Language model"), "DeepL", "Google Cloud Translation", "Microsoft Translator"}
+		cur := names[max(slices.Index(engines, p.Settings.Translator), 0)]
+		ui.Field(c, i18n.T("Translator"), func() {
+			if ui.Select(c.Key("tl-engine"), &cur, names).Label(i18n.T("Translator")).Disabled(locked).Changed() {
+				e := engines[slices.Index(names, cur)]
+				a.dubSettings(func(s *dub.Settings) { s.Translator = e })
 			}
 		})
-		auto := p.Settings.AutoGlossary
-		if dubSwitch(c, "tl-autogloss", i18n.T("Auto glossary"), "", &auto, locked) {
-			a.dubSettings(func(s *dub.Settings) { s.AutoGlossary = auto })
+		if ok && name != "" {
+			caption(c, i18n.T("Uses %s", name))
 		}
-	}
-	shorter := p.Settings.SuggestShorter
-	if dubSwitch(c, "tl-shorter", i18n.T("Suggest shorter lines"), "", &shorter, locked) {
-		a.dubSettings(func(s *dub.Settings) { s.SuggestShorter = shorter })
-	}
-	forms := []translate.Formality{translate.FormalityAuto, translate.FormalityFormal, translate.FormalityInformal}
-	fnames := []string{i18n.T("Automatic"), i18n.T("Formal"), i18n.T("Informal")}
-	fcur := fnames[max(slices.Index(forms, p.Settings.Formality), 0)]
-	ui.Field(c, i18n.T("Register"), func() {
-		if ui.Select(c.Key("tl-formality"), &fcur, fnames).Label(i18n.T("Register")).Disabled(locked).Changed() {
-			f := forms[slices.Index(fnames, fcur)]
-			a.dubSettings(func(s *dub.Settings) { s.Formality = f })
+		if p.Settings.Translator != "llm" && p.Settings.Translator != "" {
+			caption(c, i18n.T("The service's API key is kept in the Keychain as “mt.%s”.", p.Settings.Translator)).TextColor(tok(t).Text3)
 		}
-	})
-	style := p.Settings.Style
-	ui.Field(c, i18n.T("Style notes"), func() {
-		if ui.TextArea(c.Key("tl-style"), &style).Lines(2, 6).Placeholder(i18n.T("Tone, audience, how freely to adapt…")).Label(i18n.T("Style notes")).Disabled(locked).Changed() {
-			v := []rune(style)
-			v = v[:min(len(v), translate.MaxStyle)]
-			a.dubSettings(func(s *dub.Settings) { s.Style = string(v) })
-		}
-	})
-	ui.Column(c).Gap(px(t, 2)).Children(func() {
-		if ghostIconButton(c.Key("tl-gloss"), icons.TextSquare, i18n.T("Glossary (%d)", len(p.Glossary))).Label(i18n.T("Glossary (%d)", len(p.Glossary))).Clicked() {
-			a.dubGloss.open = !a.dubGloss.open
-		}
-		if ghostIconButton(c.Key("tl-paste"), icons.Copy, i18n.T("Paste translation")).Label(i18n.T("Paste translation")).Disabled(len(p.Segments) == 0).Clicked() {
-			a.dubPaste.open = !a.dubPaste.open
-			if a.dubLang == "" {
-				a.dubLang = p.Primary()
+		if p.Settings.Translator == "llm" || p.Settings.Translator == "" {
+			quals := []translate.Quality{translate.Fast, translate.Autofit, translate.Cinematic}
+			qi := max(slices.Index(quals, p.Settings.Quality), 0)
+			fieldInfo(c, i18n.T("Quality"), i18n.T("Fast is one literal pass; Autofit rewrites lines that would not fit their time; Cinematic drafts, critiques and adapts for natural phrasing."), func() {
+				if segmentedFit(c.Key("tl-quality"), &qi, i18n.T("Fast"), i18n.T("Autofit"), i18n.T("Cinematic")).Label(i18n.T("Quality")).Disabled(locked).Changed() {
+					q := quals[qi]
+					a.dubSettings(func(s *dub.Settings) { s.Quality = q })
+				}
+			})
+			auto := p.Settings.AutoGlossary
+			if dubSwitch(c, "tl-autogloss", i18n.T("Auto glossary"), "", &auto, locked) {
+				a.dubSettings(func(s *dub.Settings) { s.AutoGlossary = auto })
 			}
 		}
-		if ghostIconButton(c.Key("tl-again"), icons.Restart, i18n.T("Translate everything again")).Label(i18n.T("Translate everything again")).Disabled(locked || len(p.Segments) == 0).
-			Tooltip(i18n.T("Lines you wrote yourself are kept")).Clicked() {
-			a.dubTranslate(true)
+		shorter := p.Settings.SuggestShorter
+		if dubSwitch(c, "tl-shorter", i18n.T("Suggest shorter lines"), "", &shorter, locked) {
+			a.dubSettings(func(s *dub.Settings) { s.SuggestShorter = shorter })
 		}
+		forms := []translate.Formality{translate.FormalityAuto, translate.FormalityFormal, translate.FormalityInformal}
+		fnames := []string{i18n.T("Automatic"), i18n.T("Formal"), i18n.T("Informal")}
+		fcur := fnames[max(slices.Index(forms, p.Settings.Formality), 0)]
+		ui.Field(c, i18n.T("Register"), func() {
+			if ui.Select(c.Key("tl-formality"), &fcur, fnames).Label(i18n.T("Register")).Disabled(locked).Changed() {
+				f := forms[slices.Index(fnames, fcur)]
+				a.dubSettings(func(s *dub.Settings) { s.Formality = f })
+			}
+		})
+		style := p.Settings.Style
+		ui.Field(c, i18n.T("Style notes"), func() {
+			if ui.TextArea(c.Key("tl-style"), &style).Lines(2, 6).Placeholder(i18n.T("Tone, audience, how freely to adapt…")).Label(i18n.T("Style notes")).Disabled(locked).Changed() {
+				v := []rune(style)
+				v = v[:min(len(v), translate.MaxStyle)]
+				a.dubSettings(func(s *dub.Settings) { s.Style = string(v) })
+			}
+		})
 	})
 }
 
@@ -1157,14 +1133,16 @@ func (a *app) dubCastPanel(c *ui.Context) {
 	if p.Settings.VoiceMatch == dub.MatchLine {
 		match = 1
 	}
-	fieldInfo(c, i18n.T("Voice match"), i18n.T("Consistent clones each speaker from one sample; Per line clones each line from its own audio (follows the delivery, less stable)."), func() {
-		if segmentedFit(c.Key("cast-match"), &match, i18n.T("Consistent"), i18n.T("Per line")).Label(i18n.T("Voice match")).Changed() {
-			m := dub.MatchConsistent
-			if match == 1 {
-				m = dub.MatchLine
+	a.dubAdvanced(c, dubStepCast, locked, func() {
+		fieldInfo(c, i18n.T("Voice match"), i18n.T("Consistent clones each speaker from one sample; Per line clones each line from its own audio (follows the delivery, less stable)."), func() {
+			if segmentedFit(c.Key("cast-match"), &match, i18n.T("Consistent"), i18n.T("Per line")).Label(i18n.T("Voice match")).Disabled(locked).Changed() {
+				m := dub.MatchConsistent
+				if match == 1 {
+					m = dub.MatchLine
+				}
+				a.dubSettings(func(s *dub.Settings) { s.VoiceMatch = m })
 			}
-			a.dubSettings(func(s *dub.Settings) { s.VoiceMatch = m })
-		}
+		})
 	})
 }
 
@@ -1192,7 +1170,7 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 		caption(c.Key("gen-needs-ref"), i18n.T("%s only clones voices: each line speaks in its speaker's own voice or a saved cloned voice.", entryFor(p.Settings.Model).Label)).TextColor(tok(t).Text3)
 	}
 	if caps.Duration {
-		caption(c, i18n.T("This model speaks each line in exactly its time: the best lip sync.")).TextColor(tok(t).Text3)
+		caption(c, i18n.T("This model can speak each line in exactly its time (Lip sync), but then it may change words: Smart fit is safer.")).TextColor(tok(t).Text3)
 	}
 	// Timing.
 	timings := dub.Timings
@@ -1208,15 +1186,6 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 	if dubSwitch(c, "gen-bg", i18n.T("Keep background (music and effects)"), "", &keep, locked) {
 		a.dubSettings(func(s *dub.Settings) { s.KeepBackground = keep })
 	}
-	summary := ""
-	if p.Settings.Steps != 0 || p.Settings.Guidance != 0 || p.Settings.Speed != 0 || p.Settings.Instruct != "" {
-		summary = i18n.T("Changed")
-	}
-	collapsible(c.Key("gen-voice"), i18n.T("Voice controls"), &a.dubVoiceCtl, func() {
-		if summary != "" {
-			caption(c, summary).SingleLine()
-		}
-	}, func() { a.dubVoiceControls(c, caps, locked) })
 	sectionTitle(c, i18n.T("Tracks"))
 	// Tracks.
 	for _, l := range p.Targets {
@@ -1239,16 +1208,23 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 		})
 	}
 	// Verify is in the editor's toolbar.
+	a.dubAdvanced(c, dubStepGenerate, locked, func() { a.dubVoiceControls(c, caps, locked) })
 }
 
 // dubVoiceControls are the Generate step's voice controls: steps,
 // guidance, speed and style, as the model takes them.
 func (a *app) dubVoiceControls(c *ui.Context, caps services.DubModelCaps, locked bool) {
 	p := a.dub
+	// Unset: the model's recommended values for dubbing (presets).
+	pre, _ := catalog.PresetFor(entryFor(p.Settings.Model).ID)
+	rec := pre.ParamsFor(catalog.WorkflowDub)
 	if caps.Steps {
 		steps := float64(p.Settings.Steps)
 		if steps == 0 {
 			steps = 32
+			if rec.Steps != nil {
+				steps = float64(*rec.Steps)
+			}
 		}
 		ui.Field(c, i18n.T("Steps: %d", int(steps)), func() {
 			if ui.StepSlider(c.Key("gen-steps"), &steps, 8, 64, 1).Label(i18n.T("Steps")).Disabled(locked).Changed() {
@@ -1258,10 +1234,7 @@ func (a *app) dubVoiceControls(c *ui.Context, caps services.DubModelCaps, locked
 		})
 	}
 	if caps.Guidance {
-		g := p.Settings.Guidance
-		if g == 0 {
-			g = 2
-		}
+		g := shown(p.Settings.Guidance, rec.Guidance, 2)
 		ui.Field(c, i18n.T("Guidance: %.1f", g), func() {
 			if ui.StepSlider(c.Key("gen-cfg"), &g, 0, 4, 0.1).Label(i18n.T("Guidance")).Disabled(locked).Changed() {
 				v := dubRound(g)
@@ -1290,9 +1263,6 @@ func (a *app) dubVoiceControls(c *ui.Context, caps services.DubModelCaps, locked
 				a.dubSettings(func(s *dub.Settings) { s.Instruct = v })
 			}
 		})
-	}
-	if ghostIconButton(c.Key("gen-reset"), icons.Restart, i18n.T("Reset voice controls")).Label(i18n.T("Reset voice controls")).Disabled(locked).Clicked() {
-		a.dubSettings(func(s *dub.Settings) { s.Steps, s.Guidance, s.Speed, s.Instruct = 0, 0, 0, "" })
 	}
 }
 

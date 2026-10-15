@@ -95,6 +95,8 @@ func (a *app) dubToolbar(c *ui.Context) {
 			menuDo(m, i18n.T("Clean up fragments"), locked, a.dubCleanup)
 			menuDo(m, i18n.T("Mirror source delivery"), locked || p.Media.Audio == "", a.dubMirror)
 			menuDo(m, i18n.T("Import subtitles as the transcript…"), locked || a.dubBusy(), a.dubImportSubtitles)
+			menuDo(m, i18n.T("Transcribe again…"), a.dubBusy(), func() { a.dubConfirm, a.dubConfirmOpen = "transcribe", true })
+			menuDo(m, i18n.T("Translate everything again"), locked || a.dubBusy(), func() { a.dubTranslate(true) })
 			m.Separator()
 			menuDo(m, i18n.T("Restore the source (drop translations)"), locked, a.dubRestore)
 			if a.dubLang != "" {
