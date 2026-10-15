@@ -211,3 +211,36 @@ func TestStorySplitAndImport(t *testing.T) {
 		t.Errorf("imported %q", p.doc.ImportText)
 	}
 }
+
+// The render bar's Clear empties the lines at once (the cast stays), and
+// Undo brings them back.
+func TestStoriesClearWithUndo(t *testing.T) {
+	a, _, tt := newTestApp(t)
+	a.navigate("/stories")
+	tt.Frame()
+	p := a.lfStories
+	p.doc.ImportText = screenplay
+	tt.Frame()
+	if err := tt.Click("Auto-cast"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	lines, cast := len(p.doc.Lines), len(p.doc.Cast)
+	if lines == 0 {
+		t.Fatal("no lines")
+	}
+	if err := tt.Click("Clear"); err != nil {
+		t.Fatalf("%v: %q", err, tt.Texts())
+	}
+	tt.Frame()
+	if len(p.doc.Lines) != 0 || len(p.doc.Cast) != cast {
+		t.Fatalf("after Clear: %d lines, %d cast", len(p.doc.Lines), len(p.doc.Cast))
+	}
+	if err := tt.Click("Undo"); err != nil {
+		t.Fatalf("%v: %q", err, tt.Texts())
+	}
+	tt.Frame()
+	if len(p.doc.Lines) != lines {
+		t.Fatalf("after Undo: %d lines, want %d", len(p.doc.Lines), lines)
+	}
+}

@@ -519,6 +519,15 @@ func (a *app) clearLf(p *lfPage) {
 	}
 }
 
+// clearLfUndo empties a story's script at once, with Undo.
+func (a *app) clearLfUndo(p *lfPage) {
+	lines, review := slices.Clone(p.doc.Lines), p.doc.ImportText
+	a.clearLf(p)
+	a.toastUndo(i18n.N(len(lines), "Cleared %d line", "Cleared %d lines", len(lines)), func() {
+		p.doc.Lines, p.doc.ImportText = lines, review
+	})
+}
+
 // --- the render bar --------------------------------------------------------
 
 // lfRenderPanel is the render bar and the outputs, scrolling when they
@@ -569,6 +578,13 @@ func (a *app) lfRenderBar(c *ui.Context, p *lfPage) {
 					if ui.Button(c.Key("lf-resume"), i18n.X("render", "Resume")).Tooltip(i18n.T("Render what is missing: finished chapters are kept")).
 						Disabled(a.activeRender() != nil).Clicked() {
 						a.resumeLf(p, r.rec.ID)
+					}
+				}
+				// Clear: start over with other text (Undo brings it back).
+				if p.kind == core.ProjectStory && len(p.doc.Lines) > 0 {
+					if ghostIconButton(c.Key("lf-clear"), icons.TrashBinMinimalistic, i18n.X("story", "Clear")).
+						Tooltip(i18n.T("Remove every line to start again; the cast stays")).Clicked() {
+						a.clearLfUndo(p)
 					}
 				}
 				if primaryButton(c.Key("lf-generate"), label).Disabled(blocker != "").Clicked() {
