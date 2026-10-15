@@ -16,6 +16,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
+	"github.com/hehehai/AudioSmith/internal/lang"
 )
 
 // modelPickerState is the pickers' view state, by picker key.
@@ -68,6 +69,27 @@ func englishOnly(e catalog.Entry) bool {
 		langs++
 	}
 	return langs > 0 || len(p.Languages) == 1 && p.Languages[0] == "en"
+}
+
+// languageNote warns about a model for the interface's language: one the
+// evaluation found unusable in it (Kokoro's Chinese), or one that speaks
+// only English; "" when it is fine.
+func languageNote(e catalog.Entry) string {
+	base := catalog.BaseLanguage(i18n.Locale())
+	if base == "en" {
+		return ""
+	}
+	if p, ok := catalog.PresetFor(e.ID); ok && slices.Contains(p.HideLanguages, base) {
+		name := base
+		if l, ok := lang.Lookup(base); ok {
+			name = l.NameIn(i18n.Locale())
+		}
+		return i18n.T("Not for %s", name)
+	}
+	if englishOnly(e) {
+		return i18n.T("English only")
+	}
+	return ""
 }
 
 // ratingDots is a 1–3 hint as dots: ●●○.
@@ -217,8 +239,8 @@ func (a *app) pickerList(c *ui.Context, key string, w catalog.Workflow, cur cata
 			for _, e := range others {
 				why := whyNotFor(e, w)
 				note := ""
-				if why == "" && englishOnly(e) && catalog.BaseLanguage(i18n.Locale()) != "en" {
-					note = i18n.T("English only")
+				if why == "" {
+					note = languageNote(e)
 				}
 				a.pickerRow(c, e, cur, i18n.T(e.About), firstOf(why, note), why == "", pick)
 			}
@@ -277,7 +299,7 @@ func (a *app) pickerRow(c *ui.Context, e, cur catalog.Entry, about, note string,
 			if line != "" {
 				ui.Text(c, line).FontSize(px(t, fsMicro)).TextColor(lineCol).MaxLines(2).Ellipsis("…").MinWidth(0)
 			}
-			if p, ok := catalog.PresetFor(e.ID); ok && usable {
+			if p, ok := catalog.PresetFor(e.ID); ok && usable && note == "" {
 				ui.Text(c, i18n.T("Speed %s · Quality %s", ratingDots(p.Speed), ratingDots(p.Quality))).FontSize(px(t, fsMicro)).TextColor(k.Text3).SingleLine()
 			}
 		})

@@ -1651,6 +1651,7 @@
   "Not enough free disk space. %v": "磁盘空间不足。%v",
   "Not enough free space: %s needed, %s free.": "空间不足：需要 %s，剩余 %s。",
   "Not enough space there: %s needed, %s free.": "空间不足：需要 %s，剩余 %s。",
+  "Not for %s": "不适合%s",
   "Not found": "未找到",
   "Not in the sidebar": "不在侧边栏里",
   "Not listening": "未在监听",
