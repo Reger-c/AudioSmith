@@ -119,3 +119,43 @@ func TestStoryDirectorBatches(t *testing.T) {
 		t.Errorf("cast %v", got.Cast)
 	}
 }
+
+// TestStoryDirectorEnglishLimits: English scene, personas and directions
+// are no longer cut at the Chinese limits ("skeptical, testing the e",
+// thread #44); too-long ones end at a phrase or word break.
+func TestStoryDirectorEnglishLimits(t *testing.T) {
+	m := &model{handle: func(sys, user string) (string, error) {
+		if !strings.Contains(sys, "2 to 6 words") {
+			t.Errorf("no English direction length in the prompt")
+		}
+		return `{"scene":"A cozy living room on a quiet Saturday morning. Mia, a bright seven-year-old, wants to adopt a kitten; Dad hesitates.",
+		"cast":[{"name":"Mia","persona":"seven-year-old girl, bright, eager, slightly impatient"},{"name":"Dad","persona":"warm, slightly weary middle-aged man, careful with promises, dry humour, soft heart underneath it all"}],
+		"lines":[{"n":1,"direction":"bursting with excitement","intensity":3},{"n":2,"direction":"skeptical, testing the edges of her promise","intensity":3},
+		{"n":3,"direction":"brightly, pleadingly, hopeful, almost breathless, words tumbling out over each other in a rush","intensity":2},
+		{"n":4,"direction":"yielding warmly agreeing to visit the shelter this very Saturday morning together","intensity":2}]}`, nil
+	}}
+	s := StoryScript{Lines: []StoryScriptLine{
+		{Speaker: "Mia", Text: "Dad, can we adopt a kitten?"}, {Speaker: "Dad", Text: "Who would feed it every day?"},
+		{Speaker: "Mia", Text: "Me! Every single day, I promise."}, {Speaker: "Dad", Text: "All right, we'll visit the shelter on Saturday."},
+	}}
+	got, err := (&StoryDirector{Router: router(m)}).Direct(context.Background(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(got.Scene, "Dad hesitates.") {
+		t.Errorf("scene %q", got.Scene)
+	}
+	if got.Cast[0].Persona != "seven-year-old girl, bright, eager, slightly impatient" || got.Cast[1].Persona != "warm, slightly weary middle-aged man, careful with promises, dry humour" {
+		t.Errorf("cast %q", got.Cast)
+	}
+	want := []string{"bursting with excitement", "skeptical, testing the edges of her promise", "brightly, pleadingly, hopeful, almost breathless", "yielding warmly agreeing to visit the shelter this very"}
+	for i, l := range got.Lines {
+		if l.Direction != want[i] {
+			t.Errorf("line %d: %q, want %q", i+1, l.Direction, want[i])
+		}
+	}
+	// Chinese keeps its limit, cut at a clause break.
+	if c := clipScript("温和但坚定，语气沉稳，慢慢地把每一个字都说得清清楚楚，带着一点无奈的笑", storyDirectionMax, storyDirectionMaxLatin); c != "温和但坚定，语气沉稳" {
+		t.Errorf("zh %q", c)
+	}
+}

@@ -14,7 +14,7 @@ import (
 	"context"
 	"strings"
 	"time"
-	"unicode/utf8"
+	"unicode"
 
 	"github.com/hehehai/AudioSmith/internal/llm"
 )
@@ -74,11 +74,18 @@ type StoryDirector struct {
 // batches that carry the scene, the cast and the lines just before.
 const storyBatch = 40
 
-// Limits of what the director writes (runes).
+// Limits of what the director writes, per script: runes of Chinese (or
+// Japanese) text, characters of Latin text. A word is about 1.5 Chinese
+// characters but 6 Latin characters, so one limit for both cut English
+// directions mid-word ("skeptical, testing the e", thread #44). The
+// Latin limits stay within what StoryInstruct passes to the voice.
 const (
-	storySceneMax     = 60
-	storyPersonaMax   = 40
-	storyDirectionMax = 24
+	storySceneMax          = 60
+	storyPersonaMax        = 40
+	storyDirectionMax      = 24
+	storySceneMaxLatin     = 140
+	storyPersonaMaxLatin   = 90
+	storyDirectionMaxLatin = 60
 )
 
 var storySchema = func() *llm.Schema {
@@ -165,7 +172,7 @@ func (d *StoryDirector) Direct(ctx context.Context, s StoryScript) (StoryDirecti
 			return StoryDirection{}, err
 		}
 		if first == 0 {
-			if sc := clipText(got.Scene, storySceneMax); sc != "" {
+			if sc := clipScript(got.Scene, storySceneMax, storySceneMaxLatin); sc != "" {
 				out.Scene = sc
 			}
 			out.Cast = mergeCast(s.Cast, got.Cast, cast)
@@ -176,7 +183,7 @@ func (d *StoryDirector) Direct(ctx context.Context, s StoryScript) (StoryDirecti
 				continue
 			}
 			seen[l.N] = true
-			l.Direction = clipText(cleanDirection(l.Direction), storyDirectionMax)
+			l.Direction = clipScript(cleanDirection(l.Direction), storyDirectionMax, storyDirectionMaxLatin)
 			l.Intensity = min(max(l.Intensity, 1), 3)
 			if l.Direction == "" {
 				l.Intensity = 0
@@ -223,7 +230,7 @@ func mergeCast(had, got []StoryRole, names []string) []StoryRole {
 		voice[strings.ToLower(strings.TrimSpace(r.Name))] = strings.TrimSpace(r.Voice)
 	}
 	for _, r := range got {
-		if p := clipText(r.Persona, storyPersonaMax); p != "" {
+		if p := clipScript(r.Persona, storyPersonaMax, storyPersonaMaxLatin); p != "" {
 			byName[strings.ToLower(strings.TrimSpace(r.Name))] = p
 		}
 	}
@@ -245,11 +252,39 @@ func cleanDirection(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// clipText trims, folds whitespace and cuts s to n runes.
-func clipText(s string, n int) string {
+// clipScript shortens s to cjk runes when it is mostly Chinese or
+// Japanese, else to latin characters, keeping whole phrases: it cuts at
+// the last clause break (comma, semicolon…) that fits, else (Latin) at
+// the last space, and never leaves trailing punctuation.
+func clipScript(s string, cjk, latin int) string {
 	s = strings.TrimSpace(strings.Join(strings.Fields(s), " "))
-	if utf8.RuneCountInString(s) > n {
-		s = strings.TrimSpace(string([]rune(s)[:n]))
+	n := latin
+	if cjkShare(s) >= 0.3 {
+		n = cjk
 	}
-	return s
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	cut := -1
+	for i := n; i > n/3; i-- { // a clause break inside the limit
+		if strings.ContainsRune(",;:，；：、。.!?！？", r[i]) {
+			cut = i
+			break
+		}
+	}
+	if cut < 0 && n == latin {
+		for i := n; i > n/3; i-- { // a word break
+			if r[i] == ' ' {
+				cut = i
+				break
+			}
+		}
+	}
+	if cut < 0 {
+		cut = n
+	}
+	return strings.TrimRightFunc(string(r[:cut]), func(c rune) bool {
+		return unicode.IsSpace(c) || strings.ContainsRune(",;:，；：、-—–", c)
+	})
 }
