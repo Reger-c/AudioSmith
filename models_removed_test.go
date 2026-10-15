@@ -346,8 +346,8 @@ func TestModelsCleanup(t *testing.T) {
 	}
 	tt.Frame()
 	texts := strings.Join(tt.Texts(), "|")
-	if !a.cleanAsk || !strings.Contains(texts, "Clean up removed models (6 MB)?") || !strings.Contains(texts, "• mlx-community/kitten-tts-mini-0.8 (3 MB)") ||
-		!strings.Contains(texts, "• kyutai/moshiko-pytorch-bf16 (1 MB)") {
+	if !a.cleanAsk || !strings.Contains(texts, "Clean up removed models (6 MB)?") || !strings.Contains(texts, "• KittenTTS mini · 3 MB") ||
+		!strings.Contains(texts, "• Pocket TTS · 3 MB") { // Pocket with its tokenizer
 		t.Fatalf("dialog: %q", texts)
 	}
 	tt.Key(0, ui.KeyEnter)

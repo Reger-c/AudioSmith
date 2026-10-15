@@ -306,16 +306,31 @@ func (a *app) removedBytes() int64 {
 	return n
 }
 
-// removedNames names what is on disk: the removed models' labels (an
-// auxiliary repo counts as its model's).
-func (a *app) removedNames() []string {
-	var out []string
+// removedOnDisk are the removed models with files on disk, and the bytes
+// of each (its auxiliary repos count as its own).
+func (a *app) removedOnDisk() (names []string, bytes []int64) {
 	for _, r := range catalog.Builtin().Removed {
-		if slices.ContainsFunc(a.removedLeft, func(l hub.Leftover) bool { return slices.Contains(r.Repos(), l.Repo) }) {
-			out = append(out, r.Label)
+		var n int64
+		found := false
+		for _, l := range a.removedLeft {
+			if slices.Contains(r.Repos(), l.Repo) {
+				n += l.Bytes
+				found = true
+			}
+		}
+		if found {
+			names, bytes = append(names, r.Label), append(bytes, n)
 		}
 	}
-	return out
+	return names, bytes
+}
+
+// listJoin joins names as the interface's language lists them.
+func listJoin(names []string) string {
+	if strings.HasPrefix(i18n.Locale(), "zh") {
+		return strings.Join(names, "、")
+	}
+	return strings.Join(names, ", ")
 }
 
 // removedRow is the Models page's row about removed models still on
@@ -332,7 +347,8 @@ func (a *app) removedRow(c *ui.Context) {
 			iconMark(c, icons.TrashBinMinimalistic, k.Text2, "")
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 				ui.Text(c, i18n.T("Removed models still take %s", mb(n))).FontWeight(600)
-				caption(c, i18n.T("%s: AudioSmith no longer uses them.", strings.Join(a.removedNames(), ", "))).TextColor(k.Text2).MaxLines(2)
+				names, _ := a.removedOnDisk()
+				caption(c, i18n.T("%s: AudioSmith no longer uses them.", listJoin(names))).TextColor(k.Text2).MaxLines(2)
 			})
 			if secondaryIconButton(c.Key("models-clean"), icons.TrashBinMinimalistic, i18n.T("Clean up")).Label(i18n.T("Clean up")).
 				Disabled(a.cleaning).Clicked() {
@@ -345,10 +361,11 @@ func (a *app) removedRow(c *ui.Context) {
 // removedAlert confirms the clean-up.
 func (a *app) removedAlert(c *ui.Context) {
 	var lines []string
-	for _, l := range a.removedLeft {
-		lines = append(lines, "• "+l.Repo+" ("+mb(l.Bytes)+")")
+	names, bytes := a.removedOnDisk()
+	for i, n := range names {
+		lines = append(lines, "• "+n+" · "+mb(bytes[i]))
 	}
-	body := i18n.T("These folders leave the model folder; nothing else is touched:") + "\n" + strings.Join(lines, "\n")
+	body := i18n.T("Their folders leave the model folder; your other models and files stay:") + "\n" + strings.Join(lines, "\n")
 	if ui.AlertDialog(c, &a.cleanAsk, i18n.T("Clean up removed models (%s)?", mb(a.removedBytes())), body, i18n.T("Cancel"), i18n.T("Clean up")) == 1 {
 		a.cleanRemoved()
 	}

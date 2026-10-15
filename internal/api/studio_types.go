@@ -201,6 +201,8 @@ type LongformJSON struct {
 	Book       BookJSON      `json:"book"`
 	Render     *RenderJSON   `json:"last_render,omitempty"`
 	Updated    time.Time     `json:"updated_at"`
+	// Warning: the request named a removed model; its replacement is used.
+	Warning string `json:"warning,omitempty"`
 }
 
 // LongformUpdate changes a project; empty fields stay as they are.
@@ -366,6 +368,8 @@ type DubJSON struct {
 	Language   string                  `json:"language,omitempty"` // of the translations shown
 	Segments   []DubSegmentJSON        `json:"segments,omitempty"`
 	Updated    time.Time               `json:"updated_at"`
+	// Warning: the request named a removed model; its replacement is used.
+	Warning string `json:"warning,omitempty"`
 }
 
 // DubExport saves a dub.
@@ -412,6 +416,8 @@ type BatchJSON struct {
 	Queue  []BatchItemJSON    `json:"queue,omitempty"`
 	Watch  *WatchFolderJSON   `json:"watch_folder,omitempty"`
 	Prefs  *BatchSettingsJSON `json:"settings,omitempty"`
+	// Warning: the request named a removed model; its replacement is used.
+	Warning string `json:"warning,omitempty"`
 }
 
 // BatchErrorJSON is a file the batch could not take.

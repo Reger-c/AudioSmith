@@ -17,7 +17,7 @@ github.com/hehehai/AudioSmith
 │   ├── engine/          Supervisor (one engine process per role), job executors
 │   │   ├── proto/       protocol-2 wire types (leaf); fixtures in engine/Fixtures/
 │   │   └── enginetest/  a scripted protocol-2 engine for tests (the test binary re-runs itself)
-│   ├── catalog/         model catalogue: catalog.json (entries, pinned commits, licences, retired models); presets.json (recommended models per page and language, tuned defaults: thread #41)
+│   ├── catalog/         model catalogue: catalog.json (entries, pinned commits, licences, the removed models' alias table); presets.json (recommended models per page and language, tuned defaults: thread #41)
 │   ├── hub/             model files: HF cache layout, downloader, model.download jobs, token, proxy
 │   ├── licence/         the licence gate (core.LicenceService) over the store's licences
 │   ├── settings/        the typed, versioned settings document + Service                (leaf)
@@ -183,7 +183,8 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | AI calls (M6b): `a.callSvc` (`*services.Calls`: Place/Get/List/Delete/Hangup/Takeover/Say/PhonePreview/Reconcile), event `services.CallChanged`; `telephony.Gateway` on 127.0.0.1:3950 (only when `settings.Calls.Enabled`; Twilio webhooks + Media Streams WebSocket), `telephony.Agent` per live call; speech through the queue: `listen:stt.transcribe` (listen lane) and `take.render` jobs owned by `call:<id>/<n>` (no take saved, no watermark); LLM skill `call_agent`; table `calls` (migration 007); Keychain `twilio.token`; Projects category Calls; badge `a.callsBadge` | calls*.go, twilio*.go, internal/telephony, internal/services/calls*.go | integrations (`/integrations/twilio` → `/calls/setup`), projects, sidebar (Automate) |
 | Watermark: `services.Config.Watermark` (`l.watermarkRender`) marks every finished `take.render` (24-bit in place, `watermark.embed` on the media worker with AudioSeal); dub marks the final mixed track and its speech stem (`Dubs.watermarkTracks`), not lines; `l.detectWatermark` for Tools → Watermark; per-install message id `settings.Privacy.WatermarkID`; off with `Privacy.NoWatermark` | watermark_app.go, internal/services/watermark.go, internal/watermark | studio, dub, tools, settings → privacy |
 | First run (M7a): `a.openOnboarding()` — steps Mac check (`loadSysInfo`: sw_vers/sysctl, disk, network/mirror, engine, ffmpeg, permissions), model pack (`modelPacks`: fast/balanced/quality/max, each adds catalogue ids to the smaller ones; `recommendPack(memGB)`, `packSizes`), privacy, dictation; `settings.Setup` records it; the welcome line plays when Kokoro is ready (`resources/demo/welcome-<locale>.wav` may be shipped to play earlier) | onboarding.go, sysinfo.go | main (first launch), Settings → General |
-| Catalogue fields (M1-E, measured on M4 by the smoke suite): `rtf`, `maxChars` (hard limit for Kokoro/Kitten, recommended chunk size otherwise), `deterministic` (chunk cache ignores seed), `nonVerbal` (OmniVoice tags), `stream` (Qwen3-TTS only), `guidance`/`exaggeration` (Chatterbox) | internal/catalog/catalog.json | render, studio, dictation |
+| Catalogue fields (M1-E, measured on M4 by the smoke suite): `rtf`, `maxChars` (hard limit for Kokoro, recommended chunk size otherwise), `deterministic` (chunk cache ignores seed), `nonVerbal` (OmniVoice tags), `stream` (Qwen3-TTS only), `guidance` (OmniVoice) | internal/catalog/catalog.json | render, studio, dictation |
+| Removed models (#43): `catalog.Removed` (catalog.json `removed`: id, label, repo, its own aux repos, `replacedBy`, `cloneReplacedBy`), `Catalog.RemovedModel(ref)` / `Replace(ref, clone)`; the app maps on load (`applyStudioDraft`, `setLfDoc` → `replaceRemovedDoc`, `dubShow`, batch settings, `wfShow` → `replaceRemovedWorkflow`, `reuse`, `migrateRemovedSettings` at start) with one notice per model (`noteRemoved`), and every render maps again (`services.Config.Replace` = `replaceRemovedTake`); `entryFor(repo)` answers the replacement; the API answers with the replacement + `replaced_by`/warning (`api.Replacement`), 400/410 `model_removed` when it can't; Models page `removedRow`/`cleanRemoved` → `hub.Leftovers`/`RemoveLeftovers` (exact repo dirs + engine copies, on request only) | models_removed.go, internal/catalog, internal/hub/local.go, internal/api/resolve.go | studio, stories, audiobook, dub, batch, workflows, calls, API/MCP |
 
 ## 4. Contracts (summary)
 
@@ -264,7 +265,7 @@ Rules that stay:
 | Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app, rotated at 5 MB) and `engine-gpu.log` (engine stderr) |
 | Models | the Hugging Face cache, `~/.cache/huggingface/hub` (`HF_HUB_CACHE`/`HF_HOME`, or Settings → Models → Model folder) |
 | Secrets | the login Keychain, service "AudioSmith": account "huggingface-token" (HF token; or `$HF_TOKEN`, or huggingface-cli's token file), "llm.<provider>", "mt.<service>", "api.key", "twilio.token" |
-| Engine model copies | `<HF cache>/mlx-audio/<owner>_<name>/`: mlx-audio-swift's own copy, made only for repos it resolves by id (auxiliary g2p repos; families without a directory loader such as OmniVoice and Marvis); deleted with the model (`hub.Delete`) |
+| Engine model copies | `<HF cache>/mlx-audio/<owner>_<name>/`: mlx-audio-swift's own copy, made only for repos it resolves by id (auxiliary g2p repos; families without a directory loader such as OmniVoice); deleted with the model (`hub.Delete`) |
 
 ### Engine dependencies (M1-E)
 

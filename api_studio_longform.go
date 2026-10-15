@@ -53,12 +53,17 @@ func readImport(ctx context.Context, path string) (*doc.Document, error) {
 }
 
 // CreateLongform makes and saves a Stories or Audiobook project.
-func (b *apiBackend) CreateLongform(ctx context.Context, req api.LongformCreate) (api.LongformJSON, error) {
+func (b *apiBackend) CreateLongform(ctx context.Context, req api.LongformCreate) (out api.LongformJSON, err error) {
 	kind := lfKind(req.Kind)
-	e, err := ttsEntry(req.Model, b.defaultTTSRepo())
+	e, warn, err := ttsEntry(req.Model, b.defaultTTSRepo(), false)
 	if err != nil {
 		return api.LongformJSON{}, err
 	}
+	defer func() {
+		if err == nil {
+			out.Warning = warn
+		}
+	}()
 	voices, err := b.voices(ctx)
 	if err != nil {
 		return api.LongformJSON{}, err
@@ -465,7 +470,7 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 }
 
 // UpdateLongform changes a project's voices and settings.
-func (b *apiBackend) UpdateLongform(ctx context.Context, req api.LongformUpdate) (api.LongformJSON, error) {
+func (b *apiBackend) UpdateLongform(ctx context.Context, req api.LongformUpdate) (out api.LongformJSON, err error) {
 	p, d, err := b.loadLongform(ctx, req.ID)
 	if err != nil {
 		return api.LongformJSON{}, err
@@ -475,11 +480,16 @@ func (b *apiBackend) UpdateLongform(ctx context.Context, req api.LongformUpdate)
 		return api.LongformJSON{}, err
 	}
 	if req.Model != "" {
-		e, err := ttsEntry(req.Model, "")
+		e, warn, err := ttsEntry(req.Model, "", false)
 		if err != nil {
 			return api.LongformJSON{}, err
 		}
 		d.Model = e.Repo
+		defer func() {
+			if err == nil {
+				out.Warning = warn
+			}
+		}()
 	}
 	e := entryFor(d.Model)
 	ref := func(v, param string) (string, error) {

@@ -254,6 +254,18 @@
                 },
                 "description": "Parameters the model does not honour."
               },
+              "X-AudioSmith-Replaced-By": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The request named a removed model: the catalogue id of the model that answered instead."
+              },
+              "X-AudioSmith-Warning": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Why X-AudioSmith-Replaced-By answered."
+              },
               "X-AudioSmith-Seed": {
                 "schema": {
                   "type": "integer"
@@ -3321,11 +3333,11 @@
           },
           "guidance_scale": {
             "type": "number",
-            "description": "AudioSmith: classifier-free guidance (OmniVoice, Chatterbox)."
+            "description": "AudioSmith: classifier-free guidance (OmniVoice)."
           },
           "exaggeration": {
             "type": "number",
-            "description": "AudioSmith: emotion intensity (Chatterbox)."
+            "description": "AudioSmith: accepted for older clients; no model takes it any more (reported in X-AudioSmith-Ignored)."
           },
           "normalize": {
             "type": "boolean",

@@ -68,15 +68,13 @@ Defaults, all checked against their upstream model cards. Every listed model pas
 
 | Task | Default | Others | Licence |
 |---|---|---|---|
-| Speech | Kokoro 82M (54 voices, 9 languages) | Qwen3-TTS 0.6B/1.7B (CustomVoice, clone, VoiceDesign), Chatterbox (23 languages), Chatterbox Turbo, MOSS-TTS-Nano (clone only), KittenTTS, Pocket TTS, Soprano, Marvis | Apache-2.0 / MIT / CC-BY-4.0 |
+| Speech | Kokoro 82M (54 voices, 9 languages) | Qwen3-TTS 0.6B/1.7B (CustomVoice, clone, VoiceDesign), Chatterbox Turbo (English clone) | Apache-2.0 / MIT |
 | Speech, 646 languages | — | **OmniVoice** (clone, design tags, exact duration) | **CC-BY-NC-4.0**: non-commercial, asks you to accept the licence first |
 | Transcription | Whisper large-v3 turbo | Qwen3-ASR 0.6B (dictation default), Parakeet TDT v3 | MIT / Apache-2.0 / CC-BY-4.0 |
 | Word timing, VAD, denoise | Qwen3-ForcedAligner, Silero VAD, DeepFilterNet 3 | | Apache-2.0 / MIT |
 | Separation, speakers | HTDemucs, Sortformer (≤4 speakers) | Mel-RoFormer Kim vocal 2 | MIT / NVIDIA Open Model |
 | Language model | Qwen3 4B Instruct 2507 | Gemma 4 E2B | Apache-2.0 |
 | Watermark | AudioSeal (16 bits) | | MIT |
-
-Marvis is listed as Apache-2.0 but was trained on Emilia, a non-commercial dataset. Check it before commercial use.
 
 Measured on a MacBook Air M4 (24 GB):
 
