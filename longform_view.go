@@ -73,8 +73,9 @@ func lfCount(n int) string {
 	return strconv.Itoa(n)
 }
 
-// lfSetup is the setup card: title, model, default voice, speed, language
-// and format.
+// lfSetup is the setup card: title (the project's name), model, default
+// voice, speed, and an audiobook's format (the rest is under Advanced,
+// longform_advanced.go).
 func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
 	d := &p.doc
@@ -142,9 +143,16 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 			}
 		}
 	}
-	if e.Has(catalog.CapLanguage) || e.ID == "custom" {
-		ui.Field(c, i18n.T("Language"), func() { a.lfLanguage(c, d, e, locked) })
+	if p.kind == core.ProjectAudiobook {
+		a.lfFormat(c, p, locked)
 	}
+}
+
+// lfFormat is the render's format: WAV, or M4B with chapters once the
+// engine encodes.
+func (a *app) lfFormat(c *ui.Context, p *lfPage, locked bool) {
+	t := c.Theme()
+	d := &p.doc
 	formats := []string{i18n.T("WAV")}
 	if a.lfEncode != nil && a.lfEncode() {
 		formats = append(formats, i18n.T("M4B (chapters)"))
@@ -219,27 +227,30 @@ func (a *app) lfLanguage(c *ui.Context, d *services.LongformDoc, e catalog.Entry
 	}
 }
 
-// lfProduction is the production overrides card.
+// lfProduction are the production settings (under Advanced).
 func (a *app) lfProduction(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
 	pr := &p.doc.Production
 	e := entryFor(p.doc.Model)
+	pre, _ := catalog.PresetFor(e.ID)
+	rec := pre.ParamsFor(lfWorkflow(p))
 	if modelInfo(e.Repo).Steps {
-		steps := float64(pr.Steps)
-		if steps == 0 {
-			steps = services.StepsBalanced
+		cur := float64(pr.Steps)
+		if cur == 0 {
+			cur = services.StepsBalanced
+			if rec.Steps != nil {
+				cur = float64(*rec.Steps)
+			}
 		}
-		ui.Field(c, i18n.T("Steps %d", int(steps)), func() {
-			if ui.StepSlider(c.Key("lf-steps"), &steps, 8, 64, 4).Label(i18n.T("Steps")).Disabled(locked).Changed() {
-				pr.Steps = int(steps)
+		tier := slices.Index(tierSteps, cur)
+		fieldInfo(c, i18n.T("Voice refinement"), i18n.T("More steps sound cleaner and take longer."), func() {
+			if segmentedFit(c.Key("lf-steps"), &tier, i18n.T("Fast"), i18n.T("Balanced"), i18n.T("Quality")).Label(i18n.T("Voice refinement")).Disabled(locked).Changed() && tier >= 0 {
+				pr.Steps = int(tierSteps[tier])
 			}
 		})
 	}
 	if e.Has(catalog.CapGuidance) {
-		g := pr.Guidance
-		if g == 0 {
-			g = 2
-		}
+		g := shown(pr.Guidance, rec.Guidance, 2)
 		ui.Field(c, i18n.T("Guidance %.1f", g), func() {
 			if snapped(ui.Slider(c.Key("lf-cfg"), &g, 0, 4).Label(i18n.T("Guidance")).Disabled(locked), &g, 0.1).Changed() {
 				pr.Guidance = g
@@ -277,21 +288,12 @@ func (a *app) lfProduction(c *ui.Context, p *lfPage, locked bool) {
 			pr.Seed = int64(seed)
 		}
 	})
-	ui.Row(c).Children(func() {
-		def := services.DefaultProduction()
-		if p.kind == core.ProjectStory {
-			def = services.DefaultStoryProduction()
-		}
-		if secondaryIconButton(c.Key("lf-prod-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Disabled(locked || *pr == def).Clicked() {
-			*pr = def
-		}
-	})
 }
 
 // Loudness choices of the book card.
 var lfLoudness = []string{services.LoudnessOff, services.LoudnessACX, services.LoudnessPodcast}
 
-// lfBookCard is the book's details, cover, loudness and stems.
+// lfBookCard is the book's details, cover and loudness.
 func (a *app) lfBookCard(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
 	b := &p.doc.Book
@@ -337,9 +339,6 @@ func (a *app) lfBookCard(c *ui.Context, p *lfPage, locked bool) {
 		if segmentedFit(c.Key("book-loud"), &li, i18n.T("Off"), i18n.T("ACX"), i18n.T("Podcast")).Label(i18n.T("Loudness")).Disabled(locked).Changed() {
 			b.Loudness = lfLoudness[li]
 		}
-	})
-	formRow(c, "book-stems-row", i18n.T("A stem per character"), i18n.T("Each character's lines on the book's timeline, silent elsewhere, for mixing. As large as the book per character."), func() {
-		ui.Switch(c.Key("book-stems"), &p.doc.Stems).Label(i18n.T("A stem per character")).Disabled(locked)
 	})
 }
 
@@ -403,68 +402,6 @@ func (a *app) setCover(p *lfPage, src string) {
 			}
 		}
 		a.post(func() { a.toast(i18n.T("Can't use this cover: %v", err)) })
-	})
-}
-
-// lfProjectCard is the project card: name, Save, Save a copy, New, and the
-// saved projects of the page's kind.
-func (a *app) lfProjectCard(c *ui.Context, p *lfPage, locked bool) {
-	t := c.Theme()
-	if p.saveName == "" && p.doc.Title != "" && p.project == "" {
-		p.saveName = p.doc.Title
-	}
-	ui.Field(c, i18n.T("Project name"), func() {
-		ui.TextInput(c.Key("proj-name"), &p.saveName).Placeholder(i18n.T("Project name")).Label(i18n.T("Project name"))
-	})
-	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-		if ui.Button(c.Key("proj-save"), i18n.T("Save")).Disabled(strings.TrimSpace(p.saveName) == "" && strings.TrimSpace(p.doc.Title) == "").Clicked() {
-			a.saveLf(p, false)
-		}
-		if p.project != "" && p.unsaved() {
-			statusDot(c, t.Warning)
-			caption(c, i18n.T("Unsaved changes")).SingleLine().Ellipsis("…").MinWidth(0)
-		}
-		ui.Spacer(c)
-		moreMenu(c.Key("proj-more"), i18n.T("Project actions"), func(m *ui.Menu) {
-			if p.project != "" && m.Item(i18n.T("Save a copy")).Chosen() {
-				a.saveLf(p, true)
-			}
-			if m.Item(i18n.T("New")).Disabled(locked).Chosen() {
-				if p.unsaved() {
-					p.confirm, p.confirmOpen = "new", true
-				} else {
-					a.newLf(p)
-				}
-			}
-		})
-	})
-	if len(p.projects) == 0 {
-		caption(c, i18n.T("No saved projects yet."))
-		return
-	}
-	ui.Column(c).Gap(px(t, 2)).Children(func() {
-		for _, pr := range p.projects {
-			row := ui.Row(c.Key("proj-"+pr.ID)).Gap(px(t, 6)).AlignItems(ui.Center).Padding(px(t, 4), px(t, 4), px(t, 4), px(t, sp2)).Radius(px(t, radiusControl))
-			if pr.ID == p.project {
-				row.Background(tok(t).Pressed)
-			}
-			row.Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					truncText(c, pr.Title)
-					ui.Text(c, i18n.DateTime(pr.UpdatedAt)).FontSize(px(t, fsMicro)).TextColor(tok(t).Text3)
-				})
-				if pr.ID != p.project && ghostButton(c.Key("open"), i18n.T("Open")).Disabled(locked).Clicked() {
-					if p.unsaved() {
-						p.confirm, p.confirmOpen = pr.ID, true
-					} else {
-						a.openLfProject(pr.ID)
-					}
-				}
-				if iconButton(c.Key("delete"), icons.TrashBinMinimalistic, i18n.T("Delete")).Disabled(locked && pr.ID == p.project).Clicked() {
-					p.confirm, p.confirmOpen = "delete:"+pr.ID, true
-				}
-			})
-		}
 	})
 }
 

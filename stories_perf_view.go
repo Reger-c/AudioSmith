@@ -85,22 +85,10 @@ func (a *app) storyPerformance(c *ui.Context, p *lfPage, locked bool) {
 			}
 		}
 	})
-	if d.Production.Pacing != services.PacingFixed {
-		merge := !d.Production.NoMerge
-		formRow(c, "perf-merge-row", i18n.T("Merge a character's lines"), i18n.T("Consecutive lines of one character are said in one go, so the voice flows from one into the next; they are split back into lines for the player and stems (or made one by one when they cannot be)."), func() {
-			if ui.Switch(c.Key("perf-merge"), &merge).Label(i18n.T("Merge a character's lines")).Disabled(locked).Changed() {
-				d.Production.NoMerge = !merge
-			}
-		})
-		level := !d.Production.NoLevel
-		formRow(c, "perf-level-row", i18n.T("Even out each voice"), i18n.T("Brings each character's lines toward one loudness, so a voice does not jump in level from line to line; louder or softer directions keep part of their difference."), func() {
-			if ui.Switch(c.Key("perf-level-switch"), &level).Label(i18n.T("Even out each voice")).Disabled(locked).Changed() {
-				d.Production.NoLevel = !level
-			}
-		})
+	// Scene and the AI director: only for models that hear them.
+	if level == services.ContinuityLines {
+		return
 	}
-
-	// Scene and the AI director.
 	fieldInfo(c, i18n.T("Scene"), i18n.T("Where and when, who these people are to each other, the mood. Models that take instructions hear it with every line; it is never spoken."), func() {
 		ui.TextArea(c.Key("perf-scene"), &d.Scene).Placeholder(i18n.T("Evening at home: the child wants a kitten, the mother hesitates but softens")).
 			Label(i18n.T("Scene")).Lines(2, 5).MinHeight(0).Disabled(locked)

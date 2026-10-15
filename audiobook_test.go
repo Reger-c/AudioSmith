@@ -70,7 +70,8 @@ func TestAudiobookManuscriptCastAndWarnings(t *testing.T) {
 	}
 	// A word listed twice blocks Generate.
 	p.doc.Lexicon = []services.LexiconEntry{{Word: "Harrow", Say: "Harro"}, {Word: "harrow", Say: "Haro"}}
-	p.open["lexicon"] = true
+	a.setAdvancedOpen("audiobook", true) // the book's pronunciations are under Advanced
+	tt.SetSize(1100, 1800)
 	tt.Frame()
 	if msg := a.lfBlocker(p); !strings.Contains(msg, "listed twice") || !hasAnyText(tt.Texts(), "Keep one pronunciation per word") {
 		t.Errorf("duplicate: %q", msg)

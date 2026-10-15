@@ -11,22 +11,30 @@ func TestCollapsibleSectionsToggle(t *testing.T) {
 	a.navigate("/stories")
 	tt.Frame()
 	p := a.lfStories
-	if p.open["production"] {
-		t.Fatal("Production starts open")
+	if p.open["scene"] {
+		t.Fatal("Performance starts open")
 	}
-	if err := tt.Click("Production"); err != nil {
+	if err := tt.Click("Performance"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !p.open["production"] {
-		t.Fatal("a click did not open Production")
+	if !p.open["scene"] {
+		t.Fatal("a click did not open Performance")
 	}
-	if err := tt.Click("Production"); err != nil {
+	if err := tt.Click("Performance"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if p.open["production"] {
-		t.Fatal("a second click did not close Production")
+	if p.open["scene"] {
+		t.Fatal("a second click did not close Performance")
+	}
+	// Advanced, remembered in the settings.
+	if err := tt.Click("Advanced"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.advancedOpen("story") || a.advancedOpen("audiobook") {
+		t.Fatal("a click did not open the story's Advanced")
 	}
 	if !p.open["setup"] {
 		t.Fatal("Setup starts open")
