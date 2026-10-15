@@ -49,8 +49,7 @@ final class Analyzer: @unchecked Sendable {
         var detected: String?
         if let whisper = model as? WhisperModel {
             whisper.task = task
-            whisper.initialPrompt = p.prompt ?? "" // patch 0005: Whisper's initial prompt
-            defer { whisper.task = "transcribe"; whisper.initialPrompt = "" }
+            defer { whisper.task = "transcribe" }
             var params = whisper.defaultGenerationParameters
             params = STTGenerateParameters(maxTokens: params.maxTokens, temperature: 0, topP: 1, topK: 0,
                                            language: language, chunkDuration: params.chunkDuration,
