@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -28,7 +29,7 @@ func TestRecipeCarriesOutputOptions(t *testing.T) {
 	tt.Frame()
 	tt.Click("Generate")
 	r := renderOf(t, eng.last(t))
-	if r.Take.Render == nil || r.Take.Render.Master != services.MasterDefault || r.Take.Render.Bits != 0 ||
+	if r.Take.Render == nil || r.Take.Render.Master != services.MasterDefault || r.Take.Render.Bits != 24 ||
 		r.Take.Render.NoNormalize || r.Take.Seed != 0 || !r.Stream || r.Lang != "en-US" {
 		t.Fatalf("defaults %+v %+v", r, r.Take.Render)
 	}
@@ -36,7 +37,7 @@ func TestRecipeCarriesOutputOptions(t *testing.T) {
 
 	a.selectModel(entry(t, "omnivoice-bf16"))
 	a.acceptLicenceForTest(t)
-	a.bitsIndex, a.evenOut, a.normalize = 1, false, false
+	a.evenOut, a.normalize = false, false
 	a.seedPinned, a.seed, a.steps = true, 1234, 48
 	tt.Frame()
 	tt.Click("Generate")
@@ -46,10 +47,10 @@ func TestRecipeCarriesOutputOptions(t *testing.T) {
 	}
 	// Reuse brings all of it back.
 	tk := r.Take
-	a.bitsIndex, a.evenOut, a.normalize, a.seedPinned, a.steps = 0, true, true, false, 0
+	a.evenOut, a.normalize, a.seedPinned, a.steps = true, true, false, 0
 	a.reuse(&tk)
-	if a.bitsIndex != 1 || a.evenOut || a.normalize || !a.seedPinned || a.seed != 1234 || a.steps != 48 || a.preset().ID != "omnivoice-bf16" {
-		t.Errorf("reuse: bits %d even %v norm %v seed %v/%v steps %v", a.bitsIndex, a.evenOut, a.normalize, a.seedPinned, a.seed, a.steps)
+	if a.evenOut || a.normalize || !a.seedPinned || a.seed != 1234 || a.steps != 48 || a.preset().ID != "omnivoice-bf16" {
+		t.Errorf("reuse: even %v norm %v seed %v/%v steps %v", a.evenOut, a.normalize, a.seedPinned, a.seed, a.steps)
 	}
 }
 
@@ -62,43 +63,41 @@ func (a *app) acceptLicenceForTest(t *testing.T) {
 	}
 }
 
-func TestAudioQualityPopover(t *testing.T) {
+// TestStudioAdvanced: the Studio's 「高级」 holds what the old Voice
+// controls and Audio quality popovers held, as the model takes it, opens
+// and closes per page (remembered), and Restore recommended clears it.
+func TestStudioAdvanced(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	tt.Frame()
-	tt.Click("Audio quality")
-	tt.Frame()
-	if !tt.HasText("WAV precision") || !tt.HasText("Even out volume") || tt.HasText("Voice refinement  32 steps") {
-		t.Fatalf("Kokoro's quality: %q", tt.Texts())
+	if tt.HasText("Even out volume") || !tt.HasText("Recommended settings") {
+		t.Fatalf("closed: %q", tt.Texts())
 	}
-	tt.Click("24-bit")
+	tt.Click("Advanced")
+	tt.Frame()
+	if !a.advancedOpen("studio") || !tt.HasText("Even out volume") || !tt.HasText("Pin the seed") || tt.HasText("Voice refinement") || tt.HasText("WAV precision") {
+		t.Fatalf("Kokoro's advanced: %q", tt.Texts())
+	}
 	a.evenOut = false
 	tt.Frame()
-	if a.bitsIndex != 1 || a.evenOut {
-		t.Errorf("bits %d even out %v", a.bitsIndex, a.evenOut)
+	if !tt.HasText("1 change") {
+		t.Errorf("changes: %q", tt.Texts())
 	}
-	tt.Key(0, ui.KeyEscape)
 
 	a.selectModel(entry(t, "omnivoice-bf16"))
 	tt.Frame()
-	tt.Click("Audio quality")
-	tt.Frame()
-	if !tt.HasText("Voice refinement  32 steps") {
-		t.Fatalf("OmniVoice's quality: %q", tt.Texts())
+	if !tt.HasText("Voice refinement") || !tt.HasText("Prompt guidance  1.5") {
+		t.Fatalf("OmniVoice's advanced: %q", tt.Texts())
 	}
 	tt.Click("Quality")
 	tt.Frame()
-	if a.steps != services.StepsQuality || !tt.HasText("Voice refinement  48 steps") {
+	if a.steps != services.StepsQuality {
 		t.Errorf("steps %v", a.steps)
-	}
-	if r, ok := tt.Find("More steps sound cleaner and take longer."); ok {
-		tt.Scroll(r.X+20, r.Y, 0, 1000) // the popover scrolls to its end
-		tt.Frame()
 	}
 	if err := tt.Click("Restore recommended"); err != nil {
 		t.Fatal(err)
 	}
 	if a.steps != 0 || !a.evenOut {
-		t.Errorf("after reset: %v %v %v", a.steps, a.bitsIndex, a.evenOut)
+		t.Errorf("after restore: %v %v", a.steps, a.evenOut)
 	}
 }
 
@@ -516,5 +515,22 @@ func TestPronunciationSettings(t *testing.T) {
 	tt.Frame()
 	if len(a.pron.entries) != 0 {
 		t.Errorf("entries %+v", a.pron.entries)
+	}
+}
+
+// TestStudioCustomVoiceField: a custom repo's voice is typed under
+// Advanced (the catalogue knows none of its speakers).
+func TestStudioCustomVoiceField(t *testing.T) {
+	a, _, tt := newTestApp(t)
+	a.modelLabel, a.customRepo = catalog.CustomLabel, "acme/tts"
+	a.modelChanged()
+	a.setAdvancedOpen("studio", true)
+	tt.Frame()
+	if _, ok := tt.Find("Model default"); !ok {
+		t.Fatalf("no voice field: %q", tt.Texts())
+	}
+	a.voice = "narrator_2"
+	if r := a.recipe(time.Now()); r.Voice != "narrator_2" || r.Model != "acme/tts" {
+		t.Errorf("custom take %+v", r)
 	}
 }

@@ -75,9 +75,9 @@ func TestSnapshotsPresets(t *testing.T) {
 		a.pickerOpen, a.pickerAll = nil, nil
 		shoot(a, tt, "04-voice-controls-changed", func() {
 			a.temperature, a.seedPinned, a.seed = 0.5, true, 81723
-			a.composer.voiceOpen = true
+			a.setAdvancedOpen("studio", true)
 		})
-		a.composer.voiceOpen = false
+		a.setAdvancedOpen("studio", false)
 		a.restoreRecommended()
 		shoot(a, tt, "05-retired", func() {
 			a.modelLabel = entry(t, "chatterbox-8bit").Label

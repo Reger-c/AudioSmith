@@ -115,16 +115,15 @@ func TestCannotGenerateWithoutEngineOrText(t *testing.T) {
 
 func TestModelSwitchShowsItsControls(t *testing.T) {
 	a, eng, tt := newTestApp(t)
+	a.setAdvancedOpen("studio", true)
 	tt.Frame()
-	tt.Click("Voice controls")
-	tt.Frame()
-	if !tt.HasText("Speed  1.00×") || !tt.HasText("Pin the seed") || tt.HasText("Use the model's sampling defaults") {
-		t.Errorf("Kokoro's voice controls: %q", tt.Texts())
+	// Kokoro: speed in view, no sampling.
+	if !tt.HasText("Speed  1.00×") || !tt.HasText("Pin the seed") || tt.HasText("Temperature  0.70") {
+		t.Errorf("Kokoro's controls: %q", tt.Texts())
 	}
 	if tt.HasText("Auto-detect") {
 		t.Error("Kokoro's language follows the voice: no picker")
 	}
-	tt.Key(0, ui.KeyEscape)
 
 	a.modelLabel = "Qwen3-TTS 0.6B Base (voice clone)"
 	a.modelChanged()
@@ -132,19 +131,16 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	if a.voice != "" || a.language != "" {
 		t.Errorf("voice %q language %q after switching", a.voice, a.language)
 	}
-	if !tt.HasText("Voice cloning") || !tt.HasText("Auto-detect") {
-		t.Errorf("controls for Qwen Base: %q", tt.Texts())
-	}
-	tt.Click("Voice controls")
-	tt.Frame()
 	// The recommended sampling (presets), shown; a change is the model's.
-	if tt.HasText("Speed  1.00×") || !tt.HasText("Temperature  0.70") || !tt.HasText("Top P  0.80") || !tt.HasText("Recommended settings") {
-		t.Errorf("voice controls for Qwen Base: %q", tt.Texts())
+	if !tt.HasText("Auto-detect") || tt.HasText("Speed  1.00×") || !tt.HasText("Temperature  0.70") || !tt.HasText("Top P  0.80") || !tt.HasText("Recommended settings") {
+		t.Errorf("controls for Qwen Base: %q", tt.Texts())
 	}
 	a.temperature = 0.5
 	a.refAudio, a.refText = "/tmp/ref.wav", "Reference words"
 	tt.Frame()
-	tt.Key(0, ui.KeyEscape)
+	if !tt.HasText("Clip: ref.wav") || !tt.HasText("Reference transcript") {
+		t.Errorf("the clip: %q", tt.Texts())
+	}
 	tt.Click("Generate")
 	req := renderOf(t, eng.last(t)).Take
 	if req.Temperature != 0.5 || req.TopP != 0.8 || req.MaxTokens != 0 || req.Speed != 0 ||
@@ -221,14 +217,12 @@ func TestGenerateAsksForTheLicence(t *testing.T) {
 	a.selectModel(omni)
 	a.voice = "female, young adult, british accent"
 	a.duration = 3
-	tt.Frame()
-	tt.Click("Voice controls")
+	a.setAdvancedOpen("studio", true)
 	tt.Frame()
 	if !tt.HasText("Duration (seconds, 0 = natural)") || !tt.HasText("CC BY-NC 4.0 · non-commercial use only") ||
 		!tt.HasText("A duration overrides the speed.") {
 		t.Errorf("OmniVoice controls: %q", tt.Texts())
 	}
-	tt.Key(0, ui.KeyEscape)
 	tt.Click("Generate")
 	tt.Frame()
 	if !a.licenceOpen || a.job != nil || len(eng.sent) != 0 {

@@ -141,6 +141,7 @@ func TestWorkerFailures(t *testing.T) {
 
 func TestPreloadUnloadAndStats(t *testing.T) {
 	a, eng, tt := newTestApp(t)
+	a.switchOpen = true // ⌘E: Preload and Unload left the Studio's inspector
 	tt.Frame()
 	if err := tt.Click("Preload"); err != nil {
 		t.Fatal(err)
@@ -151,7 +152,7 @@ func TestPreloadUnloadAndStats(t *testing.T) {
 	}
 	eng.succeed(req.ID, proto.LoadResult{Model: kokoro, Task: "tts", SampleRate: 24000, Seconds: 1.5})
 	tt.Frame()
-	if a.job != nil || !tt.HasText("Loaded") || a.loadedModel != kokoro {
+	if a.job != nil || a.loadedModel != kokoro {
 		t.Fatalf("after load: job %v texts %q", a.job, tt.Texts())
 	}
 
@@ -175,8 +176,15 @@ func TestPreloadUnloadAndStats(t *testing.T) {
 	}
 
 	a.showPage("studio")
+	a.switchOpen = true
 	tt.Frame()
-	tt.Click("Unload")
+	if err := tt.Click("More actions"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Unload"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 	if eng.last(t).Cmd != "unload" {
 		t.Fatalf("Unload sent %+v", eng.last(t))
 	}

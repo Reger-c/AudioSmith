@@ -441,7 +441,7 @@ func (m *memSampler) stop() { close(m.quit) }
 func (v *v02) studio(t *testing.T) (string, string) {
 	a := v.a
 	a.selectModel(v.model(t, "kokoro-82m-bf16"))
-	a.evenOut, a.bitsIndex = true, slices.Index(bitDepths, 24)
+	a.evenOut = true // takes are 24-bit
 	var notes []string
 	var first string
 	for _, c := range []struct{ name, voice, text string }{

@@ -642,59 +642,6 @@ func (a *app) studioVoiceOptions(e catalog.Entry) (labels, ids []string) {
 	return labels, ids
 }
 
-// voicePicker is the Studio's saved-voice picker for model e: the model's
-// own voices, the voices of the library it can speak with, or the clip
-// used without saving. It sets what applyStudioVoice applies, and says
-// when the chosen voice doesn't suit the model.
-//
-// Thread G calls it in the Studio's inspector: a.voicePicker(c, a.preset())
-func (a *app) voicePicker(c *ui.Context, e catalog.Entry) {
-	t := c.Theme()
-	labels, ids := a.studioVoiceOptions(e)
-	cur := ""
-	switch {
-	case a.studioClip != nil && a.studioVoice == "":
-		cur = "clip"
-	default:
-		cur = a.studioVoice
-	}
-	label := labels[0]
-	if i := slices.Index(ids, cur); i >= 0 {
-		label = labels[i]
-	}
-	ui.Field(c, i18n.T("Saved voice"), func() {
-		if ui.Select(c.Key("studio-voice"), &label, labels).Label(i18n.T("Saved voice")).Changed() {
-			if i := slices.Index(labels, label); i >= 0 {
-				switch ids[i] {
-				case "clip":
-					a.studioVoice = ""
-				case "":
-					a.studioVoice, a.studioClip = "", nil
-				default:
-					a.studioVoice = ids[i]
-				}
-			}
-		}
-	})
-	if v := a.findVoice(a.studioVoice); v != nil {
-		ui.Row(c.Key("studio-voice-info")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			ui.Avatar(c, v.Name, a.portrait(v))
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, voiceKindText(v.Kind)).FontSize(px(t, 12)).TextColor(t.TextMuted).SingleLine()
-				if ok, why := voiceUsable(v, e); !ok {
-					ui.Text(c, why).FontSize(px(t, 12)).TextColor(t.Warning)
-				}
-			})
-			if ui.Button(c.Key("studio-voice-edit"), i18n.T("Edit")).Clicked() {
-				a.openVoiceEditor(v.ID)
-			}
-		})
-	}
-	if ui.Button(c.Key("studio-voice-manage"), i18n.T("Manage voices…")).Clicked() {
-		a.navigate("/voices")
-	}
-}
-
 // studioUsesSavedVoice reports whether the Studio's voice comes from the
 // picker (a saved voice or an unsaved clip) for model e, so the Studio
 // can hide its own voice and reference controls.
@@ -822,9 +769,11 @@ func firstOf(xs ...string) string {
 func (a *app) useVoiceInStudio(v *core.Voice) {
 	a.studioVoice, a.studioClip = v.ID, nil
 	if ok, _ := voiceUsable(v, a.preset()); !ok {
-		var pick []catalog.Entry
+		// The recommended models first: a designed voice speaks best
+		// cloned from its sample on Qwen3-TTS Base (thread #41).
+		pick := catalog.Builtin().Recommended(catalog.WorkflowStudio, i18n.Locale())
 		if v.Kind == core.VoiceDesigned {
-			pick = designModels()
+			pick = append(pick, designModels()...)
 		}
 		pick = append(pick, cloneModels()...)
 		for _, e := range pick {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -33,7 +34,11 @@ import (
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
-// Bit depths of the Audio quality popover, by index.
+// studioBits is the bit depth takes are kept at: room for editing; the
+// Export audio dialog chooses the file's (thread #42).
+const studioBits = 24
+
+// bitDepths are the WAV bit depths offered (a book's Save as).
 var bitDepths = []int{16, 24, 32}
 
 // studioState is the Studio form.
@@ -58,7 +63,6 @@ type studioState struct {
 
 	// Audio quality.
 	steps     float64 // diffusion steps (models with Steps); 0 = the model's
-	bitsIndex int     // into bitDepths
 	evenOut   bool    // master with services.MasterDefault
 	normalize bool    // read numbers, dates… as words
 	// Voice controls: a pinned seed makes takes repeatable.
@@ -76,8 +80,9 @@ type studioState struct {
 
 	script      scriptEditor
 	composer    composerState
-	pron        pronState // Settings → Pronunciation
-	renderState           // the render the Studio follows: chunk progress, preview
+	inspectorUI studioInspectorState // studio_inspector.go
+	pron        pronState            // Settings → Pronunciation
+	renderState                      // the render the Studio follows: chunk progress, preview
 
 	// savedDraft is the form as last handed to the draft service (or restored).
 	savedDraft studioDraft
@@ -143,7 +148,7 @@ func (s *studioState) toDraft() studioDraft {
 		Voice: s.voice, Language: s.language, Speed: s.speed, ModelDefaults: s.modelDefaults,
 		Temperature: s.temperature, TopP: s.topP, MaxTokens: s.maxTokens,
 		RefAudio: s.refAudio, RefText: s.refText, Duration: s.duration,
-		Steps: s.steps, Bits: bitDepths[min(max(s.bitsIndex, 0), len(bitDepths)-1)], RawVolume: !s.evenOut,
+		Steps: s.steps, Bits: studioBits, RawVolume: !s.evenOut,
 		NoNormalize: !s.normalize, SeedPinned: s.seedPinned, Seed: s.seed, Recent: s.recentLangs,
 		Guidance: s.guidance, Exaggeration: s.exaggeration}
 }
@@ -166,7 +171,6 @@ func (s *studioState) applyDraft(d studioDraft) {
 	}
 	s.refAudio, s.refText, s.duration = d.RefAudio, d.RefText, d.Duration
 	s.steps, s.evenOut, s.normalize = d.Steps, !d.RawVolume, !d.NoNormalize
-	s.bitsIndex = max(slices.Index(bitDepths, d.Bits), 0)
 	s.seedPinned, s.seed, s.recentLangs = d.SeedPinned, d.Seed, d.Recent
 	s.guidance, s.exaggeration = d.Guidance, d.Exaggeration
 	s.script.reset(s.text)
@@ -328,12 +332,9 @@ func (a *app) recipe(now time.Time) core.Take {
 		Voice:    strings.TrimSpace(a.voice),
 		Language: strings.TrimSpace(a.language),
 		Render: &core.TakeRender{
-			Bits:        bitDepths[min(max(a.bitsIndex, 0), len(bitDepths)-1)],
+			Bits:        studioBits, // the bit depth is chosen at export
 			NoNormalize: !a.normalize,
 		},
-	}
-	if t.Render.Bits == 16 {
-		t.Render.Bits = 0
 	}
 	if a.evenOut {
 		t.Render.Master = services.MasterDefault
@@ -391,11 +392,10 @@ func (a *app) reuse(t *core.Take) {
 	a.guidance, a.exaggeration = t.Guidance, t.Exaggeration
 	a.seedPinned, a.seed = t.Seed != 0, float64(t.Seed)
 	if r := t.Render; r != nil {
-		a.bitsIndex = max(slices.Index(bitDepths, r.Bits), 0)
 		a.evenOut = r.Master != "" && r.Master != "raw"
 		a.normalize = !r.NoNormalize
 	} else {
-		a.bitsIndex, a.evenOut, a.normalize = 0, false, true
+		a.evenOut, a.normalize = false, true
 	}
 	a.showPage("studio")
 }
@@ -416,7 +416,12 @@ func (a *app) chooseRefAudio() {
 		if err != nil || len(paths) == 0 {
 			return
 		}
-		a.post(func() { a.refAudio = paths[0] })
+		a.post(func() {
+			a.refAudio, a.refText = paths[0], ""
+			if strings.EqualFold(filepath.Ext(paths[0]), ".wav") {
+				a.transcribeRef(paths[0])
+			}
+		})
 	}()
 }
 

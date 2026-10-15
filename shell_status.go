@@ -309,6 +309,9 @@ func (a *app) quickSwitch(c *ui.Context) {
 			}
 			ui.Spacer(c)
 			moreMenu(c.Key("switch-more"), "", func(m *ui.Menu) {
+				if m.Item(i18n.T("Unload")).Disabled(a.loadedModel == "" || a.job != nil).Chosen() {
+					a.unload()
+				}
 				if m.Item(i18n.T("Clear cache")).Disabled(eng.State != engineReady).Chosen() {
 					a.flushEngine()
 				}

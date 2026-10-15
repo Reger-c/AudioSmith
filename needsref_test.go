@@ -58,7 +58,7 @@ func TestStudioNeedsReference(t *testing.T) {
 	i18n.SetLocale("zh-Hans")
 	got := studioNeedsReferenceText(moss)
 	i18n.SetLocale("en")
-	if got != "MOSS-TTS-Nano 只能克隆声音：先在右侧“声音克隆”里选一段参考音频，或选一个已保存的克隆音色。" {
+	if got != "MOSS-TTS-Nano 只能克隆声音：请在右侧“音色”里选一个已保存的音色，或一段要克隆的音频。" {
 		t.Errorf("zh: %q", got)
 	}
 

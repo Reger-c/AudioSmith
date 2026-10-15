@@ -10,7 +10,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
-	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 func (a *app) studioPage(c *ui.Context) {
@@ -247,17 +246,13 @@ func (a *app) readiness(st scriptStats) (msg string, warn bool) {
 // studioNeedsReferenceText says what the Studio needs before model e
 // (which only clones voices) can generate.
 func studioNeedsReferenceText(e catalog.Entry) string {
-	return i18n.T("%s only clones voices: choose a reference clip under Voice cloning in the inspector, or a saved cloned voice.", e.Label)
+	return i18n.T("%s only clones voices: under Voice in the inspector, pick a saved voice or a clip to clone.", e.Label)
 }
 
 func (a *app) generateBar(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
-		a.voicePopover(c)
-		a.qualityPopover(c)
-		if s := a.voiceControlsSummary(); s != "" && !a.studioNarrow(c) {
-			caption(c, s).SingleLine().Ellipsis("…").MinWidth(0).Margin(0, 0, 0, px(t, sp1))
-		}
+		a.studioSummary(c)
 		ui.Spacer(c)
 		if a.job != nil {
 			if ui.Button(c.Key("cancel"), i18n.T("Cancel")).Clicked() {
@@ -345,75 +340,6 @@ func (a *app) jobStatus(c *ui.Context) {
 				}
 			}
 		})
-	})
-}
-
-func (a *app) inspector(c *ui.Context) {
-	t := c.Theme()
-	k := tok(t)
-	p := a.preset()
-	custom := a.modelLabel == catalog.CustomLabel
-
-	about := i18n.T(p.About)
-	if size := catalog.HumanSize(p.Size); size != "" {
-		about += i18n.T(" Download %s.", size)
-	}
-	ui.Column(c).Gap(px(t, 6)).Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, i18n.T("Model")).FontWeight(600).Grow(1)
-			infoTip(c.Key("model-about"), about)
-		})
-		a.modelPicker(c, "model", catalog.WorkflowStudio, p, func(e catalog.Entry) {
-			if e.ID == "custom" {
-				a.modelLabel = catalog.CustomLabel
-			} else {
-				a.modelLabel = e.Label
-			}
-			a.modelChanged()
-		}, pickerOpts{Custom: true})
-		if custom {
-			ui.TextInput(c.Key("repo"), &a.customRepo).Placeholder("owner/model-name").Label(i18n.T("Repo"))
-		}
-		if !p.Licence.Commercial {
-			ui.Text(c, p.Licence.Name+" · "+i18n.T("non-commercial use only")).FontSize(px(t, fsCaption)).TextColor(t.Warning)
-		}
-		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
-			loaded := p.Repo != "" && p.Repo == a.loadedModel
-			dot := k.G[5]
-			state := i18n.T("Not loaded")
-			if loaded {
-				dot, state = t.Success, i18n.T("Loaded")
-			}
-			ui.Box(c).Size(px(t, 6), px(t, 6)).Radius(px(t, 3)).Background(dot)
-			caption(c, state).Grow(1).SingleLine()
-			if ghostButton(c.Key("preload"), i18n.T("Preload")).
-				Disabled(loaded || a.job != nil || a.engState != engineReady || p.Repo == "").
-				Tooltip(i18n.T("Load the model now, so the first take starts at once")).
-				Clicked() {
-				a.preload()
-			}
-			if ghostButton(c.Key("unload"), i18n.T("Unload")).
-				Disabled(a.loadedModel == "" || a.job != nil).
-				Tooltip(i18n.T("Free the memory the loaded model takes")).
-				Clicked() {
-				a.unload()
-			}
-		})
-	})
-
-	ui.Divider(c)
-	ui.Column(c).Gap(px(t, sp3)).Children(func() {
-		a.voicePicker(c, p) // the voice library's picker (voices.go)
-		if !a.studioUsesSavedVoice(p) {
-			a.studioVoiceSection(c, p)
-		}
-	})
-	ui.Divider(c)
-	formRow(c, "autoplay-row", i18n.T("Play each take when it is ready"), i18n.T("Long scripts play from the first chunk while the rest renders."), func() {
-		if ui.Switch(c.Key("autoplay"), &a.autoplay).Label(i18n.T("Play each take when it is ready")).Changed() {
-			on := a.autoplay
-			a.updateSettings(func(s *settings.Settings) { s.Studio.Autoplay = on })
-		}
 	})
 }
 
