@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -514,5 +515,22 @@ func TestPronunciationSettings(t *testing.T) {
 	tt.Frame()
 	if len(a.pron.entries) != 0 {
 		t.Errorf("entries %+v", a.pron.entries)
+	}
+}
+
+// TestStudioCustomVoiceField: a custom repo's voice is typed under
+// Advanced (the catalogue knows none of its speakers).
+func TestStudioCustomVoiceField(t *testing.T) {
+	a, _, tt := newTestApp(t)
+	a.modelLabel, a.customRepo = catalog.CustomLabel, "acme/tts"
+	a.modelChanged()
+	a.setAdvancedOpen("studio", true)
+	tt.Frame()
+	if _, ok := tt.Find("Model default"); !ok {
+		t.Fatalf("no voice field: %q", tt.Texts())
+	}
+	a.voice = "narrator_2"
+	if r := a.recipe(time.Now()); r.Voice != "narrator_2" || r.Model != "acme/tts" {
+		t.Errorf("custom take %+v", r)
 	}
 }

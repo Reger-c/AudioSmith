@@ -286,6 +286,11 @@ func (a *app) studioAdvanced(c *ui.Context, p catalog.Entry) {
 			})
 		}
 	}
+	if p.ID == "custom" && !saved {
+		ui.Field(c, i18n.T("Voice"), func() {
+			ui.TextInput(c.Key("custom-voice"), &a.voice).Placeholder(i18n.T("Model default")).Label(i18n.T("Voice"))
+		})
+	}
 	if p.Has(catalog.CapClone) && strings.TrimSpace(a.refAudio) != "" && !saved && a.studioClip == nil {
 		ui.Field(c, i18n.T("Reference transcript"), func() {
 			ui.TextArea(c.Key("ref-text"), &a.refText).Lines(2, 4).Placeholder(i18n.T("What the reference clip says")).Label(i18n.T("Reference transcript"))
