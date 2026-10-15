@@ -91,6 +91,12 @@ func (f *Fitter) apply(ctx context.Context, req Request, masks []masked, out []T
 				out[j].Warnings = append(out[j].Warnings, WarnFitFailed)
 				continue
 			}
+			_, pause := Units(text, tgt.Tag)
+			budget, _ := p.Budget(tgt.Tag, req.Segments[j].Slot, req.Speed, pause)
+			if fitRejected(out[j].Text, text, tgt, float64(budget)) != "" {
+				out[j].Warnings = append(out[j].Warnings, WarnFitFailed) // the full translation stays
+				continue
+			}
 			if req.Quality == Autofit {
 				if out[j].Draft == "" {
 					out[j].Draft = out[j].Text

@@ -115,6 +115,12 @@ type session struct {
 	index map[string]int
 	usage llm.Usage
 	ctxN  int
+	// budgets: the first pass sees each line's time budget (Autofit on a
+	// cloud route). Local models shown a budget over-shorten into broken,
+	// mixed-script fragments (thread #44), so with them Autofit's first
+	// pass is a plain translation and only overflowing lines are
+	// rewritten, and checked (fitRejected).
+	budgets bool
 }
 
 func (t *LLM) Translate(ctx context.Context, req Request) (Result, error) {
@@ -132,6 +138,7 @@ func (t *LLM) Translate(ctx context.Context, req Request) (Result, error) {
 	s.tgt, _ = parseLang(req.Target)
 	s.src, s.srcOK = parseLang(req.Source)
 	s.notes = langNotes("notes:", s.tgt)
+	s.budgets = req.Quality == Autofit && !localRoute(t.Router, skill)
 	s.ctxN = req.ContextLines
 	if s.ctxN == 0 {
 		s.ctxN = DefaultContextLines
@@ -213,7 +220,7 @@ func (s *session) data(idx []int) promptData {
 		texts[i] = s.req.Segments[j].Text
 	}
 	d := promptData{
-		Source: s.src, SourceKnown: s.srcOK, Target: s.tgt, Autofit: s.req.Quality == Autofit,
+		Source: s.src, SourceKnown: s.srcOK, Target: s.tgt, Autofit: s.budgets,
 		Style: s.req.Style, Context: s.req.Context, Formality: s.req.Formality,
 		Glossary: s.req.Glossary.Relevant(texts...), TargetNotes: s.notes,
 	}
@@ -232,7 +239,7 @@ func (s *session) data(idx []int) promptData {
 func (s *session) lineIn(j int) lineIn {
 	seg := s.req.Segments[j]
 	l := lineIn{ID: seg.ID, Text: s.masks[j].Text, Speaker: seg.Speaker, Note: seg.Note}
-	if s.req.Quality == Autofit && seg.Slot > 0 {
+	if s.budgets && seg.Slot > 0 {
 		l.MaxSeconds = round2(seg.Slot)
 		_, pause := Units(seg.Text, s.src.Tag)
 		_, l.MaxChars = s.t.predictor().Budget(s.tgt.Tag, seg.Slot, s.req.Speed, pause)
