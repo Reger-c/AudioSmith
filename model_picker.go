@@ -5,8 +5,8 @@ package main
 // with the page's recommended models first (the catalogue's presets for
 // the interface's language, thread #41), each with a speed and a quality
 // hint, and the others behind "Show all models", where the ones that
-// cannot do the page's job are greyed out with the reason. A retired
-// model (still running for old projects) says what replaces it.
+// cannot do the page's job are greyed out with the reason. Removed
+// models (models_removed.go) are never offered.
 
 import (
 	"slices"
@@ -54,7 +54,7 @@ func whyNotFor(e catalog.Entry, w catalog.Workflow) string {
 }
 
 // englishOnly reports whether e speaks only English (Kokoro without its
-// hidden Chinese voices, Pocket, Soprano…), for a hint in other languages.
+// hidden Chinese voices, Chatterbox Turbo), for a hint in other languages.
 func englishOnly(e catalog.Entry) bool {
 	p, _ := catalog.PresetFor(e.ID)
 	langs := 0
@@ -107,7 +107,7 @@ func bestFor(e catalog.Entry) string {
 }
 
 // modelPicker is the picker for workflow w; set receives the model chosen
-// (or the replacement of a retired one). key must be unique on the page.
+// key must be unique on the page.
 func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur catalog.Entry, set func(catalog.Entry), o pickerOpts) {
 	t := c.Theme()
 	k := tok(t)
@@ -142,7 +142,7 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 						Radius(px(t, 4)).Background(k.AccentSoft).SingleLine().Shrink(0)
 				}
 			})
-			if b := bestFor(cur); b != "" && cur.Retired == nil {
+			if b := bestFor(cur); b != "" {
 				ui.Text(c, b).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Ellipsis("…").MinWidth(0)
 			}
 		})
@@ -156,16 +156,6 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 		a.pickerList(c, key, w, cur, recs, set, o)
 	})
 	a.pickerOpen[key] = a.pickerOpen[key] && open && !o.Locked // closed by a pick, outside, Escape
-	if r, ok := catalog.Builtin().Replacement(cur); ok {
-		ui.Row(c.Key(key + "-retired")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			iconMark(c, icons.DangerTriangle, t.Warning, "")
-			caption(c, i18n.T("%s is retired: it misread too much in our tests. %s is better.", cur.Label, r.Label)).
-				TextColor(t.Warning).Grow(1).MinWidth(0)
-			if ghostButton(c.Key(key+"-switch"), i18n.T("Switch")).Disabled(o.Locked).Tooltip(i18n.T("Use %s", r.Label)).Clicked() {
-				set(r)
-			}
-		})
-	}
 }
 
 // pickerList is the picker's popover: recommended, then all the others.

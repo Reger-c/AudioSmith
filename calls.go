@@ -170,6 +170,8 @@ func callModelFor(lib *library, st settings.Settings, v core.Voice) (catalog.Ent
 	for _, repo := range []string{v.Model, v.CreatedWith} {
 		if e, ok := c.ByRepo(repo); ok {
 			cands = append(cands, e)
+		} else if e, _, ok := replaceRemoved(repo, true); ok {
+			cands = append(cands, e)
 		}
 	}
 	if e, ok := c.ByID(st.Studio.Model); ok {

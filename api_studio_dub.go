@@ -103,7 +103,7 @@ func (b *apiBackend) dubReady(ctx context.Context, p *dub.Project, through dub.S
 
 // CreateDub makes a dub of a file, as dropping it on the Dub page does,
 // and starts it (through: transcript, translation, dub; none: not yet).
-func (b *apiBackend) CreateDub(ctx context.Context, req api.DubCreate) (api.DubJSON, error) {
+func (b *apiBackend) CreateDub(ctx context.Context, req api.DubCreate) (out api.DubJSON, err error) {
 	if b.dubs == nil {
 		return api.DubJSON{}, errNoModule("Dubbing")
 	}
@@ -131,11 +131,16 @@ func (b *apiBackend) CreateDub(ctx context.Context, req api.DubCreate) (api.DubJ
 		p.Targets = slices.Clone(req.Targets)
 	}
 	if req.Model != "" {
-		e, err := ttsEntry(req.Model, "")
+		e, warn, err := ttsEntry(req.Model, "", true) // a dub clones its speakers
 		if err != nil {
 			return api.DubJSON{}, err
 		}
 		p.Settings.Model = e.Repo
+		defer func() {
+			if err == nil {
+				out.Warning = warn
+			}
+		}()
 	}
 	if req.Voice != "" {
 		voices, err := b.voices(ctx)
@@ -509,7 +514,7 @@ func (b *apiBackend) ExportDub(ctx context.Context, req api.DubExport) (api.JobJ
 
 // BatchDub adds files to the batch queue with the Batch page's settings
 // (the request's override them for these files only; nothing is saved).
-func (b *apiBackend) BatchDub(ctx context.Context, req api.BatchRequest) (api.BatchJSON, error) {
+func (b *apiBackend) BatchDub(ctx context.Context, req api.BatchRequest) (res api.BatchJSON, err error) {
 	if b.dubs == nil {
 		return api.BatchJSON{}, errNoModule("Dubbing")
 	}
@@ -536,11 +541,16 @@ func (b *apiBackend) BatchDub(ctx context.Context, req api.BatchRequest) (api.Ba
 		}
 	}
 	if req.Model != "" {
-		e, err := ttsEntry(req.Model, "")
+		e, warn, err := ttsEntry(req.Model, "", true)
 		if err != nil {
 			return api.BatchJSON{}, err
 		}
 		bs.Model = e.Repo
+		defer func() {
+			if err == nil {
+				res.Warning = warn
+			}
+		}()
 	}
 	if bs.Model == "" {
 		bs.Model = dubDefaultModelBy(b.onDisk)

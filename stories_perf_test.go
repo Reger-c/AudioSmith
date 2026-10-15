@@ -50,8 +50,7 @@ func TestInstructCapability(t *testing.T) {
 		level := storyContinuity(e.Repo)
 		switch {
 		case want && level != services.ContinuityInstruct,
-			e.Has(catalog.CapExaggeration) && level != services.ContinuityIntensity,
-			!want && !e.Has(catalog.CapExaggeration) && level != services.ContinuityLines:
+			!want && level != services.ContinuityLines:
 			t.Errorf("%s: continuity %s", e.ID, level)
 		}
 	}

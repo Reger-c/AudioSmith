@@ -310,7 +310,7 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 			if li > 0 && paced && !sameSpeaker(p.Lines[li-1], l) && p.Lines[li-1].Character != "" && StoryPrevDirection {
 				prev = p.Lines[li-1].Direction
 			}
-			withDelivery(&t, info, StoryInstruct(say, p.Scene, l.Persona, l.Direction, l.Intensity, prev), l.Direction, l.Intensity)
+			withDelivery(&t, info, StoryInstruct(say, p.Scene, l.Persona, l.Direction, l.Intensity, prev))
 		}
 		seed := p.Seed
 		if v.Seed != 0 {

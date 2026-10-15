@@ -42,8 +42,6 @@ type Traits struct {
 	// Instruct: takes a delivery instruction in its voice field
 	// (TakesInstruct): stories send their scene, personas and directions.
 	Instruct bool `json:"instruct,omitempty"`
-	// Exaggeration: takes an emotion intensity (Chatterbox).
-	Exaggeration bool `json:"exaggeration,omitempty"`
 }
 
 // WithCatalog applies what the catalogue knows of the model (v3): its
@@ -80,11 +78,10 @@ func TraitsFor(family string, caps []string) Traits {
 		Steps:     slices.Contains(caps, "steps"),
 		NonVerbal: slices.Contains(caps, "nonVerbal"),
 		MaxChars:  400, MaxCharsCJK: 200,
-		Instruct:     TakesInstruct(caps),
-		Exaggeration: slices.Contains(caps, "exaggeration"),
+		Instruct: TakesInstruct(caps),
 	}
 	switch family {
-	case "kokoro", "kitten":
+	case "kokoro":
 		// Kokoro takes at most 510 phonemes a call: about 300 letters
 		// of English, or 100 Chinese characters (pinyin phonemes).
 		t.MaxChars, t.MaxCharsCJK = 300, 100
@@ -95,8 +92,6 @@ func TraitsFor(family string, caps []string) Traits {
 		// Until the catalogue lists OmniVoice's tags (CapNonVerbal).
 		t.NonVerbal, t.Steps = true, true
 		t.MaxChars, t.MaxCharsCJK = 600, 250
-	case "marvis", "soprano":
-		t.MaxChars, t.MaxCharsCJK = 300, 150
 	}
 	return t
 }

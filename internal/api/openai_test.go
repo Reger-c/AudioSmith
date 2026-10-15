@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -239,13 +240,14 @@ func TestSpeechSSE(t *testing.T) {
 }
 
 func TestSpeechErrors(t *testing.T) {
+	cloneOnlyModel(t)
 	f := newFake(t)
 	f.voices = []core.Voice{{ID: "v1", Name: "Ana", Kind: core.VoiceCloned}, {ID: "v2", Name: "Twin", Kind: core.VoiceCloned}, {ID: "v3", Name: "twin", Kind: core.VoiceCloned}}
 	_, ts := f.server()
 	omni, _ := catalog.Builtin().ByID("omnivoice-bf16")
-	kitten, _ := catalog.Builtin().ByID("kitten-tts-mini-0.8")
+	turbo, _ := catalog.Builtin().ByID("chatterbox-turbo-8bit")
 	f.licence[omni.Repo] = true
-	f.notReady[kitten.Repo] = true
+	f.notReady[turbo.Repo] = true
 	for _, c := range []struct {
 		name, body string
 		status     int
@@ -262,10 +264,11 @@ func TestSpeechErrors(t *testing.T) {
 		{"ambiguous voice", `{"model":"tts-1","input":"hi","voice":"TWIN"}`, 409, CodeAmbiguousVoice},
 		{"clone on a model that can't", `{"model":"kokoro-82m-bf16","input":"hi","voice":"Ana"}`, 400, CodeUnsupportedModel},
 		{"licence", `{"model":"omnivoice-bf16","input":"hi"}`, 403, CodeLicenceRequired},
-		{"not downloaded", `{"model":"kitten-tts-mini-0.8","input":"hi"}`, 409, CodeNotDownloaded},
+		{"not downloaded", `{"model":"chatterbox-turbo-8bit","input":"hi"}`, 409, CodeNotDownloaded},
 		{"bad json", `{"model":`, 400, CodeInvalid},
-		{"clone-only, no reference", `{"model":"moss-tts-nano-100m","input":"hi"}`, 400, CodeNeedsReference},
-		{"clone-only, OpenAI voice", `{"model":"moss-tts-nano-100m","input":"hi","voice":"alloy"}`, 400, CodeNeedsReference},
+		{"clone-only, no reference", `{"model":"clone-only-nano","input":"hi"}`, 400, CodeNeedsReference},
+		{"clone-only, OpenAI voice", `{"model":"clone-only-nano","input":"hi","voice":"alloy"}`, 400, CodeNeedsReference},
+		{"removed model, its own speaker", `{"model":"kitten-tts-mini-0.8","input":"hi","voice":"Bella"}`, 400, CodeModelRemoved},
 	} {
 		resp := sdkSpeech(t, ts, c.body)
 		var e apiErr
@@ -296,12 +299,12 @@ func TestSpeechErrors(t *testing.T) {
 
 func TestSpeechVoices(t *testing.T) {
 	f := newFake(t)
-	f.voices = []core.Voice{{ID: "c1", Name: "Narrator", Kind: core.VoiceCloned, Model: "mlx-community/chatterbox-8bit"}}
+	f.voices = []core.Voice{{ID: "c1", Name: "Narrator", Kind: core.VoiceCloned, Model: "mlx-community/chatterbox-turbo-8bit"}}
 	_, ts := f.server()
 	// A saved clone by name: the default (Kokoro) can't clone, so its own model.
 	resp := sdkSpeech(t, ts, `{"model":"tts-1","input":"hi","voice":"narrator","response_format":"wav","normalize":true}`)
 	io.Copy(io.Discard, resp.Body)
-	if resp.StatusCode != 200 || resp.Header.Get("X-AudioSmith-Model") != "chatterbox-8bit" || resp.Header.Get("X-AudioSmith-Voice") != "Narrator" {
+	if resp.StatusCode != 200 || resp.Header.Get("X-AudioSmith-Model") != "chatterbox-turbo-8bit" || resp.Header.Get("X-AudioSmith-Voice") != "Narrator" {
 		t.Fatalf("%d %v", resp.StatusCode, resp.Header)
 	}
 	// A built-in speaker; OpenAI's {"id": …} form; ignored parameters.
@@ -483,28 +486,107 @@ func TestModelsOpenAI(t *testing.T) {
 	}
 }
 
+// cloneOnlyModel adds a speech model that only clones voices to the
+// catalogue for the test: no shipped model does since thread #43.
+func cloneOnlyModel(t *testing.T) catalog.Entry {
+	t.Helper()
+	e := catalog.Entry{ID: "clone-only-nano", Label: "CloneOnly Nano", Family: "moss_tts_nano", Repo: "test/CloneOnly-Nano-100M",
+		Tasks: []catalog.Task{catalog.TaskTTS}, About: "A test model that only clones voices.", NeedsReference: true,
+		Capabilities: []catalog.Capability{catalog.CapSampling, catalog.CapClone, catalog.CapSeed},
+		Licence:      catalog.Licence{ID: "apache-2.0", Name: "Apache 2.0", Commercial: true, Verified: true}}
+	c := *catalog.Builtin()
+	c.Entries = append(slices.Clone(c.Entries), e)
+	t.Cleanup(catalog.Swap(&c))
+	return e
+}
+
 // A model that only clones speaks with a saved cloned voice; the services'
 // refusal (core.NeedsReferenceError) is a 400 needs_reference too.
 func TestSpeechNeedsReference(t *testing.T) {
+	cloneOnlyModel(t)
 	f := newFake(t)
 	f.voices = []core.Voice{{ID: "v1", Name: "Ana", Kind: core.VoiceCloned}}
 	_, ts := f.server()
-	resp := sdkSpeech(t, ts, `{"model":"moss-tts-nano-100m","input":"hi","voice":"Ana","response_format":"wav"}`)
+	resp := sdkSpeech(t, ts, `{"model":"clone-only-nano","input":"hi","voice":"Ana","response_format":"wav"}`)
 	io.Copy(io.Discard, resp.Body)
-	if resp.StatusCode != 200 || resp.Header.Get("X-AudioSmith-Model") != "moss-tts-nano-100m" {
+	if resp.StatusCode != 200 || resp.Header.Get("X-AudioSmith-Model") != "clone-only-nano" {
 		t.Fatalf("%d %v", resp.StatusCode, resp.Header)
 	}
-	resp = sdkSpeech(t, ts, `{"model":"moss-tts-nano-100m","input":"hi"}`)
+	resp = sdkSpeech(t, ts, `{"model":"clone-only-nano","input":"hi"}`)
 	var e apiErr
 	json.NewDecoder(resp.Body).Decode(&e)
-	if resp.StatusCode != 400 || e.Error.Code != CodeNeedsReference || !strings.Contains(e.Error.Message, "MOSS-TTS-Nano only clones voices") {
+	if resp.StatusCode != 400 || e.Error.Code != CodeNeedsReference || !strings.Contains(e.Error.Message, "CloneOnly Nano only clones voices") {
 		t.Fatalf("%d %+v", resp.StatusCode, e)
 	}
-	ae := errorOf(fmt.Errorf("generate: %w", &core.NeedsReferenceError{Model: "MOSS-TTS-Nano"}))
+	ae := errorOf(fmt.Errorf("generate: %w", &core.NeedsReferenceError{Model: "CloneOnly Nano"}))
 	if ae.Status != 400 || ae.Code != CodeNeedsReference {
 		t.Fatalf("errorOf: %+v", ae)
 	}
 	if je := jobErrorOf(&jobs.Error{Code: core.CodeNeedsReference, Message: "x"}); je.Status != 400 {
 		t.Fatalf("jobErrorOf: %+v", je)
+	}
+}
+
+// TestRemovedModels: requests that name a model thread #43 removed are
+// answered by its replacement, with X-AudioSmith-Replaced-By and a
+// warning (headers, JSON); a cloning request goes to the clone
+// replacement; what the replacement can't do (the old model's own
+// speaker, downloading the old model) is a clear error. The model list
+// never shows them; GET of one says what replaces it.
+func TestRemovedModels(t *testing.T) {
+	f := newFake(t)
+	f.voices = []core.Voice{{ID: "v1", Name: "Ana", Kind: core.VoiceCloned}}
+	_, ts := f.server()
+	for _, c := range []struct{ body, model string }{
+		{`{"model":"kitten-tts-mini-0.8","input":"hi"}`, "kokoro-82m-bf16"},
+		{`{"model":"mlx-community/Soprano-80M-bf16","input":"hi","voice":"af_heart"}`, "kokoro-82m-bf16"},
+		{`{"model":"Pocket TTS","input":"hi","voice":"Ana"}`, "chatterbox-turbo-8bit"}, // a clone
+		{`{"model":"marvis-tts-250m-v0.2-8bit","input":"hi","voice":"alloy"}`, "kokoro-82m-bf16"},
+		{`{"model":"MOSS-TTS-Nano-100M","input":"hi","voice":"Ana"}`, "qwen3-tts-0.6b-base-8bit"},
+		{`{"model":"chatterbox-8bit","input":"hi","voice":"Ana"}`, "chatterbox-turbo-8bit"},
+	} {
+		resp := sdkSpeech(t, ts, c.body)
+		io.Copy(io.Discard, resp.Body)
+		h := resp.Header
+		if resp.StatusCode != 200 || h.Get("X-AudioSmith-Model") != c.model || h.Get("X-AudioSmith-Replaced-By") != c.model ||
+			!strings.Contains(h.Get("X-AudioSmith-Warning"), "was removed from AudioSmith") {
+			t.Errorf("%s: %d %v", c.body, resp.StatusCode, h)
+		}
+	}
+	if g := f.generated[len(f.generated)-1]; g.Model.ID != "chatterbox-turbo-8bit" || g.Voice == nil || g.Voice.ID != "v1" {
+		t.Errorf("generated %+v", g)
+	}
+	// The old model's speaker: Kokoro has no Bella.
+	resp := sdkSpeech(t, ts, `{"model":"kitten-tts-mini-0.8","input":"hi","voice":"Bella"}`)
+	var e apiErr
+	json.NewDecoder(resp.Body).Decode(&e)
+	if resp.StatusCode != 400 || e.Error.Code != CodeModelRemoved || !strings.Contains(e.Error.Message, "KittenTTS mini was removed") ||
+		!strings.Contains(e.Error.Message, "Kokoro 82M has no voice called Bella") {
+		t.Errorf("Bella: %d %+v", resp.StatusCode, e)
+	}
+	// The native API: replaced_by and warning in the answer.
+	var gen map[string]any
+	if resp := do(t, ts, "POST", "/api/generate", `{"text":"hi","model":"soprano-80m-bf16"}`, &gen); resp.StatusCode != 200 ||
+		gen["replaced_by"] != "kokoro-82m-bf16" || !strings.Contains(fmt.Sprint(gen["warning"]), "Soprano 80M was removed") {
+		t.Errorf("generate: %d %v", resp.StatusCode, gen)
+	}
+	// Lists and lookups.
+	var list struct{ Data []map[string]any }
+	do(t, ts, "GET", "/v1/models", nil, &list)
+	for _, m := range list.Data {
+		if _, ok := catalog.Builtin().RemovedModel(fmt.Sprint(m["id"])); ok {
+			t.Errorf("listed %v", m["id"])
+		}
+	}
+	for _, path := range []string{"/v1/models/pocket-tts", "/api/models/pocket-tts"} {
+		var rm RemovedModelJSON
+		if resp := do(t, ts, "GET", path, nil, &rm); resp.StatusCode != 200 || !rm.Removed || rm.ReplacedBy != "kokoro-82m-bf16" ||
+			rm.CloneReplacedBy != "chatterbox-turbo-8bit" || rm.Warning == "" {
+			t.Errorf("%s: %d %+v", path, resp.StatusCode, rm)
+		}
+	}
+	resp = do(t, ts, "POST", "/api/models/kitten-tts-mini-0.8/download", nil, &e)
+	if resp.StatusCode != 410 || e.Error.Code != CodeModelRemoved {
+		t.Errorf("download: %d %+v", resp.StatusCode, e)
 	}
 }

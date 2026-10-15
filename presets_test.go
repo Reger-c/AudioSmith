@@ -11,7 +11,7 @@ import (
 // TestPresetDefaults: a take that sets no sampling gets the model's
 // tuned parameters (thread #41): Qwen3-TTS 0.7 / 0.8, OmniVoice guidance
 // 1.5 and 32 steps (16 for dubbing); what the recipe sets wins; models
-// without a preset (Kokoro's sampling, Marvis) get nothing.
+// without a preset (Kokoro's sampling) get nothing.
 func TestPresetDefaults(t *testing.T) {
 	a, eng, _ := newTestApp(t)
 	acceptLicences(t, a)
@@ -51,8 +51,8 @@ func TestPresetDefaults(t *testing.T) {
 	if g := gen("omnivoice-bf16", nil); g.Guidance != 1.5 || g.Steps != 32 {
 		t.Errorf("OmniVoice %+v", g)
 	}
-	if g := gen("marvis-tts-250m-v0.2-8bit", nil); g.Temperature != 0 || g.TopP != 0 {
-		t.Errorf("Marvis %+v", g)
+	if g := gen("kokoro-82m-bf16", nil); g.Temperature != 0 || g.TopP != 0 {
+		t.Errorf("Kokoro %+v", g)
 	}
 	info := modelInfo(entry(t, "omnivoice-bf16").Repo)
 	var dubTake core.Take

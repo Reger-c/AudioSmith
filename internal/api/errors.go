@@ -51,8 +51,13 @@ const (
 	CodeTranslationNotReady = "translation_unavailable" // no language model for /v1/audio/translations
 	CodePathNotAllowed      = "path_not_allowed"
 	CodeTooLarge            = "too_large"
-	// CodeNeedsReference: the model only clones voices (MOSS-TTS-Nano)
-	// and the request gave no reference (ref_audio, or a saved voice
+	// CodeModelRemoved: the request names a model AudioSmith removed
+	// (thread #43) and its replacement can't do what was asked (a
+	// built-in speaker of the old model, a download). Requests the
+	// replacement can serve are answered by it, with replaced_by.
+	CodeModelRemoved = "model_removed"
+	// CodeNeedsReference: the model only clones voices and the request
+	// gave no reference (ref_audio, or a saved voice
 	// cloned from a clip). 400.
 	CodeNeedsReference = core.CodeNeedsReference
 )

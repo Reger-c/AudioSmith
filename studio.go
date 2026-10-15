@@ -69,8 +69,7 @@ type studioState struct {
 	seedPinned bool
 	seed       float64
 	// Model-specific controls (catalogue capabilities); 0 = the model's.
-	guidance     float64
-	exaggeration float64
+	guidance float64
 	// recentLangs are the languages chosen last, newest first (codes).
 	recentLangs [4]string
 	// studioAuto: the model was picked for a new user (nothing in the
@@ -94,6 +93,8 @@ func newStudioState(prefs settings.Settings) studioState {
 	first := catalog.Builtin().ForTask(catalog.TaskTTS)[0]
 	if e, ok := catalog.Builtin().ByID(prefs.Studio.Model); ok && !e.Hidden && slices.Contains(e.Tasks, catalog.TaskTTS) {
 		first = e
+	} else if e, _, ok := replaceRemoved(prefs.Studio.Model, false); ok {
+		first = e // the settings move to it as the shell opens (migrateRemovedSettings)
 	}
 	s := studioState{
 		modelLabel:    first.Label,
@@ -130,15 +131,14 @@ type studioDraft struct {
 	RefText       string  `json:"refText,omitempty"`
 	Duration      float64 `json:"duration,omitempty"`
 
-	Steps        float64   `json:"steps,omitempty"`
-	Bits         int       `json:"bits,omitempty"`
-	RawVolume    bool      `json:"rawVolume,omitempty"`   // Even out volume off
-	NoNormalize  bool      `json:"noNormalize,omitempty"` // normalisation off
-	SeedPinned   bool      `json:"seedPinned,omitempty"`
-	Seed         float64   `json:"seed,omitempty"`
-	Recent       [4]string `json:"recentLanguages"`
-	Guidance     float64   `json:"guidance,omitempty"`
-	Exaggeration float64   `json:"exaggeration,omitempty"`
+	Steps       float64   `json:"steps,omitempty"`
+	Bits        int       `json:"bits,omitempty"`
+	RawVolume   bool      `json:"rawVolume,omitempty"`   // Even out volume off
+	NoNormalize bool      `json:"noNormalize,omitempty"` // normalisation off
+	SeedPinned  bool      `json:"seedPinned,omitempty"`
+	Seed        float64   `json:"seed,omitempty"`
+	Recent      [4]string `json:"recentLanguages"`
+	Guidance    float64   `json:"guidance,omitempty"`
 }
 
 const studioDraftKey = "studio"
@@ -150,13 +150,14 @@ func (s *studioState) toDraft() studioDraft {
 		RefAudio: s.refAudio, RefText: s.refText, Duration: s.duration,
 		Steps: s.steps, Bits: studioBits, RawVolume: !s.evenOut,
 		NoNormalize: !s.normalize, SeedPinned: s.seedPinned, Seed: s.seed, Recent: s.recentLangs,
-		Guidance: s.guidance, Exaggeration: s.exaggeration}
+		Guidance: s.guidance}
 }
 
-// applyDraft restores a draft, ignoring a model the catalogue no longer has.
+// applyDraft restores a draft, ignoring a model the catalogue no longer
+// has (restoreStudioDraft first moves a removed one to its replacement).
 func (s *studioState) applyDraft(d studioDraft) {
 	if e, ok := catalog.Builtin().ByLabel(d.ModelLabel); d.ModelLabel != catalog.CustomLabel && (!ok || e.Hidden || !slices.Contains(e.Tasks, catalog.TaskTTS)) {
-		return // retired models stay: they still run, and the picker says what replaces them
+		return
 	}
 	s.text, s.modelLabel, s.customRepo = d.Text, d.ModelLabel, d.CustomRepo
 	s.voice, s.language = d.Voice, d.Language
@@ -172,9 +173,25 @@ func (s *studioState) applyDraft(d studioDraft) {
 	s.refAudio, s.refText, s.duration = d.RefAudio, d.RefText, d.Duration
 	s.steps, s.evenOut, s.normalize = d.Steps, !d.RawVolume, !d.NoNormalize
 	s.seedPinned, s.seed, s.recentLangs = d.SeedPinned, d.Seed, d.Recent
-	s.guidance, s.exaggeration = d.Guidance, d.Exaggeration
+	s.guidance = d.Guidance
 	s.script.reset(s.text)
 	s.savedDraft = s.toDraft()
+}
+
+// applyStudioDraft restores a draft; one on a removed model moves to its
+// replacement (the clone one when the draft has a reference clip), with
+// that model's recommended voice, language and settings, and says so.
+func (a *app) applyStudioDraft(d studioDraft) {
+	by, r, removed := replaceRemoved(d.ModelLabel, d.RefAudio != "")
+	if removed {
+		d.ModelLabel = by.Label
+	}
+	a.applyDraft(d)
+	if removed {
+		a.loadPreset(by, a.prefs.Studio.Overrides[by.ID])
+		a.savedDraft = studioDraft{} // saved again on the next autosave
+		a.noteRemoved(r, by)
+	}
 }
 
 // autosaveStudio hands the form to the draft service when it changed
@@ -201,7 +218,7 @@ func (a *app) restoreStudioDraft() {
 		}
 		a.post(func() {
 			if a.toDraft() == a.savedDraft {
-				a.applyDraft(d)
+				a.applyStudioDraft(d)
 			}
 			a.startAutoModel(true)
 		})
@@ -359,9 +376,6 @@ func (a *app) recipe(now time.Time) core.Take {
 	if p.Has(catalog.CapGuidance) && a.guidance > 0 {
 		t.Guidance = a.guidance
 	}
-	if p.Has(catalog.CapExaggeration) && a.exaggeration > 0 {
-		t.Exaggeration = a.exaggeration
-	}
 	return t
 }
 
@@ -372,10 +386,16 @@ func (a *app) reuse(t *core.Take) {
 	a.script.set(t.Text)
 	if p, ok := catalog.Builtin().ByRepo(t.Model); ok {
 		a.modelLabel = p.Label
+	} else if p, r, ok := replaceRemoved(t.Model, services.HasReference(*t)); ok {
+		a.modelLabel = p.Label
+		a.noteRemoved(r, p)
 	} else {
 		a.modelLabel, a.customRepo = catalog.CustomLabel, t.Model
 	}
 	a.voice, a.language = t.Voice, t.Language
+	if m := *t; replaceRemovedTake(&m) {
+		a.voice, a.language = m.Voice, m.Language // what the replacement takes
+	}
 	if t.Speed > 0 {
 		a.speed = t.Speed
 	}
@@ -389,7 +409,7 @@ func (a *app) reuse(t *core.Take) {
 		a.refAudio, a.refText = "", ""
 	}
 	a.duration, a.steps = t.Duration, float64(t.Steps)
-	a.guidance, a.exaggeration = t.Guidance, t.Exaggeration
+	a.guidance = t.Guidance
 	a.seedPinned, a.seed = t.Seed != 0, float64(t.Seed)
 	if r := t.Render; r != nil {
 		a.evenOut = r.Master != "" && r.Master != "raw"

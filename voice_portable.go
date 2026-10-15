@@ -38,6 +38,9 @@ func portableLine(lang string) string {
 // canMakePortable reports whether v can be made portable: a built-in
 // speaker or a designed voice (a cloned voice already is).
 func canMakePortable(v *core.Voice) bool {
+	if v != nil && v.Kind == core.VoiceBuiltin && removedVoice(v) {
+		return false // its model is gone: nothing can render it
+	}
 	return v != nil && (v.Kind == core.VoiceBuiltin || v.Kind == core.VoiceDesigned)
 }
 

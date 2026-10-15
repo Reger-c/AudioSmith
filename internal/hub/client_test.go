@@ -321,7 +321,7 @@ func TestDownload(t *testing.T) {
 }
 
 // Files with the same content share a blob: it is fetched once, and both
-// paths of the snapshot link to it (Marvis ships two identical prompts).
+// paths of the snapshot link to it (some repos ship identical prompts).
 func TestDownloadDuplicateContent(t *testing.T) {
 	h := newFakeHub(t)
 	h.files["prompts/a.txt"] = []byte("the same words")

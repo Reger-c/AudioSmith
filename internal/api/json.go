@@ -99,16 +99,36 @@ type ModelJSON struct {
 	MinMemoryGB  float64       `json:"min_memory_gb,omitempty"`
 	// NeedsReference: the model only clones voices; speech requests need
 	// ref_audio or a saved cloned voice (else 400 needs_reference).
-	NeedsReference bool `json:"needs_reference,omitempty"`
-	Downloaded     bool `json:"downloaded"`
-	Default        bool `json:"default,omitempty"` // what OpenAI's names map to
-	Hidden         bool `json:"hidden,omitempty"`
-	// Retired models still answer when named; ReplacedBy is the model to
-	// use instead (the catalogue's id).
-	Retired    bool        `json:"retired,omitempty"`
-	ReplacedBy string      `json:"replaced_by,omitempty"`
-	About      string      `json:"about,omitempty"`
-	Licence    LicenceJSON `json:"licence"`
+	NeedsReference bool        `json:"needs_reference,omitempty"`
+	Downloaded     bool        `json:"downloaded"`
+	Default        bool        `json:"default,omitempty"` // what OpenAI's names map to
+	Hidden         bool        `json:"hidden,omitempty"`
+	About          string      `json:"about,omitempty"`
+	Licence        LicenceJSON `json:"licence"`
+}
+
+// RemovedModelJSON answers GET /v1/models/{id} for a model AudioSmith
+// removed (thread #43): requests naming it are answered by ReplacedBy
+// (CloneReplacedBy when they clone a voice), with a warning.
+type RemovedModelJSON struct {
+	ID              string `json:"id"`
+	Object          string `json:"object"` // "model"
+	Label           string `json:"label"`
+	Repo            string `json:"repo"`
+	Removed         bool   `json:"removed"`
+	ReplacedBy      string `json:"replaced_by"`
+	CloneReplacedBy string `json:"clone_replaced_by,omitempty"`
+	Warning         string `json:"warning"`
+}
+
+func removedModelJSON(r catalog.Removed) RemovedModelJSON {
+	by, _ := catalog.Builtin().ByID(r.ReplacedBy)
+	j := RemovedModelJSON{ID: r.ID, Object: "model", Label: r.Label, Repo: r.Repo, Removed: true, ReplacedBy: r.ReplacedBy,
+		Warning: r.Label + " was removed from AudioSmith; requests that name it are answered by " + by.Label + "."}
+	if r.CloneReplacedBy != r.ReplacedBy {
+		j.CloneReplacedBy = r.CloneReplacedBy
+	}
+	return j
 }
 
 // SpeakerJSON is a built-in speaker.
@@ -140,9 +160,6 @@ func modelJSON(m Model, isDefault bool) ModelJSON {
 	}
 	for _, c := range e.Capabilities {
 		j.Capabilities = append(j.Capabilities, string(c))
-	}
-	if r := e.Retired; r != nil {
-		j.Retired, j.ReplacedBy = true, r.ReplacedBy
 	}
 	j.Languages = entryLanguages(e)
 	for _, v := range e.Voices {

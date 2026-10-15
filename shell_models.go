@@ -92,7 +92,8 @@ func (a *app) downloadsRunning() int {
 	return n
 }
 
-// refreshModels reads what of every entry is on disk, in the background.
+// refreshModels reads what of every entry is on disk, and what the
+// removed models left there (models_removed.go), in the background.
 func (a *app) refreshModels() {
 	client := a.hubClient()
 	entries := catalog.Builtin().Entries
@@ -102,6 +103,7 @@ func (a *app) refreshModels() {
 			a.post(func() { a.setLocal(e, l, err) })
 		}
 	})
+	a.refreshRemoved()
 }
 
 // refreshModel reads what of e is on disk, in the background.
@@ -312,6 +314,9 @@ func (a *app) modelsPage(c *ui.Context) {
 	})
 	ui.Scroll(c.Key("models-scroll-" + itoa(a.modelsKind))).Grow(1).Children(func() {
 		ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp2)).MaxWidth(px(t, 880)).Children(func() {
+			if a.modelsKind <= 1 {
+				a.removedRow(c) // removed speech models still on disk
+			}
 			for _, e := range entries {
 				if a.modelsKind == 0 || modelKindOf(e) == a.modelsKind {
 					a.modelCard(c, e)

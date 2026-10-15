@@ -327,9 +327,11 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Wait != nil && !*b.Wait {
 		sp.Detach()
-		writeJSON(w, http.StatusAccepted, map[string]any{"take_id": sp.Recipe.ID, "job_id": sp.JobID, "model": sp.Model.ID,
+		out := map[string]any{"take_id": sp.Recipe.ID, "job_id": sp.JobID, "model": sp.Model.ID,
 			"ignored": sp.Ignored, "job_url": "/api/jobs/" + sp.JobID, "events_url": "/api/jobs/" + sp.JobID + "/events",
-			"audio_url": "/api/takes/" + sp.Recipe.ID + "/audio"})
+			"audio_url": "/api/takes/" + sp.Recipe.ID + "/audio"}
+		sp.addReplaced(out)
+		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
 	res, err := sp.Wait(r.Context(), nil)
@@ -338,7 +340,17 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	speechHeaders(w.Header(), sp)
-	writeJSON(w, http.StatusOK, map[string]any{"take": takeJSON(res.Take), "job_id": sp.JobID, "ignored": sp.Ignored})
+	out := map[string]any{"take": takeJSON(res.Take), "job_id": sp.JobID, "ignored": sp.Ignored}
+	sp.addReplaced(out)
+	writeJSON(w, http.StatusOK, out)
+}
+
+// addReplaced adds replaced_by and warning to an answer when the request
+// named a removed model.
+func (sp *Speech) addReplaced(out map[string]any) {
+	if r := sp.Replaced; r != nil {
+		out["replaced_by"], out["warning"] = r.ReplacedBy, r.Warning
+	}
 }
 
 // Detach stops following a speech request without cancelling it.
@@ -364,6 +376,8 @@ func (s *Server) listTakes(w http.ResponseWriter, r *http.Request) {
 	if m := q.Get("model"); m != "" {
 		if e, ok := findEntry(m, catalog.TaskTTS); ok {
 			tq.Model = e.Repo
+		} else if rm, ok := catalog.Builtin().RemovedModel(m); ok {
+			tq.Model = rm.Repo // the takes it made keep its name
 		} else {
 			tq.Model = m
 		}
@@ -607,11 +621,21 @@ func (s *Server) getModel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if rm, ok := catalog.Builtin().RemovedModel(id); ok {
+		writeJSON(w, http.StatusOK, removedModelJSON(rm))
+		return
+	}
 	writeError(w, errNotFound(CodeModelNotFound, "There is no model %q.", id))
 }
 
 func (s *Server) downloadModel(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if rm, ok := catalog.Builtin().RemovedModel(id); ok {
+		writeError(w, &Error{Status: http.StatusGone, Code: CodeModelRemoved, Param: "id",
+			Message: rm.Label + " was removed from AudioSmith: download " + rm.ReplacedBy + " instead.",
+			Data:    map[string]any{"model": rm.ID, "replaced_by": rm.ReplacedBy}})
+		return
+	}
 	if _, ok := catalog.Builtin().ByID(id); !ok {
 		writeError(w, errNotFound(CodeModelNotFound, "There is no model %q.", id))
 		return
@@ -654,6 +678,9 @@ func (s *Server) Languages(model string) ([]LanguageJSON, error) {
 	var entries []catalog.Entry
 	if model != "" {
 		e, ok := findEntry(model, catalog.TaskTTS)
+		if !ok {
+			e, _, ok = replaceRemoved(model, false)
+		}
 		if !ok {
 			if e, ok = findEntry(model, catalog.TaskSTT); !ok {
 				return nil, errNotFound(CodeModelNotFound, "There is no model %q.", model)

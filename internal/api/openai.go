@@ -579,6 +579,10 @@ func (s *Server) v1Model(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if rm, ok := catalog.Builtin().RemovedModel(id); ok {
+		writeJSON(w, http.StatusOK, removedModelJSON(rm))
+		return
+	}
 	writeError(w, errNotFound(CodeModelNotFound, "There is no model %q.", id))
 }
 

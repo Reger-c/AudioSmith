@@ -191,7 +191,7 @@ func (e *LicenceRequiredError) Error() string {
 func (e *LicenceRequiredError) Unwrap() error { return ErrLicenceRequired }
 
 // NeedsReferenceError: the model only clones voices (catalog
-// Entry.NeedsReference, MOSS-TTS-Nano) and the recipe has no reference
+// Entry.NeedsReference) and the recipe has no reference
 // clip. It wraps ErrInvalid (the Local API answers 400).
 type NeedsReferenceError struct {
 	Model string // the model's name as the UI shows it, or its repo

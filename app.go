@@ -47,6 +47,7 @@ type app struct {
 	callsState
 	exportState      // export_dialog.go (thread #31): the Export audio dialog
 	modelPickerState // model_picker.go (thread #42): the creation pages' model picker
+	removedState     // models_removed.go (thread #43): removed models, their clean-up
 }
 
 func newApp(eng *engineHost, lib *library) *app {

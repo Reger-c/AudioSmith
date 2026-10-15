@@ -18,8 +18,8 @@ package enginetest
 //     -45 dBFS), with the request's minSpeech/minSilence/pad.
 //   - enhance.run: the input converted to 48 kHz mono, unchanged otherwise.
 //   - tts.encodeVoice: writes a small JSON file (format "fake/1"); models
-//     whose repo contains kokoro, kitten, soprano, customvoice or
-//     voicedesign are unsupported. tts.synthesize accepts that file as
+//     whose repo contains kokoro, customvoice or voicedesign are
+//     unsupported. tts.synthesize accepts that file as
 //     voicePrompt for the same model, else falls back to refAudio.
 //   - media.probe / media.decode: as described for inputs; decode cuts,
 //     resamples and remixes for real.
@@ -422,7 +422,7 @@ const FakePromptFormat = "fake/1"
 
 func noVoicePrompt(model string) bool {
 	l := strings.ToLower(model)
-	for _, s := range []string{"kokoro", "kitten", "soprano", "customvoice", "voicedesign"} {
+	for _, s := range []string{"kokoro", "customvoice", "voicedesign"} {
 		if strings.Contains(l, s) {
 			return true
 		}

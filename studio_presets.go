@@ -39,7 +39,7 @@ func (s *studioState) loadPreset(e catalog.Entry, ov settings.ModelParams) {
 		}
 	}
 	s.temperature, s.topP = ov.Temperature, ov.TopP
-	s.steps, s.guidance, s.exaggeration = float64(ov.Steps), ov.Guidance, ov.Exaggeration
+	s.steps, s.guidance = float64(ov.Steps), ov.Guidance
 	s.speed = 1
 	if ov.Speed > 0 {
 		s.speed = ov.Speed
@@ -64,7 +64,7 @@ func (a *app) studioOverride() settings.ModelParams {
 	}
 	o := settings.ModelParams{
 		Temperature: diff(a.temperature, rec.Temperature), TopP: diff(a.topP, rec.TopP),
-		Guidance: diff(a.guidance, rec.Guidance), Exaggeration: diff(a.exaggeration, rec.Exaggeration),
+		Guidance: diff(a.guidance, rec.Guidance),
 	}
 	if a.steps > 0 && (rec.Steps == nil || int(a.steps) != *rec.Steps) {
 		o.Steps = int(a.steps)
@@ -116,7 +116,6 @@ func (a *app) studioChanges() []string {
 	add(o.TopP != 0 && p.Has(catalog.CapSampling), i18n.T("Top P"))
 	add(o.Steps != 0 && a.traits().Steps, i18n.T("Steps"))
 	add(o.Guidance != 0 && p.Has(catalog.CapGuidance), i18n.T("Prompt guidance"))
-	add(o.Exaggeration != 0 && p.Has(catalog.CapExaggeration), i18n.T("Expressiveness"))
 	add(a.duration > 0 && p.Has(catalog.CapDuration), i18n.T("Duration"))
 	add(a.seedPinned, i18n.T("Seed"))
 	add(!a.evenOut, i18n.T("Even out volume"))
@@ -127,7 +126,7 @@ func (a *app) studioChanges() []string {
 // restoreRecommended clears the form's changes: the model's recommended
 // parameters, a free seed, the natural length, the output options on.
 func (a *app) restoreRecommended() {
-	a.temperature, a.topP, a.steps, a.guidance, a.exaggeration = 0, 0, 0, 0, 0
+	a.temperature, a.topP, a.steps, a.guidance = 0, 0, 0, 0
 	a.speed, a.duration, a.seedPinned = 1, 0, false
 	a.evenOut, a.normalize = true, true
 }

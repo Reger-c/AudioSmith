@@ -204,6 +204,7 @@ func (a *app) restoreLfDraft(p *lfPage) {
 // sample).
 func (a *app) setLfDoc(p *lfPage, d services.LongformDoc, project, saved string) {
 	d.Kind = p.kind
+	a.replaceRemovedDoc(&d) // a removed model's replacement (models_removed.go)
 	if d.Production == (services.Production{}) {
 		d.Production = services.DefaultProduction()
 	}

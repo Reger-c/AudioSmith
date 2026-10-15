@@ -155,14 +155,10 @@ func formatDuration(seconds float64) string {
 // on an M-series Mac, for the slow-generation warning.
 func typicalRTF(family string) float64 {
 	switch family {
-	case "kokoro", "kitten":
+	case "kokoro":
 		return 20
-	case "soprano":
-		return 8
 	case "omnivoice":
 		return 3
-	case "marvis":
-		return 1.5
 	}
 	return 2
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"image/png"
 	"io"
 	"net/http"
@@ -163,8 +164,15 @@ func TestAgentSkill(t *testing.T) {
 						t.Errorf("%s %s %s: no %q in\n%s", lang, slug, mode, w, s)
 					}
 				}
-				if !strings.Contains(ref, "MOSS-TTS-Nano") {
-					t.Errorf("%s: the reference lacks MOSS-TTS-Nano", lang)
+				if !strings.Contains(ref, "replaced_by") {
+					t.Errorf("%s: the reference does not say removed models are replaced", lang)
+				}
+				for _, r := range catalog.Builtin().Removed {
+					for _, name := range []string{r.ID, r.Repo, removedName(r)} {
+						if name != "" && (strings.Contains(ref, name) || strings.Contains(body, name)) {
+							t.Errorf("%s %s: names the removed %s", lang, slug, name)
+						}
+					}
 				}
 				for _, tl := range skillTools() {
 					if !strings.Contains(ref, "### `"+tl.Name+"`") {
@@ -605,4 +613,15 @@ func TestSnapshotsAgentSkill(t *testing.T) {
 			}
 		}
 	}
+}
+
+// removedName is a removed model's label, or "" when a kept model's label
+// contains it (Chatterbox → Chatterbox Turbo).
+func removedName(r catalog.Removed) string {
+	for _, e := range catalog.Builtin().Entries {
+		if strings.Contains(e.Label, r.Label) {
+			return ""
+		}
+	}
+	return r.Label
 }

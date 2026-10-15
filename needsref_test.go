@@ -1,7 +1,8 @@
 package main
 
-// A model that only clones voices (catalog NeedsReference: MOSS-TTS-Nano)
-// never gets a job without a reference: the Studio disables Generate and
+// A model that only clones voices (catalog NeedsReference: no shipped
+// model since thread #43 removed MOSS-TTS-Nano, so the tests add one,
+// cloneOnly) never gets a job without a reference: the Studio disables Generate and
 // says why, the services refuse the recipe, a render job refuses it, the
 // pickers drop voices without a clip; with a clip or a saved cloned voice
 // it generates. The engine's own words reach the user.
@@ -10,6 +11,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -17,24 +21,40 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/workflow"
 )
 
-func mossEntry(t *testing.T) catalog.Entry {
+// cloneOnly adds a speech model that only clones voices to the catalogue
+// for the test and returns it; with an app, its files are put in the
+// app's model folder (newTestApp does it for the models it finds).
+func cloneOnly(t *testing.T, a *app) catalog.Entry {
 	t.Helper()
-	e, ok := catalog.Builtin().ByID("moss-tts-nano-100m")
-	if !ok || !e.NeedsReference {
-		t.Fatalf("MOSS-TTS-Nano: %+v", e)
+	e := catalog.Entry{ID: "clone-only-nano", Label: "CloneOnly Nano", Family: "moss_tts_nano", Repo: "test/CloneOnly-Nano-100M",
+		Revision: "0123456789abcdef0123456789abcdef01234567", Tasks: []catalog.Task{catalog.TaskTTS}, About: "A test model that only clones voices.",
+		NeedsReference: true, Capabilities: []catalog.Capability{catalog.CapSampling, catalog.CapClone, catalog.CapSeed},
+		SampleRate: 48000, MaxChars: 400, Licence: catalog.Licence{ID: "apache-2.0", Name: "Apache 2.0", Commercial: true, Verified: true}}
+	c := *catalog.Builtin()
+	c.Entries = append(slices.Clone(c.Entries), e)
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(catalog.Swap(&c))
+	if a != nil {
+		snap := filepath.Join(hub.RepoDir(modelCache(a.lib.settings.Get()), e.Repo), "snapshots", e.Revision)
+		os.MkdirAll(snap, 0o755)
+		os.WriteFile(filepath.Join(snap, "config.json"), []byte("{}"), 0o644)
+		os.WriteFile(filepath.Join(snap, "model.safetensors"), []byte("weights"), 0o644)
 	}
 	return e
 }
 
 func TestStudioNeedsReference(t *testing.T) {
+	moss := cloneOnly(t, nil)
 	a, eng, tt := newTestApp(t)
-	moss := mossEntry(t)
 	a.text = "Hello there."
 	a.modelLabel = moss.Label
 	a.modelChanged()
@@ -44,7 +64,7 @@ func TestStudioNeedsReference(t *testing.T) {
 	if a.canGenerate() || !tt.HasText(want) {
 		t.Fatalf("Generate allowed without a reference: %v, %q", a.canGenerate(), tt.Texts())
 	}
-	if !tt.HasText("Required: MOSS-TTS-Nano only clones voices.") {
+	if !tt.HasText("Required: CloneOnly Nano only clones voices.") {
 		t.Errorf("no caption in the Voice cloning section: %q", tt.Texts())
 	}
 	tt.Click("Generate")
@@ -58,7 +78,7 @@ func TestStudioNeedsReference(t *testing.T) {
 	i18n.SetLocale("zh-Hans")
 	got := studioNeedsReferenceText(moss)
 	i18n.SetLocale("en")
-	if got != "MOSS-TTS-Nano 只能克隆声音：请在右侧“音色”里选一个已保存的音色，或一段要克隆的音频。" {
+	if got != "CloneOnly Nano 只能克隆声音：请在右侧“音色”里选一个已保存的音色，或一段要克隆的音频。" {
 		t.Errorf("zh: %q", got)
 	}
 
@@ -78,8 +98,8 @@ func TestStudioNeedsReference(t *testing.T) {
 }
 
 func TestStudioNeedsReferenceSavedVoice(t *testing.T) {
+	moss := cloneOnly(t, nil)
 	a, eng, tt := newTestApp(t)
-	moss := mossEntry(t)
 	clone := addVoice(t, a, core.Voice{Name: "Clone", Kind: core.VoiceCloned, RefText: "Words."}, 4)
 	designed := addVoice(t, a, core.Voice{Name: "Design only", Kind: core.VoiceDesigned}, 0)
 	builtin := core.Voice{Name: "Speaker", Kind: core.VoiceBuiltin, Speaker: "af_heart"}
@@ -89,17 +109,17 @@ func TestStudioNeedsReferenceSavedVoice(t *testing.T) {
 	tt.Frame()
 
 	if ok, why := voiceUsable(&builtin, moss); ok || why == "" {
-		t.Errorf("a built-in speaker on MOSS: %v %q", ok, why)
+		t.Errorf("a built-in speaker on the clone-only model: %v %q", ok, why)
 	}
 	if ok, _ := voiceUsable(&designed, moss); ok {
-		t.Error("a design without a sample on MOSS")
+		t.Error("a design without a sample on the clone-only model")
 	}
 	if ok, _ := voiceUsable(&clone, moss); !ok {
 		t.Fatal("a cloned voice with its clip is refused")
 	}
 	for _, v := range a.lfVoices(moss) { // Stories / Audiobook
 		if v.ref != clone.ID {
-			t.Errorf("Stories offer %+v on MOSS", v)
+			t.Errorf("Stories offer %+v on the clone-only model", v)
 		}
 	}
 	_, ids := a.studioVoiceOptions(moss)
@@ -130,14 +150,14 @@ func TestStudioNeedsReferenceSavedVoice(t *testing.T) {
 // which wraps ErrInvalid: the Local API's 400), and a render job of one
 // (Dub, Workflows and Calls render through it) fails with needs_reference.
 func TestServicesNeedReference(t *testing.T) {
+	moss := cloneOnly(t, nil)
 	a, eng, _ := newTestApp(t)
-	moss := mossEntry(t)
 	_, err := a.lib.svc.Takes.Generate(context.Background(), core.TakeRequest{Recipe: core.Take{Text: "Hi", Model: moss.Repo}})
 	var nr *core.NeedsReferenceError
-	if !errors.As(err, &nr) || !errors.Is(err, core.ErrInvalid) || nr.Model != "MOSS-TTS-Nano" {
+	if !errors.As(err, &nr) || !errors.Is(err, core.ErrInvalid) || nr.Model != "CloneOnly Nano" {
 		t.Fatalf("err %v", err)
 	}
-	if got := engineErrorText(err); got != needsReferenceText("MOSS-TTS-Nano") {
+	if got := engineErrorText(err); got != needsReferenceText("CloneOnly Nano") {
 		t.Errorf("text %q", got)
 	}
 	if _, _, err := a.lib.svc.Render.Preview(context.Background(), core.Take{Text: "Hi", Model: moss.Repo}); !errors.As(err, &nr) {
@@ -154,7 +174,7 @@ func TestServicesNeedReference(t *testing.T) {
 	if !errors.As(err, &je) || je.Code != core.CodeNeedsReference {
 		t.Fatalf("render: %v", err)
 	}
-	if got := jobErrorText(je); got != needsReferenceText("MOSS-TTS-Nano") {
+	if got := jobErrorText(je); got != needsReferenceText("CloneOnly Nano") {
 		t.Errorf("job text %q", got)
 	}
 	if len(eng.sent) != 0 {
@@ -162,17 +182,21 @@ func TestServicesNeedReference(t *testing.T) {
 	}
 }
 
-// The engine's words: its bad_request for MOSS without a reference, and
+// The engine's words: its bad_request for a model that only clones
+// without a reference (named by the catalogue, or "This model"), and
 // Cocoa's generic sentence from engines before the fix.
 func TestEngineErrorWords(t *testing.T) {
+	cloneOnly(t, nil)
 	for _, c := range []struct {
 		err  jobs.Error
 		want string
 	}{
-		{jobs.Error{Code: proto.CodeBadRequest, Message: "MOSS-TTS-Nano-100M only clones voices: give it a reference clip (refAudio)"},
-			needsReferenceText("MOSS-TTS-Nano")},
+		{jobs.Error{Code: proto.CodeBadRequest, Message: "CloneOnly-Nano-100M only clones voices: give it a reference clip (refAudio)"},
+			needsReferenceText("CloneOnly Nano")},
+		{jobs.Error{Code: proto.CodeBadRequest, Message: "CloneOnly Nano requires refAudio for voice_clone generation."},
+			needsReferenceText("CloneOnly Nano")},
 		{jobs.Error{Code: proto.CodeBadRequest, Message: "MOSS-TTS-Nano requires refAudio for voice_clone generation."},
-			needsReferenceText("MOSS-TTS-Nano")},
+			"This model only clones voices: it needs a reference clip or a saved cloned voice."},
 		{jobs.Error{Code: proto.CodeInternal, Message: "internal: The operation couldn’t be completed. (MLXAudioTTS.MossTTSNanoError error 0.)"},
 			"internal: The operation couldn’t be completed. (MLXAudioTTS.MossTTSNanoError error 0.)"},
 		{jobs.Error{Code: proto.CodeInternal, Message: "The operation couldn’t be completed. (MLXAudioTTS.MossTTSNanoError error 0.)"},
@@ -190,12 +214,12 @@ func TestEngineErrorWords(t *testing.T) {
 // Dub: a model that only clones offers no default voice or design presets,
 // and a line cast without a reference clones its speaker.
 func TestDubNeedsReference(t *testing.T) {
+	moss := cloneOnly(t, nil)
 	a, _, _ := newTestApp(t)
-	moss := mossEntry(t)
 	a.dub = &dub.Project{Settings: dub.Settings{Model: moss.Repo}}
 	for _, ch := range a.dubVoiceChoices() {
 		if ch.ref == dub.VoiceDefault || strings.HasPrefix(ch.ref, dub.PresetPrefix) {
-			t.Errorf("choice %+v for MOSS", ch)
+			t.Errorf("choice %+v for the clone-only model", ch)
 		}
 	}
 	if caps := dubCaps(moss.Repo); !caps.NeedsReference || !caps.Clone {
@@ -207,11 +231,11 @@ func TestDubNeedsReference(t *testing.T) {
 	}
 }
 
-// Workflows: a Speak step on MOSS without a saved cloned voice is an error
+// Workflows: a Speak step on a clone-only model without a saved cloned voice is an error
 // of the graph.
 func TestWorkflowNeedsReference(t *testing.T) {
+	moss := cloneOnly(t, nil)
 	a, _, tt := newTestApp(t)
-	moss := mossEntry(t)
 	n := &workflow.Node{ID: "s", Kind: workflow.KindSpeak, P: workflow.Params{Model: moss.Repo}}
 	ds := a.wfCheck(n, "")
 	if len(ds) == 0 || ds[0].Severity != workflow.Error || !strings.Contains(ds[0].Arg, "only clones voices") {
@@ -225,7 +249,7 @@ func TestWorkflowNeedsReference(t *testing.T) {
 			t.Errorf("with a cloned voice: %+v", d)
 		}
 	}
-	if got := wfErrorText(core.CodeNeedsReference, "MOSS-TTS-Nano only clones voices: give it a reference clip, or a saved voice cloned from one"); got != needsReferenceText("MOSS-TTS-Nano") {
+	if got := wfErrorText(core.CodeNeedsReference, "CloneOnly Nano only clones voices: give it a reference clip, or a saved voice cloned from one"); got != needsReferenceText("CloneOnly Nano") {
 		t.Errorf("wf text %q", got)
 	}
 }

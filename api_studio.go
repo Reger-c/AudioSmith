@@ -120,18 +120,23 @@ func notFound(err error, what, id string) error {
 
 // --- models and voices --------------------------------------------------------------
 
-// ttsEntry finds a speech model by id, repo or label; "" is def.
-func ttsEntry(name, def string) (catalog.Entry, error) {
+// ttsEntry finds a speech model by id, repo or label; "" is def. A
+// removed model gives its replacement (clone: the work clones voices)
+// and a warning for the answer.
+func ttsEntry(name, def string, clone bool) (catalog.Entry, string, error) {
 	n := strings.TrimSpace(name)
 	if n == "" {
 		n = def
 	}
 	for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
 		if strings.EqualFold(e.ID, n) || strings.EqualFold(e.Repo, n) || strings.EqualFold(e.Label, n) || strings.EqualFold(catalog.ShortRepo(e.Repo), n) {
-			return e, nil
+			return e, "", nil
 		}
 	}
-	return catalog.Entry{}, apiErr(http.StatusNotFound, api.CodeModelNotFound, "model", "There is no speech model %q: list_models lists them.", name)
+	if e, r, ok := replaceRemoved(n, clone); ok {
+		return e, r.Warning(e), nil
+	}
+	return catalog.Entry{}, "", apiErr(http.StatusNotFound, api.CodeModelNotFound, "model", "There is no speech model %q: list_models lists them.", name)
 }
 
 // defaultTTSRepo is the Studio's default model (Settings → Studio).

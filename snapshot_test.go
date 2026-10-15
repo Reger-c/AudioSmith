@@ -107,12 +107,12 @@ func TestSnapshots(t *testing.T) {
 		a.showPage("engine")
 		save("engine")
 
-		// Models: Kokoro downloaded (from a fake hub), Soprano downloading.
+		// Models: Kokoro downloaded (from a fake hub), Chatterbox Turbo downloading.
 		useFakeHub(t, a)
 		a.download(entry(t, "kokoro-82m-bf16"))
 		a.navigate("/models")
-		dl := a.model(entry(t, "soprano-80m-bf16"))
-		dl.downloading, dl.progress = true, hub.Progress{Bytes: 88e6, TotalBytes: 220645307, Mirror: "https://hf-mirror.com"}
+		dl := a.model(entry(t, "chatterbox-turbo-8bit"))
+		dl.downloading, dl.progress = true, hub.Progress{Bytes: 480e6, TotalBytes: 1202987769, Mirror: "https://hf-mirror.com"}
 		a.notices = nil
 		save("models")
 		a.askLicence(entry(t, "omnivoice-bf16"), nil)
@@ -122,7 +122,7 @@ func TestSnapshots(t *testing.T) {
 
 		// Generate with a model that is not downloaded.
 		a.navigate("/studio")
-		a.selectModel(entry(t, "soprano-80m-bf16"))
+		a.selectModel(entry(t, "chatterbox-turbo-8bit"))
 		a.generate()
 		save("studio-download")
 		a.jobError, a.needDownload = "", nil

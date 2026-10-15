@@ -91,12 +91,11 @@ type Studio struct {
 // ModelParams are generation parameters changed from a model's
 // recommendation; 0 = not changed.
 type ModelParams struct {
-	Temperature  float64 `json:"temperature,omitempty"`
-	TopP         float64 `json:"topP,omitempty"`
-	Steps        int     `json:"steps,omitempty"`
-	Guidance     float64 `json:"guidance,omitempty"`
-	Exaggeration float64 `json:"exaggeration,omitempty"`
-	Speed        float64 `json:"speed,omitempty"` // 0 = 1×
+	Temperature float64 `json:"temperature,omitempty"`
+	TopP        float64 `json:"topP,omitempty"`
+	Steps       int     `json:"steps,omitempty"`
+	Guidance    float64 `json:"guidance,omitempty"`
+	Speed       float64 `json:"speed,omitempty"` // 0 = 1×
 }
 
 // Models: where and how models download.

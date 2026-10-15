@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -310,4 +311,76 @@ func CleanEngineCopies(cacheDir string) ([]string, error) {
 		}
 	}
 	return removed, nil
+}
+
+// Leftover is what a repo AudioSmith no longer uses (a removed model's,
+// catalog.Removed) leaves in the model folder: its cache directory and
+// the engine's copy, and their size.
+type Leftover struct {
+	Repo  string
+	Dirs  []string // existing directories, absolute
+	Bytes int64    // regular files under them (blobs, copies; links not followed)
+}
+
+// repoID is an "owner/name" Hugging Face repo id.
+var repoID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// leftoverDirs are the directories of repo in cacheDir: exactly its
+// cache directory and its engine copy, nothing else.
+func leftoverDirs(cacheDir, repo string) ([]string, error) {
+	if !repoID.MatchString(repo) || strings.Contains(repo, "..") {
+		return nil, fmt.Errorf("leftovers: bad repo id %q", repo)
+	}
+	return []string{RepoDir(cacheDir, repo), EngineCopy(cacheDir, repo)}, nil
+}
+
+// Leftovers reports what of repos is on disk in cacheDir; repos with
+// nothing there are left out.
+func Leftovers(cacheDir string, repos []string) ([]Leftover, error) {
+	var out []Leftover
+	for _, repo := range repos {
+		dirs, err := leftoverDirs(cacheDir, repo)
+		if err != nil {
+			return out, err
+		}
+		l := Leftover{Repo: repo}
+		for _, d := range dirs {
+			if st, err := os.Lstat(d); err != nil || !st.IsDir() {
+				continue
+			}
+			l.Dirs = append(l.Dirs, d)
+			filepath.WalkDir(d, func(_ string, de fs.DirEntry, err error) error {
+				if err == nil && de.Type().IsRegular() {
+					if info, err := de.Info(); err == nil {
+						l.Bytes += info.Size()
+					}
+				}
+				return nil
+			})
+		}
+		if len(l.Dirs) > 0 {
+			out = append(out, l)
+		}
+	}
+	return out, nil
+}
+
+// RemoveLeftovers deletes the directories of repos in cacheDir (their
+// cache directories and engine copies; see Leftovers) and nothing else.
+// It returns the bytes freed.
+func RemoveLeftovers(cacheDir string, repos []string) (int64, error) {
+	ls, err := Leftovers(cacheDir, repos)
+	if err != nil {
+		return 0, err
+	}
+	var freed int64
+	for _, l := range ls {
+		for _, d := range l.Dirs {
+			if err := os.RemoveAll(d); err != nil {
+				return freed, err
+			}
+		}
+		freed += l.Bytes
+	}
+	return freed, nil
 }

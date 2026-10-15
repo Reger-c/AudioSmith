@@ -407,6 +407,16 @@ func TestStudioStoryProgressAndCancel(t *testing.T) {
 	}
 	e.fails(t, "create_story", map[string]any{"text": "x", "lines": []map[string]any{{"text": "y"}}}, api.CodeInvalid)
 	e.fails(t, "render_longform", map[string]any{"project_id": p.ID, "chapters": []int{3}}, api.CodeInvalid)
+	// A removed model (thread #43): its replacement, with a warning.
+	var pr api.LongformJSON
+	e.must(t, "create_story", map[string]any{"text": "Ann: Hi.", "model": "kitten-tts-mini-0.8"}, &pr)
+	if pr.Model != "kokoro-82m-bf16" || !strings.Contains(pr.Warning, "KittenTTS mini was removed") {
+		t.Fatalf("removed model: %q %q", pr.Model, pr.Warning)
+	}
+	e.must(t, "update_longform", map[string]any{"project_id": pr.ID, "model": "Pocket TTS"}, &pr)
+	if pr.Model != "kokoro-82m-bf16" || !strings.Contains(pr.Warning, "Pocket TTS was removed") {
+		t.Fatalf("update to a removed model: %q %q", pr.Model, pr.Warning)
+	}
 
 	// Held speech: the job runs, with a stage; cancel stops it.
 	e.gate.hold = true

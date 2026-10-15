@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"slices"
@@ -72,10 +73,41 @@ func findEntry(name string, task catalog.Task) (catalog.Entry, bool) {
 	return catalog.Entry{}, false
 }
 
-// defaultTTS is the Studio's model (Settings → Studio), else the first
-// speech model of the catalogue.
+// Replacement says a request named a model AudioSmith removed (thread
+// #43) and which model answered instead.
+type Replacement struct {
+	Model      string `json:"model"`       // the removed model's id
+	ReplacedBy string `json:"replaced_by"` // the catalogue id that answered
+	Warning    string `json:"warning"`
+}
+
+// replaceRemoved maps name, when it names a removed model, to its
+// replacement (clone: the request clones a voice).
+func replaceRemoved(name string, clone bool) (catalog.Entry, *Replacement, bool) {
+	e, r, ok := catalog.Builtin().Replace(name, clone)
+	if !ok {
+		return e, nil, false
+	}
+	return e, &Replacement{Model: r.ID, ReplacedBy: e.ID, Warning: r.Warning(e)}, true
+}
+
+// errRemovedVoice explains a voice the replacement of a removed model
+// can't speak with (a built-in speaker of the old model).
+func errRemovedVoice(rep *Replacement, e catalog.Entry, why string) *Error {
+	r, _ := catalog.Builtin().RemovedModel(rep.Model)
+	return &Error{Status: http.StatusBadRequest, Code: CodeModelRemoved, Param: "voice",
+		Message: r.Label + " was removed from AudioSmith (" + e.Label + " replaces it): " + why +
+			" GET /v1/models/" + e.ID + " lists its voices.",
+		Data: map[string]any{"model": rep.Model, "replaced_by": rep.ReplacedBy}}
+}
+
+// defaultTTS is the Studio's model (Settings → Studio; a removed one's
+// replacement), else the first speech model of the catalogue.
 func defaultTTS(st settings.Settings) catalog.Entry {
 	if e, ok := catalog.Builtin().ByID(st.Studio.Model); ok && slices.Contains(e.Tasks, catalog.TaskTTS) {
+		return e
+	}
+	if e, _, ok := catalog.Builtin().Replace(st.Studio.Model, false); ok {
 		return e
 	}
 	if l := catalog.Builtin().ForTask(catalog.TaskTTS); len(l) > 0 {
@@ -191,41 +223,59 @@ func (s *Server) resolveVoice(ctx context.Context, name string, e *catalog.Entry
 }
 
 // resolveTTS picks the model of a speech request: a catalogue model by
-// name, or, for OpenAI's names, the default model — unless a saved voice
-// needs another (a clone on a model that cannot clone): then the voice's
-// own model, or the first downloaded model that can speak with it.
-func (s *Server) resolveTTS(ctx context.Context, model string, voice string) (catalog.Entry, voiceChoice, error) {
+// name (a removed model's replacement: rep says so), or, for OpenAI's
+// names, the default model — unless a saved voice needs another (a clone
+// on a model that cannot clone): then the voice's own model, or the
+// first downloaded model that can speak with it. clone says the request
+// gives a reference clip.
+func (s *Server) resolveTTS(ctx context.Context, model string, voice string, clone bool) (e catalog.Entry, vc voiceChoice, rep *Replacement, err error) {
 	st := s.b.Settings()
 	if !isTTSAlias(model) {
 		e, ok := findEntry(model, catalog.TaskTTS)
 		if !ok {
-			return e, voiceChoice{}, errNotFound(CodeModelNotFound, "There is no speech model %q: GET /v1/models lists them.", model)
+			if _, removed := catalog.Builtin().RemovedModel(model); removed {
+				// A saved voice that is not a built-in speaker clones.
+				if v, err := s.resolveVoice(ctx, voice, nil); err == nil && v.Saved != nil && v.Saved.Kind != core.VoiceBuiltin {
+					clone = true
+				}
+				e, rep, ok = replaceRemoved(model, clone)
+			}
+		}
+		if !ok {
+			return e, voiceChoice{}, nil, errNotFound(CodeModelNotFound, "There is no speech model %q: GET /v1/models lists them.", model)
 		}
 		vc, err := s.resolveVoice(ctx, voice, &e)
 		if err != nil {
-			return e, vc, err
+			if rep != nil && apiCode(err) == CodeVoiceNotFound {
+				return e, vc, rep, errRemovedVoice(rep, e, e.Label+" has no voice called "+strings.TrimSpace(voice)+".")
+			}
+			return e, vc, rep, err
 		}
 		if vc.Saved != nil {
 			if ok, why := s.b.VoiceFits(*vc.Saved, e); !ok {
-				return e, vc, &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedModel, Param: "voice", Message: why}
+				if rep != nil {
+					return e, vc, rep, errRemovedVoice(rep, e, why)
+				}
+				return e, vc, rep, &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedModel, Param: "voice", Message: why}
 			}
 		}
-		return e, vc, nil
+		return e, vc, rep, nil
 	}
 	def := defaultTTS(st)
-	vc, err := s.resolveVoice(ctx, voice, &def)
+	vc, err = s.resolveVoice(ctx, voice, &def)
 	if err != nil || vc.Saved == nil {
-		return def, vc, err
+		return def, vc, nil, err
 	}
 	if ok, _ := s.b.VoiceFits(*vc.Saved, def); ok {
-		return def, vc, nil
+		return def, vc, nil, nil
 	}
 	var candidates []catalog.Entry
-	if e, ok := catalog.Builtin().ByRepo(vc.Saved.Model); ok {
-		candidates = append(candidates, e)
-	}
-	if e, ok := catalog.Builtin().ByRepo(vc.Saved.CreatedWith); ok {
-		candidates = append(candidates, e)
+	for _, repo := range []string{vc.Saved.Model, vc.Saved.CreatedWith} {
+		if e, ok := catalog.Builtin().ByRepo(repo); ok {
+			candidates = append(candidates, e)
+		} else if e, _, ok := catalog.Builtin().Replace(repo, vc.Saved.Kind != core.VoiceBuiltin); ok {
+			candidates = append(candidates, e)
+		}
 	}
 	candidates = append(candidates, catalog.Builtin().ForTask(catalog.TaskTTS)...)
 	models, _ := s.b.Models(ctx)
@@ -240,17 +290,26 @@ func (s *Server) resolveTTS(ctx context.Context, model string, voice string) (ca
 			continue
 		}
 		if downloaded[e.Repo] {
-			return e, vc, nil
+			return e, vc, nil, nil
 		}
 		if fallback == nil {
 			fallback = &candidates[i]
 		}
 	}
 	if fallback != nil {
-		return *fallback, vc, nil
+		return *fallback, vc, nil, nil
 	}
 	_, why := s.b.VoiceFits(*vc.Saved, def)
-	return def, vc, &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedModel, Param: "voice", Message: why}
+	return def, vc, nil, &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedModel, Param: "voice", Message: why}
+}
+
+// apiCode is the code of an *Error, or "".
+func apiCode(err error) string {
+	var e *Error
+	if errors.As(err, &e) {
+		return e.Code
+	}
+	return ""
 }
 
 // resolveSTT picks the speech-to-text model.

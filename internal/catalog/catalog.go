@@ -61,12 +61,11 @@ const (
 	CapWordTimes  Capability = "wordTimes"  // STT: word-level timestamps
 
 	// M1.
-	CapVoicePrompt  Capability = "voicePrompt"  // tts.encodeVoice: a clone reference can be encoded once and reused
-	CapSteps        Capability = "steps"        // honours steps (diffusion / refinement steps)
-	CapGuidance     Capability = "guidance"     // honours guidance (classifier-free guidance scale)
-	CapExaggeration Capability = "exaggeration" // honours exaggeration (Chatterbox emotion intensity)
-	CapNonVerbal    Capability = "nonVerbal"    // renders inline non-verbal tags (Entry.NonVerbal)
-	CapTranslate    Capability = "translate"    // STT: can translate speech into English (task "translate")
+	CapVoicePrompt Capability = "voicePrompt" // tts.encodeVoice: a clone reference can be encoded once and reused
+	CapSteps       Capability = "steps"       // honours steps (diffusion / refinement steps)
+	CapGuidance    Capability = "guidance"    // honours guidance (classifier-free guidance scale)
+	CapNonVerbal   Capability = "nonVerbal"   // renders inline non-verbal tags (Entry.NonVerbal)
+	CapTranslate   Capability = "translate"   // STT: can translate speech into English (task "translate")
 )
 
 // Catalog is a versioned list of entries.
@@ -74,7 +73,35 @@ type Catalog struct {
 	// Version increases with every published change of the schema or data.
 	Version int     `json:"version"`
 	Entries []Entry `json:"entries"`
+	// Removed are the models AudioSmith offered once and no longer does
+	// (thread #43): what still names them maps to their replacement.
+	Removed []Removed `json:"removed,omitempty"`
 }
+
+// Removed is a model taken out of the catalogue. Projects, drafts,
+// settings, history recipes, workflows and API or MCP calls that still
+// name it (by id, repo, short repo or label) use ReplacedBy instead, or
+// CloneReplacedBy when the request clones a voice. Its files stay on
+// disk until the user removes them (Models → Clean up).
+type Removed struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Repo  string `json:"repo"`
+	// Aux are auxiliary repos only this model used: removed with it.
+	Aux             []string `json:"aux,omitempty"`
+	ReplacedBy      string   `json:"replacedBy"`
+	CloneReplacedBy string   `json:"cloneReplacedBy,omitempty"`
+	Reason          string   `json:"reason"` // English, for reviewers
+}
+
+// Warning tells an API client that by answers for the removed model.
+func (r Removed) Warning(by Entry) string {
+	return r.Label + " was removed from AudioSmith; " + by.Label + " (" + by.ID + ") answered instead."
+}
+
+// Repos are the repos a removed model leaves on disk: its own, then its
+// auxiliary ones.
+func (r Removed) Repos() []string { return append([]string{r.Repo}, r.Aux...) }
 
 // Entry is one downloadable model.
 //
@@ -90,7 +117,7 @@ type Entry struct {
 	Tasks    []Task `json:"tasks"`
 	About    string `json:"about"` // one or two sentences, English (translated via i18n catalogs)
 
-	// NeedsReference: the model only clones (MOSS-TTS-Nano): a take needs
+	// NeedsReference: the model only clones: a take needs
 	// a reference clip (or a saved voice that carries one), else the
 	// engine refuses it. The app does not send such a job, and pickers
 	// say so. Requires CapClone.
@@ -134,19 +161,8 @@ type Entry struct {
 	// but not offered by pickers (ForTask, Labels) until the app can run
 	// them end to end (none at the end of M0).
 	Hidden bool `json:"hidden,omitempty"`
-	// Retired entries are no longer offered (pickers, ForTask, Labels)
-	// after the evaluation found them unreliable (thread #41), but they
-	// still run: projects, drafts and API calls that name them keep
-	// working, and the UI suggests the replacement.
-	Retired *Retirement `json:"retired,omitempty"`
 
 	Licence Licence `json:"licence"`
-}
-
-// Retirement says why an entry is retired and what replaces it.
-type Retirement struct {
-	ReplacedBy string `json:"replacedBy"` // the ID of the entry to use instead
-	Reason     string `json:"reason"`     // English, for reviewers
 }
 
 // Aux is an auxiliary repo of an entry.
@@ -214,6 +230,16 @@ var builtin = func() *Catalog {
 // Builtin returns the embedded catalogue. Do not modify it.
 func Builtin() *Catalog { return builtin }
 
+// Swap makes c the built-in catalogue until restore is called. Tests use
+// it for entries no shipped model has (a model that only clones voices,
+// since thread #43 removed MOSS-TTS-Nano); it is not safe while anything
+// else reads the catalogue.
+func Swap(c *Catalog) (restore func()) {
+	old := builtin
+	builtin = c
+	return func() { builtin = old }
+}
+
 // Parse decodes and validates a catalogue.
 func Parse(data []byte) (*Catalog, error) {
 	var c Catalog
@@ -276,17 +302,50 @@ func (c *Catalog) Validate() error {
 				return fmt.Errorf("%s: unknown language code %q", e.ID, l.Code)
 			}
 		}
-		if r := e.Retired; r != nil {
-			if n, ok := c.ByID(r.ReplacedBy); !ok || n.Retired != nil || n.ID == e.ID {
-				return fmt.Errorf("%s: retired without a live replacement (%q)", e.ID, r.ReplacedBy)
+	}
+	for _, r := range c.Removed {
+		if r.ID == "" || r.Repo == "" || r.Label == "" {
+			return fmt.Errorf("removed %q: id, label and repo are required", r.ID)
+		}
+		for _, k := range []string{"id:" + r.ID, "repo:" + r.Repo, "label:" + r.Label} {
+			if seen[k] {
+				return fmt.Errorf("removed: duplicate %s", k)
+			}
+			seen[k] = true
+		}
+		for i, by := range []string{r.ReplacedBy, r.CloneReplacedBy} {
+			if i == 1 && by == "" {
+				continue // no other replacement for clones
+			}
+			if n, ok := c.ByID(by); !ok || n.Hidden || !slices.Contains(n.Tasks, TaskTTS) {
+				return fmt.Errorf("removed %s: no live speech model replaces it (%q)", r.ID, by)
+			}
+		}
+		if n, _ := c.ByID(r.CloneReplacedBy); r.CloneReplacedBy != "" && !n.Has(CapClone) {
+			return fmt.Errorf("removed %s: %s can't clone", r.ID, r.CloneReplacedBy)
+		}
+		for _, a := range r.Aux {
+			if c.UsesRepo(a) {
+				return fmt.Errorf("removed %s: aux repo %s is still used", r.ID, a)
 			}
 		}
 	}
 	return nil
 }
 
+// UsesRepo reports whether a catalogue entry downloads repo, as its own
+// or an auxiliary repo.
+func (c *Catalog) UsesRepo(repo string) bool {
+	for _, e := range c.Entries {
+		if e.Repo == repo || slices.ContainsFunc(e.Aux, func(a Aux) bool { return a.Repo == repo }) {
+			return true
+		}
+	}
+	return false
+}
+
 var knownCaps = []Capability{CapSpeed, CapSampling, CapClone, CapVoiceStyle, CapLanguage, CapInstruct, CapDesign, CapSeed, CapDuration, CapStream, CapWordTimes,
-	CapVoicePrompt, CapSteps, CapGuidance, CapExaggeration, CapNonVerbal, CapTranslate}
+	CapVoicePrompt, CapSteps, CapGuidance, CapNonVerbal, CapTranslate}
 
 // Default models of the M1 analysis tasks: what the app runs to clean,
 // cut and transcribe a clone reference. Their entries may be hidden from
@@ -351,11 +410,11 @@ func (c *Catalog) find(match func(*Entry) bool) (Entry, bool) {
 }
 
 // ForTask returns the entries that do task, in catalogue order, without
-// hidden and retired ones.
+// hidden ones.
 func (c *Catalog) ForTask(task Task) []Entry {
 	var out []Entry
 	for _, e := range c.Entries {
-		if !e.Hidden && e.Retired == nil && slices.Contains(e.Tasks, task) {
+		if !e.Hidden && slices.Contains(e.Tasks, task) {
 			out = append(out, e)
 		}
 	}
@@ -416,12 +475,35 @@ func (e Entry) AllVoiceIDs() []string {
 	return ids
 }
 
-// Replacement is the entry that replaces a retired one.
-func (c *Catalog) Replacement(e Entry) (Entry, bool) {
-	if e.Retired == nil {
-		return Entry{}, false
+// RemovedModel finds a removed model by id, repo, short repo or label
+// (case-insensitive).
+func (c *Catalog) RemovedModel(ref string) (Removed, bool) {
+	n := strings.TrimSpace(ref)
+	if n == "" {
+		return Removed{}, false
 	}
-	return c.ByID(e.Retired.ReplacedBy)
+	for _, r := range c.Removed {
+		if strings.EqualFold(r.ID, n) || strings.EqualFold(r.Repo, n) || strings.EqualFold(ShortRepo(r.Repo), n) || strings.EqualFold(r.Label, n) {
+			return r, true
+		}
+	}
+	return Removed{}, false
+}
+
+// Replace maps ref, when it names a removed model, to the entry that
+// replaces it: CloneReplacedBy when the request clones a voice (and the
+// model has one), else ReplacedBy. ok is false for anything else.
+func (c *Catalog) Replace(ref string, clone bool) (e Entry, r Removed, ok bool) {
+	r, ok = c.RemovedModel(ref)
+	if !ok {
+		return Entry{}, Removed{}, false
+	}
+	id := r.ReplacedBy
+	if clone && r.CloneReplacedBy != "" {
+		id = r.CloneReplacedBy
+	}
+	e, ok = c.ByID(id)
+	return e, r, ok
 }
 
 // LanguageOptions lists the values the language parameter takes, default
@@ -464,10 +546,13 @@ func ShortRepo(repo string) string {
 }
 
 // DisplayName is how to name a model in the UI: its label when the
-// catalogue has it, else the repo without its owner.
+// catalogue has it (or had it), else the repo without its owner.
 func (c *Catalog) DisplayName(repo string) string {
 	if e, ok := c.ByRepo(repo); ok {
 		return e.Label
+	}
+	if r, ok := c.RemovedModel(repo); ok && strings.EqualFold(r.Repo, repo) {
+		return r.Label
 	}
 	return ShortRepo(repo)
 }
