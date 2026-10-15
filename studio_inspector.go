@@ -151,12 +151,16 @@ func (a *app) studioVoiceField(c *ui.Context, e catalog.Entry) {
 		case v != nil:
 			ui.Row(c.Key("studio-voice-info")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 				col := k.Text2
-				text := voiceKindText(v.Kind)
+				text := voiceKindLabel(v)
 				if ok, why := voiceUsable(v, e); !ok {
 					col, text = t.Warning, why
 				}
 				caption(c, text).TextColor(col).Grow(1).MinWidth(0)
-				if ghostButton(c.Key("studio-voice-edit"), i18n.T("Edit")).Clicked() {
+				if ok, _ := voiceUsable(v, e); !ok && canMakePortable(v) && e.Has(catalog.CapClone) {
+					if ghostButton(c.Key("studio-voice-portable"), i18n.T("Make portable")).Tooltip(i18n.T("Save an approximate clone of this voice that models that clone can speak with")).Clicked() {
+						a.makePortable(v)
+					}
+				} else if ghostButton(c.Key("studio-voice-edit"), i18n.T("Edit")).Clicked() {
 					a.openVoiceEditor(v.ID)
 				}
 			})
@@ -248,7 +252,7 @@ func (a *app) studioVoiceList(c *ui.Context, e catalog.Entry) {
 				row("clip", i18n.T("Unsaved clip: %s", a.studioClip.Name), "", true, func() {})
 			}
 			for _, v := range mine {
-				row("v-"+v.ID, v.Name, voiceKindText(v.Kind), saved != nil && saved.ID == v.ID, func() {
+				row("v-"+v.ID, v.Name, voiceKindLabel(v), saved != nil && saved.ID == v.ID, func() {
 					a.studioVoice, a.studioClip = v.ID, nil
 				})
 			}
@@ -261,6 +265,11 @@ func (a *app) studioVoiceList(c *ui.Context, e catalog.Entry) {
 				row("ref", label, i18n.T("A few seconds of clean speech; not saved to your voices"), ref, func() {
 					a.studioVoice, a.studioClip = "", nil
 					a.chooseRefAudio()
+				})
+			}
+			if speaker != "" && saved == nil && !clip && !ref && !e.Has(catalog.CapClone) {
+				row("portable", i18n.T("Make a portable copy of %s…", speaker), i18n.T("An approximate clone of it, for models that clone"), false, func() {
+					a.makeSpeakerPortable(e, speaker)
 				})
 			}
 			row("manage", i18n.T("Manage voices…"), "", false, func() { a.navigate("/voices") })

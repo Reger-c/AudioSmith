@@ -63,6 +63,9 @@ type voicesState struct {
 	// voiceWork the other engine jobs they wait for, by owner.
 	voiceJobs map[string]*voiceJob
 	voiceWork map[string]func(jobs.Job)
+	// portableJobs are the portable copies being rendered, by take id
+	// (voice_portable.go).
+	portableJobs map[string]portableJob
 }
 
 // clipRef is a reference clip used without saving it as a voice.
@@ -382,6 +385,8 @@ func (a *app) voiceTakeCreated(t core.Take) {
 	switch j.purpose {
 	case "sample":
 		a.attachSample(j.voiceID, t)
+	case "portable":
+		a.portableTakeCreated(t) // voice_portable.go
 	default:
 		a.play(&t)
 	}
@@ -583,6 +588,9 @@ func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 		if v.Model == "" || v.Model == e.Repo {
 			return true, ""
 		}
+		if e.Has(catalog.CapClone) {
+			return false, i18n.T("This voice belongs to %s. Make a portable copy to use it here: an approximate clone.", catalog.Builtin().DisplayName(v.Model))
+		}
 		return false, i18n.T("This voice belongs to %s.", catalog.Builtin().DisplayName(v.Model))
 	case v.Locked && v.Sample != "" && e.Has(catalog.CapClone):
 		return true, ""
@@ -597,6 +605,9 @@ func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 		}
 		if v.Sample != "" && e.Has(catalog.CapClone) {
 			return true, ""
+		}
+		if e.Has(catalog.CapClone) {
+			return false, i18n.T("%s can't design voices. Make a portable copy to use it here (an approximate clone), or choose a model that designs.", e.Label)
 		}
 		return false, i18n.T("%s can't design voices. Choose a model that can, such as OmniVoice.", e.Label)
 	}

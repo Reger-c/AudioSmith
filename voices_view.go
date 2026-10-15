@@ -191,6 +191,11 @@ func (a *app) voiceCard(c *ui.Context, v *core.Voice) {
 						then(v)
 					}
 				})
+				if canMakePortable(v) && m.Item(i18n.T("Make a portable copy (approximate)")).Chosen() {
+					if v := a.findVoice(id); v != nil {
+						a.makePortable(v)
+					}
+				}
 				m.Separator()
 				if m.Item(i18n.T("Delete…")).Chosen() {
 					a.askDeleteVoice(id)
@@ -232,7 +237,7 @@ func voiceBadges(c *ui.Context, v *core.Voice) {
 
 // voiceMeta is a card's second line: kind, language, date.
 func voiceMeta(v *core.Voice) string {
-	parts := []string{voiceKindText(v.Kind)}
+	parts := []string{voiceKindLabel(v)}
 	if v.Language != "" {
 		parts = append(parts, languageName(v.Language))
 	}

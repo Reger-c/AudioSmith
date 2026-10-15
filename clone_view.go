@@ -298,9 +298,19 @@ func (a *app) cloneDetails(c *ui.Context) {
 			}
 		}
 	})
-	a.styleField(c, "clone-style", &s.style)
-	ui.Field(c, i18n.T("Language"), func() {
-		ui.Autocomplete(c.Key("clone-language"), &s.language, voiceLanguages()).Placeholder(i18n.T("Auto")).Label(i18n.T("Language"))
+	// Optional: a style hint and the language (detected otherwise).
+	var changes []string
+	if strings.TrimSpace(s.style) != "" {
+		changes = append(changes, i18n.T("Style"))
+	}
+	if strings.TrimSpace(s.language) != "" {
+		changes = append(changes, i18n.T("Language"))
+	}
+	a.advancedSection(c, "clone", changes, false, func() { s.style, s.language = "", "" }, func() {
+		a.styleField(c, "clone-style", &s.style)
+		ui.Field(c, i18n.T("Language"), func() {
+			ui.Autocomplete(c.Key("clone-language"), &s.language, voiceLanguages()).Placeholder(i18n.T("Auto")).Label(i18n.T("Language"))
+		})
 	})
 }
 

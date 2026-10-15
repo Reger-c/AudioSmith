@@ -357,7 +357,7 @@ func TestOutputPanel(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.exp == nil || a.exp.take.ID != "T1" || !tt.HasText("32-bit float") {
+	if a.exp == nil || a.exp.take.ID != "T1" || !tt.HasText("Also save") {
 		t.Errorf("no dialog: %q", tt.Texts())
 	}
 }

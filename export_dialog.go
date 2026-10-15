@@ -484,52 +484,6 @@ func (a *app) exportDialog(c *ui.Context) {
 				infoTip(c.Key("ex-format-why"), exportMissing(f))
 			}
 		})
-		if len(ef.bits) > 0 {
-			formRow(c, "ex-bits", i18n.T("Bit depth"), i18n.T("16-bit plays everywhere; 24-bit keeps more headroom for editing; 32-bit float keeps the model's own samples."), func() {
-				labels := make([]string, len(ef.bits))
-				for i, b := range ef.bits {
-					labels[i] = bitsLabel(b)
-				}
-				segmentedFit(c.Key("ex-bits-"+ef.id), &f.bits[f.format], labels...).Label(i18n.T("Bit depth"))
-			})
-		}
-		if len(ef.bitrates) > 0 {
-			formRow(c, "ex-bitrate", i18n.T("Bitrate"), i18n.T("Higher keeps more detail and makes a larger file. Speech sounds clean from the lowest."), func() {
-				labels := make([]string, len(ef.bitrates))
-				for i, b := range ef.bitrates {
-					labels[i] = i18n.T("%d kb/s", b)
-				}
-				segmentedFit(c.Key("ex-bitrate-"+ef.id), &f.bitrate[f.format], labels...).Label(i18n.T("Bitrate"))
-			})
-		}
-		if ef.rates {
-			tip := i18n.T("Raising it does not add detail; choose 44.1 or 48 kHz when an app or a platform asks for it.")
-			if f.srcRate() < ef.minRate {
-				tip = i18n.T("%[1]s at %[2]s cannot hold these bitrates, so it is written at 44.1 or 48 kHz.", ef.label, khz(f.srcRate()))
-			}
-			formRow(c, "ex-rate", i18n.T("Sample rate"), tip, func() {
-				opts := f.rateOptions(ef)
-				labels := make([]string, len(opts))
-				for i, r := range opts {
-					if r == 0 {
-						labels[i] = i18n.X("audio", "Original (%s)", khz(f.srcRate()))
-					} else {
-						labels[i] = khz(r)
-					}
-				}
-				f.rate[f.format] = min(max(f.rate[f.format], 0), len(opts)-1)
-				segmentedFit(c.Key("ex-rate-"+ef.id), &f.rate[f.format], labels...).Label(i18n.T("Sample rate"))
-			})
-		}
-		formRow(c, "ex-channels", i18n.T("Channels"), i18n.T("Stereo puts the same voice in both channels, for players and editors that expect two."), func() {
-			orig, other := i18n.T("Original (mono)"), i18n.T("Stereo")
-			if f.srcChannels() > 1 {
-				orig, other = i18n.T("Original (stereo)"), i18n.T("Mono")
-			}
-			segmentedFit(c.Key("ex-ch-seg"), &f.channels, orig, other).Label(i18n.T("Channels"))
-		})
-
-		sectionTitle(c, i18n.T("Processing"))
 		formRow(c, "ex-loud", i18n.T("Loudness"), i18n.T("Brings the whole file to a loudness target, with peaks held under a ceiling (−1.5 dBTP for podcasts, −1 dBTP otherwise). −16 LUFS suits podcasts and streaming, −23 LUFS broadcast (EBU R128)."), func() {
 			opts := make([]string, len(exportLoudness))
 			for i, key := range exportLoudness {
@@ -539,12 +493,6 @@ func (a *app) exportDialog(c *ui.Context) {
 				caption(c, i18n.T("Now %s LUFS", signedDB(f.info.Integrated))).SingleLine()
 			}
 			ui.Select(c.Key("ex-loud-select"), &f.loud, opts).Label(i18n.T("Loudness")).Width(px(t, 200)).Shrink(1).MinWidth(px(t, 120))
-		})
-		formRow(c, "ex-trim", i18n.T("Trim silence"), i18n.T("Cuts the silence before the first sound and after the last, keeping a short breath at each end."), func() {
-			if f.trim && f.info != nil && f.info.Seconds-f.info.Trimmed >= 0.05 {
-				caption(c, i18n.T("−%.1f s", f.info.Seconds-f.info.Trimmed)).SingleLine()
-			}
-			ui.Switch(c.Key("ex-trim-switch"), &f.trim).Label(i18n.T("Trim silence"))
 		})
 
 		sectionTitle(c, i18n.T("File"))
@@ -568,6 +516,59 @@ func (a *app) exportDialog(c *ui.Context) {
 				}
 			})
 		}
+		ui.Box(c).Height(px(t, sp1))
+		a.advancedSection(c, "export", f.changes(), false, f.restore, func() {
+			if len(ef.bits) > 0 {
+				formRow(c, "ex-bits", i18n.T("Bit depth"), i18n.T("16-bit plays everywhere; 24-bit keeps more headroom for editing; 32-bit float keeps the model's own samples."), func() {
+					labels := make([]string, len(ef.bits))
+					for i, b := range ef.bits {
+						labels[i] = bitsLabel(b)
+					}
+					segmentedFit(c.Key("ex-bits-"+ef.id), &f.bits[f.format], labels...).Label(i18n.T("Bit depth"))
+				})
+			}
+			if len(ef.bitrates) > 0 {
+				formRow(c, "ex-bitrate", i18n.T("Bitrate"), i18n.T("Higher keeps more detail and makes a larger file. Speech sounds clean from the lowest."), func() {
+					labels := make([]string, len(ef.bitrates))
+					for i, b := range ef.bitrates {
+						labels[i] = i18n.T("%d kb/s", b)
+					}
+					segmentedFit(c.Key("ex-bitrate-"+ef.id), &f.bitrate[f.format], labels...).Label(i18n.T("Bitrate"))
+				})
+			}
+			if ef.rates {
+				tip := i18n.T("Raising it does not add detail; choose 44.1 or 48 kHz when an app or a platform asks for it.")
+				if f.srcRate() < ef.minRate {
+					tip = i18n.T("%[1]s at %[2]s cannot hold these bitrates, so it is written at 44.1 or 48 kHz.", ef.label, khz(f.srcRate()))
+				}
+				formRow(c, "ex-rate", i18n.T("Sample rate"), tip, func() {
+					opts := f.rateOptions(ef)
+					labels := make([]string, len(opts))
+					for i, r := range opts {
+						if r == 0 {
+							labels[i] = i18n.X("audio", "Original (%s)", khz(f.srcRate()))
+						} else {
+							labels[i] = khz(r)
+						}
+					}
+					f.rate[f.format] = min(max(f.rate[f.format], 0), len(opts)-1)
+					segmentedFit(c.Key("ex-rate-"+ef.id), &f.rate[f.format], labels...).Label(i18n.T("Sample rate"))
+				})
+			}
+			formRow(c, "ex-channels", i18n.T("Channels"), i18n.T("Stereo puts the same voice in both channels, for players and editors that expect two."), func() {
+				orig, other := i18n.T("Original (mono)"), i18n.T("Stereo")
+				if f.srcChannels() > 1 {
+					orig, other = i18n.T("Original (stereo)"), i18n.T("Mono")
+				}
+				segmentedFit(c.Key("ex-ch-seg"), &f.channels, orig, other).Label(i18n.T("Channels"))
+			})
+			formRow(c, "ex-trim", i18n.T("Trim silence"), i18n.T("Cuts the silence before the first sound and after the last, keeping a short breath at each end."), func() {
+				if f.trim && f.info != nil && f.info.Seconds-f.info.Trimmed >= 0.05 {
+					caption(c, i18n.T("−%.1f s", f.info.Seconds-f.info.Trimmed)).SingleLine()
+				}
+				ui.Switch(c.Key("ex-trim-switch"), &f.trim).Label(i18n.T("Trim silence"))
+			})
+		})
 	}, func() {
 		size := humanBytes(f.estimate())
 		ui.Text(c, i18n.T("About %s · %s", size, i18n.T("%.1f s", f.seconds()))).FontSize(px(t, fsCaption)).TextColor(k.Text2).
@@ -771,4 +772,33 @@ func exportEncoderOf(ex jobs.Executor, tool *ffmpeg.Tool) services.AudioEncoder 
 		}
 		return tool.EncodeAudio(ctx, ffmpeg.EncodeOptions{Input: in, Output: dst, Format: o.Format, Bitrate: o.Bitrate, Metadata: o.Metadata}, nil)
 	}
+}
+
+// changes names what the form changes from the kind's defaults for the
+// chosen format (the 「高级」 settings: bit depth or bitrate, sample rate,
+// channels, trimming).
+func (f *exportForm) changes() []string {
+	ef, i := f.fmt_(), f.format
+	def := f.kind.defaults
+	var out []string
+	add := func(on bool, name string) {
+		if on {
+			out = append(out, name)
+		}
+	}
+	add(len(ef.bits) > 0 && f.bits[i] != indexOr(ef.bits, def.Bits, 0), i18n.T("Bit depth"))
+	add(len(ef.bitrates) > 0 && f.bitrate[i] != indexOr(ef.bitrates, ef.defBitrate, 0), i18n.T("Bitrate"))
+	add(ef.rates && f.rate[i] != 0, i18n.T("Sample rate"))
+	add(f.channels != 0, i18n.T("Channels"))
+	add(f.trim, i18n.T("Trim silence"))
+	return out
+}
+
+// restore puts the 「高级」 settings back to the kind's defaults.
+func (f *exportForm) restore() {
+	ef, i := f.fmt_(), f.format
+	def := f.kind.defaults
+	f.bits[i] = indexOr(ef.bits, def.Bits, 0)
+	f.bitrate[i] = indexOr(ef.bitrates, ef.defBitrate, 0)
+	f.rate[i], f.channels, f.trim = 0, 0, false
 }
