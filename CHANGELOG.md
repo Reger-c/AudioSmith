@@ -6,6 +6,7 @@
 - Every speech model was measured on a MacBook Air (intelligibility with two recognisers, naturalness, voice stability, speed, memory). Each page now recommends two or three models for its job and your language, with a one-line "best for" and a speed and quality hint; the others are one click away under "Show all models", and the ones that can't do the job (no cloning for a dub) are greyed out with the reason.
 - Tuned defaults: Qwen3-TTS uses temperature 0.7 and top-p 0.8 unless you (or an API request) set them — the models' own 0.9 / 1.0 sounded worse and less stable; OmniVoice uses guidance 1.5 with 32 steps (16 for dubbing). The Local API and MCP tools follow the same defaults. Rendered chunks from before are made again once with the new settings.
 - Retired: KittenTTS mini, MOSS-TTS-Nano and Chatterbox (multilingual) misread too much in the tests. They are no longer offered, but projects and API calls that name them keep working, and the app suggests what to use instead (Kokoro, Qwen3-TTS 0.6B Base, Chatterbox Turbo). Their downloads are kept.
+- New dubs fit lines with "Smart fit" instead of "Lip sync": lip sync sped most Chinese lines up audibly (1.2–1.4×). Dubs you already made keep their timing.
 - Kokoro's six Chinese voices are hidden (unintelligible in the tests); its English voices are the best English default.
 
 ### Stories: dialogue that flows

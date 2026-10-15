@@ -6,12 +6,14 @@ import "math"
 type Timing string
 
 const (
-	// TimingLipSync (strict slot, the default): the line is trimmed of
+	// TimingLipSync (strict slot; the default before 0.4, and of projects
+	// saved without a timing): the line is trimmed of
 	// edge silence and time-stretched, pitch kept, to its slot; what is
 	// still too long after the fastest natural speed is cut with a fade
 	// (verdict trimmed).
 	TimingLipSync Timing = "lipsync"
-	// TimingSmart: a line may run into the silence after its slot; only
+	// TimingSmart (the default, thread #41: lip sync sped 3 of 5 Chinese
+	// lines up 1.2–1.4×): a line may run into the silence after its slot; only
 	// what is left over is sped up (at most 1.25×). A line that still
 	// does not fit keeps all its words and overlaps the next (overflow).
 	TimingSmart Timing = "smart"

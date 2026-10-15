@@ -47,7 +47,7 @@ type BatchSettings struct {
 
 // DefaultBatchSettings are the batch queue's first settings.
 func DefaultBatchSettings() BatchSettings {
-	return BatchSettings{Targets: []string{"es"}, KeepBackground: true, Translator: "llm", Quality: translate.Fast, Timing: dub.TimingLipSync}
+	return BatchSettings{Targets: []string{"es"}, KeepBackground: true, Translator: "llm", Quality: translate.Fast, Timing: dub.TimingSmart}
 }
 
 // WatchState is the watch folder, as persisted.
