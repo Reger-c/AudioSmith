@@ -173,7 +173,7 @@ func (a *app) loadStorage() {
 				n += s
 			}
 			if n > 0 {
-				r.models = append(r.models, storageCat{id: e.ID, title: e.Label, bytes: n, dir: hub.RepoDir(models, e.Repo)})
+				r.models = append(r.models, storageCat{id: e.ID, title: e.DisplayName(), bytes: n, dir: hub.RepoDir(models, e.Repo)})
 				r.ours += n
 			}
 		}

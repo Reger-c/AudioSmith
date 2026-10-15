@@ -148,7 +148,7 @@ func TestStoryPerformanceUI(t *testing.T) {
 	// A model that takes no instructions: line by line, with the advice.
 	d.Model = kokoro
 	tt.Frame()
-	if !tt.HasText("Line by line") || !tt.HasText("Switch to Qwen3-TTS CustomVoice or VoiceDesign (Setup) to hear the directions.") {
+	if !tt.HasText("Line by line") || !tt.HasText("Switch to “Standard voices” or “Voice design” (Setup) to hear the directions.") {
 		t.Errorf("kokoro: %q", tt.Texts())
 	}
 

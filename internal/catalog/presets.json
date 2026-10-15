@@ -85,7 +85,6 @@
         "zh",
         "en"
       ],
-      "bestFor": "Fast Chinese and English with named voices that follow a style; no reference needed",
       "speed": 3,
       "quality": 2,
       "defaults": {
@@ -140,7 +139,6 @@
         "zh",
         "en"
       ],
-      "bestFor": "Best clone quality and the most stable saved voices (clones and designed voices)",
       "speed": 1,
       "quality": 3,
       "defaults": {
@@ -184,7 +182,6 @@
         "zh",
         "en"
       ],
-      "bestFor": "Long narration and dubbing with a saved voice, about real time",
       "speed": 2,
       "quality": 2,
       "defaults": {
@@ -219,7 +216,6 @@
       "hideLanguages": [
         "zh"
       ],
-      "bestFor": "English: fastest and most natural built-in voices",
       "speed": 3,
       "quality": 3,
       "defaults": {
@@ -272,7 +268,6 @@
       "languages": [
         "en"
       ],
-      "bestFor": "Fast English voice cloning",
       "speed": 3,
       "quality": 2,
       "defaults": {
@@ -297,7 +292,6 @@
         "en"
       ],
       "licenceGate": "cc-by-nc-4.0",
-      "bestFor": "Non-commercial: most natural Chinese, strong cloning, exact durations",
       "speed": 1,
       "quality": 3,
       "defaults": {
@@ -331,7 +325,6 @@
         "zh",
         "en"
       ],
-      "bestFor": "Designs a new voice from a description; save it, then speak with it on a Base model",
       "speed": 2,
       "quality": 2,
       "defaults": {

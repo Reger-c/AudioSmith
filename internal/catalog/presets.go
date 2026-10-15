@@ -2,8 +2,8 @@ package catalog
 
 // Presets are the tuned settings of the recommended models (thread #41's
 // evaluation, research/model-eval.md): which models each workflow
-// recommends, in which order and for which content language; a one-line
-// "best for", a speed and a quality hint; and the parameters to use when
+// recommends, in which order and for which content language; a speed and
+// a quality hint; and the parameters to use when
 // the user (or an API request) sets none. presets.json is embedded and
 // validated against the catalogue by the tests.
 
@@ -66,9 +66,10 @@ type PresetDefaults struct {
 
 // Preset is one model's entry of presets.json.
 type Preset struct {
-	BestFor string `json:"bestFor"` // English; translated by the UI's i18n
-	Speed   int    `json:"speed"`   // 1–3
-	Quality int    `json:"quality"` // 1–3
+	// The one line about the model is the catalogue's (Entry.Summary,
+	// thread #45).
+	Speed   int `json:"speed"`   // 1–3
+	Quality int `json:"quality"` // 1–3
 	// Languages the model is evaluated for; HideLanguages are those it
 	// must not be offered for (Kokoro's Chinese voices).
 	Languages     []string                 `json:"languages,omitempty"`
@@ -217,8 +218,8 @@ func (p *Presets) Validate(c *Catalog) error {
 		if _, ok := c.ByID(id); !ok {
 			return fmt.Errorf("presets: unknown model %q", id)
 		}
-		if m.BestFor == "" || m.Speed < 1 || m.Speed > 3 || m.Quality < 1 || m.Quality > 3 {
-			return fmt.Errorf("presets: %s: bestFor, speed and quality (1–3) are required", id)
+		if m.Speed < 1 || m.Speed > 3 || m.Quality < 1 || m.Quality > 3 {
+			return fmt.Errorf("presets: %s: speed and quality (1–3) are required", id)
 		}
 	}
 	for lang, ws := range p.RecommendByLanguage {

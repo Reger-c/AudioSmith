@@ -56,7 +56,7 @@ func (a *app) noteRemoved(r catalog.Removed, by catalog.Entry) {
 		return
 	}
 	a.removedNoted[r.ID] = true
-	a.toast(i18n.T("%s was removed; %s is used instead.", r.Label, by.Label))
+	a.toast(i18n.T("%s was removed; %s is used instead.", r.Label, modelRef(by)))
 	if a.logs != nil {
 		a.logs.Append(core.LogEntry{Source: "models", Message: r.ID + " was removed; using " + by.ID})
 	}
@@ -267,7 +267,7 @@ func (a *app) migrateRemovedSettings() {
 	// Several at once: one notice, not a stack of them.
 	var pairs []string
 	for _, p := range rs {
-		pairs = append(pairs, p.r.Label+" → "+p.by.Label)
+		pairs = append(pairs, p.r.Label+" → "+p.by.DisplayName())
 		if a.removedNoted == nil {
 			a.removedNoted = map[string]bool{}
 		}

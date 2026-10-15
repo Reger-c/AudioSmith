@@ -188,7 +188,7 @@ func TestGenerateNeedsDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.job != nil || a.needDownload == nil || !tt.HasText("Kokoro 82M is not downloaded yet.") {
+	if a.job != nil || a.needDownload == nil || !tt.HasText("“Fast English voices” is not downloaded yet.") {
 		t.Fatalf("not refused: job %v, %q", a.job, tt.Texts())
 	}
 	if len(eng.sent) != 0 {
@@ -219,7 +219,7 @@ func TestGenerateAsksForTheLicence(t *testing.T) {
 	a.duration = 3
 	a.setAdvancedOpen("studio", true)
 	tt.Frame()
-	if !tt.HasText("Duration (seconds, 0 = natural)") || !tt.HasText("CC BY-NC 4.0 · non-commercial use only") ||
+	if !tt.HasText("Duration (seconds, 0 = natural)") || !tt.HasText("Non-commercial use only") ||
 		!tt.HasText("A duration overrides the speed.") {
 		t.Errorf("OmniVoice controls: %q", tt.Texts())
 	}
@@ -255,7 +255,7 @@ func TestStudioDefaultsFromSettings(t *testing.T) {
 	}
 	b.navigate("/settings/studio")
 	tt.Frame()
-	if !tt.HasText("Default model") || !tt.HasText("Chatterbox Turbo") {
+	if !tt.HasText("Default model") || !tt.HasText("English clone") {
 		t.Errorf("studio settings: %q", tt.Texts())
 	}
 }

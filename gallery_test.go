@@ -275,8 +275,8 @@ func TestGalleryPreviewModelDownloaded(t *testing.T) {
 	if e, _ := a.previewModel(); e.ID != second.ID {
 		t.Fatalf("previews use %s, not the downloaded %s", e.Label, second.Label)
 	}
-	if !tt.HasText(second.Label) {
-		t.Errorf("header does not name %s: %q", second.Label, tt.Texts())
+	if !tt.HasText(second.DisplayName()) {
+		t.Errorf("header does not name %s: %q", second.DisplayName(), tt.Texts())
 	}
 	// Choosing the one not downloaded: Preview explains, sends no job.
 	a.gallery.model = first.Label

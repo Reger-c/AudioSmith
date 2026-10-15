@@ -568,9 +568,9 @@ func (a *app) callChecks() []callCheck {
 	stt := callCheck{id: "asr", title: i18n.T("Speech recognition"), fix: "/models"}
 	e := callSTT(a.prefs)
 	if ready, known := a.modelOnDisk(e); ready || !known {
-		stt.ok, stt.detail = true, e.Label
+		stt.ok, stt.detail = true, e.DisplayName()
 	} else {
-		stt.detail = i18n.T("%s is not downloaded yet.", e.Label)
+		stt.detail = i18n.T("%s is not downloaded yet.", modelRef(e))
 	}
 	out = append(out, stt)
 	vc := callCheck{id: "voice", title: i18n.T("A voice that may place calls"), fix: "/voices"}

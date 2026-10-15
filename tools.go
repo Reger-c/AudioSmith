@@ -180,10 +180,10 @@ func (a *app) toolChoices() []toolChoice {
 	}
 	e := a.preset()
 	for _, sp := range e.Voices {
-		out = append(out, toolChoice{label: sp.ID + " · " + e.Label, model: e, spk: sp.ID})
+		out = append(out, toolChoice{label: sp.ID + " · " + e.DisplayName(), model: e, spk: sp.ID})
 	}
 	if len(out) == 0 {
-		out = append(out, toolChoice{label: e.Label, model: e})
+		out = append(out, toolChoice{label: e.DisplayName(), model: e})
 	}
 	return out
 }

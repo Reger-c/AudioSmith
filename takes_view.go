@@ -227,6 +227,9 @@ func recipeRows(t *core.Take) [][2]string {
 			rows = append(rows, [2]string{label, value})
 		}
 	}
+	if tech := catalog.Builtin().TechnicalName(t.Model); tech != modelName(t.Model) {
+		add(i18n.T("Technical name"), tech) // the family and version (thread #45)
+	}
 	add(i18n.T("Voice"), t.Voice)
 	add(i18n.T("Language"), t.Language)
 	if t.RefAudio != "" {

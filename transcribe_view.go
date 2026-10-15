@@ -111,11 +111,11 @@ func (a *app) transcribeToolbar(c *ui.Context, shown bool) {
 	}
 }
 
-// trModelLine names the mode's model: "Whisper large-v3 turbo + word
-// timings".
+// trModelLine names the mode's model: "Multilingual transcription +
+// word timings".
 func (a *app) trModelLine() string {
 	e := a.trModel(a.trMode == 0)
-	s := e.Label
+	s := e.DisplayName()
 	if a.trMode == 1 {
 		if al := trAligner(e); al.Repo != "" {
 			s += " + " + i18n.T("word timings")
@@ -316,7 +316,7 @@ func (a *app) transcriptStatus(c *ui.Context) {
 			ui.Row(c).Gap(px(t, sp2)).Wrap().Children(func() {
 				if e := a.trNeed; e != nil {
 					m := a.model(*e)
-					label := i18n.T("Download %s", e.Label)
+					label := i18n.T("Download %s", modelRef(*e))
 					if m.downloading {
 						label = i18n.T("Downloading…")
 					}
@@ -340,7 +340,7 @@ func (a *app) transcribeSources(c *ui.Context) {
 	k := tok(t)
 	e := a.trModel(a.trMode == 0)
 	if ready, known := a.modelOnDisk(e); known && !ready {
-		notice(c, "tr-need-model", noticeWarn, i18n.T("Transcribing needs %s, which is not downloaded yet.", e.Label), "", func() {
+		notice(c, "tr-need-model", noticeWarn, i18n.T("Transcribing needs %s, which is not downloaded yet.", modelRef(e)), "", func() {
 			m := a.model(e)
 			label := i18n.T("Download")
 			if m.downloading {

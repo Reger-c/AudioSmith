@@ -30,9 +30,11 @@ func (a *app) inspector(c *ui.Context) {
 	p := a.preset()
 	custom := a.modelLabel == catalog.CustomLabel
 
-	about := i18n.T(p.About)
-	if size := catalog.HumanSize(p.Size); size != "" {
-		about += i18n.T(" Download %s.", size)
+	// What the model is for, then what it is (family, quantisation,
+	// size, licence: thread #45 keeps them out of the picker's text).
+	about := p.Description()
+	if p.ID != "custom" {
+		about += "\n\n" + p.TechnicalSummary()
 	}
 	ui.Column(c).Gap(px(t, 6)).Children(func() {
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
@@ -51,7 +53,7 @@ func (a *app) inspector(c *ui.Context) {
 			ui.TextInput(c.Key("repo"), &a.customRepo).Placeholder("owner/model-name").Label(i18n.T("Repo"))
 		}
 		if !p.Licence.Commercial {
-			caption(c, p.Licence.Name+" · "+i18n.T("non-commercial use only")).TextColor(t.Warning)
+			caption(c, i18n.T("Non-commercial use only")).TextColor(t.Warning).Tooltip(p.Licence.Name)
 		}
 	})
 	a.studioVoiceField(c, p)
@@ -176,7 +178,7 @@ func (a *app) studioVoiceField(c *ui.Context, e catalog.Entry) {
 				}
 			})
 		case e.NeedsReference && !a.studioUsesSavedVoice(e):
-			caption(c.Key("ref-required"), i18n.T("Required: %s only clones voices.", e.Label)).TextColor(t.Warning)
+			caption(c.Key("ref-required"), i18n.T("Required: %s only clones voices.", modelRef(e))).TextColor(t.Warning)
 		}
 	})
 }
@@ -366,7 +368,7 @@ func (a *app) studioSummary(c *ui.Context) {
 	t := c.Theme()
 	k := tok(t)
 	p := a.preset()
-	parts := []string{p.Label, a.studioVoiceLabel(p)}
+	parts := []string{p.DisplayName(), a.studioVoiceLabel(p)}
 	if p.ID == "custom" {
 		parts[0] = catalog.ShortRepo(p.Repo)
 	}

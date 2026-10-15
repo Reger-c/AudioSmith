@@ -86,15 +86,15 @@ func packAbout(id string) string {
 	switch id {
 	case "fast":
 		if packModelID(packStudioModel) != "kokoro-82m-bf16" {
-			return i18n.T("Qwen3-TTS CustomVoice's named voices for Chinese and English, and dictation.")
+			return i18n.T("Ready-made Chinese and English voices, and dictation.")
 		}
-		return i18n.T("Kokoro's natural English voices, and dictation. Light on memory.")
+		return i18n.T("Natural English voices, and dictation. Light on memory.")
 	case "balanced":
-		return i18n.T("Adds voice cloning (Qwen3-TTS 0.6B), Whisper transcription with word times, and noise removal.")
+		return i18n.T("Adds voice cloning, multilingual transcription with word times, and noise removal.")
 	case "quality":
-		return i18n.T("Adds the larger Qwen3-TTS (cloning and voice design), dubbing (speech separation, speakers) and a local writing model.")
+		return i18n.T("Adds high-fidelity cloning and voice design, dubbing (voice separation, speakers) and a local writing assistant.")
 	case "max":
-		return i18n.T("Adds OmniVoice (600+ languages, non-commercial licence) and the finest speech separation.")
+		return i18n.T("Adds a multilingual model (600+ languages, non-commercial licence) and the finest voice separation.")
 	}
 	return ""
 }
@@ -133,7 +133,7 @@ func (a *app) packSizes(id string) (total, missing int64, names []string) {
 		total += e.Size
 		if m := a.model(e); !m.known || m.local.State != hub.Downloaded {
 			missing += e.Size
-			names = append(names, e.Label)
+			names = append(names, e.DisplayName())
 		}
 	}
 	return total, missing, names
@@ -641,7 +641,7 @@ func (a *app) obModels(c *ui.Context) {
 			statusMark(c, icons.DangerCircle, t.Danger, i18n.T("Not enough free space: %s needed, %s free.", humanBytes(missing), humanBytes(a.obFree)))
 		}
 		if a.obPack == "max" {
-			banner(c, icons.DangerTriangle, t.Warning, i18n.T("OmniVoice's licence (CC BY-NC 4.0) allows non-commercial use only: you are asked to accept it before it downloads."), nil)
+			banner(c, icons.DangerTriangle, t.Warning, i18n.T("%s's licence (CC BY-NC 4.0) allows non-commercial use only: you are asked to accept it before it downloads.", modelRefID(idOmniVoice)), nil)
 		}
 		caption(c, i18n.T("Downloads start when you finish, and go on in the background."))
 	}
@@ -661,7 +661,7 @@ func (a *app) obPrivacy(c *ui.Context) {
 		}
 	})
 	wm := !a.prefs.Privacy.NoWatermark
-	settingRowNote(c, "ob-watermark", i18n.T("Invisible watermark"), i18n.T("Marks generated audio so it can be recognised as made by AudioSmith. Needs the small AudioSeal model."), func() {
+	settingRowNote(c, "ob-watermark", i18n.T("Invisible watermark"), i18n.T("Marks generated audio so it can be recognised as made by AudioSmith. Needs a small model."), func() {
 		if ui.Switch(c.Key("ob-watermark"), &wm).Label(i18n.T("Add an invisible watermark to generated audio")).Changed() {
 			on := wm
 			a.updateSettings(func(s *settings.Settings) { s.Privacy.NoWatermark = !on })
@@ -690,14 +690,14 @@ func (a *app) obDictation(c *ui.Context) {
 			a.permissionsSettings(c) // permissions.go: microphone, accessibility
 		}
 	}
-	caption(c, i18n.T("When you finish, the Studio says hello as soon as the Kokoro voice is downloaded."))
+	caption(c, i18n.T("When you finish, the Studio says hello as soon as its voice is downloaded."))
 }
 
 // obPackNames lists a pack's models (tests, the palette).
 func obPackNames(id string) []string {
 	var out []string
 	for _, e := range packEntries(id) {
-		out = append(out, e.Label)
+		out = append(out, e.DisplayName())
 	}
 	return out
 }

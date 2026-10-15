@@ -334,18 +334,14 @@ func (a *app) dictationSettings(c *ui.Context) {
 	e := a.dictModel()
 	desc := i18n.T("Smaller models answer sooner.")
 	if ready, known := a.modelOnDisk(e); known && !ready {
-		desc = i18n.T("%s is not downloaded yet.", e.Label)
+		desc = i18n.T("%s is not downloaded yet.", modelRef(e))
 	}
 	settingRowNote(c, "dict-model", i18n.T("Model"), desc, func() {
-		var labels []string
-		for _, x := range sttEntries() {
-			labels = append(labels, x.Label)
-		}
-		if ui.Select(c.Key("dict-model-select"), &f.model, labels).Label(i18n.T("Model")).Width(px(t, 260)).Changed() {
-			if x, ok := catalog.Builtin().ByLabel(f.model); ok {
-				id := x.ID
-				a.updateSettings(func(s *settings.Settings) { s.Dictation.Model = id })
-			}
+		cur, _ := catalog.Builtin().ByLabel(f.model)
+		if x, ok := modelSelect(c, "dict-model-select", cur, sttEntries(), i18n.T("Model"), px(t, 260)); ok {
+			f.model = x.Label
+			id := x.ID
+			a.updateSettings(func(s *settings.Settings) { s.Dictation.Model = id })
 		}
 		if ready, known := a.modelOnDisk(e); known && !ready {
 			m := a.model(e)

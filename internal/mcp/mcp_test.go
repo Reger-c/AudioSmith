@@ -311,6 +311,21 @@ func TestTools(t *testing.T) {
 		t.Fatalf("removed model: %v %s", res.IsError, textOf(res))
 	}
 	res = call(t, cs, "list_models", map[string]any{})
+	var models struct {
+		Models []map[string]any `json:"models"`
+	}
+	json.Unmarshal([]byte(textOf(res)), &models)
+	for _, m := range models.Models { // thread #45: friendly names, a line, tags
+		if m["display_name"] == "" || m["display_name"] == nil || m["ui_name"] == nil || m["description"] == "" || m["tags"] == nil || m["label"] == nil {
+			t.Errorf("names: %v", m)
+		}
+		if m["id"] == "kokoro-82m-bf16" && (m["display_name"] != "Fast English voices" || m["label"] != "Kokoro 82M") {
+			t.Errorf("kokoro: %v", m)
+		}
+	}
+	if len(models.Models) == 0 {
+		t.Error("no models")
+	}
 	for _, r := range catalog.Builtin().Removed {
 		if strings.Contains(textOf(res), `"`+r.ID+`"`) {
 			t.Errorf("list_models lists %s", r.ID)

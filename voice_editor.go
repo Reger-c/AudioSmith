@@ -325,10 +325,20 @@ func (a *app) editorTry(c *ui.Context, v *core.Voice) {
 				e.tryModel = p.Label
 			}
 		}
+		// The select shows friendly names; e.tryModel keeps the label.
+		names := make([]string, len(ms))
+		for i, m := range ms {
+			names[i] = m.DisplayName()
+		}
+		pick := names[slices.Index(labels, e.tryModel)]
 		ui.Column(c).Gap(px(t, 8)).Children(func() {
 			ui.TextArea(c.Key("try-text"), &e.tryText).Lines(2, 4).Label(i18n.T("Test phrase"))
 			ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
-				ui.Select(c.Key("try-model"), &e.tryModel, labels).Label(i18n.T("Model")).Grow(1).MinWidth(0)
+				if ui.Select(c.Key("try-model"), &pick, names).Label(i18n.T("Model")).Tooltip(modelTip(ms[slices.Index(labels, e.tryModel)])).Grow(1).MinWidth(0).Changed() {
+					if i := slices.Index(names, pick); i >= 0 {
+						e.tryModel = labels[i]
+					}
+				}
 				j := a.voiceJob("try", v.ID)
 				if ui.Button(c.Key("try-go"), i18n.T("Generate preview")).Disabled(j.running() || strings.TrimSpace(e.tryText) == "").Clicked() {
 					a.tryVoice(v.ID)
@@ -510,7 +520,7 @@ func ncNote(v *core.Voice) string {
 			continue
 		}
 		if e, ok := catalog.Builtin().ByRepo(repo); ok && !e.Licence.Commercial {
-			return i18n.T("Made with %s, whose licence (%s) allows only non-commercial use: what you make with this voice may be bound by it too.", e.Label, e.Licence.Name)
+			return i18n.T("Made with %s, whose licence (%s) allows only non-commercial use: what you make with this voice may be bound by it too.", modelRef(e), e.Licence.Name)
 		}
 	}
 	return ""

@@ -1,12 +1,14 @@
 package main
 
 // The model picker the creation pages share (Studio, Stories, Audiobook,
-// Dub, Design): the chosen model with its one-line "best for"; a list
-// with the page's recommended models first (the catalogue's presets for
-// the interface's language, thread #41), each with a speed and a quality
-// hint, and the others behind "Show all models", where the ones that
-// cannot do the page's job are greyed out with the reason. Removed
-// models (models_removed.go) are never offered.
+// Dub, Design): the chosen model by its friendly name with its one-line
+// description (thread #45: the family, version and size only in the
+// tooltip); a list with a search field, the page's recommended models
+// first (the catalogue's presets for the interface's language, thread
+// #41), each with up to three tags and a speed and a quality hint, and the
+// others behind "Show all models", where the ones that cannot do the
+// page's job are greyed out with the reason. Removed models
+// (models_removed.go) are never offered.
 
 import (
 	"slices"
@@ -23,6 +25,7 @@ import (
 type modelPickerState struct {
 	pickerOpen map[string]bool
 	pickerAll  map[string]bool // "Show all models" open (remembered while the app runs)
+	pickerFind map[string]string
 }
 
 // pickerOpts tunes a picker.
@@ -98,12 +101,16 @@ func ratingDots(n int) string {
 	return strings.Repeat("●", n) + strings.Repeat("○", 3-n)
 }
 
-// bestFor is model e's one line: its preset's "best for", else nothing.
-func bestFor(e catalog.Entry) string {
-	if p, ok := catalog.PresetFor(e.ID); ok && p.BestFor != "" {
-		return i18n.T(p.BestFor)
+// pickerTags are the tags a picker row shows: at most two, leaving out
+// Fast and High quality where the speed and quality dots say it.
+
+// modelTip is a model's technical identity, for a tooltip: "Qwen3-TTS
+// 0.6B CustomVoice · 8bit · ≈ 2 GB · Apache 2.0".
+func modelTip(e catalog.Entry) string {
+	if e.ID == "custom" {
+		return e.DisplayName()
 	}
-	return ""
+	return e.TechnicalSummary()
 }
 
 // modelPicker is the picker for workflow w; set receives the model chosen
@@ -112,7 +119,7 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 	t := c.Theme()
 	k := tok(t)
 	if a.pickerOpen == nil {
-		a.pickerOpen, a.pickerAll = map[string]bool{}, map[string]bool{}
+		a.pickerOpen, a.pickerAll, a.pickerFind = map[string]bool{}, map[string]bool{}, map[string]string{}
 	}
 	lang := i18n.Locale()
 	recs := catalog.Builtin().Recommended(w, lang)
@@ -124,25 +131,22 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 	isRec := func(e catalog.Entry) bool {
 		return slices.ContainsFunc(recs, func(x catalog.Entry) bool { return x.ID == e.ID })
 	}
-	label := cur.Label
-	if cur.ID == "custom" {
-		label = i18n.T("Custom Hugging Face repo…")
-	}
+	label := cur.DisplayName()
 	btn := ui.ButtonBase(c.Key(key)).Padding(px(t, 6), px(t, 10)).Gap(px(t, sp2)).Radius(px(t, radiusControl)).
-		Background(t.Surface).Border(1, t.Border).AlignItems(ui.Center).Label(i18n.T("Model")).Tooltip(label).Disabled(o.Locked)
+		Background(t.Surface).Border(1, t.Border).AlignItems(ui.Center).Label(i18n.T("Model")).Tooltip(modelTip(cur)).Disabled(o.Locked)
 	if btn.Hovered() && !o.Locked {
 		btn.Background(t.SurfaceHover)
 	}
 	btn.Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 1)).Children(func() {
-			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Wrap().GapX(px(t, 6)).GapY(px(t, 2)).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
 				if isRec(cur) {
 					ui.Text(c, i18n.T("Recommended")).FontSize(px(t, fsMicro)).TextColor(k.AccentInk).Padding(px(t, 1), px(t, 5)).
 						Radius(px(t, 4)).Background(k.AccentSoft).SingleLine().Shrink(0)
 				}
 			})
-			if b := bestFor(cur); b != "" {
+			if b := cur.Description(); b != "" {
 				ui.Text(c, b).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Ellipsis("…").MinWidth(0)
 			}
 		})
@@ -150,6 +154,7 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 	})
 	if btn.Clicked() {
 		a.pickerOpen[key] = !a.pickerOpen[key]
+		a.pickerFind[key] = ""
 	}
 	open := a.pickerOpen[key]
 	ui.Popover(c, btn, &open, func() {
@@ -191,12 +196,37 @@ func (a *app) pickerList(c *ui.Context, key string, w catalog.Workflow, cur cata
 		return 1
 	})
 	_, h := c.Size()
-	ui.Scroll(c.Key(key + "-scroll")).MaxHeight(max(px(t, 220), h*0.7)).Children(func() {
+	find := a.pickerFind[key]
+	ui.Row(c.Key(key+"-find")).Width(px(t, 340)).Padding(px(t, 6), px(t, 6), 0).Children(func() {
+		searchField(c, key+"-search", &find, i18n.T("Search models"), 0).Label(i18n.T("Search models"))
+	})
+	a.pickerFind[key] = find
+	ui.Scroll(c.Key(key + "-scroll")).MaxHeight(max(px(t, 220), h*0.7-px(t, 40))).Children(func() {
 		ui.Column(c.Key(key + "-list")).Width(px(t, 340)).Gap(px(t, 2)).Padding(px(t, 6)).Children(func() {
+			if strings.TrimSpace(find) != "" {
+				// Searching: every match in one list, friendly or technical.
+				n := 0
+				for _, e := range append(slices.Clone(recs), others...) {
+					if !e.Matches(find) {
+						continue
+					}
+					n++
+					why := whyNotFor(e, w)
+					note := ""
+					if why == "" {
+						note = languageNote(e)
+					}
+					a.pickerRow(c, e, cur, e.Description(), firstOf(why, note), why == "", pick)
+				}
+				if n == 0 {
+					ui.Text(c, i18n.T("No model matches")).FontSize(px(t, fsCaption)).TextColor(k.Text3).Padding(px(t, 6), px(t, sp2))
+				}
+				return
+			}
 			if len(recs) > 0 {
 				ui.Text(c, i18n.T("Recommended")).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Padding(px(t, 4), px(t, sp2), px(t, 2))
 				for _, e := range recs {
-					a.pickerRow(c, e, cur, bestFor(e), "", true, pick)
+					a.pickerRow(c, e, cur, e.Description(), "", true, pick)
 				}
 			}
 			if len(others) == 0 && !o.Custom {
@@ -232,7 +262,7 @@ func (a *app) pickerList(c *ui.Context, key string, w catalog.Workflow, cur cata
 				if why == "" {
 					note = languageNote(e)
 				}
-				a.pickerRow(c, e, cur, i18n.T(e.About), firstOf(why, note), why == "", pick)
+				a.pickerRow(c, e, cur, e.Description(), firstOf(why, note), why == "", pick)
 			}
 			if o.Custom {
 				custom := catalog.Custom("")
@@ -242,20 +272,18 @@ func (a *app) pickerList(c *ui.Context, key string, w catalog.Workflow, cur cata
 	})
 }
 
-// pickerRow is one model of the list: its name (and "non-commercial"),
-// one line about it (or why it can't be used, or a note), the speed and
-// quality hint of a preset, and on the right ✓ for the chosen one or the
-// download size of one not downloaded.
+// pickerRow is one model of the list: its friendly name and up to three
+// tags ("non-commercial" first), one line about it (or why it can't be
+// used, or a note), the speed and quality hint of a preset, and on the
+// right ✓ for the chosen one or the download size of one not
+// downloaded. Its tooltip names it technically.
 func (a *app) pickerRow(c *ui.Context, e, cur catalog.Entry, about, note string, usable bool, pick func(catalog.Entry)) {
 	t := c.Theme()
 	k := tok(t)
-	name := e.Label
-	if e.ID == "custom" {
-		name = i18n.T("Custom Hugging Face repo…")
-	}
+	name := e.DisplayName()
 	chosen := e.ID == cur.ID && (e.ID != "custom" || cur.ID == "custom")
 	b := ui.ButtonBase(c.Key("pm-"+e.ID)).Padding(px(t, 6), px(t, sp2)).Radius(px(t, radiusControl)).Gap(px(t, sp2)).
-		AlignItems(ui.Center).Label(name).Disabled(!usable)
+		AlignItems(ui.Center).Label(name).Tooltip(modelTip(e)).Disabled(!usable)
 	switch {
 	case chosen:
 		b.Background(k.Pressed)
@@ -271,11 +299,9 @@ func (a *app) pickerRow(c *ui.Context, e, cur catalog.Entry, about, note string,
 			if !usable {
 				col = k.Text3
 			}
-			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Wrap().GapX(px(t, 6)).GapY(px(t, 2)).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, name).TextColor(col).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
-				if !e.Licence.Commercial {
-					ui.Text(c, i18n.T("non-commercial")).FontSize(px(t, fsMicro)).TextColor(t.Warning).SingleLine().Shrink(0)
-				}
+				pickerTags(c, e)
 			})
 			line, lineCol := about, k.Text2
 			if note != "" {
@@ -304,3 +330,68 @@ func (a *app) pickerRow(c *ui.Context, e, cur catalog.Entry, about, note string,
 		}
 	})
 }
+
+func pickerTags(c *ui.Context, e catalog.Entry) {
+	tags := e.DisplayTags(0)
+	if _, ok := catalog.PresetFor(e.ID); ok {
+		tags = slices.DeleteFunc(tags, func(tg catalog.Tag) bool { return tg == catalog.TagFast || tg == catalog.TagQuality })
+	}
+	tagChips(c, tags[:min(len(tags), 2)])
+}
+
+// modelTags shows up to n of e's tags as chips (0 = all): Non-commercial
+// in the warning colour.
+func modelTags(c *ui.Context, e catalog.Entry, n int) { tagChips(c, e.DisplayTags(n)) }
+
+func tagChips(c *ui.Context, tags []catalog.Tag) {
+	t := c.Theme()
+	for _, tg := range tags {
+		ch := tagChip(c, tg.Label())
+		if tg == catalog.TagNonCommercial {
+			ch.TextColor(t.Warning)
+		}
+	}
+}
+
+// modelRef names model e inside a sentence: its friendly name in quotes
+// (“Standard voices” is not downloaded yet).
+func modelRef(e catalog.Entry) string { return "“" + e.DisplayName() + "”" }
+
+// modelSelect is a select of models by their friendly names (its tooltip
+// names the chosen one technically): it returns the model chosen and
+// true when the user chose another. cur may be outside models (then the
+// select shows its name too).
+func modelSelect(c *ui.Context, key string, cur catalog.Entry, models []catalog.Entry, label string, w float32) (catalog.Entry, bool) {
+	names := make([]string, 0, len(models)+1)
+	for _, e := range models {
+		names = append(names, e.DisplayName())
+	}
+	sel := cur.DisplayName()
+	if cur.ID == "" && len(models) > 0 {
+		sel = names[0]
+	}
+	if ui.Select(c.Key(key), &sel, names).Label(label).Width(w).Tooltip(modelTip(cur)).Changed() {
+		if i := slices.Index(names, sel); i >= 0 && models[i].ID != cur.ID {
+			return models[i], true
+		}
+	}
+	return cur, false
+}
+
+// modelRefID is modelRef of the catalogue model with id ("" when the
+// catalogue has none): texts that suggest a model name it by its
+// friendly name.
+func modelRefID(id string) string {
+	if e, ok := catalog.Builtin().ByID(id); ok {
+		return modelRef(e)
+	}
+	return ""
+}
+
+// Models texts suggest by name.
+const (
+	idCustomVoice = "qwen3-tts-0.6b-customvoice-8bit"
+	idVoiceDesign = "qwen3-tts-1.7b-voicedesign-4bit"
+	idCloneHiFi   = "qwen3-tts-1.7b-base-8bit"
+	idOmniVoice   = "omnivoice-bf16"
+)

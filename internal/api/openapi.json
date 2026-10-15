@@ -4242,7 +4242,39 @@
             ]
           },
           "label": {
-            "type": "string"
+            "type": "string",
+            "description": "Technical name: family, size, variant (\"Qwen3-TTS 0.6B CustomVoice\")."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Friendly name in English: what the model is for (\"Standard voices\")."
+          },
+          "ui_name": {
+            "type": "string",
+            "description": "The name AudioSmith's UI shows, in its language (\"标准音色\"): how the user knows the model."
+          },
+          "description": {
+            "type": "string",
+            "description": "One line in English: what it is for, when to pick it."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "chinese",
+                "english",
+                "multilingual",
+                "clone",
+                "design",
+                "voices",
+                "fast",
+                "quality",
+                "light",
+                "non-commercial"
+              ]
+            },
+            "description": "Words of a fixed vocabulary, most telling first."
           },
           "repo": {
             "type": "string"

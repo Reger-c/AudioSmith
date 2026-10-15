@@ -412,7 +412,7 @@ func (a *app) dictTranscribe(s *dictSession, path string) {
 				os.Remove(path)
 				if errors.Is(err, core.ErrNotDownloaded) {
 					s.need = &e
-					a.dictFail(s, i18n.T("%s is not downloaded yet.", e.Label))
+					a.dictFail(s, i18n.T("%s is not downloaded yet.", modelRef(e)))
 					return
 				}
 				var lic *core.LicenceRequiredError

@@ -114,18 +114,23 @@ func TestCustom(t *testing.T) {
 func TestValidate(t *testing.T) {
 	for name, data := range map[string]string{
 		"version":    `{"version":0,"entries":[]}`,
-		"dup repo":   `{"version":1,"entries":[{"id":"a","label":"A","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}},{"id":"b","label":"B","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
-		"task":       `{"version":1,"entries":[{"id":"a","label":"A","family":"f","repo":"r","tasks":["sing"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
-		"capability": `{"version":1,"entries":[{"id":"a","label":"A","family":"f","repo":"r","tasks":["tts"],"capabilities":["fly"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
-		"licence":    `{"version":1,"entries":[{"id":"a","label":"A","family":"f","repo":"r","tasks":["tts"]}]}`,
-		"aux":        `{"version":1,"entries":[{"id":"a","label":"A","family":"f","repo":"r","tasks":["tts"],"aux":[{"repo":"r"}],"licence":{"id":"x","name":"X","commercial":true}}]}`,
-		"nc gate":    `{"version":1,"entries":[{"id":"a","label":"A","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"cc-by-nc-4.0","name":"CC BY-NC 4.0","commercial":false}}]}`,
+		"dup repo":   `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}},{"id":"b","label":"B","name":"Bb","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"task":       `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","family":"f","repo":"r","tasks":["sing"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"capability": `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","family":"f","repo":"r","tasks":["tts"],"capabilities":["fly"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"licence":    `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","family":"f","repo":"r","tasks":["tts"]}]}`,
+		"aux":        `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","family":"f","repo":"r","tasks":["tts"],"aux":[{"repo":"r"}],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"no name":    `{"version":1,"entries":[{"id":"a","label":"A","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"dup name":   `{"version":1,"entries":[{"id":"a","label":"A","name":"Same","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}},{"id":"b","label":"B","name":"same","family":"f","repo":"r2","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"tag":        `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","tags":["shiny"],"family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"computed":   `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","tags":["recommended"],"family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"repeated":   `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","tags":["fast","fast"],"family":"f","repo":"r","tasks":["tts"],"licence":{"id":"x","name":"X","commercial":true}}]}`,
+		"nc gate":    `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"cc-by-nc-4.0","name":"CC BY-NC 4.0","commercial":false}}]}`,
 	} {
 		if _, err := Parse([]byte(data)); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	ok := `{"version":1,"entries":[{"id":"a","label":"A","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"cc-by-nc-4.0","name":"CC BY-NC 4.0","commercial":false,"requiresAcceptance":true}}]}`
+	ok := `{"version":1,"entries":[{"id":"a","label":"A","name":"Aa","family":"f","repo":"r","tasks":["tts"],"licence":{"id":"cc-by-nc-4.0","name":"CC BY-NC 4.0","commercial":false,"requiresAcceptance":true}}]}`
 	if _, err := Parse([]byte(ok)); err != nil {
 		t.Error(err)
 	}
@@ -144,7 +149,10 @@ func TestHumanSize(t *testing.T) {
 
 func TestNames(t *testing.T) {
 	c := Builtin()
-	if got := c.DisplayName("mlx-community/Kokoro-82M-bf16"); got != "Kokoro 82M" {
+	if got := c.DisplayName("mlx-community/Kokoro-82M-bf16"); got != "Fast English voices" {
+		t.Error(got)
+	}
+	if got := c.TechnicalName("mlx-community/Kokoro-82M-bf16"); got != "Kokoro 82M" {
 		t.Error(got)
 	}
 	if got := c.DisplayName("someone/My-TTS"); got != "My-TTS" {
@@ -215,7 +223,7 @@ func TestNeedsReference(t *testing.T) {
 	if len(got) != 0 {
 		t.Errorf("needsReference: %q", got)
 	}
-	c := Catalog{Version: 1, Entries: []Entry{{ID: "x", Label: "X", Family: "x", Repo: "o/x", Tasks: []Task{TaskTTS},
+	c := Catalog{Version: 1, Entries: []Entry{{ID: "x", Label: "X", Name: "Xx", Family: "x", Repo: "o/x", Tasks: []Task{TaskTTS},
 		NeedsReference: true, Licence: Licence{ID: "mit", Name: "MIT", Commercial: true}}}}
 	if err := c.Validate(); err == nil {
 		t.Error("needsReference without clone validated")

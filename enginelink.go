@@ -299,7 +299,7 @@ func (a *app) generateRefused(t core.Take, err error) {
 	case errors.As(err, &lic):
 		a.askLicence(e, func() { a.generate() })
 	case errors.Is(err, core.ErrNotDownloaded):
-		a.jobError = i18n.T("%s is not downloaded yet.", e.Label)
+		a.jobError = i18n.T("%s is not downloaded yet.", modelRef(e))
 		a.needDownload = &e
 	case errors.As(err, new(*core.NeedsReferenceError)):
 		a.jobError = engineErrorText(err)
@@ -548,7 +548,7 @@ func jobErrorText(e *jobs.Error) string {
 		if d.Model == "" {
 			return needsReferenceText(modelInMessage(e.Message))
 		}
-		return needsReferenceText(entryFor(d.Model).Label)
+		return needsReferenceText(modelRef(entryFor(d.Model)))
 	case proto.CodeBadRequest:
 		// The engine's own refusal of a clone-only model without a
 		// reference, in older or newer words.
@@ -569,11 +569,12 @@ func needsReferenceText(model string) string {
 }
 
 // modelInMessage is the model an engine message starts with
-// ("Some-Model-100M only clones…"), as the UI names it, or "".
+// ("Some-Model-100M only clones…"), as the UI names it in a sentence
+// (modelRef), or "".
 func modelInMessage(msg string) string {
 	for _, e := range catalog.Builtin().Entries {
 		if strings.HasPrefix(msg, catalog.ShortRepo(e.Repo)+" ") || strings.HasPrefix(msg, e.Label+" ") {
-			return e.Label
+			return modelRef(e)
 		}
 	}
 	return ""
@@ -607,6 +608,9 @@ func engineErrorText(err error) string {
 	}
 	var nr *core.NeedsReferenceError
 	if errors.As(err, &nr) {
+		if m := modelInMessage(nr.Model + " "); m != "" {
+			return needsReferenceText(m) // the label, as the UI names it
+		}
 		return needsReferenceText(nr.Model)
 	}
 	if errors.Is(err, context.Canceled) {

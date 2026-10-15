@@ -228,7 +228,7 @@ func (a *app) readiness(st scriptStats) (msg string, warn bool) {
 		return i18n.T("The script has nothing to say: only markup."), true
 	}
 	if m := a.model(p); p.ID != "custom" && m.known && m.local.State != hub.Downloaded && a.needDownload == nil {
-		return i18n.T("%s is not downloaded yet.", p.Label), true
+		return i18n.T("%s is not downloaded yet.", modelRef(p)), true
 	}
 	if a.studioMissingReference() {
 		return studioNeedsReferenceText(p), true
@@ -242,7 +242,7 @@ func (a *app) readiness(st scriptStats) (msg string, warn bool) {
 // studioNeedsReferenceText says what the Studio needs before model e
 // (which only clones voices) can generate.
 func studioNeedsReferenceText(e catalog.Entry) string {
-	return i18n.T("%s only clones voices: under Voice in the inspector, pick a saved voice or a clip to clone.", e.Label)
+	return i18n.T("%s only clones voices: under Voice in the inspector, pick a saved voice or a clip to clone.", modelRef(e))
 }
 
 func (a *app) generateBar(c *ui.Context) {
@@ -286,9 +286,9 @@ func (a *app) jobProblem(c *ui.Context) {
 		m := a.model(*e)
 		switch {
 		case m.downloading:
-			text := i18n.T("Downloading %s", e.Label)
+			text := i18n.T("Downloading %s", modelRef(*e))
 			if m.progress.TotalBytes > 0 {
-				text = i18n.T("Downloading %s · %d%%", e.Label, int(100*m.progress.Bytes/m.progress.TotalBytes))
+				text = i18n.T("Downloading %s · %d%%", modelRef(*e), int(100*m.progress.Bytes/m.progress.TotalBytes))
 			}
 			caption(c, text)
 			if ui.Button(c.Key("dl-cancel"), i18n.T("Cancel")).Clicked() {

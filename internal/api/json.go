@@ -83,9 +83,18 @@ func round2(f float64) float64 { return float64(int64(f*100+0.5)) / 100 }
 
 // ModelJSON is a catalogue entry and its state.
 type ModelJSON struct {
-	ID           string        `json:"id"`
-	Object       string        `json:"object"` // "model"
-	Label        string        `json:"label"`
+	ID     string `json:"id"`
+	Object string `json:"object"` // "model"
+	Label  string `json:"label"`  // technical name: "Qwen3-TTS 0.6B CustomVoice"
+	// DisplayName and Description are the friendly name and one line in
+	// English ("Standard voices"); UIName is the name AudioSmith's UI
+	// shows, in its language ("标准音色"); Tags are words of a fixed
+	// vocabulary ("chinese", "clone", "fast", "non-commercial"…), thread
+	// #45.
+	DisplayName  string        `json:"display_name"`
+	UIName       string        `json:"ui_name"`
+	Description  string        `json:"description,omitempty"`
+	Tags         []string      `json:"tags"`
 	Repo         string        `json:"repo"`
 	Family       string        `json:"family"`
 	Tasks        []string      `json:"tasks"`
@@ -151,12 +160,15 @@ type LicenceJSON struct {
 
 func modelJSON(m Model, isDefault bool) ModelJSON {
 	e := m.Entry
-	j := ModelJSON{ID: e.ID, Object: "model", Label: e.Label, Repo: e.Repo, Family: e.Family, SampleRate: e.SampleRate,
+	j := ModelJSON{ID: e.ID, Object: "model", Label: e.Label, DisplayName: e.Name, UIName: e.DisplayName(), Description: firstNonEmpty(e.Summary, e.About), Tags: []string{}, Repo: e.Repo, Family: e.Family, SampleRate: e.SampleRate,
 		MaxChars: e.MaxChars, RTF: e.RTF, Size: e.Size, MinMemoryGB: e.MinMemoryGB, Downloaded: m.Downloaded, NeedsReference: e.NeedsReference,
 		Default: isDefault, Hidden: e.Hidden, About: e.About, Tasks: []string{}, Capabilities: []string{},
 		Licence: LicenceJSON{ID: e.Licence.ID, Name: e.Licence.Name, URL: e.Licence.URL, Commercial: e.Licence.Commercial, Needed: m.LicenceNeeded}}
 	for _, t := range e.Tasks {
 		j.Tasks = append(j.Tasks, string(t))
+	}
+	for _, t := range e.DisplayTags(0) {
+		j.Tags = append(j.Tags, string(t))
 	}
 	for _, c := range e.Capabilities {
 		j.Capabilities = append(j.Capabilities, string(c))

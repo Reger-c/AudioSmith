@@ -125,7 +125,7 @@ func (a *app) dubbingSettings(c *ui.Context) {
 	names := []string{i18n.T("Automatic")}
 	repos := []string{""}
 	for _, e := range models {
-		names = append(names, e.Label)
+		names = append(names, e.DisplayName())
 		repos = append(repos, e.Repo)
 	}
 	cur := names[max(slices.Index(repos, d.Model), 0)]

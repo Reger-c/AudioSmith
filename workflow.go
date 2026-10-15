@@ -535,7 +535,7 @@ func (a *app) wfCheck(n *workflow.Node, _ workflow.Type) []workflow.Diagnostic {
 		}
 		if e, ok := catalog.Builtin().ByRepo(m.STT); ok {
 			if ready, known := a.modelOnDisk(e); known && !ready {
-				add(workflow.Warning, wfCodeNotDownloaded, i18n.T("%s is not downloaded yet.", e.Label))
+				add(workflow.Warning, wfCodeNotDownloaded, i18n.T("%s is not downloaded yet.", modelRef(e)))
 			}
 		}
 	}
@@ -546,10 +546,10 @@ func (a *app) wfCheck(n *workflow.Node, _ workflow.Type) []workflow.Diagnostic {
 		}
 		e := entryFor(n.P.Model)
 		if ready, known := a.modelOnDisk(e); known && !ready {
-			add(workflow.Warning, wfCodeNotDownloaded, i18n.T("%s is not downloaded yet.", e.Label))
+			add(workflow.Warning, wfCodeNotDownloaded, i18n.T("%s is not downloaded yet.", modelRef(e)))
 		}
 		if e.NeedsReference && (n.P.Voice == "" || strings.Contains(n.P.Voice, ":")) {
-			add(workflow.Error, wfCodeVoice, i18n.T("%s only clones voices: choose a saved cloned voice.", e.Label))
+			add(workflow.Error, wfCodeVoice, i18n.T("%s only clones voices: choose a saved cloned voice.", modelRef(e)))
 		}
 		if ref := n.P.Voice; ref != "" && !strings.Contains(ref, ":") {
 			v := a.findVoice(ref)

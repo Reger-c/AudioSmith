@@ -191,7 +191,7 @@ func (a *app) previewArchetype(arch gallery.Archetype) {
 	}
 	if ok, known := a.modelOnDisk(e); known && !ok {
 		// Not a failed render: say what to do instead.
-		a.toast(i18n.T("Previews use %s, which is not downloaded: choose a downloaded model at the top right, or download it on the Models page.", e.Label))
+		a.toast(i18n.T("Previews use %s, which is not downloaded: choose a downloaded model at the top right, or download it on the Models page.", modelRef(e)))
 		return
 	}
 	if licence.Required(e) != nil && !licence.Covers(a.accepted, e) {
@@ -205,7 +205,7 @@ func (a *app) previewArchetype(arch gallery.Archetype) {
 	}
 	if len(plan.Jobs) == 0 {
 		_, lang := arch.PreviewLine()
-		a.toast(i18n.T("%s doesn't speak %s, so this voice has no preview.", e.Label, languageName(lang)))
+		a.toast(i18n.T("%s doesn't speak %s, so this voice has no preview.", modelRef(e), languageName(lang)))
 		return
 	}
 	pj := plan.Jobs[0]

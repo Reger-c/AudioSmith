@@ -446,7 +446,7 @@ func (a *app) transcriptRefused(req services.TranscribeRequest, err error) {
 			repo = req.Aligner
 		}
 		e := entryFor(repo)
-		a.trErr = i18n.T("%s is not downloaded yet.", e.Label)
+		a.trErr = i18n.T("%s is not downloaded yet.", modelRef(e))
 		a.trNeed = &e
 		a.trRetry = &req
 	default:

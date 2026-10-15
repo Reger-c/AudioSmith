@@ -128,7 +128,7 @@ func (a *app) syncTwilioChanged(old, new settings.Calls) {
 func callModelOptions() (labels, ids []string) {
 	labels, ids = []string{i18n.T("The voice's own model")}, []string{""}
 	for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
-		labels, ids = append(labels, e.Label), append(ids, e.ID)
+		labels, ids = append(labels, e.DisplayName()), append(ids, e.ID)
 	}
 	return labels, ids
 }

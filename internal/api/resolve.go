@@ -55,8 +55,8 @@ func OpenAIVoiceNames() []string {
 	return out
 }
 
-// findEntry finds a catalogue entry by id, repo, short repo or label
-// (case-insensitive) that does task.
+// findEntry finds a catalogue entry by id, repo, short repo, label or
+// friendly name (case-insensitive, Entry.Named) that does task.
 func findEntry(name string, task catalog.Task) (catalog.Entry, bool) {
 	n := strings.TrimSpace(name)
 	if n == "" {
@@ -66,7 +66,7 @@ func findEntry(name string, task catalog.Task) (catalog.Entry, bool) {
 		if !slices.Contains(e.Tasks, task) {
 			continue
 		}
-		if strings.EqualFold(e.ID, n) || strings.EqualFold(e.Repo, n) || strings.EqualFold(catalog.ShortRepo(e.Repo), n) || strings.EqualFold(e.Label, n) {
+		if e.Named(n) {
 			return e, true
 		}
 	}

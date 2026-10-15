@@ -69,7 +69,7 @@ func TestProjectsLibrary(t *testing.T) {
 	}
 	s.details[libKey(render)] = true
 	tt.Frame()
-	for _, want := range []string{"How it was made", "Kokoro 82M", "1.00×", "2 chapters · 7 lines", "line gap 400 ms"} {
+	for _, want := range []string{"How it was made", "Fast English voices", "1.00×", "2 chapters · 7 lines", "line gap 400 ms"} {
 		if !hasAnyText(tt.Texts(), want) {
 			t.Errorf("details: no %q in %q", want, tt.Texts())
 		}

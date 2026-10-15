@@ -147,7 +147,7 @@ func (a *app) localLLMSettings(c *ui.Context) {
 	cur := a.localLLMEntry()
 	var labels []string
 	for _, e := range opts {
-		labels = append(labels, i18n.T("%s (%s)", e.Label, mb(e.Size)))
+		labels = append(labels, i18n.T("%s (%s)", e.DisplayName(), mb(e.Size)))
 	}
 	i := slices.IndexFunc(opts, func(e catalog.Entry) bool { return e.ID == cur.ID })
 	if i < 0 {
@@ -159,7 +159,7 @@ func (a *app) localLLMSettings(c *ui.Context) {
 		f.localPick = labels[i]
 	}
 	m := a.model(cur)
-	desc := i18n.T(cur.About)
+	desc := cur.Description()
 	switch {
 	case m.downloading:
 		pct := 0

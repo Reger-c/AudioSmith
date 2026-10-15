@@ -121,8 +121,9 @@ func sourceKeys(t *testing.T) (keys map[string]string, dynamic []string) {
 }
 
 // dataKeys are the English texts of data the UI translates: the about
-// text of every catalogue entry (read from the JSON, as package i18n may
-// not import catalog).
+// text, the summary and (in context "model name") the friendly name of
+// every catalogue entry (read from the JSON, as package i18n may not
+// import catalog).
 func dataKeys(t *testing.T) []string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(moduleRoot, "internal", "catalog", "catalog.json"))
@@ -131,7 +132,9 @@ func dataKeys(t *testing.T) []string {
 	}
 	var c struct {
 		Entries []struct {
-			About string `json:"about"`
+			About   string `json:"about"`
+			Summary string `json:"summary"`
+			Name    string `json:"name"`
 		} `json:"entries"`
 	}
 	if err := json.Unmarshal(data, &c); err != nil {
@@ -139,26 +142,13 @@ func dataKeys(t *testing.T) []string {
 	}
 	var out []string
 	for _, e := range c.Entries {
-		if e.About != "" {
-			out = append(out, e.About)
+		for _, s := range []string{e.About, e.Summary} {
+			if s != "" {
+				out = append(out, s)
+			}
 		}
-	}
-	// The recommended models' one-line "best for" (presets.json).
-	data, err = os.ReadFile(filepath.Join(moduleRoot, "internal", "catalog", "presets.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var p struct {
-		Models map[string]struct {
-			BestFor string `json:"bestFor"`
-		} `json:"models"`
-	}
-	if err := json.Unmarshal(data, &p); err != nil {
-		t.Fatal(err)
-	}
-	for _, m := range p.Models {
-		if m.BestFor != "" {
-			out = append(out, m.BestFor)
+		if e.Name != "" {
+			out = append(out, "model name\x04"+e.Name)
 		}
 	}
 	return out
