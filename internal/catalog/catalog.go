@@ -134,8 +134,19 @@ type Entry struct {
 	// but not offered by pickers (ForTask, Labels) until the app can run
 	// them end to end (none at the end of M0).
 	Hidden bool `json:"hidden,omitempty"`
+	// Retired entries are no longer offered (pickers, ForTask, Labels)
+	// after the evaluation found them unreliable (thread #41), but they
+	// still run: projects, drafts and API calls that name them keep
+	// working, and the UI suggests the replacement.
+	Retired *Retirement `json:"retired,omitempty"`
 
 	Licence Licence `json:"licence"`
+}
+
+// Retirement says why an entry is retired and what replaces it.
+type Retirement struct {
+	ReplacedBy string `json:"replacedBy"` // the ID of the entry to use instead
+	Reason     string `json:"reason"`     // English, for reviewers
 }
 
 // Aux is an auxiliary repo of an entry.
@@ -157,6 +168,9 @@ type VoiceOption struct {
 	ID       string `json:"id"`                 // what the voice parameter takes
 	Language string `json:"language,omitempty"` // BCP-47
 	Gender   string `json:"gender,omitempty"`   // "female", "male"
+	// Hidden speakers are not offered by pickers (Kokoro's Chinese
+	// voices: unintelligible, thread #41) but still work when named.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // File is one file of the repo to download.
@@ -262,6 +276,11 @@ func (c *Catalog) Validate() error {
 				return fmt.Errorf("%s: unknown language code %q", e.ID, l.Code)
 			}
 		}
+		if r := e.Retired; r != nil {
+			if n, ok := c.ByID(r.ReplacedBy); !ok || n.Retired != nil || n.ID == e.ID {
+				return fmt.Errorf("%s: retired without a live replacement (%q)", e.ID, r.ReplacedBy)
+			}
+		}
 	}
 	return nil
 }
@@ -332,11 +351,11 @@ func (c *Catalog) find(match func(*Entry) bool) (Entry, bool) {
 }
 
 // ForTask returns the entries that do task, in catalogue order, without
-// hidden ones.
+// hidden and retired ones.
 func (c *Catalog) ForTask(task Task) []Entry {
 	var out []Entry
 	for _, e := range c.Entries {
-		if !e.Hidden && slices.Contains(e.Tasks, task) {
+		if !e.Hidden && e.Retired == nil && slices.Contains(e.Tasks, task) {
 			out = append(out, e)
 		}
 	}
@@ -375,13 +394,34 @@ func Custom(repo string) Entry {
 // Has reports whether the entry has capability c.
 func (e Entry) Has(c Capability) bool { return slices.Contains(e.Capabilities, c) }
 
-// VoiceIDs lists the built-in speakers, default first.
+// VoiceIDs lists the built-in speakers pickers offer, default first
+// (hidden ones left out).
 func (e Entry) VoiceIDs() []string {
+	var ids []string
+	for _, v := range e.Voices {
+		if !v.Hidden {
+			ids = append(ids, v.ID)
+		}
+	}
+	return ids
+}
+
+// AllVoiceIDs lists every built-in speaker, hidden ones too: what a
+// request may name.
+func (e Entry) AllVoiceIDs() []string {
 	ids := make([]string, len(e.Voices))
 	for i, v := range e.Voices {
 		ids[i] = v.ID
 	}
 	return ids
+}
+
+// Replacement is the entry that replaces a retired one.
+func (c *Catalog) Replacement(e Entry) (Entry, bool) {
+	if e.Retired == nil {
+		return Entry{}, false
+	}
+	return c.ByID(e.Retired.ReplacedBy)
 }
 
 // LanguageOptions lists the values the language parameter takes, default

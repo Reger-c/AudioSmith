@@ -1,0 +1,357 @@
+{
+  "version": 1,
+  "measured": "2026-10-15, mac-air (M4, 24 GB), AudioSmith 0.3.0 engine (mlx-audio-swift 244458d); thread #41, research/model-eval.md",
+  "workflows": [
+    "studio",
+    "story",
+    "audiobook",
+    "dub",
+    "design"
+  ],
+  "defaultsByLanguage": {
+    "zh": {
+      "studio": "qwen3-tts-0.6b-customvoice-8bit",
+      "story": "qwen3-tts-1.7b-base-8bit",
+      "audiobook": "qwen3-tts-0.6b-base-8bit",
+      "dub": "qwen3-tts-0.6b-base-8bit",
+      "noVoiceFallback": "qwen3-tts-0.6b-customvoice-8bit",
+      "studioWithVoice": "qwen3-tts-1.7b-base-8bit"
+    },
+    "en": {
+      "studio": "kokoro-82m-bf16",
+      "story": "kokoro-82m-bf16",
+      "audiobook": "kokoro-82m-bf16",
+      "dub": "qwen3-tts-0.6b-base-8bit"
+    }
+  },
+  "recommendByLanguage": {
+    "zh": {
+      "studio": [
+        "qwen3-tts-0.6b-customvoice-8bit",
+        "qwen3-tts-1.7b-base-8bit"
+      ],
+      "story": [
+        "qwen3-tts-1.7b-base-8bit",
+        "qwen3-tts-0.6b-customvoice-8bit",
+        "qwen3-tts-0.6b-base-8bit"
+      ],
+      "audiobook": [
+        "qwen3-tts-0.6b-base-8bit",
+        "qwen3-tts-1.7b-base-8bit"
+      ],
+      "dub": [
+        "qwen3-tts-0.6b-base-8bit",
+        "qwen3-tts-1.7b-base-8bit"
+      ],
+      "design": [
+        "qwen3-tts-1.7b-voicedesign-4bit"
+      ]
+    },
+    "en": {
+      "studio": [
+        "kokoro-82m-bf16",
+        "qwen3-tts-1.7b-base-8bit",
+        "chatterbox-turbo-8bit"
+      ],
+      "story": [
+        "kokoro-82m-bf16",
+        "qwen3-tts-1.7b-base-8bit",
+        "chatterbox-turbo-8bit"
+      ],
+      "audiobook": [
+        "kokoro-82m-bf16",
+        "qwen3-tts-1.7b-base-8bit"
+      ],
+      "dub": [
+        "qwen3-tts-0.6b-base-8bit",
+        "qwen3-tts-1.7b-base-8bit"
+      ],
+      "design": [
+        "qwen3-tts-1.7b-voicedesign-4bit"
+      ]
+    }
+  },
+  "models": {
+    "qwen3-tts-0.6b-customvoice-8bit": {
+      "recommend": [
+        "studio",
+        "story"
+      ],
+      "rank": {
+        "studio": 1,
+        "story": 2
+      },
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "bestFor": "Fast Chinese and English with named voices that follow a style; no reference needed",
+      "speed": 3,
+      "quality": 2,
+      "defaults": {
+        "temperature": 0.7,
+        "topP": 0.8,
+        "voice": {
+          "zh": "Serena",
+          "en": "Serena"
+        },
+        "language": "auto",
+        "steps": null,
+        "guidance": null,
+        "exaggeration": null,
+        "speed": 1.0
+      },
+      "voices": {
+        "good": [
+          "Serena",
+          "Vivian",
+          "Aiden"
+        ],
+        "avoid": [
+          "Ryan"
+        ],
+        "notes": "Ryan: 11% word errors in both zh and en; Eric: 24% WER on Qwen3-ASR in en; Uncle_Fu/Dylan lowest naturalness in zh"
+      },
+      "workflows": {
+        "story": {
+          "temperature": 0.7,
+          "topP": 0.8,
+          "pacing": "dialogue"
+        }
+      },
+      "dub": {
+        "timing": "smart"
+      },
+      "notes": "Model default 0.9/1.0 measured worse: zh UTMOS 2.70→3.25, en 4.33→4.47, seed-to-seed voice similarity 0.81→0.92 (n=6/3). Long narration inserts interjections/garbled phrases (海上来信: 「嘿嘿」「啊，他踏着树莓蹄子…」, CER 12%): not recommended for audiobook. Misreads brand words (AudioSmith→Audius Miss, App→IP). 1.8× real time, ~3.4 GB."
+    },
+    "qwen3-tts-1.7b-base-8bit": {
+      "recommend": [
+        "studio",
+        "story",
+        "audiobook",
+        "dub"
+      ],
+      "rank": {
+        "studio": 2,
+        "story": 1,
+        "audiobook": 2,
+        "dub": 2
+      },
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "bestFor": "Best clone quality and the most stable saved voices (clones and designed voices)",
+      "speed": 1,
+      "quality": 3,
+      "defaults": {
+        "temperature": 0.7,
+        "topP": 0.8,
+        "voice": null,
+        "language": "auto",
+        "steps": null,
+        "guidance": null,
+        "exaggeration": null,
+        "speed": 1.0
+      },
+      "needsVoice": "a saved cloned or designed voice (its sample is the reference)",
+      "workflows": {
+        "audiobook": {
+          "temperature": 0.7,
+          "topP": 0.8
+        },
+        "story": {
+          "temperature": 0.7,
+          "topP": 0.8,
+          "pacing": "dialogue"
+        }
+      },
+      "dub": {
+        "timing": "smart"
+      },
+      "notes": "CER 0.8% (zh) / 0.8% (en); clone similarity 0.73–0.79 (周老师/阿杰/Sonia); default 0.9/1.0 worse in zh (UTMOS 3.05→3.30, seed similarity 0.86→0.89, n=6), equal in en. Slow on this Mac via the API: 0.35–0.55× real time (the promo measured ~1.0× in the Studio; re-check). Peak ~4.7 GB. Designed voices with weak samples (新闻主播, 老船长) drift (0.49–0.61)."
+    },
+    "qwen3-tts-0.6b-base-8bit": {
+      "recommend": [
+        "audiobook",
+        "dub",
+        "story"
+      ],
+      "rank": {
+        "audiobook": 1,
+        "dub": 1,
+        "story": 3
+      },
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "bestFor": "Long narration and dubbing with a saved voice, about real time",
+      "speed": 2,
+      "quality": 2,
+      "defaults": {
+        "temperature": 0.7,
+        "topP": 0.8,
+        "voice": null,
+        "language": "auto",
+        "steps": null,
+        "guidance": null,
+        "exaggeration": null,
+        "speed": 1.0
+      },
+      "needsVoice": "a saved cloned or designed voice",
+      "dub": {
+        "timing": "smart"
+      },
+      "notes": "Long text zh CER 2.9% (= normalisation floor), en 0%; window similarity 0.89/0.94; ~0.95–1.0× real time, ~2.6 GB. Dub en→zh: 0 errors, all 5 lines fit with timing smart (3 need 1.23–1.32× under lip sync). Sampling defaults copied from the 0.6B/1.7B sweeps (same family; not swept separately)."
+    },
+    "kokoro-82m-bf16": {
+      "recommend": [
+        "studio",
+        "story",
+        "audiobook"
+      ],
+      "rank": {
+        "studio": 1,
+        "story": 1,
+        "audiobook": 1
+      },
+      "languages": [
+        "en"
+      ],
+      "hideLanguages": [
+        "zh"
+      ],
+      "bestFor": "English: fastest and most natural built-in voices",
+      "speed": 3,
+      "quality": 3,
+      "defaults": {
+        "temperature": null,
+        "topP": null,
+        "voice": {
+          "en": "af_heart"
+        },
+        "language": "auto",
+        "steps": null,
+        "guidance": null,
+        "exaggeration": null,
+        "speed": 1.0
+      },
+      "voices": {
+        "good": [
+          "af_heart",
+          "af_sarah",
+          "am_puck",
+          "bf_isabella",
+          "af_sky",
+          "am_adam",
+          "am_michael",
+          "bm_george"
+        ],
+        "avoid": [
+          "af_nicole",
+          "zf_xiaobei",
+          "zf_xiaoni",
+          "zf_xiaoxiao",
+          "zf_xiaoyi",
+          "zm_yunjian",
+          "zm_yunxi"
+        ],
+        "notes": "af_nicole is a whisper voice: 8 silences >1 s, UTMOS 3.06. All six Chinese voices are unintelligible (CER 25–41%): hide them."
+      },
+      "dub": {
+        "timing": "smart"
+      },
+      "notes": "en WER 0.2%, UTMOS 4.2–4.5, 7–13× real time, ~1.8 GB. Story: per-character similarity 0.72–0.74, smallest pitch jumps. Speed 0.9–1.1 makes no quality difference."
+    },
+    "chatterbox-turbo-8bit": {
+      "recommend": [
+        "studio",
+        "story"
+      ],
+      "rank": {
+        "studio": 3,
+        "story": 3
+      },
+      "languages": [
+        "en"
+      ],
+      "bestFor": "Fast English voice cloning",
+      "speed": 3,
+      "quality": 2,
+      "defaults": {
+        "temperature": 0.8,
+        "topP": null,
+        "voice": null,
+        "language": "auto",
+        "steps": null,
+        "guidance": null,
+        "exaggeration": null,
+        "speed": 1.0
+      },
+      "dub": {
+        "timing": "smart"
+      },
+      "notes": "en WER 0.5%, clone similarity 0.76 (Sonia), 1.5–1.7× real time, ~2.7 GB. temperature 0.5 vs 0.8: no gain (UTMOS 3.81 vs 3.95)."
+    },
+    "omnivoice-bf16": {
+      "recommend": [],
+      "rank": {},
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "licenceGate": "cc-by-nc-4.0",
+      "bestFor": "Non-commercial: most natural Chinese, strong cloning, exact durations",
+      "speed": 1,
+      "quality": 3,
+      "defaults": {
+        "temperature": null,
+        "topP": null,
+        "voice": null,
+        "language": "auto",
+        "steps": 32,
+        "guidance": 1.5,
+        "exaggeration": null,
+        "speed": 1.0
+      },
+      "workflows": {
+        "dub": {
+          "steps": 16,
+          "guidance": 1.5
+        }
+      },
+      "dub": {
+        "timing": "smart"
+      },
+      "notes": "Hidden under 全部模型 (CC BY-NC). zh CER 0.4%, UTMOS 3.55 (best zh), clone similarity 0.78–0.83. guidance 1.5 beats the default 2.0 (UTMOS 3.13→3.28, seed similarity 0.90→0.95); 16 steps is 2× faster, UTMOS −0.2. 0.3–0.5× real time, ~6 GB. Designed voices drift line to line (0.39–0.71); whisper archetypes fail. In the real dub with lip-sync durations it changed words (CER 17%): use timing smart."
+    },
+    "qwen3-tts-1.7b-voicedesign-4bit": {
+      "recommend": [
+        "design"
+      ],
+      "rank": {
+        "design": 1
+      },
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "bestFor": "Designs a new voice from a description; save it, then speak with it on a Base model",
+      "speed": 2,
+      "quality": 2,
+      "defaults": {
+        "temperature": 0.7,
+        "topP": 0.8,
+        "voice": null,
+        "language": "auto",
+        "steps": null,
+        "guidance": null,
+        "exaggeration": null,
+        "speed": 1.0
+      },
+      "notes": "#41: one design drifts from line to line (ECAPA 0.29–0.64): design only, not for the four workflows. Sampling as the Qwen3-TTS family (main 2026-10-15)."
+    }
+  },
+  "source": "release/model-eval/presets.json (thread #41); bestFor is English here, translated in internal/i18n/locales"
+}

@@ -224,3 +224,102 @@ func TestNeedsReference(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// TestPresets: presets.json (thread #41) names live speech models, every
+// workflow recommends 1–3 per language, and new users get what main
+// decided on 2026-10-15.
+func TestPresets(t *testing.T) {
+	c := Builtin()
+	p := BuiltinPresets()
+	if err := p.Validate(c); err != nil {
+		t.Fatal(err)
+	}
+	ids := func(es []Entry) []string {
+		var out []string
+		for _, e := range es {
+			out = append(out, e.ID)
+		}
+		return out
+	}
+	for _, w := range []struct {
+		w    Workflow
+		lang string
+		want []string
+	}{
+		{WorkflowStudio, "zh-Hans", []string{"qwen3-tts-0.6b-customvoice-8bit", "qwen3-tts-1.7b-base-8bit"}},
+		{WorkflowStudio, "en", []string{"kokoro-82m-bf16", "qwen3-tts-1.7b-base-8bit", "chatterbox-turbo-8bit"}},
+		{WorkflowStudio, "ja", []string{"kokoro-82m-bf16", "qwen3-tts-1.7b-base-8bit", "chatterbox-turbo-8bit"}},
+		{WorkflowAudiobook, "zh", []string{"qwen3-tts-0.6b-base-8bit", "qwen3-tts-1.7b-base-8bit"}},
+		{WorkflowDub, "en", []string{"qwen3-tts-0.6b-base-8bit", "qwen3-tts-1.7b-base-8bit"}},
+		{WorkflowDesign, "zh", []string{"qwen3-tts-1.7b-voicedesign-4bit"}},
+	} {
+		if got := ids(c.Recommended(w.w, w.lang)); !slices.Equal(got, w.want) {
+			t.Errorf("Recommended(%s, %s) = %v, want %v", w.w, w.lang, got, w.want)
+		}
+	}
+	for _, d := range []struct {
+		w         Workflow
+		lang      string
+		haveVoice bool
+		want      string
+	}{
+		{WorkflowStudio, "zh-Hans", false, "qwen3-tts-0.6b-customvoice-8bit"},
+		{WorkflowStudio, "zh-Hans", true, "qwen3-tts-1.7b-base-8bit"},
+		{WorkflowStudio, "en", true, "kokoro-82m-bf16"},
+		{WorkflowAudiobook, "zh", true, "qwen3-tts-0.6b-base-8bit"},
+		{WorkflowAudiobook, "zh", false, "qwen3-tts-0.6b-customvoice-8bit"},
+		{WorkflowDub, "zh", false, "qwen3-tts-0.6b-base-8bit"},
+		{WorkflowStory, "en", false, "kokoro-82m-bf16"},
+	} {
+		if e, ok := c.DefaultModel(d.w, d.lang, d.haveVoice); !ok || e.ID != d.want {
+			t.Errorf("DefaultModel(%s, %s, %v) = %s", d.w, d.lang, d.haveVoice, e.ID)
+		}
+	}
+	cv, _ := PresetFor("qwen3-tts-0.6b-customvoice-8bit")
+	if pp := cv.ParamsFor(WorkflowStudio); pp.Temperature == nil || *pp.Temperature != 0.7 || pp.TopP == nil || *pp.TopP != 0.8 {
+		t.Errorf("CustomVoice params %+v", pp)
+	}
+	if cv.VoiceFor("zh-Hans") != "Serena" {
+		t.Errorf("CustomVoice voice %q", cv.VoiceFor("zh-Hans"))
+	}
+	ov, _ := PresetFor("omnivoice-bf16")
+	if pp := ov.ParamsFor(WorkflowStudio); *pp.Guidance != 1.5 || *pp.Steps != 32 {
+		t.Errorf("OmniVoice params %+v", pp)
+	}
+	if pp := ov.ParamsFor(WorkflowDub); *pp.Steps != 16 || *pp.Guidance != 1.5 {
+		t.Errorf("OmniVoice dub params %+v", pp)
+	}
+}
+
+// TestRetired: the three models #41 retired stay in the catalogue (they
+// still run when named) but no picker offers them; Kokoro's Chinese
+// speakers are hidden the same way.
+func TestRetired(t *testing.T) {
+	c := Builtin()
+	for id, by := range map[string]string{"kitten-tts-mini-0.8": "kokoro-82m-bf16", "moss-tts-nano-100m": "qwen3-tts-0.6b-base-8bit", "chatterbox-8bit": "chatterbox-turbo-8bit"} {
+		e, ok := c.ByID(id)
+		if !ok || e.Retired == nil {
+			t.Fatalf("%s: %+v", id, e)
+		}
+		if r, ok := c.Replacement(e); !ok || r.ID != by {
+			t.Errorf("%s replaced by %s", id, r.ID)
+		}
+		if slices.Contains(c.Labels(TaskTTS), e.Label) {
+			t.Errorf("%s is still offered", id)
+		}
+	}
+	k, _ := c.ByID("kokoro-82m-bf16")
+	if slices.ContainsFunc(k.VoiceIDs(), func(v string) bool { return strings.HasPrefix(v, "z") }) || !slices.Contains(k.AllVoiceIDs(), "zf_xiaobei") || len(k.VoiceIDs()) != 19 {
+		t.Errorf("kokoro voices %v", k.VoiceIDs())
+	}
+	bad := *c
+	bad.Entries = slices.Clone(c.Entries)
+	for i := range bad.Entries {
+		if bad.Entries[i].ID == "kitten-tts-mini-0.8" {
+			bad.Entries[i].Retired = &Retirement{ReplacedBy: "moss-tts-nano-100m"}
+		}
+	}
+	if bad.Validate() == nil {
+		t.Error("a retired entry replaced by a retired one validates")
+	}
+}

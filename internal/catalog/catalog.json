@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "entries": [
     {
       "id": "kokoro-82m-bf16",
@@ -33,12 +33,12 @@
         {"id": "bf_isabella", "language": "en-GB", "gender": "female"},
         {"id": "bm_george", "language": "en-GB", "gender": "male"},
         {"id": "bm_lewis", "language": "en-GB", "gender": "male"},
-        {"id": "zf_xiaobei", "language": "zh", "gender": "female"},
-        {"id": "zf_xiaoni", "language": "zh", "gender": "female"},
-        {"id": "zf_xiaoxiao", "language": "zh", "gender": "female"},
-        {"id": "zf_xiaoyi", "language": "zh", "gender": "female"},
-        {"id": "zm_yunjian", "language": "zh", "gender": "male"},
-        {"id": "zm_yunxi", "language": "zh", "gender": "male"},
+        {"id": "zf_xiaobei", "language": "zh", "gender": "female", "hidden": true},
+        {"id": "zf_xiaoni", "language": "zh", "gender": "female", "hidden": true},
+        {"id": "zf_xiaoxiao", "language": "zh", "gender": "female", "hidden": true},
+        {"id": "zf_xiaoyi", "language": "zh", "gender": "female", "hidden": true},
+        {"id": "zm_yunjian", "language": "zh", "gender": "male", "hidden": true},
+        {"id": "zm_yunxi", "language": "zh", "gender": "male", "hidden": true},
         {"id": "jf_alpha", "language": "ja", "gender": "female"},
         {"id": "jm_kumo", "language": "ja", "gender": "male"},
         {"id": "ef_dora", "language": "es", "gender": "female"},
@@ -295,6 +295,7 @@
       ],
       "minMemoryGB": 4,
       "quantization": "8bit",
+      "retired": {"replacedBy": "chatterbox-turbo-8bit", "reason": "#41: Chinese paragraphs drop sentences and garble (CER 32 %); English dialogue garbled (13 %). Turbo covers English cloning."},
       "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/ResembleAI/chatterbox", "commercial": true, "verified": true},
       "aux": [
         {"repo": "mlx-community/S3TokenizerV2", "revision": "e0c9886f0e1c35ae85b1f27277416fb19fc72bec", "licence": "apache-2.0"}
@@ -338,6 +339,7 @@
       "rtf": 1.5,
       "size": 329463572,
       "minMemoryGB": 2,
+      "retired": {"replacedBy": "qwen3-tts-0.6b-base-8bit", "reason": "#41: Chinese CER 35 % with 7–10 s silences; English long text drops sentences."},
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Nano-100M", "commercial": true, "verified": true},
       "aux": [
         {"repo": "mlx-community/MOSS-Audio-Tokenizer-Nano", "revision": "edccdfd96d5c21f1c078338a98d738b9a6bf6917", "licence": "apache-2.0"}
@@ -371,6 +373,7 @@
       "rtf": 1.2,
       "size": 292427770,
       "minMemoryGB": 1,
+      "retired": {"replacedBy": "kokoro-82m-bf16", "reason": "#41: English WER 21 %; all 8 voices misread."},
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8", "commercial": true, "verified": true},
       "aux": [
         {"repo": "beshkenadze/kitten-tts-g2p", "revision": "9c692b92682d959d9013a9cfe6a49541997add18", "licence": "mit"}
