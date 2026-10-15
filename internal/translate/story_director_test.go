@@ -11,7 +11,7 @@ import (
 )
 
 func kittenScript() StoryScript {
-	return StoryScript{Title: "我想领养一只小猫", Cast: []StoryRole{{Name: "孩子"}, {Name: "妈妈", Persona: "温柔的妈妈"}},
+	return StoryScript{Title: "我想领养一只小猫", Cast: []StoryRole{{Name: "孩子", Voice: "明亮的年轻女声"}, {Name: "妈妈", Persona: "温柔的妈妈"}},
 		Lines: []StoryScriptLine{
 			{Speaker: "孩子", Text: "妈妈，我想领养一只小猫，可以吗？"},
 			{Speaker: "妈妈", Text: "领养是好事，可是养猫要花很多时间照顾它。你能一直照顾它吗？"},
@@ -25,7 +25,7 @@ func TestStoryDirector(t *testing.T) {
 		if !strings.Contains(sys, "radio drama") || !strings.Contains(sys, "Chinese") {
 			t.Errorf("system prompt: %s", sys)
 		}
-		for _, want := range []string{"1. 孩子: 妈妈，我想领养", "3. 孩子 (急切保证): 我能！", "4. Narrator: 妈妈笑了。", "- 妈妈: 温柔的妈妈", "- 孩子\n"} {
+		for _, want := range []string{"1. 孩子: 妈妈，我想领养", "3. 孩子 (急切保证): 我能！", "4. Narrator: 妈妈笑了。", "- 妈妈: 温柔的妈妈", "- 孩子 (voice: 明亮的年轻女声)\n"} {
 			if !strings.Contains(user, want) {
 				t.Errorf("user prompt lacks %q:\n%s", want, user)
 			}
@@ -42,7 +42,7 @@ func TestStoryDirector(t *testing.T) {
 		t.Errorf("scene %q", got.Scene)
 	}
 	// Known characters only, a persona the model left empty kept.
-	if fmt.Sprint(got.Cast) != "[{孩子 七岁女孩，活泼爱撒娇} {妈妈 温柔的妈妈}]" {
+	if fmt.Sprint(got.Cast) != "[{孩子 七岁女孩，活泼爱撒娇 明亮的年轻女声} {妈妈 温柔的妈妈 }]" {
 		t.Errorf("cast %v", got.Cast)
 	}
 	want := "[{1 撒娇央求 2} {2 犹豫但温和 1} {3 急切保证 3} {4  0}]"
@@ -115,7 +115,7 @@ func TestStoryDirectorBatches(t *testing.T) {
 	if strings.Join(ranges, " ") != "1-40 41-80 81-90" || len(got.Lines) != 90 || got.Scene != "A kitchen" {
 		t.Errorf("batches %v, %d lines, scene %q", ranges, len(got.Lines), got.Scene)
 	}
-	if fmt.Sprint(got.Cast) != "[{Ann tired} {Bob }]" {
+	if fmt.Sprint(got.Cast) != "[{Ann tired } {Bob  }]" {
 		t.Errorf("cast %v", got.Cast)
 	}
 }

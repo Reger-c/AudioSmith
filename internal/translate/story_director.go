@@ -28,10 +28,13 @@ type StoryScript struct {
 	Lines []StoryScriptLine
 }
 
-// StoryRole is a character and its persona.
+// StoryRole is a character and its persona; Voice describes the voice it
+// is cast with ("bright young female voice"), so the persona fits it
+// (read, not written, by the director).
 type StoryRole struct {
 	Name    string `json:"name"`
 	Persona string `json:"persona"`
+	Voice   string `json:"-"`
 }
 
 // StoryScriptLine is one spoken line: who ("" for the narrator), what,
@@ -214,8 +217,10 @@ func castNames(s StoryScript) []string {
 // was set; characters the model made up are dropped.
 func mergeCast(had, got []StoryRole, names []string) []StoryRole {
 	byName := map[string]string{}
+	voice := map[string]string{}
 	for _, r := range had {
 		byName[strings.ToLower(strings.TrimSpace(r.Name))] = strings.TrimSpace(r.Persona)
+		voice[strings.ToLower(strings.TrimSpace(r.Name))] = strings.TrimSpace(r.Voice)
 	}
 	for _, r := range got {
 		if p := clipText(r.Persona, storyPersonaMax); p != "" {
@@ -224,7 +229,7 @@ func mergeCast(had, got []StoryRole, names []string) []StoryRole {
 	}
 	var out []StoryRole
 	for _, n := range names {
-		out = append(out, StoryRole{Name: n, Persona: byName[strings.ToLower(n)]})
+		out = append(out, StoryRole{Name: n, Persona: byName[strings.ToLower(n)], Voice: voice[strings.ToLower(n)]})
 	}
 	return out
 }

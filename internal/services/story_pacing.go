@@ -200,9 +200,9 @@ const (
 
 // mergeGroups finds the turns to synthesize as one: runs of consecutive
 // lines of one character in one voice, each one span without pauses,
-// ending a sentence, with the same speed and a direction that agrees (the
-// same, or none after the first), within the limits. It returns the runs
-// of two or more lines, as line indices.
+// ending a sentence, with the same speed, within the limits. It returns
+// the runs of two or more lines, as line indices. Their directions are
+// said in order (turnDirection).
 func mergeGroups(lines []LineSpec, info ModelInfo, varyRepeats bool) [][]int {
 	maxCJK := min(mergeMaxCJK, max(info.MaxCharsCJK*8/10, 1))
 	maxChars := min(mergeMaxChars, max(info.MaxChars*8/10, 1))
@@ -231,7 +231,6 @@ func mergeGroups(lines []LineSpec, info ModelInfo, varyRepeats bool) [][]int {
 			first, prev := lines[cur[0]], lines[cur[len(cur)-1]]
 			ok := len(cur) < mergeMaxLines && !l.Paragraph && prev.PauseAfter == 0 && sameSpeaker(prev, l) &&
 				l.Speed == first.Speed && sentenceEnd(prev.Spans[0].Text) &&
-				(l.Direction == "" || l.Direction == first.Direction && l.Intensity == first.Intensity) &&
 				cjk+c <= maxCJK && other+w*6 <= maxChars
 			if !ok {
 				flush()
@@ -262,6 +261,92 @@ func joinTurn(texts []string) string {
 	return b.String()
 }
 
+// turnDirection is the direction of a merged turn: its lines' directions
+// in order ("先认真恳求，再急切保证"), each once, and the strongest
+// intensity.
+func turnDirection(lines []LineSpec) (string, int) {
+	var dirs []string
+	intensity := 0
+	zh := false
+	for _, l := range lines {
+		if l.Direction == "" {
+			continue
+		}
+		if len(dirs) == 0 || dirs[len(dirs)-1] != l.Direction {
+			dirs = append(dirs, l.Direction)
+		}
+		intensity = max(intensity, l.Intensity)
+		if len(l.Spans) > 0 && cjkShare(l.Spans[0].Text) >= 0.3 {
+			zh = true
+		}
+	}
+	switch {
+	case len(dirs) < 2:
+		return strings.Join(dirs, ""), intensity
+	case zh:
+		return "先" + strings.Join(dirs, "，再"), intensity
+	}
+	return "first " + strings.Join(dirs, ", then "), intensity
+}
+
+// turnLines says whether a direction is a merged turn's (turnDirection):
+// it is about several lines.
+func turnLines(direction string) bool {
+	return strings.HasPrefix(direction, "先") && strings.Contains(direction, "，再") ||
+		strings.HasPrefix(direction, "first ") && strings.Contains(direction, ", then ")
+}
+
+// tightenTurn shortens the pauses between the lines of a split turn to
+// at most maxPause seconds (the model's own sentence pauses run longer
+// than a turn's gaps), cutting from their middle with short fades, and
+// returns the audio with the cuts where they now are.
+func tightenTurn(b dsp.Buffer, cuts []turnCut, maxPause float64) (dsp.Buffer, []turnCut) {
+	keep := dsp.FramesAt(maxPause, b.Rate)
+	long := false
+	for _, c := range cuts {
+		long = long || c.end-c.start > keep
+	}
+	if !long {
+		return b, cuts
+	}
+	ch := b.Channels
+	fade := dsp.FramesAt(0.01, b.Rate)
+	out := dsp.Buffer{Rate: b.Rate, Channels: ch}
+	moved := make([]turnCut, len(cuts))
+	from := 0
+	for i, c := range cuts {
+		if c.end-c.start <= keep {
+			base := out.Frames() - from
+			out.Samples = append(out.Samples, b.Samples[from*ch:c.end*ch]...)
+			moved[i] = turnCut{c.start + base, c.end + base}
+			from = c.end
+			continue
+		}
+		head := keep / 2
+		out.Samples = append(out.Samples, b.Samples[from*ch:(c.start+head)*ch]...)
+		start := out.Frames() - head
+		resume := c.end - (keep - head)
+		n := min(fade, head, keep-head)
+		tail := out.Samples[(out.Frames()-n)*ch:]
+		for f := range n {
+			g := 1 - float32(f+1)/float32(n+1)
+			for k := range ch {
+				tail[f*ch+k] *= g
+			}
+		}
+		for f := range n {
+			g := float32(f+1) / float32(n+1)
+			for k := range ch {
+				out.Samples = append(out.Samples, b.Samples[(resume+f)*ch+k]*g)
+			}
+		}
+		from = resume + n
+		moved[i] = turnCut{start, start + keep}
+	}
+	out.Samples = append(out.Samples, b.Samples[from*ch:]...)
+	return out, moved
+}
+
 // turnWeights are the expected seconds of each line of a turn.
 func turnWeights(texts []string) []float64 {
 	out := make([]float64, len(texts))
@@ -271,6 +356,10 @@ func turnWeights(texts []string) []float64 {
 	}
 	return out
 }
+
+// turnPauseSlack is how much longer than the pacing's same-speaker gap
+// a pause inside a merged turn may stay (tightenTurn).
+const turnPauseSlack = 0.12
 
 // turnCut is where one line of a merged turn gives way to the next: the
 // pause between them, in frames of the turn's audio.
@@ -462,6 +551,9 @@ func StoryInstruct(lineText, scene, persona, direction string, intensity int, pr
 		}
 		if direction != "" {
 			d := "这一句：" + direction
+			if turnLines(direction) {
+				d = "这几句：" + direction
+			}
 			switch intensity {
 			case IntensityLight:
 				d += "，情绪克制"
@@ -483,6 +575,9 @@ func StoryInstruct(lineText, scene, persona, direction string, intensity int, pr
 	}
 	if direction != "" {
 		d := "This line: " + direction
+		if turnLines(direction) {
+			d = "These lines: " + direction
+		}
 		switch intensity {
 		case IntensityLight:
 			d += ", restrained"
@@ -576,4 +671,80 @@ func upperFirst(s string) string {
 		return s
 	}
 	return string(unicode.ToUpper(r)) + s[n:]
+}
+
+// --- levelling -----------------------------------------------------------------
+
+// Levelling of paced stories: each line is brought toward its
+// character's median loudness by levelShare of the difference, at most
+// levelMaxDB either way, so one voice does not jump in level from line to
+// line (measured: 4–7 LU within one character on Qwen3-TTS) while a
+// direction's louder or softer line keeps some of its difference.
+const (
+	levelShare = 0.75
+	levelMaxDB = 5.0
+	levelMinS  = 0.4 // shorter lines are not measured
+	levelRamp  = 0.01
+)
+
+// lineGain is a gain (dB) over a line's place in the chapter (seconds).
+type lineGain struct {
+	start, end float64
+	db         float64
+}
+
+// levelGains are the levelling gains of the lines placed at places
+// (their characters' keys who), from their measured loudness (LUFS;
+// −Inf: not measured).
+func levelGains(places []LinePlace, who []string, lufs []float64) []lineGain {
+	by := map[string][]float64{}
+	for i, l := range lufs {
+		if !math.IsInf(l, 0) && !math.IsNaN(l) {
+			by[who[i]] = append(by[who[i]], l)
+		}
+	}
+	median := map[string]float64{}
+	for k, v := range by {
+		if len(v) < 2 {
+			continue
+		}
+		s := slices.Clone(v)
+		slices.Sort(s)
+		m := s[len(s)/2]
+		if len(s)%2 == 0 {
+			m = (s[len(s)/2-1] + s[len(s)/2]) / 2
+		}
+		median[k] = m
+	}
+	var out []lineGain
+	for i, l := range lufs {
+		m, ok := median[who[i]]
+		if !ok || math.IsInf(l, 0) || math.IsNaN(l) {
+			continue
+		}
+		db := min(max(levelShare*(m-l), -levelMaxDB), levelMaxDB)
+		if math.Abs(db) >= 0.1 {
+			out = append(out, lineGain{places[i].Start, places[i].End, math.Round(db*100) / 100})
+		}
+	}
+	return out
+}
+
+// gainAt is the levelling gain (linear) at time x: the line's, ramped over
+// levelRamp at its edges (which lie in silence), 1 between lines.
+func gainAt(gains []lineGain, x float64) float64 {
+	for _, g := range gains {
+		if x < g.start-levelRamp || x > g.end+levelRamp {
+			continue
+		}
+		f := 1.0
+		switch {
+		case x < g.start:
+			f = (x - (g.start - levelRamp)) / levelRamp
+		case x > g.end:
+			f = ((g.end + levelRamp) - x) / levelRamp
+		}
+		return math.Pow(10, g.db*f/20)
+	}
+	return 1
 }

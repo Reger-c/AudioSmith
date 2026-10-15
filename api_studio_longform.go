@@ -21,7 +21,9 @@ import (
 	"github.com/hehehai/AudioSmith/internal/doc"
 	"github.com/hehehai/AudioSmith/internal/ffmpeg"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/llm"
 	"github.com/hehehai/AudioSmith/internal/services"
+	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
 // lfKind is a project kind from the API's.
@@ -262,12 +264,14 @@ func (b *apiBackend) longformJSON(ctx context.Context, p core.Project, d service
 		}
 		for _, m := range d.Cast {
 			names[m.ID] = m.Name
-			out.Cast = append(out.Cast, api.CastJSON{Name: m.Name, Voice: m.Voice, VoiceName: voiceLabel(voices, m.Voice), Lines: count[m.ID]})
+			out.Cast = append(out.Cast, api.CastJSON{Name: m.Name, Voice: m.Voice, VoiceName: voiceLabel(voices, m.Voice), Lines: count[m.ID],
+				Persona: m.Persona})
 		}
 		for _, l := range d.Lines {
 			out.Lines = append(out.Lines, api.StoryLineJSON{ID: l.ID, Text: l.Text, Speaker: names[l.Character], Voice: l.Voice,
-				Speed: l.Speed, PauseAfter: l.PauseAfter, Chapter: l.Chapter})
+				Speed: l.Speed, PauseAfter: l.PauseAfter, Chapter: l.Chapter, Direction: l.Direction, Intensity: l.Intensity})
 		}
+		out.Scene, out.Pacing, out.Continuity = d.Scene, apiPacing(d.Production.Pacing), storyContinuity(d.Model)
 	} else {
 		for _, n := range services.VoiceNames(d.Script) {
 			ref := d.VoiceCast[n]
@@ -362,6 +366,103 @@ func renderJSON(r core.Render, body *services.RenderBody, chapters int) api.Rend
 }
 
 func round1(v float64) float64 { return float64(int64(v*10+0.5)) / 10 }
+
+// apiPacing is a pacing's name in the API ("fixed" for none).
+func apiPacing(p string) string {
+	if p == services.PacingFixed {
+		return "fixed"
+	}
+	return p
+}
+
+// updatePerformance applies a story's scene, personas, directions, pacing
+// and the AI director of an update.
+func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *services.LongformDoc, req api.LongformUpdate, voices []core.Voice) error {
+	story := p.Kind == core.ProjectStory
+	if !story && (req.Scene != nil || len(req.Personas) > 0 || len(req.Directions) > 0 || len(req.Intensities) > 0 || req.Pacing != "" ||
+		req.Merge != nil || req.Level != nil || req.Direct != "") {
+		return errBadRequest("scene", "scene, personas, directions, pacing and direct are for stories.")
+	}
+	if !story {
+		return nil
+	}
+	if req.Scene != nil {
+		d.Scene = strings.TrimSpace(*req.Scene)
+	}
+	for name, persona := range req.Personas {
+		i := slices.IndexFunc(d.Cast, func(m services.CastMember) bool { return strings.EqualFold(m.Name, strings.TrimSpace(name)) })
+		if i < 0 {
+			var names []string
+			for _, m := range d.Cast {
+				names = append(names, m.Name)
+			}
+			return errBadRequest("personas", "The story has no character %q; its characters are: %s.", name, strings.Join(names, ", "))
+		}
+		d.Cast[i].Persona = strings.TrimSpace(persona)
+	}
+	line := func(id, param string) (*services.StoryLine, error) {
+		i := slices.IndexFunc(d.Lines, func(l services.StoryLine) bool { return l.ID == id })
+		if i < 0 {
+			return nil, errBadRequest(param, "The story has no line %q (get_longform lists them).", id)
+		}
+		return &d.Lines[i], nil
+	}
+	for id, dir := range req.Directions {
+		l, err := line(id, "directions")
+		if err != nil {
+			return err
+		}
+		l.Direction = strings.TrimSpace(dir)
+		if l.Direction == "" {
+			l.Intensity = 0
+		}
+	}
+	for id, n := range req.Intensities {
+		l, err := line(id, "intensities")
+		if err != nil {
+			return err
+		}
+		if n < 0 || n > services.IntensityStrong {
+			return errBadRequest("intensities", "An intensity is 1 (restrained), 2 (clear) or 3 (strong); 0 clears it.")
+		}
+		l.Intensity = n
+	}
+	switch req.Pacing {
+	case "":
+	case "fixed":
+		d.Production.Pacing = services.PacingFixed
+	case services.PacingDialogue, services.PacingReading, services.PacingRelaxed:
+		d.Production.Pacing = req.Pacing
+	default:
+		return errBadRequest("pacing", "pacing is dialogue, reading, relaxed or fixed.")
+	}
+	if req.Merge != nil {
+		d.Production.NoMerge = !*req.Merge
+	}
+	if req.Level != nil {
+		d.Production.NoLevel = !*req.Level
+	}
+	switch req.Direct {
+	case "":
+		return nil
+	case "fill", "all":
+	default:
+		return errBadRequest("direct", "direct is fill (only what is empty) or all (replace).")
+	}
+	if len(storyScript(d, nil).Lines) == 0 {
+		return errBadRequest("direct", "The story has no lines to direct.")
+	}
+	dir, err := (&translate.StoryDirector{Router: b.router}).Direct(ctx, storyScript(d, voices))
+	if err != nil {
+		if c := translate.Code(err); c == translate.CodeNoLLM || c == llm.CodeNoRoute {
+			return apiErr(http.StatusBadRequest, api.CodeLLMUnavailable, "direct",
+				"The AI director needs a language model: set one up in AudioSmith's Settings → Writing help (Qwen3 4B runs on this Mac).")
+		}
+		return apiErr(http.StatusBadGateway, api.CodeDirectorFailed, "direct", "The AI director failed: %v", err)
+	}
+	applyDirection(d, dir, req.Direct == "fill")
+	return nil
+}
 
 // UpdateLongform changes a project's voices and settings.
 func (b *apiBackend) UpdateLongform(ctx context.Context, req api.LongformUpdate) (api.LongformJSON, error) {
@@ -475,6 +576,9 @@ func (b *apiBackend) UpdateLongform(ctx context.Context, req api.LongformUpdate)
 	}
 	if t := strings.TrimSpace(req.Title); t != "" {
 		d.Title, p.Title = t, t
+	}
+	if err := b.updatePerformance(ctx, p, &d, req, voices); err != nil {
+		return api.LongformJSON{}, err
 	}
 	saved, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d)
 	if err != nil {

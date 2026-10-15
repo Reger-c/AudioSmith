@@ -106,6 +106,8 @@ const MaxWait = 60 * time.Second
 const (
 	CodeConfirmRequired = "confirm_required"
 	CodeUnsupported     = "unsupported"
+	CodeLLMUnavailable  = "llm_unavailable" // the AI director has no language model
+	CodeDirectorFailed  = "director_failed" // the language model failed (timeout, unreadable answer…)
 )
 
 // ErrConfirm is the error of a delete without confirm.

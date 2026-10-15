@@ -97,11 +97,13 @@ type ChapterResult struct {
 	// Turns are the merged turns (lines of one character made as one)
 	// split back into their lines; TurnsUnsplit the ones that could not
 	// be, made line by line instead.
-	Turns        int               `json:"turns,omitempty"`
-	TurnsUnsplit int               `json:"turnsUnsplit,omitempty"`
-	Report       LoudnessReport    `json:"report"`
-	Warnings     []core.TakeNotice `json:"warnings,omitempty"`
-	Lines        []LinePlace       `json:"lines"`
+	Turns        int `json:"turns,omitempty"`
+	TurnsUnsplit int `json:"turnsUnsplit,omitempty"`
+	// Levelled counts the lines brought toward their character's loudness.
+	Levelled int               `json:"levelled,omitempty"`
+	Report   LoudnessReport    `json:"report"`
+	Warnings []core.TakeNotice `json:"warnings,omitempty"`
+	Lines    []LinePlace       `json:"lines"`
 }
 
 // LinePlace is where a line landed in its chapter (seconds).
@@ -281,7 +283,7 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 	fmt.Fprintf(h, "%s\x00%s\x00%g\x00%g\x00%g\x00%g\x00%v\x00%s\x00%s\x00", chapterKeyVersion, p.Loudness, gaps.Sentence, gaps.Line,
 		gaps.Paragraph, gaps.Crossfade, p.Production.KeepEdges, p.Model, info.Revision)
 	if paced {
-		fmt.Fprintf(h, "pacing %s\x00", p.Production.Pacing)
+		fmt.Fprintf(h, "pacing %s level %v\x00", p.Production.Pacing, !p.Production.NoLevel)
 	}
 	// take is the recipe of span sp of line li, saying text.
 	take := func(li int, sp SpanSpec, say string) (core.Take, *int64, map[string]string, error) {
@@ -303,7 +305,7 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 		}
 		if l.Direction != "" || l.Persona != "" || p.Scene != "" {
 			prev := ""
-			if li > 0 && paced && !sameSpeaker(p.Lines[li-1], l) && p.Lines[li-1].Character != "" && storyPrevDirection {
+			if li > 0 && paced && !sameSpeaker(p.Lines[li-1], l) && p.Lines[li-1].Character != "" && StoryPrevDirection {
 				prev = p.Lines[li-1].Direction
 			}
 			withDelivery(&t, info, StoryInstruct(say, p.Scene, l.Persona, l.Direction, l.Intensity, prev), l.Direction, l.Intensity)
@@ -435,7 +437,15 @@ func (cr chapterRenderer) turn(p *ChapterParams, g []int,
 		texts[i] = p.Lines[li].Spans[0].Text
 	}
 	joined := joinTurn(texts)
+	// The turn speaks as its first line, with the directions of all.
+	saved := p.Lines[g[0]]
+	lines := make([]LineSpec, len(g))
+	for i, li := range g {
+		lines[i] = p.Lines[li]
+	}
+	p.Lines[g[0]].Direction, p.Lines[g[0]].Intensity = turnDirection(lines)
 	t, seed, extra, err := take(g[0], p.Lines[g[0]].Spans[0], joined)
+	p.Lines[g[0]] = saved
 	if err != nil {
 		return nil, err
 	}
@@ -462,10 +472,10 @@ func (cr chapterRenderer) turn(p *ChapterParams, g []int,
 	return &chapterStep{chunk: &c, brk: pl.Segments[0].Break, line: g[0], turn: ts}, nil
 }
 
-// storyPrevDirection adds the other character's last direction to a
-// line's instruction ("对方刚才…"); off: the A/B listening of v1 found it
-// no better (release/story-continuity-v1).
-var storyPrevDirection = false
+// StoryPrevDirection adds the other character's last direction to a
+// line's instruction ("对方刚才…"): an experiment of the A/B listening
+// (e2e_story_ab_test.go), off in the app.
+var StoryPrevDirection = false
 
 // dictionary is the pronunciation dictionary with the book's lexicon on
 // top (its words win).
@@ -588,6 +598,9 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 				return nil
 			}
 			res.Turns++
+			if turns, ok := GapsOf(p.Production.Pacing); ok && !st.keepEdge {
+				trimmed, cuts = tightenTurn(trimmed, cuts, float64(turns.Same)/1000+turnPauseSlack)
+			}
 			start, end, err := st.appendLoaded(buf, trimmed, s.brk)
 			if err != nil {
 				return &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
@@ -643,7 +656,30 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
 	report(jobs.Progress{Stage: "writing", Fraction: 1, AudioSeconds: st.seconds()})
-	out, rep, err := st.finishChapter(ctx, loudnessTarget(p.Loudness))
+	var level func([]LinePlace) ([]float64, error)
+	if _, paced := GapsOf(p.Production.Pacing); paced && !p.Production.NoLevel {
+		level = func(places []LinePlace) ([]float64, error) { return st.lineLoudness(ctx, places) }
+	}
+	out, rep, err := st.finishChapter(ctx, loudnessTarget(p.Loudness), func() []lineGain {
+		if level == nil {
+			return nil
+		}
+		lufs, err := level(res.Lines)
+		if err != nil {
+			r.logf("chapter %s: levelling: %v", job.ID, err)
+			return nil
+		}
+		who := make([]string, len(p.Lines))
+		for i, l := range p.Lines {
+			who[i] = l.Character
+			if len(l.Spans) > 0 {
+				who[i] += "\x00" + l.Spans[0].Voice
+			}
+		}
+		g := levelGains(res.Lines, who, lufs)
+		res.Levelled = len(g)
+		return g
+	})
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -678,10 +714,11 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 	return data, nil
 }
 
-// finishChapter closes the joined audio and writes the chapter: gain and
-// a true-peak limiter to target (nil: as joined), 16 bits with dither,
+// finishChapter closes the joined audio and writes the chapter: lines
+// levelled by the gains level returns (nil: none), then gain and a
+// true-peak limiter to target (nil: as joined), 16 bits with dither,
 // measured for the report.
-func (st *renderState) finishChapter(ctx context.Context, target *loudness.Target) (finalAudio, LoudnessReport, error) {
+func (st *renderState) finishChapter(ctx context.Context, target *loudness.Target, level func() []lineGain) (finalAudio, LoudnessReport, error) {
 	if err := st.joiner.Close(); err != nil {
 		return finalAudio{}, LoudnessReport{}, err
 	}
@@ -691,6 +728,15 @@ func (st *renderState) finishChapter(ctx context.Context, target *loudness.Targe
 	}
 	st.tmp = nil
 	st.files = append(st.files, st.tmpPath)
+	if level != nil {
+		if gains := level(); len(gains) > 0 {
+			lv, err := st.applyLevel(ctx, gains)
+			if err != nil {
+				return finalAudio{}, LoudnessReport{}, err
+			}
+			integrated = lv
+		}
+	}
 	var stage *loudness.Stream
 	gain := 0.0
 	if target != nil && integrated > loudness.Floor {
@@ -738,3 +784,77 @@ func (st *renderState) finishChapter(ctx context.Context, target *loudness.Targe
 }
 
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
+
+// lineLoudness measures each placed line of the joined audio (LUFS;
+// −Inf for lines too short to measure).
+func (st *renderState) lineLoudness(ctx context.Context, places []LinePlace) ([]float64, error) {
+	meters := make([]*loudness.Meter, len(places))
+	for i, pl := range places {
+		if pl.End-pl.Start >= levelMinS {
+			meters[i] = loudness.NewMeter(st.rate, st.channels, loudness.Options{SkipTruePeak: true})
+		}
+	}
+	var at int64
+	err := eachBlock(ctx, st.tmpPath, func(s []float32) error {
+		n := int64(len(s) / st.channels)
+		t0, t1 := float64(at)/float64(st.rate), float64(at+n)/float64(st.rate)
+		for i, pl := range places {
+			if meters[i] == nil || pl.End <= t0 || pl.Start >= t1 {
+				continue
+			}
+			a := max(int64(math.Round(pl.Start*float64(st.rate)))-at, 0)
+			b := min(int64(math.Round(pl.End*float64(st.rate)))-at, n)
+			if b > a {
+				meters[i].Write(s[a*int64(st.channels) : b*int64(st.channels)])
+			}
+		}
+		at += n
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]float64, len(places))
+	for i, m := range meters {
+		out[i] = math.Inf(-1)
+		if m != nil {
+			out[i] = m.Integrated()
+		}
+	}
+	return out, nil
+}
+
+// applyLevel rewrites the joined audio with the levelling gains and
+// returns its new integrated loudness.
+func (st *renderState) applyLevel(ctx context.Context, gains []lineGain) (float64, error) {
+	path := filepath.Join(st.r.tmpDir(), st.job.ID+"-levelled.wav")
+	st.files = append(st.files, path)
+	w, err := wav.Create(path, wav.Format{Rate: st.rate, Channels: st.channels, Encoding: wav.Float32}, wav.Options{Large: true})
+	if err != nil {
+		return 0, err
+	}
+	m := loudness.NewMeter(st.rate, st.channels, loudness.Options{SkipTruePeak: true})
+	var at int64
+	err = eachBlock(ctx, st.tmpPath, func(s []float32) error {
+		for f := 0; f < len(s)/st.channels; f++ {
+			g := float32(gainAt(gains, float64(at+int64(f))/float64(st.rate)))
+			if g != 1 {
+				for c := range st.channels {
+					s[f*st.channels+c] *= g
+				}
+			}
+		}
+		at += int64(len(s) / st.channels)
+		m.Write(s)
+		return w.Write(s)
+	})
+	if err != nil {
+		w.Abort()
+		return 0, err
+	}
+	if err := w.Close(); err != nil {
+		return 0, err
+	}
+	st.tmpPath = path
+	return m.Integrated(), nil
+}

@@ -152,8 +152,11 @@ type Production struct {
 	// "" (PacingFixed) keeps one gap for every line, as stories made
 	// before it was added do.
 	Pacing string `json:"pacing,omitempty"`
-	// NoMerge keeps every line its own synthesis under a pacing preset.
+	// NoMerge keeps every line its own synthesis under a pacing preset;
+	// NoLevel keeps each line's loudness as the model made it (a pacing
+	// preset otherwise brings a character's lines toward one level).
 	NoMerge bool `json:"noMerge,omitempty"`
+	NoLevel bool `json:"noLevel,omitempty"`
 }
 
 // DefaultProduction are the production settings of a new project.

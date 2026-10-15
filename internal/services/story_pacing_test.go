@@ -168,7 +168,7 @@ func TestMergeGroups(t *testing.T) {
 	lines[9].Direction, lines[11].Direction = "calm", "angry"
 	lines[12].Speed = 1.2
 	got := fmt.Sprint(mergeGroups(lines, info, false))
-	if got != "[[0 1] [3 4 5] [9 10]]" {
+	if got != "[[0 1] [3 4 5] [9 10 11]]" {
 		t.Errorf("groups %s", got)
 	}
 	// A pause after a line, a paragraph, and VaryRepeats' repeats break turns.
@@ -246,6 +246,65 @@ func TestSplitMerged(t *testing.T) {
 	}
 }
 
+func TestTightenTurn(t *testing.T) {
+	b := turnAudio(1.0, 0.8, 1.0, 0.2, 1.0)
+	cuts, ok := splitMerged(b, []float64{1, 1, 1})
+	if !ok {
+		t.Fatal("not split")
+	}
+	out, moved := tightenTurn(b, cuts, 0.3)
+	sec := func(f int) float64 { return float64(f) / 24000 }
+	if math.Abs(out.Seconds()-3.5) > 0.01 || len(moved) != 2 ||
+		math.Abs(sec(moved[0].start)-1.0) > 0.015 || math.Abs(sec(moved[0].end)-1.3) > 0.015 ||
+		math.Abs(sec(moved[1].start)-2.3) > 0.015 || math.Abs(sec(moved[1].end)-2.5) > 0.015 {
+		t.Fatalf("%.3f s, cuts %v", out.Seconds(), moved)
+	}
+	// Speech is kept whole: as much sound before and after.
+	if math.Abs(dsp.RMS(out.Samples)-dsp.RMS(b.Samples)*math.Sqrt(b.Seconds()/out.Seconds())) > 0.01 {
+		t.Error("speech lost")
+	}
+	if same, c2 := tightenTurn(b, cuts, 1); same.Frames() != b.Frames() || c2[0] != cuts[0] {
+		t.Error("short pauses changed")
+	}
+	dir, n := turnDirection([]LineSpec{
+		{Direction: "认真恳求", Intensity: 2, Spans: []SpanSpec{{Text: "可以吗？"}}},
+		{Spans: []SpanSpec{{Text: "好吗？"}}},
+		{Direction: "急切保证", Intensity: 3, Spans: []SpanSpec{{Text: "我能！"}}},
+	})
+	if dir != "先认真恳求，再急切保证" || n != 3 || StoryInstruct("可以吗？", "", "", dir, n, "") != "这几句：先认真恳求，再急切保证，情绪饱满强烈。" {
+		t.Errorf("turn direction %q %d", dir, n)
+	}
+	if dir, _ := turnDirection([]LineSpec{{Direction: "calm", Spans: []SpanSpec{{Text: "Hi."}}}, {Direction: "calm"}}); dir != "calm" {
+		t.Errorf("turn direction %q", dir)
+	}
+}
+
+func TestLevelGains(t *testing.T) {
+	places := []LinePlace{{Start: 0, End: 2}, {Start: 2.2, End: 4}, {Start: 4.2, End: 6}, {Start: 6.2, End: 8}, {Start: 8.2, End: 9}, {Start: 9.2, End: 10}}
+	who := []string{"mom", "kid", "mom", "kid", "mom", "kid"}
+	lufs := []float64{-26, -18, -20, -22, -21, math.Inf(-1)}
+	got := levelGains(places, who, lufs)
+	// mom's median −21: −26 → +3.75, −20 → −0.75, −21 → 0 (left out); kid
+	// (two measured lines) median −20: ±1.5; an unmeasured line keeps its level.
+	want := "[{0 2 3.75} {2.2 4 -1.5} {4.2 6 -0.75} {6.2 8 1.5}]"
+	if fmt.Sprint(got) != want {
+		t.Errorf("gains %v, want %s", got, want)
+	}
+	// Capped at ±5 dB.
+	if g := levelGains(places[:3], []string{"a", "a", "a"}, []float64{-40, -20, -20}); g[0].db != levelMaxDB {
+		t.Errorf("cap %v", g)
+	}
+	// One line of a character: nothing to level against.
+	if g := levelGains(places[:2], []string{"a", "b"}, []float64{-30, -10}); len(g) != 0 {
+		t.Errorf("single lines levelled: %v", g)
+	}
+	// The gain ramps in the silence around a line.
+	gs := []lineGain{{1, 2, 6}}
+	if gainAt(gs, 0.5) != 1 || math.Abs(gainAt(gs, 1.5)-math.Pow(10, 0.3)) > 1e-9 || gainAt(gs, 2.005) <= 1 || gainAt(gs, 2.005) >= math.Pow(10, 0.3) {
+		t.Error("gainAt")
+	}
+}
+
 func TestStoryInstruct(t *testing.T) {
 	for _, c := range []struct {
 		text, scene, persona, dir string
@@ -259,6 +318,7 @@ func TestStoryInstruct(t *testing.T) {
 		{"好吧。", "", "", "松口", 2, "犹豫", "对方刚才犹豫。这一句：松口。"},
 		{"Can I keep it?", "A rainy evening", "a seven-year-old girl", "pleading", 3, "", "A seven-year-old girl. Scene: A rainy evening. This line: pleading, with strong emotion."},
 		{"Fine.", "", "", "giving in", IntensityLight, "", "This line: giving in, restrained."},
+		{"Fine. OK.", "", "", "first sulking, then giving in", 0, "", "These lines: first sulking, then giving in."},
 	} {
 		if got := StoryInstruct(c.text, c.scene, c.persona, c.dir, c.intensity, c.prev); got != c.want {
 			t.Errorf("StoryInstruct(%q, %q, %q, %q) = %q, want %q", c.text, c.scene, c.persona, c.dir, got, c.want)
@@ -390,7 +450,8 @@ func TestPacedStoryRender(t *testing.T) {
 	if !(a.Start < a.End && a.End < b.Start && b.Start < b.End && b.End < c.Start) {
 		t.Fatalf("lines %+v", res.Lines)
 	}
-	if gap := b.Start - a.End; gap < 0.3 || gap > 0.42 {
+	// The model's 0.35 s pause, tightened to the same-speaker gap + slack.
+	if gap := b.Start - a.End; math.Abs(gap-0.30) > 0.02 {
 		t.Errorf("pause inside the turn %.3f", gap)
 	}
 	// Mom answers a question: the question gap.
