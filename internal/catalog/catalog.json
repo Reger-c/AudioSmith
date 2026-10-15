@@ -11,7 +11,7 @@
       "repo": "mlx-community/Kokoro-82M-bf16",
       "revision": "a71e4d38b236d968966a2002c4c895dbd12b1c3c",
       "tasks": ["tts"],
-      "about": "Fast, light, 54 voices in 9 languages. Language follows the voice prefix (af_ = US English, zf_ = Chinese…).",
+      "about": "Fast and light. Best for English (af_/am_ = US, bf_/bm_ = UK); other languages untested, Chinese voices hidden.",
       "languages": [
         {"code": "en-US"},
         {"code": "en-GB"},

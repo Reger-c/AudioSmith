@@ -1045,7 +1045,7 @@
   "Fast is one literal pass; Autofit rewrites lines that would not fit their time; Cinematic drafts, critiques and adapts for natural phrasing.": "“快速”直译一遍；“自动贴合”会改写放不进时长的行；“影视级”先起草、再点评、再润色，措辞更自然。",
   "Fast uses a smaller model without word timings. Accurate uses the best model, then times every word.": "快速：用较小的模型，不含词级时间。精确：用最好的模型，并为每个词标注时间。",
   "Fast, accurate transcription of Chinese (with dialects), English and about 30 other languages. The default for dictation.": "快速准确地转写中文（含方言）、英语及另外约 30 种语言。听写的默认模型。",
-  "Fast, light, 54 voices in 9 languages. Language follows the voice prefix (af_ = US English, zf_ = Chinese…).": "快速轻量，9 种语言 54 个音色。语言由音色前缀决定（af_ = 美式英语，zf_ = 中文…）。",
+  "Fast and light. Best for English (af_/am_ = US, bf_/bm_ = UK); other languages untested, Chinese voices hidden.": "快速轻量，适合英文（af_/am_ = 美式，bf_/bm_ = 英式）；其他语种未经测试，中文音色已隐藏。",
   "Faster": "加快",
   "Favorites": "收藏",
   "File": "文件",
