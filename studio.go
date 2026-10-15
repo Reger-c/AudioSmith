@@ -44,13 +44,15 @@ type studioState struct {
 	voice         string
 	language      string // the value the model's language parameter takes; "" = auto
 	speed         float64
-	modelDefaults bool // leave temperature / top-p / max tokens to the model
-	temperature   float64
-	topP          float64
-	maxTokens     float64
-	refAudio      string
-	refText       string
-	duration      float64 // target seconds (models with CapDuration); 0 = natural
+	modelDefaults bool // drafts before version 3: leave the sampling to the model
+	// temperature and topP: 0 = the model's recommended (presets);
+	// changes are kept per model (settings.Studio.Overrides).
+	temperature float64
+	topP        float64
+	maxTokens   float64 // drafts before version 3 only
+	refAudio    string
+	refText     string
+	duration    float64 // target seconds (models with CapDuration); 0 = natural
 	// autoplay mirrors settings.Studio.Autoplay; the checkbox changes the setting.
 	autoplay bool
 
@@ -67,6 +69,10 @@ type studioState struct {
 	exaggeration float64
 	// recentLangs are the languages chosen last, newest first (codes).
 	recentLangs [4]string
+	// studioAuto: the model was picked for a new user (nothing in the
+	// settings, no draft); it follows their saved voices until they
+	// choose one (studio_presets.go).
+	studioAuto bool
 
 	script      scriptEditor
 	composer    composerState
@@ -88,27 +94,21 @@ func newStudioState(prefs settings.Settings) studioState {
 		modelLabel:    first.Label,
 		speed:         1,
 		modelDefaults: true,
-		temperature:   0.7,
-		topP:          0.9,
-		maxTokens:     1200,
 		autoplay:      prefs.Studio.Autoplay,
 		evenOut:       true,
 		normalize:     true,
 		text:          "Hello from AudioSmith. This voice was generated on your Mac with MLX.",
 	}
-	if v := first.VoiceIDs(); len(v) > 0 {
-		s.voice = v[0]
-	}
-	if l := first.LanguageOptions(); len(l) > 0 {
-		s.language = l[0]
-	}
+	s.loadPreset(first, prefs.Studio.Overrides[first.ID])
 	s.script = newScriptEditor()
 	s.savedDraft = s.toDraft()
 	return s
 }
 
 // studioDraft is the Studio form as saved between runs. Version 2 added
-// the output options, the seed and the recent languages.
+// the output options, the seed and the recent languages; version 3 the
+// recommended settings (a temperature or top-p of 0 = the model's
+// recommended; ModelDefaults and MaxTokens are read from older drafts).
 type studioDraft struct {
 	Version       int     `json:"version"`
 	Text          string  `json:"text"`
@@ -139,7 +139,7 @@ type studioDraft struct {
 const studioDraftKey = "studio"
 
 func (s *studioState) toDraft() studioDraft {
-	return studioDraft{Version: 2, Text: s.text, ModelLabel: s.modelLabel, CustomRepo: s.customRepo,
+	return studioDraft{Version: 3, Text: s.text, ModelLabel: s.modelLabel, CustomRepo: s.customRepo,
 		Voice: s.voice, Language: s.language, Speed: s.speed, ModelDefaults: s.modelDefaults,
 		Temperature: s.temperature, TopP: s.topP, MaxTokens: s.maxTokens,
 		RefAudio: s.refAudio, RefText: s.refText, Duration: s.duration,
@@ -159,8 +159,10 @@ func (s *studioState) applyDraft(d studioDraft) {
 		s.speed = d.Speed
 	}
 	s.modelDefaults = d.ModelDefaults
-	if d.Temperature > 0 || d.TopP > 0 || d.MaxTokens > 0 {
-		s.temperature, s.topP, s.maxTokens = d.Temperature, d.TopP, d.MaxTokens
+	s.temperature, s.topP, s.maxTokens = d.Temperature, d.TopP, 0
+	if d.Version < 3 && d.ModelDefaults {
+		// "Use the model's defaults" now means its recommended settings.
+		s.temperature, s.topP = 0, 0
 	}
 	s.refAudio, s.refText, s.duration = d.RefAudio, d.RefText, d.Duration
 	s.steps, s.evenOut, s.normalize = d.Steps, !d.RawVolume, !d.NoNormalize
@@ -175,6 +177,7 @@ func (s *studioState) applyDraft(d studioDraft) {
 // since the last call. The service only remembers it here; it writes
 // after a pause in editing, on its own goroutine.
 func (a *app) autosaveStudio() {
+	a.syncOverrides()
 	if d := a.toDraft(); d != a.savedDraft {
 		a.savedDraft = d
 		a.lib.svc.Drafts.Save(studioDraftKey, d)
@@ -189,12 +192,14 @@ func (a *app) restoreStudioDraft() {
 		var d studioDraft
 		ok, err := drafts.Load(context.Background(), studioDraftKey, &d)
 		if err != nil || !ok {
+			a.post(func() { a.startAutoModel(false) })
 			return
 		}
 		a.post(func() {
 			if a.toDraft() == a.savedDraft {
 				a.applyDraft(d)
 			}
+			a.startAutoModel(true)
 		})
 	})
 }
@@ -230,13 +235,8 @@ func (a *app) modelChanged() {
 		id := p.ID
 		a.updateSettings(func(s *settings.Settings) { s.Studio.Model = id })
 	}
-	a.voice, a.language = "", ""
-	if v := p.VoiceIDs(); len(v) > 0 {
-		a.voice = v[0]
-	}
-	if l := p.LanguageOptions(); len(l) > 0 {
-		a.language = l[0]
-	}
+	a.studioAuto = false
+	a.loadPreset(p, a.prefs.Studio.Overrides[p.ID])
 }
 
 func (a *app) canGenerate() bool {
@@ -344,8 +344,9 @@ func (a *app) recipe(now time.Time) core.Take {
 	if p.Has(catalog.CapSpeed) {
 		t.Speed = a.speed
 	}
-	if p.Has(catalog.CapSampling) && !a.modelDefaults {
-		t.Temperature, t.TopP, t.MaxTokens = a.temperature, a.topP, int(a.maxTokens)
+	if p.Has(catalog.CapSampling) {
+		// 0: the services give the model's recommended values.
+		t.Temperature, t.TopP = a.temperature, a.topP
 	}
 	a.setStudioVoice(&t, p)
 	if p.Has(catalog.CapDuration) && a.duration > 0 {
@@ -377,10 +378,8 @@ func (a *app) reuse(t *core.Take) {
 	if t.Speed > 0 {
 		a.speed = t.Speed
 	}
-	a.modelDefaults = t.Temperature == 0 && t.TopP == 0 && t.MaxTokens == 0
-	if !a.modelDefaults {
-		a.temperature, a.topP, a.maxTokens = t.Temperature, t.TopP, float64(t.MaxTokens)
-	}
+	a.studioAuto = false
+	a.temperature, a.topP = t.Temperature, t.TopP // as recommended: no change (studioOverride)
 	a.refAudio, a.refText = t.RefAudio, t.RefText
 	// The library voice it was spoken with, if it still exists.
 	a.studioVoice, a.studioClip = "", nil

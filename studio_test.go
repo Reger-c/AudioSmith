@@ -129,28 +129,26 @@ func TestModelSwitchShowsItsControls(t *testing.T) {
 	a.modelLabel = "Qwen3-TTS 0.6B Base (voice clone)"
 	a.modelChanged()
 	tt.Frame()
-	if a.voice != "" || a.language != "Chinese" {
+	if a.voice != "" || a.language != "" {
 		t.Errorf("voice %q language %q after switching", a.voice, a.language)
 	}
-	if !tt.HasText("Voice cloning") || !tt.HasText("🇨🇳 Chinese") {
+	if !tt.HasText("Voice cloning") || !tt.HasText("Auto-detect") {
 		t.Errorf("controls for Qwen Base: %q", tt.Texts())
 	}
 	tt.Click("Voice controls")
 	tt.Frame()
-	if tt.HasText("Speed  1.00×") || !tt.HasText("Use the model's sampling defaults") {
+	// The recommended sampling (presets), shown; a change is the model's.
+	if tt.HasText("Speed  1.00×") || !tt.HasText("Temperature  0.70") || !tt.HasText("Top P  0.80") || !tt.HasText("Recommended settings") {
 		t.Errorf("voice controls for Qwen Base: %q", tt.Texts())
 	}
-
-	// Sampling settings go out only when the defaults are off.
-	tt.Click("Use the model's sampling defaults")
 	a.temperature = 0.5
 	a.refAudio, a.refText = "/tmp/ref.wav", "Reference words"
 	tt.Frame()
 	tt.Key(0, ui.KeyEscape)
 	tt.Click("Generate")
 	req := renderOf(t, eng.last(t)).Take
-	if req.Temperature != 0.5 || req.MaxTokens != 1200 || req.Speed != 0 ||
-		req.RefAudio != "/tmp/ref.wav" || req.RefText != "Reference words" || req.Language != "Chinese" {
+	if req.Temperature != 0.5 || req.TopP != 0.8 || req.MaxTokens != 0 || req.Speed != 0 ||
+		req.RefAudio != "/tmp/ref.wav" || req.RefText != "Reference words" || req.Language != "" {
 		t.Fatalf("request %+v", req)
 	}
 }
@@ -175,7 +173,7 @@ func TestDraftAndLibrarySurviveRestart(t *testing.T) {
 
 	b, _, tt2 := newTestAppIn(t, dir)
 	if b.text != "A script in progress" || b.modelLabel != "Qwen3-TTS 0.6B Base (voice clone)" ||
-		b.refText != "ref words" || b.language != "Chinese" || b.autoplay {
+		b.refText != "ref words" || b.language != "" || b.autoplay {
 		t.Errorf("restored form %+v", b.toDraft())
 	}
 	tt2.Frame()

@@ -94,10 +94,10 @@ func TestAudioQualityPopover(t *testing.T) {
 		tt.Scroll(r.X+20, r.Y, 0, 1000) // the popover scrolls to its end
 		tt.Frame()
 	}
-	if err := tt.Click("Reset"); err != nil {
+	if err := tt.Click("Restore recommended"); err != nil {
 		t.Fatal(err)
 	}
-	if a.steps != 0 || a.bitsIndex != 0 || !a.evenOut {
+	if a.steps != 0 || !a.evenOut {
 		t.Errorf("after reset: %v %v %v", a.steps, a.bitsIndex, a.evenOut)
 	}
 }
@@ -141,7 +141,7 @@ func TestLanguagePicker(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	a.selectModel(entry(t, "qwen3-tts-0.6b-customvoice-8bit"))
 	tt.Frame()
-	tt.Click("🇨🇳 Chinese")
+	tt.Click("Auto-detect") // the recommended language: detected
 	tt.Frame()
 	if !tt.HasText("Auto-detect") || !tt.HasText("Not supported by Qwen3-TTS 0.6B CustomVoice") {
 		t.Fatalf("picker: %q", tt.Texts())

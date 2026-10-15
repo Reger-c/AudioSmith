@@ -117,6 +117,7 @@ func (a *app) loadVoices() {
 			}
 			sortVoices(vs)
 			a.voices, a.voicesLoaded = vs, true
+			a.autoStudioModel() // a new user with saved voices
 		})
 	})
 }
@@ -159,6 +160,7 @@ func (a *app) voiceChanged(ev core.VoiceChanged) {
 	if a.edit != nil && a.edit.id == ev.Voice.ID {
 		a.edit.refresh(ev.Voice)
 	}
+	a.autoStudioModel() // a new user's first saved voice
 }
 
 // findVoice is the snapshot's voice with id, or nil.

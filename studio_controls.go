@@ -334,9 +334,7 @@ func (a *app) qualityPopover(c *ui.Context) {
 	}
 	ui.Popover(c, btn, &a.composer.qualityOpen, func() {
 		popoverWithFooter(c, "quality", func() {
-			if secondaryIconButton(c.Key("quality-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
-				a.bitsIndex, a.steps, a.evenOut, a.normalize = 0, 0, true, true
-			}
+			a.restoreButton(c, "quality-reset")
 		}, func() {
 			ui.Column(c.Key("quality-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
 				ui.Text(c, i18n.T("WAV precision")).FontWeight(600)
@@ -346,10 +344,7 @@ func (a *app) qualityPopover(c *ui.Context) {
 				caption(c, desc[min(max(a.bitsIndex, 0), 2)]+" "+i18n.T("About %.1f MB a minute.", mbPerMinute(bits, p.SampleRate)))
 				if tr.Steps {
 					ui.Divider(c)
-					steps := a.steps
-					if steps == 0 {
-						steps = services.StepsBalanced
-					}
+					steps := a.shownSteps()
 					ui.Text(c, i18n.T("Voice refinement  %d steps", int(steps))).FontWeight(600)
 					tier := slices.Index(tierSteps, steps)
 					if segmentedFit(c.Key("tier"), &tier, i18n.T("Fast"), i18n.T("Balanced"), i18n.T("Quality")).Label(i18n.T("Performance")).Changed() && tier >= 0 {
@@ -382,11 +377,7 @@ func (a *app) voicePopover(c *ui.Context) {
 	}
 	ui.Popover(c, btn, &a.composer.voiceOpen, func() {
 		popoverWithFooter(c, "voice", func() {
-			if secondaryIconButton(c.Key("voice-reset"), icons.Restart, i18n.T("Reset")).Label(i18n.T("Reset")).Clicked() {
-				a.speed, a.duration, a.seedPinned, a.modelDefaults = 1, 0, false, true
-				a.guidance, a.exaggeration = 0, 0
-				a.temperature, a.topP, a.maxTokens = 0.7, 0.9, 1200
-			}
+			a.restoreButton(c, "voice-reset")
 		}, func() {
 			ui.Column(c.Key("voice-pop")).Width(px(t, 320)).Gap(px(t, 10)).Padding(px(t, 10)).Children(func() {
 				if p.Has(catalog.CapSpeed) {
@@ -414,10 +405,7 @@ func (a *app) voicePopover(c *ui.Context) {
 					})
 				}
 				if p.Has(catalog.CapGuidance) {
-					g := a.guidance
-					if g == 0 {
-						g = 2
-					}
+					g := shown(a.guidance, a.recommended().Guidance, 2)
 					ui.Field(c, i18n.T("Prompt guidance  %.1f", g), func() {
 						if snapped(ui.Slider(c.Key("guidance"), &g, 1, 4).Label(i18n.T("Prompt guidance")), &g, 0.1).Changed() {
 							a.guidance = g
@@ -425,10 +413,7 @@ func (a *app) voicePopover(c *ui.Context) {
 					})
 				}
 				if p.Has(catalog.CapExaggeration) {
-					x := a.exaggeration
-					if x == 0 {
-						x = 0.5
-					}
+					x := shown(a.exaggeration, a.recommended().Exaggeration, 0.5)
 					ui.Field(c, i18n.T("Expressiveness  %.2f", x), func() {
 						if snapped(ui.Slider(c.Key("exaggeration"), &x, 0.25, 2).Label(i18n.T("Expressiveness")), &x, 0.05).Changed() {
 							a.exaggeration = x
@@ -437,18 +422,18 @@ func (a *app) voicePopover(c *ui.Context) {
 				}
 				if p.Has(catalog.CapSampling) {
 					ui.Divider(c)
-					ui.Checkbox(c.Key("defaults"), &a.modelDefaults, i18n.T("Use the model's sampling defaults"))
-					if !a.modelDefaults {
-						ui.Field(c, i18n.T("Temperature  %.2f", a.temperature), func() {
-							snapped(ui.Slider(c.Key("temperature"), &a.temperature, 0, 1.5).Label(i18n.T("Temperature")), &a.temperature, 0.05)
-						})
-						ui.Field(c, i18n.T("Top P  %.2f", a.topP), func() {
-							snapped(ui.Slider(c.Key("topp"), &a.topP, 0.05, 1).Label(i18n.T("Top P")), &a.topP, 0.05)
-						})
-						ui.Field(c, i18n.T("Max tokens"), func() {
-							numberInput(c.Key("maxtokens"), &a.maxTokens, 50, 8000, 50, numOpts{Label: i18n.T("Max tokens")})
-						})
-					}
+					rec := a.recommended()
+					temp, topP := shown(a.temperature, rec.Temperature, 0.9), shown(a.topP, rec.TopP, 1)
+					ui.Field(c, i18n.T("Temperature  %.2f", temp), func() {
+						if snapped(ui.Slider(c.Key("temperature"), &temp, 0.05, 1.5).Label(i18n.T("Temperature")), &temp, 0.05).Changed() {
+							a.temperature = temp
+						}
+					})
+					ui.Field(c, i18n.T("Top P  %.2f", topP), func() {
+						if snapped(ui.Slider(c.Key("topp"), &topP, 0.05, 1).Label(i18n.T("Top P")), &topP, 0.05).Changed() {
+							a.topP = topP
+						}
+					})
 				}
 			})
 		})
@@ -477,4 +462,23 @@ func (a *app) composerButton(c *ui.Context, key string, ic icons.Icon, label str
 		return iconButton(c.Key(key), ic, label)
 	}
 	return secondaryIconButton(c.Key(key), ic, label).Label(label)
+}
+
+// restoreButton is 「恢复推荐设置」 with how many settings differ from the
+// model's recommendation (「已改 N 项」), at the foot of the Studio's
+// popovers.
+func (a *app) restoreButton(c *ui.Context, key string) {
+	t := c.Theme()
+	changes := a.studioChanges()
+	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+		label := i18n.T("Recommended settings")
+		if n := len(changes); n > 0 {
+			label = i18n.N(n, "%d change", "%d changes", n)
+		}
+		caption(c, label).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").Tooltip(strings.Join(changes, " · "))
+		if secondaryIconButton(c.Key(key), icons.Restart, i18n.T("Restore recommended")).Label(i18n.T("Restore recommended")).
+			Tooltip(i18n.T("Use the model's tuned settings again")).Disabled(len(changes) == 0).Clicked() {
+			a.restoreRecommended()
+		}
+	})
 }
