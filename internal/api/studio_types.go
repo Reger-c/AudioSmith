@@ -267,7 +267,7 @@ type DubCreate struct {
 	Path           string   `json:"path" jsonschema:"Absolute path of the video or audio to dub (mp4, mov, mkv, mp3, wav, m4a…)."`
 	Title          string   `json:"title,omitempty" jsonschema:"The project's title; empty: the file's name."`
 	SourceLanguage string   `json:"source_language,omitempty" jsonschema:"BCP-47 code spoken in the file; empty: detected."`
-	Targets        []string `json:"target_languages,omitempty" jsonschema:"BCP-47 codes to dub into, the main one first; empty: AudioSmith's Dubbing settings."`
+	Targets        []string `json:"target_languages,omitempty" jsonschema:"BCP-47 codes to dub into, the main one first; empty: AudioSmith's Dubbing settings (by default Chinese, or English for a video in Chinese)."`
 	Model          string   `json:"model,omitempty" jsonschema:"The speech model (list_models); empty: AudioSmith's dubbing default (it clones each speaker)."`
 	Voice          string   `json:"voice,omitempty" jsonschema:"One voice for every speaker (a saved voice's name or id); empty: each speaker's own voice, cloned."`
 	Speakers       int      `json:"speakers,omitempty" jsonschema:"How many people speak (1–20); 0: detected."`

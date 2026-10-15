@@ -299,7 +299,7 @@ func DefaultParams(k Kind) Params {
 	case KindConvert:
 		return Params{Speed: 1}
 	case KindTranslate:
-		return Params{To: "es"}
+		return Params{To: "zh-Hans"} // dub.DefaultTarget
 	case KindNormalize:
 		return Params{Level: LevelLoudness, Target: DefaultLoudness}
 	case KindCondition:

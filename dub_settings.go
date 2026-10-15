@@ -135,21 +135,31 @@ func (a *app) dubbingSettings(c *ui.Context) {
 			a.updateSettings(func(s *settings.Settings) { s.Dubbing.Model = repo })
 		}
 	})
-	langs := []string{}
-	langNames := []string{}
+	// "" is the default (dub.DefaultTarget, switched for a video in that
+	// language); a language picked here is used as it is.
+	langs := []string{""}
+	langNames := []string{i18n.T("%s (default)", dubLangName(dub.DefaultTarget))}
 	for _, l := range dubTargetLangs {
 		langs = append(langs, l)
 		langNames = append(langNames, dubLangName(l))
 	}
-	target := "es"
+	target := ""
 	if len(d.Targets) > 0 {
 		target = d.Targets[0]
+		if !slices.Contains(langs, target) {
+			langs, langNames = append(langs, target), append(langNames, dubLangName(target))
+		}
 	}
 	tcur := langNames[max(slices.Index(langs, target), 0)]
-	settingRow(c, "dub-target", i18n.T("Dub into"), i18n.T("The first target language of a new dub."), func() {
+	settingRow(c, "dub-target", i18n.T("Dub into"), i18n.T("The first target language of a new dub.")+" "+dubAutoTargetHint(), func() {
 		if ui.Select(c.Key("dub-target"), &tcur, langNames).Label(i18n.T("Dub into")).Changed() {
 			l := langs[slices.Index(langNames, tcur)]
-			a.updateSettings(func(s *settings.Settings) { s.Dubbing.Targets = []string{l} })
+			a.updateSettings(func(s *settings.Settings) {
+				s.Dubbing.Targets = nil
+				if l != "" {
+					s.Dubbing.Targets = []string{l}
+				}
+			})
 		}
 	})
 }

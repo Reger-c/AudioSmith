@@ -108,7 +108,7 @@ func (a *app) batchSetup(c *ui.Context) {
 				ui.Text(c, dubLangName(ll)).FontSize(px(t, fsCaption)).SingleLine()
 				if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Size(px(t, 22), px(t, 22)).Clicked() {
 					a.batchSetSettings(func(s *services.BatchSettings) {
-						s.Targets = slices.DeleteFunc(s.Targets, func(x string) bool { return x == ll })
+						s.Targets, s.TargetsAuto = slices.DeleteFunc(s.Targets, func(x string) bool { return x == ll }), false
 					})
 				}
 			})
@@ -117,11 +117,14 @@ func (a *app) batchSetup(c *ui.Context) {
 			for _, l := range dubTargetLangs {
 				if !slices.Contains(s.Targets, l) && m.Item(dubLangName(l)).Chosen() {
 					ll := l
-					a.batchSetSettings(func(s *services.BatchSettings) { s.Targets = append(s.Targets, ll) })
+					a.batchSetSettings(func(s *services.BatchSettings) { s.Targets, s.TargetsAuto = append(s.Targets, ll), false })
 				}
 			}
 		})
 	})
+	if s.TargetsAuto {
+		caption(c, dubAutoTargetHint()).TextColor(k.Text3)
+	}
 	// Voice.
 	choices := []dubVoiceChoice{{"", i18n.T("Auto · each speaker's own voice"), ""}, {dub.VoiceDefault, i18n.T("Default voice"), ""}}
 	model := firstOf(s.Model, a.dubDefaultModel())

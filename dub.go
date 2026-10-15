@@ -502,7 +502,7 @@ func newDubProject(src dub.Source, d settings.Dubbing, def string) *dub.Project 
 	p.Settings.Model = firstOf(d.Model, def)
 	p.Settings.Review = !d.NoReview
 	if len(d.Targets) > 0 {
-		p.Targets = slices.Clone(d.Targets)
+		p.ChooseTargets(d.Targets) // else dub.DefaultTarget, switched for a video in that language
 	}
 	if d.Translator != "" {
 		p.Settings.Translator = d.Translator
@@ -1177,6 +1177,27 @@ func dubPhaseText(ph dub.Phase) string {
 		return i18n.T("Failed")
 	}
 	return string(ph)
+}
+
+// dubAutoTargetHint says what the default target does.
+func dubAutoTargetHint() string {
+	return i18n.T("By default dubs are made in Chinese; a video in Chinese is dubbed into English.")
+}
+
+// dubRetargetNote says that p's default target was switched ("" if not).
+func dubRetargetNote(p *dub.Project) string {
+	if p == nil || !p.TargetsAuto || p.TargetSwitched == "" {
+		return ""
+	}
+	return i18n.T("The video is in %s, so it is dubbed into %s.", dubLangPlain(p.SourceLanguage()), dubLangPlain(p.Primary()))
+}
+
+// dubLangPlain is a language's name in the UI's language, without a flag.
+func dubLangPlain(code string) string {
+	if l, ok := lang.Lookup(code); ok {
+		return l.NameIn(i18n.Locale())
+	}
+	return code
 }
 
 // dubLangName names a language for lists: flag and name.

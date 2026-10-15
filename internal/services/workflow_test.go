@@ -281,13 +281,13 @@ func TestWorkflowTranslateAndSubtitles(t *testing.T) {
 		t.Errorf("srt %s", data)
 	}
 	step := run.Items[0].Steps[nodeOf(w, workflow.KindTranslate).ID]
-	if step.Out == nil || !strings.HasPrefix(step.Out.Text, "[es] Hello there.") || step.Out.Type != workflow.TypeTranscript || step.Out.Lang != "es" {
+	if step.Out == nil || !strings.HasPrefix(step.Out.Text, "[zh-Hans] Hello there.") || step.Out.Type != workflow.TypeTranscript || step.Out.Lang != "zh-Hans" {
 		t.Errorf("translation %+v", step.Out)
 	}
 	var sp proto.SynthesizeParams
 	json.Unmarshal(e.eng.Last(proto.MethodTTSSynthesize), &sp)
-	// ("[es]" reads as markup and is not spoken.)
-	if !strings.Contains(sp.Text, "Hello there.") || sp.Language != "es" {
+	// ("[zh-Hans]" reads as markup and is not spoken; the template dubs into Chinese.)
+	if !strings.Contains(sp.Text, "Hello there.") || sp.Language != "zh-Hans" {
 		t.Errorf("spoke %q in %q", sp.Text, sp.Language)
 	}
 }

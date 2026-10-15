@@ -128,7 +128,7 @@ func (b *apiBackend) CreateDub(ctx context.Context, req api.DubCreate) (out api.
 		if err := checkLangs("target_languages", req.Targets); err != nil {
 			return api.DubJSON{}, err
 		}
-		p.Targets = slices.Clone(req.Targets)
+		p.ChooseTargets(req.Targets)
 	}
 	if req.Model != "" {
 		e, warn, err := ttsEntry(req.Model, "", true) // a dub clones its speakers
@@ -523,7 +523,7 @@ func (b *apiBackend) BatchDub(ctx context.Context, req api.BatchRequest) (res ap
 		if err := checkLangs("target_languages", req.Targets); err != nil {
 			return api.BatchJSON{}, err
 		}
-		bs.Targets = slices.Clone(req.Targets)
+		bs.Targets, bs.TargetsAuto = slices.Clone(req.Targets), false
 	}
 	if req.SourceLanguage != "" {
 		if err := checkLangs("source_language", []string{req.SourceLanguage}); err != nil {

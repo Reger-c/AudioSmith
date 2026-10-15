@@ -44,9 +44,9 @@ var Templates = []Template{
 	}},
 	{ID: "translate-narrate", Name: "Translate and narrate", About: "Recordings → transcribed, translated and spoken.", build: func(w *Workflow, o TemplateOptions) {
 		tr := w.add(KindTranslate, 2)
-		w.Node(tr).P.To = "es"
+		w.Node(tr).P.To = DefaultParams(KindTranslate).To
 		sp := w.speak(3, o)
-		w.Node(sp).P.Language = "es"
+		w.Node(sp).P.Language = DefaultParams(KindTranslate).To
 		w.chain(w.add(KindSource, 0), w.add(KindTranscribe, 1), tr, sp, w.add(KindExport, 4))
 	}},
 	{ID: "subtitles", Name: "Transcript → subtitles", About: "Recordings → SubRip subtitles.", build: func(w *Workflow, o TemplateOptions) {

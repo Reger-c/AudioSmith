@@ -821,11 +821,22 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 		cur := names[max(slices.Index(ids, p.SourceLang), 0)]
 		if ui.Select(c.Key("src-lang"), &cur, names).Label(i18n.T("Spoken language")).Disabled(locked).Changed() {
 			l := ids[slices.Index(names, cur)]
-			a.dubSet(func(p *dub.Project) { p.SourceLang = l })
+			a.dubSet(func(p *dub.Project) {
+				p.SourceLang = l
+				if len(p.Segments) == 0 {
+					p.AutoRetarget() // the transcript does it otherwise
+				}
+			})
+			if !slices.Contains(a.dub.Languages(), a.dubLang) {
+				a.dubLang = a.dub.Primary()
+			}
 		}
 	})
 	if p.Detected != "" && p.SourceLang == "" {
 		caption(c, i18n.T("Detected: %s", dubLangName(p.Detected)))
+	}
+	if note := dubRetargetNote(p); note != "" {
+		caption(c, note)
 	}
 	a.dubAdvanced(c, dubStepSource, locked, func() {
 		fieldInfo(c, i18n.T("Speakers"), i18n.T("How many people speak? Leave it on Auto to detect them; the speaker model tells up to 4 apart."), func() {
@@ -947,9 +958,13 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 				p.Targets[0] = l
 				p.Targets = slices.Compact(p.Targets)
 			}
+			p.ChooseTargets(p.Targets)
 		})
 		a.dubLang = l
 	})
+	if note := dubRetargetNote(p); note != "" {
+		caption(c, note)
+	}
 	// Dialects.
 	base, _, _ := strings.Cut(p.Primary(), "-")
 	if ds, ok := dubDialects[base]; ok {
@@ -965,7 +980,7 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 		ui.Field(c, i18n.T("Dialect"), func() {
 			if ui.Select(c.Key("tl-dialect"), &cur, labels).Label(i18n.T("Dialect")).Disabled(locked).Changed() {
 				dd := opts[slices.Index(labels, cur)]
-				a.dubSet(func(p *dub.Project) { p.Targets[0] = dd })
+				a.dubSet(func(p *dub.Project) { p.Targets[0] = dd; p.ChooseTargets(p.Targets) })
 				a.dubLang = dd
 			}
 		})
@@ -991,7 +1006,9 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 				ui.Row(c.Key("chip-"+l)).Gap(px(t, 2)).AlignItems(ui.Center).Padding(px(t, 2), px(t, 2), px(t, 2), px(t, sp2)).Radius(px(t, radiusControl)).Background(tok(t).Hover).Children(func() {
 					ui.Text(c, dubLangName(ll)).FontSize(px(t, fsCaption)).SingleLine()
 					if iconButton(c.Key("x"), icons.Close, i18n.T("Remove %s", dubLangName(ll))).Size(px(t, 22), px(t, 22)).Disabled(locked).Clicked() {
-						a.dubSet(func(p *dub.Project) { p.Targets = slices.DeleteFunc(p.Targets, func(x string) bool { return x == ll }) })
+						a.dubSet(func(p *dub.Project) {
+							p.ChooseTargets(slices.DeleteFunc(p.Targets, func(x string) bool { return x == ll }))
+						})
 					}
 				})
 			}
@@ -1002,7 +1019,7 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 					}
 					if m.Item(dubLangName(l)).Disabled(locked).Chosen() {
 						ll := l
-						a.dubSet(func(p *dub.Project) { p.Targets = append(p.Targets, ll) })
+						a.dubSet(func(p *dub.Project) { p.ChooseTargets(append(p.Targets, ll)) })
 					}
 				}
 			})
