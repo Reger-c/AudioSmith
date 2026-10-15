@@ -483,7 +483,7 @@ func (s *Dubs) renderLine(ctx context.Context, sc *stageCtx, p *dub.Project, i i
 	defer os.Remove(raw)
 	// Not watermarked here: fitting stretches the line; the final track
 	// is marked instead (mix, watermark.go).
-	params, err := json.Marshal(RenderParams{Take: t, Lang: dub.LangFor(seg, l), Output: raw, NoWatermark: true})
+	params, err := json.Marshal(RenderParams{Take: t, Lang: dub.LangFor(seg, l), Output: raw, NoWatermark: true, Workflow: "dub"})
 	if err != nil {
 		return dub.Render{}, err
 	}

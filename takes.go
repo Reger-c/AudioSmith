@@ -196,7 +196,35 @@ func modelInfo(repo string) services.ModelInfo {
 			info.VoiceLanguages[v.ID] = v.Language
 		}
 	}
+	info.Defaults = presetDefaults(e)
 	return info
+}
+
+// presetDefaults are entry e's recommended parameters per workflow (the
+// catalogue's presets), as the services take them.
+func presetDefaults(e catalog.Entry) map[string]services.ParamDefaults {
+	p, ok := catalog.PresetFor(e.ID)
+	if !ok {
+		return nil
+	}
+	f := func(v *float64) float64 {
+		if v == nil {
+			return 0
+		}
+		return *v
+	}
+	conv := func(pp catalog.Params) services.ParamDefaults {
+		d := services.ParamDefaults{Temperature: f(pp.Temperature), TopP: f(pp.TopP), Guidance: f(pp.Guidance), Exaggeration: f(pp.Exaggeration)}
+		if pp.Steps != nil {
+			d.Steps = *pp.Steps
+		}
+		return d
+	}
+	out := map[string]services.ParamDefaults{"": conv(p.ParamsFor(catalog.WorkflowStudio))}
+	for _, w := range []catalog.Workflow{catalog.WorkflowStory, catalog.WorkflowAudiobook, catalog.WorkflowDub} {
+		out[string(w)] = conv(p.ParamsFor(w))
+	}
+	return out
 }
 
 // hubToken finds the HF token for downloads (tests replace it).

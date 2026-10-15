@@ -221,6 +221,7 @@ func (s *Takes) Generate(ctx context.Context, req core.TakeRequest) (string, err
 	// gets it, and Reuse brings it back.
 	t.Render.SeedPinned = t.Seed != 0
 	info := s.model(t.Model)
+	info.FillDefaults(&t, "") // the take records what was used
 	params, err := json.Marshal(RenderParams{Take: t, Lang: info.Lang(t.Language, t.Voice),
 		Output: s.store.AudioPath(t), Stream: req.Stream || !req.Background})
 	if err != nil {
@@ -436,6 +437,7 @@ func (s *Takes) Preview(ctx context.Context, recipe core.Take) (jobID, output st
 	t.Render = renderRecipe(t.Render)
 	t.Render.SeedPinned = t.Seed != 0
 	info := s.model(t.Model)
+	info.FillDefaults(&t, "")
 	output = filepath.Join(dir, t.File)
 	params, err := json.Marshal(RenderParams{Take: t, Lang: info.Lang(t.Language, t.Voice), Output: output, Stream: true})
 	if err != nil {
