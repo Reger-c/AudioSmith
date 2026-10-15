@@ -15,7 +15,7 @@ import (
 // TestSnapshotsPresets renders the recommended models and settings
 // (thread #42, A+B): a new user's Studio, the model picker (recommended,
 // all models, a dub's greyed models, Design), the Studio's restore
-// recommended footer, a retired model's hint, a new user's Stories and
+// recommended footer, a draft on a removed model (its notice), a new user's Stories and
 // Audiobook; Chinese at 1100×720 and 820×520 @125 %, English at 1100×720:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsPresets .
@@ -79,10 +79,10 @@ func TestSnapshotsPresets(t *testing.T) {
 		})
 		a.setAdvancedOpen("studio", false)
 		a.restoreRecommended()
-		shoot(a, tt, "05-retired", func() {
-			a.modelLabel = entry(t, "chatterbox-8bit").Label
-			a.modelChanged()
+		shoot(a, tt, "05-removed", func() {
+			a.applyStudioDraft(studioDraft{Version: 3, Text: "Hello there.", ModelLabel: "Chatterbox", RefAudio: "/tmp/ref.wav"})
 		})
+		a.toasts = nil
 		a.selectModel(entry(t, "qwen3-tts-0.6b-customvoice-8bit"))
 
 		shoot(a, tt, "06-audiobook-new-user", func() {

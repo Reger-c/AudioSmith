@@ -49,6 +49,7 @@ type Takes struct {
 
 	render    *renderer
 	models    func(repo string) ModelInfo
+	replace   func(*core.Take) bool
 	keepTakes func() int
 	cacheDir  string
 }
@@ -59,10 +60,10 @@ func newTakes(cfg Config, pron *Pronunciation) *Takes {
 	t := &Takes{
 		store: cfg.Store.Takes(), bus: cfg.Bus, sched: cfg.Scheduler, licences: cfg.Licences,
 		ready: cfg.Ready, now: cfg.Now, logf: cfg.Logf, async: cfg.Async, pending: map[string]core.Take{},
-		models: cfg.Models, keepTakes: cfg.KeepTakes, cacheDir: cfg.CacheDir,
+		models: cfg.Models, replace: cfg.Replace, keepTakes: cfg.KeepTakes, cacheDir: cfg.CacheDir,
 	}
 	t.render = &renderer{
-		synth: cfg.Synth, modelPath: cfg.ModelPath, licences: cfg.Licences, models: cfg.Models,
+		synth: cfg.Synth, modelPath: cfg.ModelPath, licences: cfg.Licences, models: cfg.Models, replace: cfg.Replace,
 		pron: pron, cacheDir: cfg.CacheDir, bus: cfg.Bus, logf: cfg.Logf, watermark: cfg.Watermark,
 	}
 	if cfg.Scheduler != nil {
@@ -116,9 +117,6 @@ func SynthesizeParams(t core.Take, output string, stream bool) proto.SynthesizeP
 	if t.Guidance != 0 {
 		p.Guidance = &t.Guidance
 	}
-	if t.Exaggeration != 0 {
-		p.Exaggeration = &t.Exaggeration
-	}
 	if t.Speed != 0 {
 		p.Speed = &t.Speed
 	}
@@ -141,6 +139,9 @@ func SynthesizeParams(t core.Take, output string, stream bool) proto.SynthesizeP
 // check validates a recipe and checks its model may run now.
 func (s *Takes) check(ctx context.Context, r core.Take) (core.Take, error) {
 	r.Text, r.Model = strings.TrimSpace(r.Text), strings.TrimSpace(r.Model)
+	if s.replace != nil {
+		s.replace(&r)
+	}
 	if r.Text == "" {
 		return r, fmt.Errorf("generate: no text: %w", core.ErrInvalid)
 	}

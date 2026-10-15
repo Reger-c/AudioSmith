@@ -527,7 +527,7 @@ func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)
 	var states []*fileState
 	scheduled := map[string]bool{}
 	for _, f := range p.files {
-		// Two files with the same content (Marvis's prompts/*.txt) are one
+		// Two files with the same content (identical prompts) are one
 		// blob: fetch it once, or the two writers race on its .incomplete.
 		if scheduled[f.blob] {
 			continue

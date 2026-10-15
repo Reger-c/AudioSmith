@@ -143,7 +143,8 @@ func (a *app) openShell(lib *library) {
 	})
 	a.applyLocale()
 	a.loadAcceptances()
-	a.loadMediaTool() // M7a: ffmpeg_settings.go
+	a.loadMediaTool()          // M7a: ffmpeg_settings.go
+	a.migrateRemovedSettings() // models_removed.go (thread #43)
 }
 
 // connectShell adds what only the real app has: log files in logDir (the
@@ -439,7 +440,8 @@ func (a *app) view(c *ui.Context) {
 	a.licenceModal(c)
 	a.exportDialog(c) // export_dialog.go (thread #31)
 	a.modelsAlerts(c)
-	a.toastsView(c) // last: over dialogs too
+	a.removedAlert(c) // models_removed.go
+	a.toastsView(c)   // last: over dialogs too
 }
 
 // toastsView gives the toasts their place and look: small ink toasts in

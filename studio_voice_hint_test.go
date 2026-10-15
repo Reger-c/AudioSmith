@@ -31,8 +31,8 @@ func TestTakeVoice(t *testing.T) {
 	custom := entryByID(t, "qwen3-tts-0.6b-customvoice-8bit")
 	omni := entryByID(t, "omnivoice-bf16")
 	kokoroE := entryByID(t, "kokoro-82m-bf16")
-	soprano := entryByID(t, "soprano-80m-bf16")
-	moss := entryByID(t, "moss-tts-nano-100m")
+	turbo := entryByID(t, "chatterbox-turbo-8bit")
+	moss := cloneOnly(t, nil)
 	for _, c := range []struct {
 		name string
 		t    core.Take
@@ -48,7 +48,7 @@ func TestTakeVoice(t *testing.T) {
 		{"built-in speaker", core.Take{Voice: "Vivian"}, custom, voiceGiven},
 		{"style model, nothing", core.Take{}, omni, voiceGiven},
 		{"no cloning (Kokoro)", core.Take{}, kokoroE, voiceGiven},
-		{"no cloning, no voices (Soprano)", core.Take{}, soprano, voiceGiven},
+		{"clone model with a default voice (Turbo)", core.Take{}, turbo, voiceDefault},
 		{"only clones, nothing", core.Take{}, moss, voiceMissing},
 		{"only clones, a voice is not enough", core.Take{Voice: "x"}, moss, voiceMissing},
 		{"only clones, reference", core.Take{RefAudio: "/r.wav"}, moss, voiceGiven},
@@ -162,16 +162,16 @@ func TestStudioDefaultVoiceHint(t *testing.T) {
 		}
 	}
 
-	// A model that only clones (MOSS): its own refusal, not the hint.
-	moss := mossEntry(t)
+	// A model that only clones: its own refusal, not the hint.
+	moss := cloneOnly(t, a)
 	a.selectModel(moss)
 	a.studioVoice = ""
 	if hint() || !tt.HasText(studioNeedsReferenceText(moss)) || a.canGenerate() {
-		t.Errorf("MOSS without a reference: %q", tt.Texts())
+		t.Errorf("clone-only without a reference: %q", tt.Texts())
 	}
 	a.studioVoice = wenqing.ID // its sample is a reference
 	if hint() || tt.HasText(studioNeedsReferenceText(moss)) || !a.canGenerate() {
-		t.Errorf("MOSS with 温晴: %v %q", a.canGenerate(), tt.Texts())
+		t.Errorf("clone-only with 温晴: %v %q", a.canGenerate(), tt.Texts())
 	}
 }
 

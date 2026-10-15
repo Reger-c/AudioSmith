@@ -7,8 +7,9 @@ import (
 	"testing"
 )
 
-// TestBuiltin pins the five MVP presets, now data: the pickers must offer
-// what the hard-coded presets offered, in order, then OmniVoice (M0).
+// TestBuiltin pins the MVP presets still offered, now data: the pickers
+// must offer them in order, then OmniVoice (M0), then what M1 added; the
+// seven speech models thread #43 kept.
 func TestBuiltin(t *testing.T) {
 	c := Builtin()
 	want := []struct {
@@ -25,8 +26,6 @@ func TestBuiltin(t *testing.T) {
 		{"Qwen3-TTS 0.6B Base (voice clone)", "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit", "≈ 2 GB", nil,
 			[]string{"Chinese", "English", "Japanese", "Korean", "German", "French", "Spanish", "Italian", "Portuguese", "Russian"},
 			false, true, true, false},
-		{"Marvis TTS 250M", "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit", "≈ 672 MB", []string{"conversational_a", "conversational_b"}, nil, false, true, false, false}, // M1 smoke: cloning rambles past the text
-		{"Soprano 80M", "mlx-community/Soprano-80M-bf16", "≈ 221 MB", nil, nil, false, true, false, false},
 	}
 	labels := c.Labels(TaskTTS)
 	// The MVP presets, then OmniVoice (M0), then what M1 added, then Custom.
@@ -54,6 +53,9 @@ func TestBuiltin(t *testing.T) {
 		if id, ok := c.ByID(e.ID); !ok || id.Repo != w.repo {
 			t.Errorf("ByID(%s)", e.ID)
 		}
+	}
+	if got := c.ForTask(TaskTTS); len(got) != 7 {
+		t.Errorf("%d speech models offered, want 7", len(got))
 	}
 	if k, _ := c.ByLabel("Kokoro 82M"); len(k.Voices) != 25 || k.VoiceIDs()[0] != "af_heart" || len(k.Aux) != 2 {
 		t.Errorf("kokoro voices %d aux %v", len(k.Voices), k.Aux)
@@ -198,12 +200,11 @@ func TestM1Entries(t *testing.T) {
 	}
 }
 
-// TestNeedsReference: MOSS-TTS-Nano only clones (upstream
-// MossTTSNanoModel.generate throws without refAudio); every other speech
-// model speaks without a reference: its own voices (Kokoro, Kitten,
-// Marvis, Pocket TTS, CustomVoice), a default voice (Qwen3-TTS Base,
-// Soprano, Chatterbox's conds.safetensors), or a design (OmniVoice,
-// VoiceDesign). A flag needs the clone capability.
+// TestNeedsReference: every speech model kept speaks without a
+// reference: its own voices (Kokoro, CustomVoice), a default voice
+// (Qwen3-TTS Base, Chatterbox Turbo's conds.safetensors), or a design
+// (OmniVoice, VoiceDesign). The flag stays for models that only clone
+// (MOSS-TTS-Nano was one); it needs the clone capability.
 func TestNeedsReference(t *testing.T) {
 	var got []string
 	for _, e := range Builtin().Entries {
@@ -211,7 +212,7 @@ func TestNeedsReference(t *testing.T) {
 			got = append(got, e.ID)
 		}
 	}
-	if !slices.Equal(got, []string{"moss-tts-nano-100m"}) {
+	if len(got) != 0 {
 		t.Errorf("needsReference: %q", got)
 	}
 	c := Catalog{Version: 1, Entries: []Entry{{ID: "x", Label: "X", Family: "x", Repo: "o/x", Tasks: []Task{TaskTTS},
@@ -291,35 +292,84 @@ func TestPresets(t *testing.T) {
 	}
 }
 
-// TestRetired: the three models #41 retired stay in the catalogue (they
-// still run when named) but no picker offers them; Kokoro's Chinese
-// speakers are hidden the same way.
-func TestRetired(t *testing.T) {
+// TestRemoved: the six speech models thread #43 removed are gone from
+// the entries and the pickers, and every name they had (id, repo, short
+// repo, label, any case) maps to its replacement; a cloning request of
+// Marvis, Soprano or Pocket goes to Chatterbox Turbo. Kokoro's Chinese
+// speakers stay hidden.
+func TestRemoved(t *testing.T) {
 	c := Builtin()
-	for id, by := range map[string]string{"kitten-tts-mini-0.8": "kokoro-82m-bf16", "moss-tts-nano-100m": "qwen3-tts-0.6b-base-8bit", "chatterbox-8bit": "chatterbox-turbo-8bit"} {
-		e, ok := c.ByID(id)
-		if !ok || e.Retired == nil {
-			t.Fatalf("%s: %+v", id, e)
+	want := []struct{ id, repo, by, cloneBy string }{
+		{"kitten-tts-mini-0.8", "mlx-community/kitten-tts-mini-0.8", "kokoro-82m-bf16", "kokoro-82m-bf16"},
+		{"moss-tts-nano-100m", "mlx-community/MOSS-TTS-Nano-100M", "qwen3-tts-0.6b-base-8bit", "qwen3-tts-0.6b-base-8bit"},
+		{"chatterbox-8bit", "mlx-community/chatterbox-8bit", "chatterbox-turbo-8bit", "chatterbox-turbo-8bit"},
+		{"marvis-tts-250m-v0.2-8bit", "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit", "kokoro-82m-bf16", "chatterbox-turbo-8bit"},
+		{"soprano-80m-bf16", "mlx-community/Soprano-80M-bf16", "kokoro-82m-bf16", "chatterbox-turbo-8bit"},
+		{"pocket-tts", "mlx-community/pocket-tts", "kokoro-82m-bf16", "chatterbox-turbo-8bit"},
+	}
+	if len(c.Removed) != len(want) {
+		t.Fatalf("%d removed", len(c.Removed))
+	}
+	for _, w := range want {
+		if _, ok := c.ByID(w.id); ok {
+			t.Errorf("%s is still an entry", w.id)
 		}
-		if r, ok := c.Replacement(e); !ok || r.ID != by {
-			t.Errorf("%s replaced by %s", id, r.ID)
+		r, ok := c.RemovedModel(w.id)
+		if !ok || r.Repo != w.repo {
+			t.Fatalf("%s: %+v", w.id, r)
 		}
-		if slices.Contains(c.Labels(TaskTTS), e.Label) {
-			t.Errorf("%s is still offered", id)
+		for _, ref := range []string{w.id, w.repo, strings.ToUpper(w.repo), ShortRepo(w.repo), r.Label, " " + r.Label + " "} {
+			if e, rr, ok := c.Replace(ref, false); !ok || e.ID != w.by || rr.ID != w.id {
+				t.Errorf("Replace(%q) = %s", ref, e.ID)
+			}
+			if e, _, ok := c.Replace(ref, true); !ok || e.ID != w.cloneBy {
+				t.Errorf("Replace(%q, clone) = %s", ref, e.ID)
+			}
 		}
+		if slices.Contains(c.Labels(TaskTTS), r.Label) {
+			t.Errorf("%s is still offered", w.id)
+		}
+		if c.DisplayName(w.repo) != r.Label {
+			t.Errorf("DisplayName(%s) = %q", w.repo, c.DisplayName(w.repo))
+		}
+	}
+	for _, ref := range []string{"", "kokoro-82m-bf16", "mlx-community/Kokoro-82M-bf16", "someone/else"} {
+		if _, _, ok := c.Replace(ref, false); ok {
+			t.Errorf("Replace(%q) maps", ref)
+		}
+	}
+	// Repos shared with kept models stay: Kokoro's G2P (Kitten's too) and
+	// S3TokenizerV2 (Chatterbox Turbo's).
+	pocket, _ := c.RemovedModel("pocket-tts")
+	if !slices.Equal(pocket.Repos(), []string{"mlx-community/pocket-tts", "kyutai/moshiko-pytorch-bf16"}) {
+		t.Errorf("pocket repos %v", pocket.Repos())
+	}
+	for _, r := range c.Removed {
+		for _, repo := range r.Repos() {
+			if c.UsesRepo(repo) {
+				t.Errorf("%s: %s is still used", r.ID, repo)
+			}
+		}
+	}
+	if !c.UsesRepo("beshkenadze/kitten-tts-g2p") || !c.UsesRepo("mlx-community/S3TokenizerV2") {
+		t.Error("shared aux repos")
 	}
 	k, _ := c.ByID("kokoro-82m-bf16")
 	if slices.ContainsFunc(k.VoiceIDs(), func(v string) bool { return strings.HasPrefix(v, "z") }) || !slices.Contains(k.AllVoiceIDs(), "zf_xiaobei") || len(k.VoiceIDs()) != 19 {
 		t.Errorf("kokoro voices %v", k.VoiceIDs())
 	}
-	bad := *c
-	bad.Entries = slices.Clone(c.Entries)
-	for i := range bad.Entries {
-		if bad.Entries[i].ID == "kitten-tts-mini-0.8" {
-			bad.Entries[i].Retired = &Retirement{ReplacedBy: "moss-tts-nano-100m"}
+	for name, edit := range map[string]func(*Catalog){
+		"replaced by a removed model":   func(b *Catalog) { b.Removed[0].ReplacedBy = "moss-tts-nano-100m" },
+		"clone replacement can't clone": func(b *Catalog) { b.Removed[3].CloneReplacedBy = "kokoro-82m-bf16" },
+		"no replacement":                func(b *Catalog) { b.Removed[0].ReplacedBy = "" },
+		"an entry's repo":               func(b *Catalog) { b.Removed[0].Repo = "mlx-community/Kokoro-82M-bf16" },
+		"a shared aux repo":             func(b *Catalog) { b.Removed[0].Aux = []string{"beshkenadze/kitten-tts-g2p"} },
+	} {
+		bad := *c
+		bad.Removed = slices.Clone(c.Removed)
+		edit(&bad)
+		if bad.Validate() == nil {
+			t.Errorf("%s validates", name)
 		}
-	}
-	if bad.Validate() == nil {
-		t.Error("a retired entry replaced by a retired one validates")
 	}
 }

@@ -585,6 +585,9 @@ func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 	}
 	switch {
 	case v.Kind == core.VoiceBuiltin:
+		if removedVoice(v) {
+			return false, i18n.T("This voice belongs to %s, which AudioSmith removed: it can't be used any more.", catalog.Builtin().DisplayName(v.Model))
+		}
 		if v.Model == "" || v.Model == e.Repo {
 			return true, ""
 		}

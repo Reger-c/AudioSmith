@@ -74,7 +74,7 @@ func skillTools() []skillTool {
 		{Name: "generate_speech", Lead: i18n.T("text to speech, as a WAV."), Args: []skillArg{
 			must(i18n.T("What to say. Long text is fine (up to 100,000 characters): AudioSmith splits it into sentences and joins the take; for a whole book, one call per chapter or section keeps each call short. %s inserts a pause.", "`[pause 500ms]`"), "text"),
 			arg(i18n.T("A saved voice's name or id (list_voices), a built-in speaker of the model (list_models → voices) or an OpenAI name (alloy, nova…). Empty: your own voice, else the model's default."), "voice"),
-			arg(i18n.T("A model id from list_models. Empty: AudioSmith's default, or a model that can speak the voice. Models marked needs_reference (MOSS-TTS-Nano) speak cloned voices only."), "model"),
+			arg(i18n.T("A model id from list_models. Empty: AudioSmith's default, or a model that can speak the voice. Models marked needs_reference speak cloned voices only. A removed model's id is answered by its replacement (replaced_by in the result)."), "model"),
 			arg(i18n.T("BCP-47 code (en, zh, ja…). Empty: the voice's or the model's."), "language"),
 			arg(i18n.T("How to say it, on models that take it (\"calm and slow, with a smile\"); on a voice-design model without a voice, the voice to design."), "instructions"),
 			arg(i18n.T("Speaking rate, 0.5–2 (1 = normal)."), "speed"),

@@ -551,7 +551,7 @@ func jobErrorText(e *jobs.Error) string {
 		return needsReferenceText(entryFor(d.Model).Label)
 	case proto.CodeBadRequest:
 		// The engine's own refusal of a clone-only model without a
-		// reference (MOSS-TTS-Nano), in older or newer words.
+		// reference, in older or newer words.
 		if m := strings.ToLower(e.Message); strings.Contains(m, "only clones voices") || strings.Contains(m, "requires refaudio") {
 			return needsReferenceText(modelInMessage(e.Message))
 		}
@@ -563,13 +563,13 @@ func jobErrorText(e *jobs.Error) string {
 // take was refused for want of a reference clip.
 func needsReferenceText(model string) string {
 	if model == "" {
-		model = "MOSS-TTS-Nano"
+		return i18n.T("This model only clones voices: it needs a reference clip or a saved cloned voice.")
 	}
 	return i18n.T("%s only clones voices: it needs a reference clip or a saved cloned voice.", model)
 }
 
 // modelInMessage is the model an engine message starts with
-// ("MOSS-TTS-Nano-100M only clones…"), as the UI names it, or "".
+// ("Some-Model-100M only clones…"), as the UI names it, or "".
 func modelInMessage(msg string) string {
 	for _, e := range catalog.Builtin().Entries {
 		if strings.HasPrefix(msg, catalog.ShortRepo(e.Repo)+" ") || strings.HasPrefix(msg, e.Label+" ") {

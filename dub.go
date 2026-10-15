@@ -441,6 +441,9 @@ func (a *app) dubShow(p *dub.Project, active []jobs.Job) {
 	a.dubExport = dubExportState{}
 	a.dubPaste = dubPasteState{}
 	a.dubLoadPeaks()
+	if m := p.Settings.Model; a.replaceRemovedRepo(&m, true) { // models_removed.go: a dub clones
+		a.dubSettings(func(s *dub.Settings) { s.Model = m })
+	}
 	if a.prefs.Dubbing.Open != p.ID {
 		id := p.ID
 		a.updateSettings(func(s *settings.Settings) { s.Dubbing.Open = id })

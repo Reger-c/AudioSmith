@@ -60,6 +60,13 @@ type Config struct {
 	ModelPath func(ctx context.Context, model string) (string, error)
 	// Models describes a model (from the catalogue); nil uses defaults.
 	Models func(repo string) ModelInfo
+	// Replace maps a recipe that names a model AudioSmith removed to its
+	// replacement (the catalogue's alias table: model, and a voice,
+	// language or parameter the replacement can't take) and reports
+	// whether it did. Generate, Preview and every render call it, so old
+	// projects, workflows and history recipes keep working. nil maps
+	// nothing.
+	Replace func(t *core.Take) bool
 	// CacheDir holds the render's chunk cache, temporary files and
 	// previews; "" means AudioSmith in the system's temporary directory.
 	CacheDir string

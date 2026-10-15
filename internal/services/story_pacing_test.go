@@ -340,7 +340,7 @@ func TestDeliveryPerModel(t *testing.T) {
 	voiceDesign := ModelInfo{Traits: TraitsFor("qwen3_tts", []string{"sampling", "design", "voiceStyle", "instruct", "language"})}
 	base := ModelInfo{Traits: TraitsFor("qwen3_tts", []string{"sampling", "clone", "language", "voicePrompt"})}
 	omni := ModelInfo{Traits: TraitsFor("omnivoice", []string{"clone", "design", "voiceStyle", "language", "duration", "speed"})}
-	chatterbox := ModelInfo{Traits: TraitsFor("chatterbox", []string{"sampling", "clone", "guidance", "exaggeration"})}
+	turbo := ModelInfo{Traits: TraitsFor("chatterbox", []string{"sampling", "clone", "seed"})}
 	kokoro := ModelInfo{Traits: TraitsFor("kokoro", []string{"speed"})}
 	// An entry that only says voiceStyle (an older catalogue) still takes it.
 	styleOnly := ModelInfo{Traits: TraitsFor("qwen3_tts", []string{"voiceStyle"})}
@@ -350,26 +350,24 @@ func TestDeliveryPerModel(t *testing.T) {
 		info  ModelInfo
 		in    core.Take
 		voice string
-		exag  float64
 		level string
 	}{
-		{"customvoice", customVoice, core.Take{Voice: "Vivian"}, "Vivian, " + ins, 0, ContinuityInstruct},
-		{"voicedesign", voiceDesign, core.Take{Voice: "温柔的年轻女声"}, "温柔的年轻女声, " + ins, 0, ContinuityInstruct},
-		{"voicedesign auto", voiceDesign, core.Take{}, ins, 0, ContinuityInstruct},
-		{"customvoice styled", customVoice, core.Take{Voice: "Vivian, 用明亮的声音说话。"}, "Vivian, 用明亮的声音说话。 " + ins, 0, ContinuityInstruct},
-		{"voicedesign long", voiceDesign, core.Take{Voice: "女声，温柔"}, "女声，温柔 " + ins, 0, ContinuityInstruct},
-		{"style only", styleOnly, core.Take{Voice: "Serena"}, "Serena, " + ins, 0, ContinuityInstruct},
-		{"base clone", base, core.Take{RefAudio: "/r.wav"}, "", 0, ContinuityLines},
-		{"voicedesign clone", voiceDesign, core.Take{Voice: "x", VoicePrompt: "/p"}, "x", 0, ContinuityInstruct},
-		{"omnivoice", omni, core.Take{Voice: "female, child"}, "female, child", 0, ContinuityLines},
-		{"chatterbox", chatterbox, core.Take{RefAudio: "/r.wav"}, "", 0.9, ContinuityIntensity},
-		{"chatterbox set", chatterbox, core.Take{RefAudio: "/r.wav", Exaggeration: 0.3}, "", 0.3, ContinuityIntensity},
-		{"kokoro", kokoro, core.Take{Voice: "af_heart"}, "af_heart", 0, ContinuityLines},
+		{"customvoice", customVoice, core.Take{Voice: "Vivian"}, "Vivian, " + ins, ContinuityInstruct},
+		{"voicedesign", voiceDesign, core.Take{Voice: "温柔的年轻女声"}, "温柔的年轻女声, " + ins, ContinuityInstruct},
+		{"voicedesign auto", voiceDesign, core.Take{}, ins, ContinuityInstruct},
+		{"customvoice styled", customVoice, core.Take{Voice: "Vivian, 用明亮的声音说话。"}, "Vivian, 用明亮的声音说话。 " + ins, ContinuityInstruct},
+		{"voicedesign long", voiceDesign, core.Take{Voice: "女声，温柔"}, "女声，温柔 " + ins, ContinuityInstruct},
+		{"style only", styleOnly, core.Take{Voice: "Serena"}, "Serena, " + ins, ContinuityInstruct},
+		{"base clone", base, core.Take{RefAudio: "/r.wav"}, "", ContinuityLines},
+		{"voicedesign clone", voiceDesign, core.Take{Voice: "x", VoicePrompt: "/p"}, "x", ContinuityInstruct},
+		{"omnivoice", omni, core.Take{Voice: "female, child"}, "female, child", ContinuityLines},
+		{"chatterbox turbo", turbo, core.Take{RefAudio: "/r.wav"}, "", ContinuityLines},
+		{"kokoro", kokoro, core.Take{Voice: "af_heart"}, "af_heart", ContinuityLines},
 	} {
 		tk := c.in
-		withDelivery(&tk, c.info, ins, "撒娇", IntensityStrong)
-		if tk.Voice != c.voice || tk.Exaggeration != c.exag {
-			t.Errorf("%s: voice %q exaggeration %g", c.name, tk.Voice, tk.Exaggeration)
+		withDelivery(&tk, c.info, ins)
+		if tk.Voice != c.voice {
+			t.Errorf("%s: voice %q", c.name, tk.Voice)
 		}
 		if got := ContinuityOf(c.info.Traits); got != c.level {
 			t.Errorf("%s: level %s", c.name, got)

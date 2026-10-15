@@ -61,6 +61,8 @@ type Speech struct {
 	VoiceName string
 	// Ignored lists the parameters the model does not honour.
 	Ignored []string
+	// Replaced is set when the request named a removed model.
+	Replaced *Replacement
 
 	s       *Server
 	x       *watch
@@ -101,13 +103,13 @@ func (s *Server) queueTimeout() time.Duration {
 }
 
 // prepare resolves a request's model and voice.
-func (s *Server) prepare(ctx context.Context, p SpeechParams) (SpeakRequest, []string, string, error) {
+func (s *Server) prepare(ctx context.Context, p SpeechParams) (SpeakRequest, []string, string, *Replacement, error) {
 	text := strings.TrimSpace(p.Text)
 	if text == "" {
-		return SpeakRequest{}, nil, "", errInvalid("input", "There is no text to speak.")
+		return SpeakRequest{}, nil, "", nil, errInvalid("input", "There is no text to speak.")
 	}
 	if n := utf8.RuneCountInString(text); n > MaxInput {
-		return SpeakRequest{}, nil, "", errInvalid("input", "The text has %d characters; the limit is %d.", n, MaxInput)
+		return SpeakRequest{}, nil, "", nil, errInvalid("input", "The text has %d characters; the limit is %d.", n, MaxInput)
 	}
 	if p.Voice == "" && p.Model == "" && p.Client != "" {
 		if b, ok := s.b.Settings().API.Binding(p.Client); ok {
@@ -118,17 +120,17 @@ func (s *Server) prepare(ctx context.Context, p SpeechParams) (SpeakRequest, []s
 			p.Voice = b.Voice
 		}
 	}
-	e, vc, err := s.resolveTTS(ctx, p.Model, p.Voice)
+	e, vc, rep, err := s.resolveTTS(ctx, p.Model, p.Voice, strings.TrimSpace(p.RefAudio) != "")
 	if err != nil {
-		return SpeakRequest{}, nil, "", err
+		return SpeakRequest{}, nil, "", nil, err
 	}
 	if p.RefAudio != "" && !e.Has(catalog.CapClone) {
-		return SpeakRequest{}, nil, "", &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedModel, Param: "model",
+		return SpeakRequest{}, nil, "", nil, &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedModel, Param: "model",
 			Message: e.Label + " cannot clone a voice: pick a model that can (GET /api/models)."}
 	}
 	if e.NeedsReference && strings.TrimSpace(p.RefAudio) == "" && vc.Saved == nil {
 		// A saved voice without a reference was refused above (VoiceFits).
-		return SpeakRequest{}, nil, "", errNeedsReference(e.Label)
+		return SpeakRequest{}, nil, "", nil, errNeedsReference(e.Label)
 	}
 	req := SpeakRequest{Text: text, Model: e, Voice: vc.Saved, Speaker: vc.Speaker, Gender: vc.Gender,
 		Instructions: strings.TrimSpace(p.Instructions), Language: strings.TrimSpace(p.Language),
@@ -142,7 +144,7 @@ func (s *Server) prepare(ctx context.Context, p SpeechParams) (SpeakRequest, []s
 	case vc.Named != "":
 		name = vc.Named
 	}
-	return req, ignoredParams(e, req), name, nil
+	return req, ignoredParams(e, req), name, rep, nil
 }
 
 // ignoredParams lists what model e will not honour of req.
@@ -166,7 +168,7 @@ func ignoredParams(e catalog.Entry, r SpeakRequest) []string {
 	add(r.Steps != 0, "steps", catalog.CapSteps)
 	add(r.Temperature != 0 || r.TopP != 0, "temperature", catalog.CapSampling)
 	add(r.Guidance != 0, "guidance", catalog.CapGuidance)
-	add(r.Exaggeration != 0, "exaggeration", catalog.CapExaggeration)
+	add(r.Exaggeration != 0, "exaggeration") // only the removed Chatterbox (multilingual) took it
 	add(r.Language != "", "language", catalog.CapLanguage)
 	return out
 }
@@ -176,7 +178,7 @@ func (s *Server) StartSpeech(ctx context.Context, p SpeechParams) (*Speech, erro
 	if err := s.engineGate(); err != nil {
 		return nil, err
 	}
-	req, ignored, name, err := s.prepare(ctx, p)
+	req, ignored, name, rep, err := s.prepare(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +189,7 @@ func (s *Server) StartSpeech(ctx context.Context, p SpeechParams) (*Speech, erro
 		x.stop()
 		return nil, err
 	}
-	return &Speech{Recipe: recipe, Model: req.Model, JobID: jobID, VoiceName: name, Ignored: ignored, s: s, x: x}, nil
+	return &Speech{Recipe: recipe, Model: req.Model, JobID: jobID, VoiceName: name, Ignored: ignored, Replaced: rep, s: s, x: x}, nil
 }
 
 // errRestarted: the engine restarted while audio was being streamed, so
@@ -253,5 +255,9 @@ func speechHeaders(h http.Header, sp *Speech) {
 	}
 	if len(sp.Ignored) > 0 {
 		h.Set("X-AudioSmith-Ignored", strings.Join(sp.Ignored, ", "))
+	}
+	if r := sp.Replaced; r != nil {
+		h.Set("X-AudioSmith-Replaced-By", r.ReplacedBy)
+		h.Set("X-AudioSmith-Warning", r.Warning)
 	}
 }

@@ -76,6 +76,9 @@ func (a *app) loadBatch() {
 				return
 			}
 			b.settings, b.items, b.loaded, b.watch = bs, items, true, w
+			if m := bs.Model; a.replaceRemovedRepo(&m, true) { // models_removed.go: dubs clone
+				a.batchSetSettings(func(s *services.BatchSettings) { s.Model = m })
+			}
 			for id, p := range docs {
 				b.docs[id] = p
 			}

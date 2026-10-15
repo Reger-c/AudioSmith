@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "entries": [
     {
       "id": "kokoro-82m-bf16",
@@ -129,49 +129,6 @@
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base", "commercial": true, "verified": true}
     },
     {
-      "id": "marvis-tts-250m-v0.2-8bit",
-      "label": "Marvis TTS 250M",
-      "family": "marvis",
-      "repo": "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit",
-      "revision": "f564ede427b7ec816b229b8c1c2f129817dc4a95",
-      "tasks": ["tts"],
-      "about": "Two English conversational voices.",
-      "languages": [
-        {"code": "en"}
-      ],
-      "voices": [
-        {"id": "conversational_a", "language": "en"},
-        {"id": "conversational_b", "language": "en"}
-      ],
-      "capabilities": ["sampling"],
-      "sampleRate": 24000,
-      "maxChars": 400,
-      "rtf": 1,
-      "size": 672148432,
-      "minMemoryGB": 2,
-      "quantization": "8bit",
-      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Marvis-AI/marvis-tts-250m-v0.2", "commercial": true, "verified": true}
-    },
-    {
-      "id": "soprano-80m-bf16",
-      "label": "Soprano 80M",
-      "family": "soprano",
-      "repo": "mlx-community/Soprano-80M-bf16",
-      "revision": "b7da048eff3dfd556409a44b78b9c61a9dd4ccfa",
-      "tasks": ["tts"],
-      "about": "Tiny English model, very fast.",
-      "languages": [
-        {"code": "en"}
-      ],
-      "capabilities": ["sampling"],
-      "maxChars": 500,
-      "rtf": 2.8,
-      "size": 220645307,
-      "minMemoryGB": 1,
-      "quantization": "bf16",
-      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/ekwek/Soprano-80M", "commercial": true, "verified": true}
-    },
-    {
       "id": "omnivoice-bf16",
       "label": "OmniVoice",
       "family": "omnivoice",
@@ -248,60 +205,6 @@
       "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base", "commercial": true, "verified": true}
     },
     {
-      "id": "chatterbox-8bit",
-      "label": "Chatterbox",
-      "family": "chatterbox",
-      "repo": "mlx-community/chatterbox-8bit",
-      "revision": "9617d61b596a03d1bed766a28c341680e993a1b9",
-      "tasks": ["tts"],
-      "about": "Expressive voice cloning in 23 languages, with an emotion-intensity control.",
-      "languages": [
-        {"code": "ar", "value": "ar"},
-        {"code": "da", "value": "da"},
-        {"code": "de", "value": "de"},
-        {"code": "el", "value": "el"},
-        {"code": "en", "value": "en"},
-        {"code": "es", "value": "es"},
-        {"code": "fi", "value": "fi"},
-        {"code": "fr", "value": "fr"},
-        {"code": "he", "value": "he"},
-        {"code": "hi", "value": "hi"},
-        {"code": "it", "value": "it"},
-        {"code": "ja", "value": "ja"},
-        {"code": "ko", "value": "ko"},
-        {"code": "ms", "value": "ms"},
-        {"code": "nl", "value": "nl"},
-        {"code": "no", "value": "no"},
-        {"code": "pl", "value": "pl"},
-        {"code": "pt", "value": "pt"},
-        {"code": "ru", "value": "ru"},
-        {"code": "sv", "value": "sv"},
-        {"code": "sw", "value": "sw"},
-        {"code": "tr", "value": "tr"},
-        {"code": "zh", "value": "zh"}
-      ],
-      "capabilities": ["sampling", "clone", "language", "guidance", "exaggeration", "seed"],
-      "sampleRate": 24000,
-      "maxChars": 400,
-      "rtf": 1.5,
-      "size": 1425486273,
-      "files": [
-        {"path": "Cangjie5_TC.json", "size": 1920163},
-        {"path": "conds.safetensors", "size": 105316},
-        {"path": "config.json", "size": 336},
-        {"path": "model.safetensors", "size": 928163417},
-        {"path": "model.safetensors.index.json", "size": 355942},
-        {"path": "tokenizer.json", "size": 70011}
-      ],
-      "minMemoryGB": 4,
-      "quantization": "8bit",
-      "retired": {"replacedBy": "chatterbox-turbo-8bit", "reason": "#41: Chinese paragraphs drop sentences and garble (CER 32 %); English dialogue garbled (13 %). Turbo covers English cloning."},
-      "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/ResembleAI/chatterbox", "commercial": true, "verified": true},
-      "aux": [
-        {"repo": "mlx-community/S3TokenizerV2", "revision": "e0c9886f0e1c35ae85b1f27277416fb19fc72bec", "licence": "apache-2.0"}
-      ]
-    },
-    {
       "id": "chatterbox-turbo-8bit",
       "label": "Chatterbox Turbo",
       "family": "chatterbox",
@@ -322,95 +225,6 @@
       "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/ResembleAI/chatterbox-turbo", "commercial": true, "verified": true},
       "aux": [
         {"repo": "mlx-community/S3TokenizerV2", "revision": "e0c9886f0e1c35ae85b1f27277416fb19fc72bec", "licence": "apache-2.0"}
-      ]
-    },
-    {
-      "id": "moss-tts-nano-100m",
-      "label": "MOSS-TTS-Nano",
-      "family": "moss_tts_nano",
-      "repo": "mlx-community/MOSS-TTS-Nano-100M",
-      "revision": "229a9c51bb0ffff6fd0dbe53b5bf0c441e438a79",
-      "tasks": ["tts"],
-      "about": "A very small voice-cloning model (needs a reference clip), 48 kHz.",
-      "needsReference": true,
-      "capabilities": ["sampling", "clone", "seed"],
-      "sampleRate": 48000,
-      "maxChars": 400,
-      "rtf": 1.5,
-      "size": 329463572,
-      "minMemoryGB": 2,
-      "retired": {"replacedBy": "qwen3-tts-0.6b-base-8bit", "reason": "#41: Chinese CER 35 % with 7–10 s silences; English long text drops sentences."},
-      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Nano-100M", "commercial": true, "verified": true},
-      "aux": [
-        {"repo": "mlx-community/MOSS-Audio-Tokenizer-Nano", "revision": "edccdfd96d5c21f1c078338a98d738b9a6bf6917", "licence": "apache-2.0"}
-      ]
-    },
-    {
-      "id": "kitten-tts-mini-0.8",
-      "label": "KittenTTS mini",
-      "family": "kitten",
-      "repo": "mlx-community/kitten-tts-mini-0.8",
-      "revision": "a22cce835c4af60bf9a50779124cf8cc34b0c36e",
-      "tasks": ["tts"],
-      "about": "Tiny and fast English model with 8 voices.",
-      "languages": [
-        {"code": "en"}
-      ],
-      "voices": [
-        {"id": "Bella", "language": "en", "gender": "female"},
-        {"id": "Jasper", "language": "en", "gender": "male"},
-        {"id": "Luna", "language": "en", "gender": "female"},
-        {"id": "Bruno", "language": "en", "gender": "male"},
-        {"id": "Rosie", "language": "en", "gender": "female"},
-        {"id": "Hugo", "language": "en", "gender": "male"},
-        {"id": "Kiki", "language": "en", "gender": "female"},
-        {"id": "Leo", "language": "en", "gender": "male"}
-      ],
-      "capabilities": ["speed"],
-      "deterministic": true,
-      "sampleRate": 24000,
-      "maxChars": 300,
-      "rtf": 1.2,
-      "size": 292427770,
-      "minMemoryGB": 1,
-      "retired": {"replacedBy": "kokoro-82m-bf16", "reason": "#41: English WER 21 %; all 8 voices misread."},
-      "licence": {"id": "apache-2.0", "name": "Apache 2.0", "url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8", "commercial": true, "verified": true},
-      "aux": [
-        {"repo": "beshkenadze/kitten-tts-g2p", "revision": "9c692b92682d959d9013a9cfe6a49541997add18", "licence": "mit"}
-      ]
-    },
-    {
-      "id": "pocket-tts",
-      "label": "Pocket TTS",
-      "family": "pocket_tts",
-      "repo": "mlx-community/pocket-tts",
-      "revision": "cbf71d5f6657bbc3f4bc02f85ee408261225bec7",
-      "tasks": ["tts"],
-      "about": "Light English model with 8 voices that can also clone a reference clip. Attribution licence (CC BY 4.0).",
-      "languages": [
-        {"code": "en"}
-      ],
-      "voices": [
-        {"id": "alba", "language": "en"},
-        {"id": "marius", "language": "en"},
-        {"id": "javert", "language": "en"},
-        {"id": "jean", "language": "en"},
-        {"id": "fantine", "language": "en"},
-        {"id": "cosette", "language": "en"},
-        {"id": "eponine", "language": "en"},
-        {"id": "azelma", "language": "en"}
-      ],
-      "capabilities": ["sampling", "clone", "seed"],
-      "sampleRate": 24000,
-      "maxChars": 500,
-      "rtf": 3.3,
-      "size": 624967440,
-      "minMemoryGB": 1,
-      "licence": {"id": "cc-by-4.0", "name": "CC BY 4.0", "url": "https://huggingface.co/kyutai/pocket-tts", "commercial": true, "gated": false, "verified": true},
-      "aux": [
-        {"repo": "kyutai/moshiko-pytorch-bf16", "revision": "2bfc9ae6e89079a5cc7ed2a68436010d91a3d289", "licence": "cc-by-4.0", "files": [
-          {"path": "tokenizer-e351c8d8-checkpoint125.safetensors", "size": 384644900}
-        ]}
       ]
     },
     {
@@ -712,5 +526,19 @@
       "minMemoryGB": 1,
       "licence": {"id": "mit", "name": "MIT / Apache 2.0", "url": "https://github.com/Rikorose/DeepFilterNet", "commercial": true, "verified": true}
     }
+  ],
+  "removed": [
+    {"id": "kitten-tts-mini-0.8", "label": "KittenTTS mini", "repo": "mlx-community/kitten-tts-mini-0.8", "replacedBy": "kokoro-82m-bf16",
+      "reason": "#41: English WER 21 %; all 8 voices misread."},
+    {"id": "moss-tts-nano-100m", "label": "MOSS-TTS-Nano", "repo": "mlx-community/MOSS-TTS-Nano-100M", "aux": ["mlx-community/MOSS-Audio-Tokenizer-Nano"], "replacedBy": "qwen3-tts-0.6b-base-8bit",
+      "reason": "#41: Chinese CER 35 % with 7–10 s silences; English long text drops sentences."},
+    {"id": "chatterbox-8bit", "label": "Chatterbox", "repo": "mlx-community/chatterbox-8bit", "replacedBy": "chatterbox-turbo-8bit",
+      "reason": "#41: Chinese paragraphs drop sentences and garble (CER 32 %); English dialogue garbled (13 %). Turbo covers English cloning."},
+    {"id": "marvis-tts-250m-v0.2-8bit", "label": "Marvis TTS 250M", "repo": "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit", "replacedBy": "kokoro-82m-bf16", "cloneReplacedBy": "chatterbox-turbo-8bit",
+      "reason": "#43: English only, 0.5× real time, trained on non-commercial data (Emilia)."},
+    {"id": "soprano-80m-bf16", "label": "Soprano 80M", "repo": "mlx-community/Soprano-80M-bf16", "replacedBy": "kokoro-82m-bf16", "cloneReplacedBy": "chatterbox-turbo-8bit",
+      "reason": "#43: English only, one voice; Kokoro reads English better."},
+    {"id": "pocket-tts", "label": "Pocket TTS", "repo": "mlx-community/pocket-tts", "aux": ["kyutai/moshiko-pytorch-bf16"], "replacedBy": "kokoro-82m-bf16", "cloneReplacedBy": "chatterbox-turbo-8bit",
+      "reason": "#43: English only, long silences; Chatterbox Turbo clones English and Kokoro reads it."}
   ]
 }

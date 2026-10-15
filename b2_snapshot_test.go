@@ -195,10 +195,10 @@ func b2Library(t *testing.T, setup b2Setup, shoot b2Shoot) {
 
 	useFakeHub(t, a)
 	a.download(entry(t, "kokoro-82m-bf16"))
-	dl := a.model(entry(t, "soprano-80m-bf16"))
+	dl := a.model(entry(t, "chatterbox-turbo-8bit"))
 	shoot(a, tt, "models", func() {
 		a.navigate("/models")
-		dl.downloading, dl.progress = true, hub.Progress{Bytes: 88e6, TotalBytes: 220645307, Mirror: "https://hf-mirror.com"}
+		dl.downloading, dl.progress = true, hub.Progress{Bytes: 480e6, TotalBytes: 1202987769, Mirror: "https://hf-mirror.com"}
 		a.notices = nil
 		a.toasts = nil
 	})

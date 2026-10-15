@@ -37,21 +37,15 @@ func storyContinuity(model string) string {
 
 // continuityLabel names a continuity level; continuityTip explains it.
 func continuityLabel(level string) string {
-	switch level {
-	case services.ContinuityInstruct:
+	if level == services.ContinuityInstruct {
 		return i18n.T("Directed delivery")
-	case services.ContinuityIntensity:
-		return i18n.T("Emotion intensity")
 	}
 	return i18n.T("Line by line")
 }
 
 func continuityTip(level string) string {
-	switch level {
-	case services.ContinuityInstruct:
+	if level == services.ContinuityInstruct {
 		return i18n.T("This model hears the scene, each character's persona and each line's direction as an instruction, so the lines carry the moment's feeling. Never spoken.")
-	case services.ContinuityIntensity:
-		return i18n.T("This model takes no instructions: a line's direction only sets how strong its emotion is (Chatterbox's exaggeration). Pacing and merged turns still apply.")
 	}
 	return i18n.T("This model says each line as written: scene, personas and directions are kept but not heard. Pacing and merged turns still apply. For directed delivery, use Qwen3-TTS CustomVoice or VoiceDesign.")
 }

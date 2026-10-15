@@ -333,8 +333,10 @@ func (s *Server) wsSpeak(ctx context.Context, c *wsConn, req wsRequest, client s
 			conv = newPCMConverter(sr, ch)
 			outRate, outCh = PCMRate, 1
 		}
-		return c.writeJSON(map[string]any{"type": "start", "take_id": sp.Recipe.ID, "job_id": sp.JobID, "model": sp.Model.ID,
-			"voice": sp.VoiceName, "ignored": sp.Ignored, "sample_rate": outRate, "channels": outCh, "encoding": "pcm_s16le"})
+		start := map[string]any{"type": "start", "take_id": sp.Recipe.ID, "job_id": sp.JobID, "model": sp.Model.ID,
+			"voice": sp.VoiceName, "ignored": sp.Ignored, "sample_rate": outRate, "channels": outCh, "encoding": "pcm_s16le"}
+		sp.addReplaced(start)
+		return c.writeJSON(start)
 	}
 	res, err := sp.Wait(runCtx, func(ch proto.ChunkParams) error {
 		if !started {

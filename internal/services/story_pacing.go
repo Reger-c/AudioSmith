@@ -13,8 +13,7 @@ package services
 //     lines; a turn that cannot be split is made line by line instead;
 //   - delivery: a line's direction, its character's persona and the
 //     story's scene become an instruction for models that take one
-//     (StoryInstruct; Traits.Instruct), Chatterbox's exaggeration for
-//     Chatterbox, nothing for the others.
+//     (StoryInstruct; Traits.Instruct), nothing for the others.
 //
 // A document without a pacing (stories made before it existed) renders
 // exactly as before: one gap, a call per line.
@@ -589,46 +588,30 @@ func StoryInstruct(lineText, scene, persona, direction string, intensity int, pr
 	return strings.Join(parts, " ")
 }
 
-// directionExaggeration is Chatterbox's exaggeration for a direction of
-// intensity (0.5 is the model's neutral).
-func directionExaggeration(intensity int) float64 {
-	switch intensity {
-	case IntensityLight:
-		return 0.55
-	case IntensityStrong:
-		return 0.9
-	}
-	return 0.7
-}
-
 // withDelivery puts a line's delivery into its recipe: the instruction
 // into the voice field of models that take one (after the speaker of
 // Qwen3 CustomVoice, after the description of a designed voice: the
-// engine's own instruct field is dropped when a voice is set), the
-// exaggeration for Chatterbox. A clone (reference clip or voice prompt)
-// takes no instruction.
-func withDelivery(t *core.Take, info ModelInfo, instruct, direction string, intensity int) {
+// engine's own instruct field is dropped when a voice is set). A clone
+// (reference clip or voice prompt) takes no instruction.
+func withDelivery(t *core.Take, info ModelInfo, instruct string) {
+	if !info.Instruct || instruct == "" || t.RefAudio != "" || t.VoicePrompt != "" {
+		return
+	}
 	switch {
-	case info.Instruct && instruct != "" && t.RefAudio == "" && t.VoicePrompt == "":
-		switch {
-		case t.Voice == "":
-			t.Voice = instruct
-		case strings.ContainsAny(t.Voice, ",，"):
-			// "Speaker, instruction" or a description already: goes on.
-			t.Voice = strings.TrimRight(t.Voice, " ") + " " + instruct
-		default:
-			t.Voice += ", " + instruct
-		}
-	case info.Exaggeration && direction != "" && t.Exaggeration == 0:
-		t.Exaggeration = directionExaggeration(intensity)
+	case t.Voice == "":
+		t.Voice = instruct
+	case strings.ContainsAny(t.Voice, ",，"):
+		// "Speaker, instruction" or a description already: goes on.
+		t.Voice = strings.TrimRight(t.Voice, " ") + " " + instruct
+	default:
+		t.Voice += ", " + instruct
 	}
 }
 
 // Continuity levels of a model for stories (ContinuityOf).
 const (
-	ContinuityInstruct  = "instruct"  // takes the scene, personas and directions
-	ContinuityIntensity = "intensity" // Chatterbox: directions set its exaggeration
-	ContinuityLines     = "lines"     // pacing and merged turns only
+	ContinuityInstruct = "instruct" // takes the scene, personas and directions
+	ContinuityLines    = "lines"    // pacing and merged turns only
 )
 
 // ContinuityOf is what a model does with a story's scene, personas and
@@ -637,8 +620,6 @@ func ContinuityOf(info Traits) string {
 	switch {
 	case info.Instruct:
 		return ContinuityInstruct
-	case info.Exaggeration:
-		return ContinuityIntensity
 	}
 	return ContinuityLines
 }

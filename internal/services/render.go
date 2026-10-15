@@ -146,8 +146,8 @@ type ModelInfo struct {
 // ParamDefaults are recommended generation parameters; 0 = none (the
 // model's own).
 type ParamDefaults struct {
-	Temperature, TopP, Guidance, Exaggeration float64
-	Steps                                     int
+	Temperature, TopP, Guidance float64
+	Steps                       int
 }
 
 // FillDefaults gives recipe t the model's recommended parameters for
@@ -167,9 +167,6 @@ func (m ModelInfo) FillDefaults(t *core.Take, workflow string) {
 	}
 	if t.Guidance == 0 {
 		t.Guidance = d.Guidance
-	}
-	if t.Exaggeration == 0 {
-		t.Exaggeration = d.Exaggeration
 	}
 	if t.Steps == 0 {
 		t.Steps = d.Steps
@@ -197,6 +194,7 @@ type renderer struct {
 	modelPath func(ctx context.Context, model string) (string, error)
 	licences  core.LicenceService
 	models    func(repo string) ModelInfo
+	replace   func(*core.Take) bool
 	pron      *Pronunciation
 	cacheDir  string
 	bus       *core.Bus
@@ -232,6 +230,12 @@ func (r *renderer) Run(ctx context.Context, job jobs.Job, report func(jobs.Progr
 	var p RenderParams
 	if err := json.Unmarshal(job.Params, &p); err != nil {
 		return nil, &jobs.Error{Code: proto.CodeBadRequest, Message: "params: " + err.Error()}
+	}
+	if r.replace != nil && r.replace(&p.Take) {
+		r.logf("render %s: %s replaces a removed model", job.ID, p.Take.Model)
+		if p.Lang == "" {
+			p.Lang = r.model(p.Take.Model).Lang(p.Take.Language, p.Take.Voice)
+		}
 	}
 	t := p.Take
 	opts := core.TakeRender{}
@@ -505,9 +509,6 @@ func (r *renderer) chunks(p *RenderParams, pl *plan.Plan, info ModelInfo, modelP
 		}
 		if t.Guidance != 0 {
 			sp.Guidance = &t.Guidance
-		}
-		if t.Exaggeration != 0 {
-			sp.Exaggeration = &t.Exaggeration
 		}
 		speed := t.Speed
 		if seg.Speed != 1 && seg.Speed > 0 {

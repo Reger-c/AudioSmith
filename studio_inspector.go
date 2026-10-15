@@ -327,14 +327,6 @@ func (a *app) studioAdvanced(c *ui.Context, p catalog.Entry) {
 			}
 		})
 	}
-	if p.Has(catalog.CapExaggeration) {
-		x := shown(a.exaggeration, rec.Exaggeration, 0.5)
-		ui.Field(c, i18n.T("Expressiveness  %.2f", x), func() {
-			if snapped(ui.Slider(c.Key("exaggeration"), &x, 0.25, 2).Label(i18n.T("Expressiveness")), &x, 0.05).Changed() {
-				a.exaggeration = x
-			}
-		})
-	}
 	if p.Has(catalog.CapSampling) {
 		temp, topP := shown(a.temperature, rec.Temperature, 0.9), shown(a.topP, rec.TopP, 1)
 		ui.Field(c, i18n.T("Temperature  %.2f", temp), func() {

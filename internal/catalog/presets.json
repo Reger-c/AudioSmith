@@ -98,7 +98,6 @@
         "language": "auto",
         "steps": null,
         "guidance": null,
-        "exaggeration": null,
         "speed": 1.0
       },
       "voices": {
@@ -151,7 +150,6 @@
         "language": "auto",
         "steps": null,
         "guidance": null,
-        "exaggeration": null,
         "speed": 1.0
       },
       "needsVoice": "a saved cloned or designed voice (its sample is the reference)",
@@ -196,7 +194,6 @@
         "language": "auto",
         "steps": null,
         "guidance": null,
-        "exaggeration": null,
         "speed": 1.0
       },
       "needsVoice": "a saved cloned or designed voice",
@@ -234,7 +231,6 @@
         "language": "auto",
         "steps": null,
         "guidance": null,
-        "exaggeration": null,
         "speed": 1.0
       },
       "voices": {
@@ -286,7 +282,6 @@
         "language": "auto",
         "steps": null,
         "guidance": null,
-        "exaggeration": null,
         "speed": 1.0
       },
       "dub": {
@@ -312,7 +307,6 @@
         "language": "auto",
         "steps": 32,
         "guidance": 1.5,
-        "exaggeration": null,
         "speed": 1.0
       },
       "workflows": {
@@ -347,7 +341,6 @@
         "language": "auto",
         "steps": null,
         "guidance": null,
-        "exaggeration": null,
         "speed": 1.0
       },
       "notes": "#41: one design drifts from line to line (ECAPA 0.29–0.64): design only, not for the four workflows. Sampling as the Qwen3-TTS family (main 2026-10-15)."

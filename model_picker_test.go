@@ -10,15 +10,15 @@ import (
 
 // TestModelPicker: the Studio's picker lists the recommended models for
 // the interface's language first, with their "best for" and hints; the
-// others come with "Show all models"; picking one applies it; retired
-// models are not offered.
+// others come with "Show all models"; picking one applies it; removed
+// models are never offered.
 func TestModelPicker(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	tt.Frame()
 	a.pickerOpen = map[string]bool{"model": true}
 	tt.Frame()
 	texts := strings.Join(tt.Texts(), "|")
-	for _, want := range []string{"Recommended", "English: fastest and most natural built-in voices", "Speed ●●● · Quality ●●●", "Chatterbox Turbo", "Show all models (7)"} {
+	for _, want := range []string{"Recommended", "English: fastest and most natural built-in voices", "Speed ●●● · Quality ●●●", "Chatterbox Turbo", "Show all models (4)"} {
 		if !strings.Contains(texts, want) {
 			t.Errorf("picker lacks %q: %s", want, texts)
 		}
@@ -26,17 +26,17 @@ func TestModelPicker(t *testing.T) {
 	if strings.Contains(texts, "Marvis TTS 250M") {
 		t.Error("the others show before Show all models")
 	}
-	tt.Click("Show all models (7)")
+	tt.Click("Show all models (4)")
 	tt.Frame()
 	texts = strings.Join(tt.Texts(), "|")
-	for _, l := range []string{"Marvis TTS 250M", "OmniVoice", "Custom Hugging Face repo…"} {
+	for _, l := range []string{"Qwen3-TTS 0.6B CustomVoice", "OmniVoice", "Custom Hugging Face repo…"} {
 		if !strings.Contains(texts, l) {
 			t.Errorf("all models lack %q", l)
 		}
 	}
-	for _, id := range []string{"kitten-tts-mini-0.8", "moss-tts-nano-100m", "chatterbox-8bit"} {
-		if strings.Contains(texts, entry(t, id).Label+"|") {
-			t.Errorf("retired %s offered", id)
+	for _, r := range catalog.Builtin().Removed {
+		if strings.Contains(texts, "|"+r.Label+"|") {
+			t.Errorf("removed %s offered", r.ID)
 		}
 	}
 	if err := tt.Click("Qwen3-TTS 1.7B Base (voice clone)"); err != nil {
@@ -72,24 +72,4 @@ func TestModelPickerDub(t *testing.T) {
 		t.Error("a model that can't clone was picked")
 	}
 	_ = dub.TimingSmart
-}
-
-// TestRetiredModelHint: a page on a retired model says what replaces it,
-// and Switch moves to it.
-func TestRetiredModelHint(t *testing.T) {
-	a, _, tt := newTestApp(t)
-	a.modelLabel = entry(t, "kitten-tts-mini-0.8").Label
-	a.modelChanged()
-	tt.Frame()
-	if !tt.HasText("KittenTTS mini is retired: it misread too much in our tests. Kokoro 82M is better.") {
-		t.Fatalf("no hint: %q", tt.Texts())
-	}
-	if err := tt.Click("Switch"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.preset().ID != "kokoro-82m-bf16" {
-		t.Errorf("switched to %s", a.preset().ID)
-	}
-	_ = catalog.Builtin
 }

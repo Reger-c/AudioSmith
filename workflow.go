@@ -180,6 +180,9 @@ func (a *app) wfShow(w *workflow.Workflow, run *workflow.Run, active []jobs.Job)
 	a.wfSel, a.wfSelEdge, a.wfErr = "", "", ""
 	a.wfCanvas = wfCanvasState{w: a.wfCanvas.w, h: a.wfCanvas.h, fit: true}
 	a.wfVer++
+	if a.replaceRemovedWorkflow(w) { // models_removed.go
+		a.wfSave()
+	}
 	if a.wfBusy() {
 		a.wfPanel = wfPanelRun
 	}

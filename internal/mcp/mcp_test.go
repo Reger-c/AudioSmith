@@ -303,6 +303,19 @@ func TestTools(t *testing.T) {
 			t.Fatal("audio inline in file mode")
 		}
 	}
+	// A removed model (thread #43): its replacement answers, and says so.
+	res = call(t, cs, "generate_speech", map[string]any{"text": "Hi.", "model": "kitten-tts-mini-0.8", "output": "file"})
+	out = speechOut{}
+	json.Unmarshal([]byte(textOf(res)), &out)
+	if res.IsError || out.Model != "kokoro-82m-bf16" || out.ReplacedBy != "kokoro-82m-bf16" || !strings.Contains(out.Warning, "KittenTTS mini was removed") {
+		t.Fatalf("removed model: %v %s", res.IsError, textOf(res))
+	}
+	res = call(t, cs, "list_models", map[string]any{})
+	for _, r := range catalog.Builtin().Removed {
+		if strings.Contains(textOf(res), `"`+r.ID+`"`) {
+			t.Errorf("list_models lists %s", r.ID)
+		}
+	}
 	// A model whose licence is not accepted: a tool error saying so.
 	omni, _ := catalog.Builtin().ByID("omnivoice-bf16")
 	f.mu.Lock()

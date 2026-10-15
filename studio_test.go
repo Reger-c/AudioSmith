@@ -245,17 +245,17 @@ func TestStudioDefaultsFromSettings(t *testing.T) {
 	dir := t.TempDir()
 	a, _, _ := newTestAppIn(t, dir)
 	a.updateSettings(func(s *settings.Settings) {
-		s.Studio.Model = "soprano-80m-bf16"
+		s.Studio.Model = "chatterbox-turbo-8bit"
 		s.Studio.Autoplay = false
 	})
 	a.lib.close()
 	b, _, tt := newTestAppIn(t, dir)
-	if b.preset().ID != "soprano-80m-bf16" || b.autoplay {
+	if b.preset().ID != "chatterbox-turbo-8bit" || b.autoplay {
 		t.Errorf("fresh start: %s autoplay %v", b.preset().ID, b.autoplay)
 	}
 	b.navigate("/settings/studio")
 	tt.Frame()
-	if !tt.HasText("Default model") || !tt.HasText("Soprano 80M") {
+	if !tt.HasText("Default model") || !tt.HasText("Chatterbox Turbo") {
 		t.Errorf("studio settings: %q", tt.Texts())
 	}
 }

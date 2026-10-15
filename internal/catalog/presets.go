@@ -28,12 +28,11 @@ const (
 
 // Params are generation parameters; nil = not set (the model's own).
 type Params struct {
-	Temperature  *float64 `json:"temperature,omitempty"`
-	TopP         *float64 `json:"topP,omitempty"`
-	Steps        *int     `json:"steps,omitempty"`
-	Guidance     *float64 `json:"guidance,omitempty"`
-	Exaggeration *float64 `json:"exaggeration,omitempty"`
-	Speed        *float64 `json:"speed,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	TopP        *float64 `json:"topP,omitempty"`
+	Steps       *int     `json:"steps,omitempty"`
+	Guidance    *float64 `json:"guidance,omitempty"`
+	Speed       *float64 `json:"speed,omitempty"`
 }
 
 // merge returns p with o's set values on top.
@@ -49,9 +48,6 @@ func (p Params) merge(o Params) Params {
 	}
 	if o.Guidance != nil {
 		p.Guidance = o.Guidance
-	}
-	if o.Exaggeration != nil {
-		p.Exaggeration = o.Exaggeration
 	}
 	if o.Speed != nil {
 		p.Speed = o.Speed
@@ -161,12 +157,12 @@ func (p *Presets) byLanguage(lang string) (rec map[string][]string, defs map[str
 }
 
 // Recommended are workflow w's recommended models for content language
-// lang, best first (retired and hidden ones left out).
+// lang, best first (hidden ones left out).
 func (c *Catalog) Recommended(w Workflow, lang string) []Entry {
 	rec, _ := builtinPresets.byLanguage(lang)
 	var out []Entry
 	for _, id := range rec[string(w)] {
-		if e, ok := c.ByID(id); ok && !e.Hidden && e.Retired == nil {
+		if e, ok := c.ByID(id); ok && !e.Hidden {
 			out = append(out, e)
 		}
 	}
@@ -193,7 +189,7 @@ func (c *Catalog) DefaultModel(w Workflow, lang string, haveVoice bool) (Entry, 
 			id = f
 		}
 	}
-	if e, ok := c.ByID(id); ok && e.Retired == nil {
+	if e, ok := c.ByID(id); ok {
 		return e, true
 	}
 	if l := c.Recommended(w, lang); len(l) > 0 {
@@ -212,8 +208,8 @@ func (p *Presets) Validate(c *Catalog) error {
 			return fmt.Errorf("unknown model %q", id)
 		case !slices.Contains(e.Tasks, TaskTTS):
 			return fmt.Errorf("%s does not speak", id)
-		case e.Retired != nil || e.Hidden:
-			return fmt.Errorf("%s is retired or hidden", id)
+		case e.Hidden:
+			return fmt.Errorf("%s is hidden", id)
 		}
 		return nil
 	}

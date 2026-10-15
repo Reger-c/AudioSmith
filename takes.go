@@ -126,6 +126,7 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 		Synth:     l.synthExecutor,
 		ModelPath: l.modelSnapshot,
 		Models:    modelInfo,
+		Replace:   replaceRemovedTake, // models_removed.go
 		CacheDir:  cacheDir,
 		KeepTakes: func() int { return l.settings.Get().Studio.KeepTakes },
 		Encode:    l.encodeExecutor,  // M3: longform.go
@@ -214,7 +215,7 @@ func presetDefaults(e catalog.Entry) map[string]services.ParamDefaults {
 		return *v
 	}
 	conv := func(pp catalog.Params) services.ParamDefaults {
-		d := services.ParamDefaults{Temperature: f(pp.Temperature), TopP: f(pp.TopP), Guidance: f(pp.Guidance), Exaggeration: f(pp.Exaggeration)}
+		d := services.ParamDefaults{Temperature: f(pp.Temperature), TopP: f(pp.TopP), Guidance: f(pp.Guidance)}
 		if pp.Steps != nil {
 			d.Steps = *pp.Steps
 		}
@@ -261,9 +262,13 @@ func (l *library) resetHub() {
 	l.hubMu.Unlock()
 }
 
-// entryFor is the catalogue entry of a repo, or a custom entry for it.
+// entryFor is the catalogue entry of a repo (a removed model's
+// replacement: models_removed.go), or a custom entry for it.
 func entryFor(repo string) catalog.Entry {
 	if e, ok := catalog.Builtin().ByRepo(repo); ok {
+		return e
+	}
+	if e, _, ok := replaceRemoved(repo, false); ok {
 		return e
 	}
 	return catalog.Custom(repo)

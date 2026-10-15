@@ -542,7 +542,7 @@ func smokeTTS(t *testing.T, e catalog.Entry, snap, ref string, refSeconds float6
 	}
 	// Models with a hard per-request limit: find the longest English and
 	// Chinese text they take, in characters and in catalog.TextLength.
-	if e.Family == "kokoro" || e.Family == "kitten" {
+	if e.Family == "kokoro" {
 		for _, lang := range []string{"en", "zh"} {
 			if _, ok := langOf(lang); !ok {
 				continue

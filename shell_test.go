@@ -544,9 +544,9 @@ func TestDownloadErrors(t *testing.T) {
 	a.resetHub()
 	a.navigate("/models")
 	tt.Frame()
-	a.download(entry(t, "soprano-80m-bf16"))
+	a.download(entry(t, "chatterbox-turbo-8bit"))
 	tt.Frame()
-	m := a.models["soprano-80m-bf16"]
+	m := a.models["chatterbox-turbo-8bit"]
 	if m.downloading || m.err == "" || len(a.notices) == 0 || a.notices[0].Link != "/settings/models" {
 		t.Fatalf("offline: %+v %+v", m, a.notices)
 	}
@@ -564,13 +564,13 @@ func TestStatusBar(t *testing.T) {
 	if !tt.HasText("Engine ready") || !tt.HasText("· No model loaded") {
 		t.Errorf("status: %q", tt.Texts())
 	}
-	m := a.model(entry(t, "soprano-80m-bf16"))
+	m := a.model(entry(t, "chatterbox-turbo-8bit"))
 	m.downloading, m.progress = true, hub.Progress{Bytes: 50, TotalBytes: 200}
 	tt.Frame()
-	if !tt.HasText("Downloading Soprano 80M · 25%") {
+	if !tt.HasText("Downloading Chatterbox Turbo · 25%") {
 		t.Errorf("download in status: %q", tt.Texts())
 	}
-	tt.Click("Downloading Soprano 80M · 25%")
+	tt.Click("Downloading Chatterbox Turbo · 25%")
 	if a.router.Path() != "/models" {
 		t.Errorf("click: %s", a.router.Path())
 	}

@@ -319,6 +319,9 @@ type speechOut struct {
 	AudioURL     string   `json:"audio_url"`
 	Ignored      []string `json:"ignored,omitempty"`
 	Note         string   `json:"note,omitempty"`
+	// ReplacedBy and Warning: the request named a removed model.
+	ReplacedBy string `json:"replaced_by,omitempty"`
+	Warning    string `json:"warning,omitempty"`
 }
 
 func (s *Server) generateSpeech(ctx context.Context, req *sdk.CallToolRequest, in speechIn) (*sdk.CallToolResult, any, error) {
@@ -345,6 +348,9 @@ func (s *Server) generateSpeech(ctx context.Context, req *sdk.CallToolRequest, i
 	out := speechOut{TakeID: res.Take.ID, Model: sp.Model.ID, Voice: sp.VoiceName, AudioSeconds: round2(res.Take.AudioSeconds),
 		GenSeconds: round2(res.Take.GenSeconds), SampleRate: res.Take.SampleRate, Seed: res.Take.Seed,
 		AudioURL: "/api/takes/" + res.Take.ID + "/audio", Ignored: sp.Ignored}
+	if r := sp.Replaced; r != nil {
+		out.ReplacedBy, out.Warning = r.ReplacedBy, r.Warning
+	}
 	var extra []sdk.Content
 	if mode == "inline" || mode == "both" {
 		data, err := os.ReadFile(res.Output)
@@ -594,7 +600,7 @@ func (s *Server) listModels(ctx context.Context, req *sdk.CallToolRequest, in li
 		if m.LicenceNeeded {
 			item["licence_to_accept"] = true
 		}
-		if e.NeedsReference { // speaks cloned voices only (MOSS-TTS-Nano)
+		if e.NeedsReference { // speaks cloned voices only
 			item["needs_reference"] = true
 		}
 		var speakers []string

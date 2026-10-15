@@ -158,6 +158,12 @@ type renderEnv struct {
 
 func newRenderEnv(t *testing.T, models func(string) ModelInfo) *renderEnv {
 	t.Helper()
+	return newRenderEnvWith(t, models, nil)
+}
+
+// newRenderEnvWith is newRenderEnv with Config.Replace.
+func newRenderEnvWith(t *testing.T, models func(string) ModelInfo, replace func(*core.Take) bool) *renderEnv {
+	t.Helper()
 	dir := t.TempDir()
 	st, err := sqlitestore.Open(ctx, dir)
 	if err != nil {
@@ -188,6 +194,7 @@ func newRenderEnv(t *testing.T, models func(string) ModelInfo) *renderEnv {
 		Synth:     func() jobs.Executor { return e.synth },
 		ModelPath: func(_ context.Context, m string) (string, error) { return "/models/" + m, nil },
 		Models:    models,
+		Replace:   replace,
 		KeepTakes: func() int { return int(e.keep.Load()) },
 		Watermark: func(ctx context.Context, path string, bits int) (bool, error) {
 			if e.wm == nil {
@@ -571,5 +578,45 @@ func TestRenderReplansWhenTheEngineWantsShorterChunks(t *testing.T) {
 		if n := len([]rune(c.Text)); n > 40 {
 			t.Errorf("chunk of %d", n)
 		}
+	}
+}
+
+// TestRenderReplacesRemovedModels: Config.Replace (the app's alias table
+// of removed models, thread #43) maps a recipe before Generate checks and
+// stores it, and again as every render job starts (Stories, Dub,
+// Workflows and Calls submit render jobs of their own), so the engine
+// never gets a removed model.
+func TestRenderReplacesRemovedModels(t *testing.T) {
+	replace := func(tk *core.Take) bool {
+		if tk.Model != "old/removed" {
+			return false
+		}
+		tk.Model, tk.Voice = "m/kokoro", "af_heart"
+		return true
+	}
+	e := newRenderEnvWith(t, kokoroInfo, replace)
+	j, tk := e.generate(t, core.Take{Text: "Hello there.", Model: "old/removed", Voice: "Bella"})
+	if j.State != jobs.StateSucceeded || tk.Model != "m/kokoro" || tk.Voice != "af_heart" {
+		t.Fatalf("generate: %s %+v", j.State, tk)
+	}
+	// A render job submitted directly, as the longform service does.
+	params, _ := json.Marshal(RenderParams{Take: core.Take{ID: "x", Text: "Again.", Model: "old/removed", Voice: "Bella"},
+		Output: filepath.Join(t.TempDir(), "x.wav")})
+	id, err := e.sched.Submit(ctx, jobs.Spec{Kind: KindRender, Lane: jobs.LaneGPU, Params: params})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j := e.waitJob(t, id); j.State != jobs.StateSucceeded {
+		t.Fatalf("job %s %+v", j.State, j.Err)
+	}
+	e.synth.mu.Lock()
+	defer e.synth.mu.Unlock()
+	for _, c := range e.synth.calls {
+		if c.Model != "m/kokoro" || c.Voice != "af_heart" {
+			t.Errorf("engine got %s %s", c.Model, c.Voice)
+		}
+	}
+	if len(e.synth.calls) < 2 {
+		t.Errorf("%d calls", len(e.synth.calls))
 	}
 }
