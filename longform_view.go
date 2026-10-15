@@ -86,17 +86,10 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 		ui.TextInput(c.Key("lf-title"), &d.Title).Placeholder(placeholder).Label(i18n.T("Title")).Disabled(locked)
 	})
 	e := entryFor(d.Model)
-	labels := catalog.Builtin().Labels(catalog.TaskTTS)
-	model := e.Label
-	if !slices.Contains(labels, model) {
-		labels = append([]string{model}, labels...)
-	}
 	ui.Field(c, i18n.T("Model"), func() {
-		if ui.Select(c.Key("lf-model"), &model, labels).Label(i18n.T("Model")).Disabled(locked).Changed() {
-			if ne, ok := catalog.Builtin().ByLabel(model); ok {
-				d.Model, p.auto = ne.Repo, false
-			}
-		}
+		a.modelPicker(c, "lf-model", lfWorkflow(p), e, func(ne catalog.Entry) {
+			d.Model, p.auto = ne.Repo, false
+		}, pickerOpts{Locked: locked})
 	})
 	if m := a.model(e); e.ID != "custom" && m.known && m.local.State != hub.Downloaded {
 		ui.Row(c.Key("lf-download")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {

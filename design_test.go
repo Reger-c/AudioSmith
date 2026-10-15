@@ -42,6 +42,13 @@ func TestDesignPage(t *testing.T) {
 	d := &a.design
 	a.navigate("/design")
 	tt.Frame()
+	// The recommended designer is the default (presets: Qwen3-TTS
+	// VoiceDesign); this test goes on with OmniVoice.
+	if e, _ := voiceCatalog().ByLabel(d.model); e.ID != "qwen3-tts-1.7b-voicedesign-4bit" {
+		t.Errorf("default designer %q", d.model)
+	}
+	d.model = "OmniVoice"
+	tt.Frame()
 	if !tt.HasText("Describe the voice") || !tt.HasText("Sent to OmniVoice (non-commercial)") && !strings.Contains(strings.Join(tt.Texts(), "|"), "Sent to OmniVoice") {
 		t.Fatalf("design page: %q", tt.Texts())
 	}

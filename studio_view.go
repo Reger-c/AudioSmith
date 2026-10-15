@@ -363,9 +363,14 @@ func (a *app) inspector(c *ui.Context) {
 			ui.Text(c, i18n.T("Model")).FontWeight(600).Grow(1)
 			infoTip(c.Key("model-about"), about)
 		})
-		if ui.Select(c.Key("model"), &a.modelLabel, catalog.Builtin().Labels(catalog.TaskTTS)).Label(i18n.T("Model")).FillWidth().Changed() {
+		a.modelPicker(c, "model", catalog.WorkflowStudio, p, func(e catalog.Entry) {
+			if e.ID == "custom" {
+				a.modelLabel = catalog.CustomLabel
+			} else {
+				a.modelLabel = e.Label
+			}
 			a.modelChanged()
-		}
+		}, pickerOpts{Custom: true})
 		if custom {
 			ui.TextInput(c.Key("repo"), &a.customRepo).Placeholder("owner/model-name").Label(i18n.T("Repo"))
 		}
