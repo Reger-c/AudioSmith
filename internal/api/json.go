@@ -99,12 +99,16 @@ type ModelJSON struct {
 	MinMemoryGB  float64       `json:"min_memory_gb,omitempty"`
 	// NeedsReference: the model only clones voices; speech requests need
 	// ref_audio or a saved cloned voice (else 400 needs_reference).
-	NeedsReference bool        `json:"needs_reference,omitempty"`
-	Downloaded     bool        `json:"downloaded"`
-	Default        bool        `json:"default,omitempty"` // what OpenAI's names map to
-	Hidden         bool        `json:"hidden,omitempty"`
-	About          string      `json:"about,omitempty"`
-	Licence        LicenceJSON `json:"licence"`
+	NeedsReference bool `json:"needs_reference,omitempty"`
+	Downloaded     bool `json:"downloaded"`
+	Default        bool `json:"default,omitempty"` // what OpenAI's names map to
+	Hidden         bool `json:"hidden,omitempty"`
+	// Retired models still answer when named; ReplacedBy is the model to
+	// use instead (the catalogue's id).
+	Retired    bool        `json:"retired,omitempty"`
+	ReplacedBy string      `json:"replaced_by,omitempty"`
+	About      string      `json:"about,omitempty"`
+	Licence    LicenceJSON `json:"licence"`
 }
 
 // SpeakerJSON is a built-in speaker.
@@ -137,9 +141,14 @@ func modelJSON(m Model, isDefault bool) ModelJSON {
 	for _, c := range e.Capabilities {
 		j.Capabilities = append(j.Capabilities, string(c))
 	}
+	if r := e.Retired; r != nil {
+		j.Retired, j.ReplacedBy = true, r.ReplacedBy
+	}
 	j.Languages = entryLanguages(e)
 	for _, v := range e.Voices {
-		j.Voices = append(j.Voices, SpeakerJSON{ID: v.ID, Language: v.Language, Gender: v.Gender})
+		if !v.Hidden {
+			j.Voices = append(j.Voices, SpeakerJSON{ID: v.ID, Language: v.Language, Gender: v.Gender})
+		}
 	}
 	return j
 }

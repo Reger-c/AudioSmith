@@ -150,8 +150,8 @@ func (s *studioState) toDraft() studioDraft {
 
 // applyDraft restores a draft, ignoring a model the catalogue no longer has.
 func (s *studioState) applyDraft(d studioDraft) {
-	if d.ModelLabel != catalog.CustomLabel && !slices.Contains(catalog.Builtin().Labels(catalog.TaskTTS), d.ModelLabel) {
-		return
+	if e, ok := catalog.Builtin().ByLabel(d.ModelLabel); d.ModelLabel != catalog.CustomLabel && (!ok || e.Hidden || !slices.Contains(e.Tasks, catalog.TaskTTS)) {
+		return // retired models stay: they still run, and the picker says what replaces them
 	}
 	s.text, s.modelLabel, s.customRepo = d.Text, d.ModelLabel, d.CustomRepo
 	s.voice, s.language = d.Voice, d.Language
