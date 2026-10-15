@@ -47,7 +47,7 @@ func continuityTip(level string) string {
 	if level == services.ContinuityInstruct {
 		return i18n.T("This model hears the scene, each character's persona and each line's direction as an instruction, so the lines carry the moment's feeling. Never spoken.")
 	}
-	return i18n.T("This model says each line as written: scene, personas and directions are kept but not heard. Pacing and merged turns still apply. For directed delivery, use Qwen3-TTS CustomVoice or VoiceDesign.")
+	return i18n.T("This model says each line as written: scene, personas and directions are kept but not heard. Pacing and merged turns still apply. For directed delivery, use %s or %s.", modelRefID(idCustomVoice), modelRefID(idVoiceDesign))
 }
 
 // storyPerformance is the Performance section.
@@ -66,7 +66,7 @@ func (a *app) storyPerformance(c *ui.Context, p *lfPage, locked bool) {
 		infoTip(c.Key("perf-level-tip"), continuityTip(level))
 	})
 	if level == services.ContinuityLines && storyDirected(d) {
-		caption(c.Key("perf-advice"), i18n.T("Switch to Qwen3-TTS CustomVoice or VoiceDesign (Setup) to hear the directions.")).TextColor(k.Text3)
+		caption(c.Key("perf-advice"), i18n.T("Switch to %s or %s (Setup) to hear the directions.", modelRefID(idCustomVoice), modelRefID(idVoiceDesign))).TextColor(k.Text3)
 	}
 
 	// Pacing.

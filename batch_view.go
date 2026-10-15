@@ -154,7 +154,7 @@ func (a *app) batchSetup(c *ui.Context) {
 	mnames := []string{i18n.T("Automatic")}
 	mrepos := []string{""}
 	for _, e := range models {
-		mnames = append(mnames, e.Label)
+		mnames = append(mnames, e.DisplayName())
 		mrepos = append(mrepos, e.Repo)
 	}
 	mcur := mnames[max(slices.Index(mrepos, s.Model), 0)]

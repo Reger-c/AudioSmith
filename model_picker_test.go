@@ -9,7 +9,8 @@ import (
 )
 
 // TestModelPicker: the Studio's picker lists the recommended models for
-// the interface's language first, with their "best for" and hints; the
+// the interface's language first, by friendly name with their one line,
+// tags and hints; the
 // others come with "Show all models"; picking one applies it; removed
 // models are never offered.
 func TestModelPicker(t *testing.T) {
@@ -18,7 +19,7 @@ func TestModelPicker(t *testing.T) {
 	a.pickerOpen = map[string]bool{"model": true}
 	tt.Frame()
 	texts := strings.Join(tt.Texts(), "|")
-	for _, want := range []string{"Recommended", "English: fastest and most natural built-in voices", "Speed ●●● · Quality ●●●", "Chatterbox Turbo", "Show all models (4)"} {
+	for _, want := range []string{"Recommended", "Fast English voices", "The fastest, most natural built-in English voices; light on memory.", "Built-in voices", "Speed ●●● · Quality ●●●", "English clone", "Show all models (4)"} {
 		if !strings.Contains(texts, want) {
 			t.Errorf("picker lacks %q: %s", want, texts)
 		}
@@ -29,7 +30,7 @@ func TestModelPicker(t *testing.T) {
 	tt.Click("Show all models (4)")
 	tt.Frame()
 	texts = strings.Join(tt.Texts(), "|")
-	for _, l := range []string{"Qwen3-TTS 0.6B CustomVoice", "OmniVoice", "Custom Hugging Face repo…"} {
+	for _, l := range []string{"Standard voices", "Multilingual all-rounder", "Non-commercial", "Custom Hugging Face repo…"} {
 		if !strings.Contains(texts, l) {
 			t.Errorf("all models lack %q", l)
 		}
@@ -39,7 +40,7 @@ func TestModelPicker(t *testing.T) {
 			t.Errorf("removed %s offered", r.ID)
 		}
 	}
-	if err := tt.Click("Qwen3-TTS 1.7B Base (voice clone)"); err != nil {
+	if err := tt.Click("High-fidelity clone"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -61,10 +62,10 @@ func TestModelPickerDub(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	texts := strings.Join(tt.Texts(), "|")
-	if !strings.Contains(texts, "Can't clone: the dub won't sound like the speakers") || !strings.Contains(texts, "Long narration and dubbing with a saved voice, about real time") {
+	if !strings.Contains(texts, "Can't clone: the dub won't sound like the speakers") || !strings.Contains(texts, "Speaks in a saved or cloned voice at about real time: long narration and dubbing.") {
 		t.Errorf("dub picker: %s", texts)
 	}
-	if err := tt.Click("Kokoro 82M"); err != nil {
+	if err := tt.Click("Fast English voices"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

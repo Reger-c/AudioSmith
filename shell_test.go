@@ -402,17 +402,17 @@ func TestQuickSwitch(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyE)
-	if !a.switchOpen || !tt.HasText("Speech engine") || !tt.HasText("Qwen3-TTS 0.6B CustomVoice") {
+	if !a.switchOpen || !tt.HasText("Speech engine") || !tt.HasText("Standard voices") {
 		t.Fatalf("⌘E: %q", tt.Texts())
 	}
-	if err := tt.Click("Qwen3-TTS 0.6B CustomVoice"); err != nil {
+	if err := tt.Click("Standard voices"); err != nil {
 		t.Fatal(err)
 	}
 	if a.preset().ID != "qwen3-tts-0.6b-customvoice-8bit" || a.voice != "Serena" {
 		t.Errorf("chosen %s voice %q", a.preset().ID, a.voice)
 	}
 	for _, e := range catalog.Builtin().Entries {
-		if e.Hidden && tt.HasText(e.Label) {
+		if e.Hidden && (tt.HasText(e.Label) || tt.HasText(e.DisplayName())) {
 			t.Errorf("hidden %s offered", e.Label)
 		}
 	}
@@ -425,7 +425,7 @@ func TestModelsPage(t *testing.T) {
 	core.On(a.bus, func(ev hub.DownloadProgress) { progress = append(progress, ev.Progress) })
 	a.navigate("/models")
 	tt.Frame()
-	if !tt.HasText("Kokoro 82M") || !tt.HasText("OmniVoice") || !tt.HasText("Not downloaded") {
+	if !tt.HasText("Fast English voices") || !tt.HasText("Multilingual all-rounder") || !tt.HasText("Not downloaded") {
 		t.Fatalf("models: %q", tt.Texts())
 	}
 	// The first card is Kokoro: it downloads with its G2P repos.
@@ -446,13 +446,13 @@ func TestModelsPage(t *testing.T) {
 	if len(progress) == 0 || progress[len(progress)-1].Bytes != progress[len(progress)-1].TotalBytes {
 		t.Errorf("progress events %+v", progress)
 	}
-	if len(a.notices) == 0 || a.notices[0].Title != "Kokoro 82M is downloaded" {
+	if len(a.notices) == 0 || a.notices[0].Title != "“Fast English voices” is downloaded" {
 		t.Errorf("notices %+v", a.notices)
 	}
-	if !tt.HasText("More actions for Kokoro 82M") || !strings.Contains(strings.Join(tt.Texts(), "|"), "Downloaded · ") {
+	if !tt.HasText("More actions for “Fast English voices”") || !strings.Contains(strings.Join(tt.Texts(), "|"), "Downloaded · ") {
 		t.Errorf("downloaded card: %q", tt.Texts())
 	}
-	tt.Click("More actions for Kokoro 82M")
+	tt.Click("More actions for “Fast English voices”")
 	if err := tt.ChooseMenuItem("Verify"); err != nil {
 		t.Fatalf("verify: %v (menu %q)", err, tt.Menu())
 	}
@@ -462,10 +462,10 @@ func TestModelsPage(t *testing.T) {
 	}
 
 	// Delete asks first; Enter confirms.
-	tt.Click("More actions for Kokoro 82M")
+	tt.Click("More actions for “Fast English voices”")
 	tt.ChooseMenuItem("Delete")
 	tt.Frame()
-	if !a.deleteAsk || !tt.HasText("Delete Kokoro 82M?") {
+	if !a.deleteAsk || !tt.HasText("Delete “Fast English voices”?") {
 		t.Fatalf("delete alert: %q", tt.Texts())
 	}
 	tt.Key(0, ui.KeyEnter)
@@ -488,12 +488,12 @@ func TestLicenceGate(t *testing.T) {
 	omni := entry(t, "omnivoice-bf16")
 	a.navigate("/models")
 	tt.Frame()
-	if !tt.HasText("CC BY-NC 4.0 · non-commercial use only") || !tt.HasText("Review licence…") {
+	if !tt.HasText("non-commercial use only") || !tt.HasText("Review licence…") {
 		t.Fatalf("licence line: %q", tt.Texts())
 	}
 	a.download(omni)
 	tt.Frame()
-	if !a.licenceOpen || !tt.HasText("Licence of OmniVoice") || a.models[omni.ID].downloading {
+	if !a.licenceOpen || !tt.HasText("Licence of “Multilingual all-rounder”") || a.models[omni.ID].downloading {
 		t.Fatalf("dialog: %v %q", a.licenceOpen, tt.Texts())
 	}
 	if f.served[omni.Repo] != 0 {
@@ -567,10 +567,10 @@ func TestStatusBar(t *testing.T) {
 	m := a.model(entry(t, "chatterbox-turbo-8bit"))
 	m.downloading, m.progress = true, hub.Progress{Bytes: 50, TotalBytes: 200}
 	tt.Frame()
-	if !tt.HasText("Downloading Chatterbox Turbo · 25%") {
+	if !tt.HasText("Downloading “English clone” · 25%") {
 		t.Errorf("download in status: %q", tt.Texts())
 	}
-	tt.Click("Downloading Chatterbox Turbo · 25%")
+	tt.Click("Downloading “English clone” · 25%")
 	if a.router.Path() != "/models" {
 		t.Errorf("click: %s", a.router.Path())
 	}
@@ -667,10 +667,10 @@ func TestModelsPageKinds(t *testing.T) {
 		tab       string
 		has, lack string
 	}{
-		{"TTS", "Kokoro 82M", "Whisper large-v3 turbo"},
-		{"ASR", "Whisper large-v3 turbo", "Kokoro 82M"},
-		{"LLM", "Qwen3 4B Instruct (2507)", "Kokoro 82M"},
-		{"Other", "HTDemucs", "Qwen3 4B Instruct (2507)"},
+		{"Speech", "Fast English voices", "Multilingual transcription"},
+		{"Transcription", "Multilingual transcription", "Fast English voices"},
+		{"Writing", "Writing assistant · Standard", "Fast English voices"},
+		{"Other", "Fast voice separation", "Writing assistant · Standard"},
 	} {
 		label := ""
 		for _, s := range tt.Texts() {

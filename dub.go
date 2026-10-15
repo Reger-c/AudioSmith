@@ -743,7 +743,7 @@ func (a *app) dubRun(req services.RunRequest) {
 	if req.Through == dub.StageMix || req.Through == dub.StageSynthesize {
 		e := entryFor(p.Settings.Model)
 		if ready, known := a.modelOnDisk(e); known && !ready {
-			a.dubErr = i18n.T("%s is not downloaded yet.", e.Label)
+			a.dubErr = i18n.T("%s is not downloaded yet.", modelRef(e))
 			a.dubNeed = &e
 			return
 		}

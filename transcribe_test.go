@@ -40,7 +40,7 @@ func TestTranscribeFileAccurate(t *testing.T) {
 	a, eng, tt := m.a, m.eng, m.tt
 	a.navigate("/transcripts")
 	tt.Frame()
-	if !tt.HasText("No transcripts yet") || !tt.HasText("Drop audio or video here, or click to choose") || !tt.HasText("Whisper large-v3 turbo + word timings") {
+	if !tt.HasText("No transcripts yet") || !tt.HasText("Drop audio or video here, or click to choose") || !tt.HasText("Multilingual transcription + word timings") {
 		t.Fatalf("empty page: %q", tt.Texts())
 	}
 	a.updateSettings(func(s *settings.Settings) { s.Transcribe.Language = "en" })
@@ -158,7 +158,7 @@ func TestTranscribeFastAndRecording(t *testing.T) {
 	tt.Frame()
 	tt.Click("Fast")
 	tt.Frame()
-	if a.prefs.Transcribe.Mode != settings.TranscribeFast || !tt.HasText("Qwen3-ASR 0.6B") {
+	if a.prefs.Transcribe.Mode != settings.TranscribeFast || !tt.HasText("Chinese & English transcription") {
 		t.Fatalf("fast: %q %q", a.prefs.Transcribe.Mode, tt.Texts())
 	}
 	// Record, then stop: the recording is transcribed and removed after.
@@ -198,14 +198,14 @@ func TestTranscribeErrors(t *testing.T) {
 	a.navigate("/transcripts")
 	e := removeModel(t, a, catalog.DefaultSTT)
 	tt.Frame()
-	if !tt.HasText("Transcribing needs Whisper large-v3 turbo, which is not downloaded yet.") {
+	if !tt.HasText("Transcribing needs “Multilingual transcription”, which is not downloaded yet.") {
 		t.Fatalf("banner: %q", tt.Texts())
 	}
 	src := filepath.Join(t.TempDir(), "a.wav")
 	writeTestWAV(t, src, 16000, 1)
 	a.transcribeFile(src)
 	tt.Frame()
-	if a.trJob != nil || a.trNeed == nil || a.trNeed.ID != e.ID || !tt.HasText("Transcription failed") || !tt.HasText("Download Whisper large-v3 turbo") {
+	if a.trJob != nil || a.trNeed == nil || a.trNeed.ID != e.ID || !tt.HasText("Transcription failed") || !tt.HasText("Download “Multilingual transcription”") {
 		t.Fatalf("refused: %q", tt.Texts())
 	}
 	tt.Click("Dismiss")

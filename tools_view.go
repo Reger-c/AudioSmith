@@ -153,7 +153,7 @@ func (a *app) convertTool(c *ui.Context) {
 	ui.Field(c, i18n.T("Voice"), func() {
 		ui.Select(c.Key("cv-voice"), &cv.voice, labels).Label(i18n.T("Voice")).Width(px(t, 280)).Shrink(1).MinWidth(0)
 	})
-	settingRow(c, "cv-match", i18n.T("Match the recording's length"), i18n.T("OmniVoice aims at the length as it speaks; other models' takes are time-stretched to it, at the same pitch (up to twice as fast or slow)."), func() {
+	settingRow(c, "cv-match", i18n.T("Match the recording's length"), i18n.T("%s aims at the length as it speaks; other models' takes are time-stretched to it, at the same pitch (up to twice as fast or slow).", modelRefID(idOmniVoice)), func() {
 		ui.Switch(c.Key("cv-match-switch"), &cv.match).Label(i18n.T("Match the recording's length"))
 	})
 	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
@@ -310,7 +310,7 @@ func (a *app) directionTool(c *ui.Context) {
 		if secondaryIconButton(c.Key("dir-preview"), icons.Play, i18n.T("Hear it")).Label(i18n.T("Hear it")).Disabled(d.preview != nil && d.preview.busy || res.Instruct == "").Clicked() {
 			a.previewDirection()
 		}
-		caption(c, i18n.T("A sample line with %s", e.Label)).SingleLine().Ellipsis("…").MinWidth(0)
+		caption(c, i18n.T("A sample line with %s", modelRef(e))).SingleLine().Ellipsis("…").MinWidth(0)
 	})
 	if d.preview != nil {
 		a.runRow(c, "dir-run-row", i18n.T("Sample"), d.preview)

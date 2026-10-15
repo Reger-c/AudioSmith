@@ -35,7 +35,7 @@ func (a *app) audiobookPage(c *ui.Context) {
 			a.lfRenderPanel(c, p)
 		})
 		a.lfInspector(c, p, inline, shown, func() {
-			a.lfSection(c, p, "setup", i18n.T("Setup"), entryFor(p.doc.Model).Label, func() { a.lfSetup(c, p, locked) })
+			a.lfSection(c, p, "setup", i18n.T("Setup"), entryFor(p.doc.Model).DisplayName(), func() { a.lfSetup(c, p, locked) })
 			a.lfSection(c, p, "cast", i18n.T("Cast"), lfCount(len(bookCast(p))), func() { a.bookCastCard(c, p, locked) })
 			a.lfSection(c, p, "plan", i18n.T("Chapters"), lfCount(len(p.spec.Chapters)), func() { a.chapterPlan(c, p) })
 			a.lfSection(c, p, "book", i18n.T("Cover & details"), "", func() { a.lfBookCard(c, p, locked) })

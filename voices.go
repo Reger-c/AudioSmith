@@ -340,7 +340,7 @@ func (a *app) voiceGenerate(purpose, voiceID string, t core.Take, retry func()) 
 				delete(a.voiceJobs, j.takeID)
 				a.askLicence(e, retry)
 			case errors.Is(err, core.ErrNotDownloaded):
-				j.err, j.needDownload = i18n.T("%s is not downloaded yet.", e.Label), &e
+				j.err, j.needDownload = i18n.T("%s is not downloaded yet.", modelRef(e)), &e
 			default:
 				j.err = err.Error()
 			}
@@ -581,7 +581,7 @@ func designTextLang(lang string) string {
 // voiceUsable reports whether model e can speak with v, and why not.
 func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 	if e.NeedsReference && !voiceHasReference(v) {
-		return false, i18n.T("%s only clones voices, and this voice has no reference clip.", e.Label)
+		return false, i18n.T("%s only clones voices, and this voice has no reference clip.", modelRef(e))
 	}
 	switch {
 	case v.Kind == core.VoiceBuiltin:
@@ -601,7 +601,7 @@ func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 		if e.Has(catalog.CapClone) {
 			return true, ""
 		}
-		return false, i18n.T("%s can't clone voices. Choose a model that clones, such as Qwen3-TTS Base or OmniVoice.", e.Label)
+		return false, i18n.T("%s can't clone voices. Choose a model that clones, such as %s or %s.", modelRef(e), modelRefID(idCloneHiFi), modelRefID(idOmniVoice))
 	case v.Kind == core.VoiceDesigned:
 		if canDesign(e) {
 			return true, ""
@@ -610,9 +610,9 @@ func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 			return true, ""
 		}
 		if e.Has(catalog.CapClone) {
-			return false, i18n.T("%s can't design voices. Make a portable copy to use it here (an approximate clone), or choose a model that designs.", e.Label)
+			return false, i18n.T("%s can't design voices. Make a portable copy to use it here (an approximate clone), or choose a model that designs.", modelRef(e))
 		}
-		return false, i18n.T("%s can't design voices. Choose a model that can, such as OmniVoice.", e.Label)
+		return false, i18n.T("%s can't design voices. Choose a model that can, such as %s.", modelRef(e), modelRefID(idOmniVoice))
 	}
 	return false, ""
 }

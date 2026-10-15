@@ -11,6 +11,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/llm"
@@ -130,7 +131,7 @@ func storyDirected(d *services.LongformDoc) bool {
 
 // noDirectorText says the director has no language model.
 func noDirectorText() string {
-	return i18n.T("The AI director needs a language model: download one in Settings → Writing help (Qwen3 4B runs on this Mac).")
+	return i18n.T("The AI director needs a language model: download one in Settings → Writing help (%s runs on this Mac).", modelRefID(catalog.DefaultLLM))
 }
 
 // directorError is the page's message for a director that failed.

@@ -325,7 +325,7 @@ func (a *app) alignChapter(p *lfPage, r *lfRender, i int) {
 		return
 	}
 	if m := a.model(e); m.known && m.local.State != hub.Downloaded {
-		a.toast(i18n.T("Download %s first (Models).", e.Label))
+		a.toast(i18n.T("Download %s first (Models).", modelRef(e)))
 		a.download(e)
 		return
 	}

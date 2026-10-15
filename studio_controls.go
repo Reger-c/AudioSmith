@@ -299,7 +299,7 @@ func (a *app) languagePicker(c *ui.Context) {
 						}
 						ui.Text(c, name).TextColor(text).SingleLine().Ellipsis("…")
 						if !o.Supported {
-							ui.Text(c, i18n.T("Not supported by %s", p.Label)).FontSize(px(t, 11)).TextColor(muted).SingleLine().Ellipsis("…")
+							ui.Text(c, i18n.T("Not supported by %s", modelRef(p))).FontSize(px(t, 11)).TextColor(muted).SingleLine().Ellipsis("…")
 						}
 					})
 					ui.Text(c, o.Code).FontSize(px(t, 11)).TextColor(muted)

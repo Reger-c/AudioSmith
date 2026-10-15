@@ -14,9 +14,9 @@ import (
 func testCatalog(t *testing.T) *catalog.Catalog {
 	t.Helper()
 	c, err := catalog.Parse([]byte(`{"version":1,"entries":[
-	 {"id":"free","label":"Free","family":"f","repo":"o/free","tasks":["tts"],"licence":{"id":"apache-2.0","name":"Apache 2.0","commercial":true}},
-	 {"id":"nc","label":"NC","family":"f","repo":"o/nc","tasks":["tts"],"licence":{"id":"cc-by-nc-4.0","name":"CC BY-NC 4.0","url":"https://example.com/nc","commercial":false,"requiresAcceptance":true}},
-	 {"id":"nc2","label":"NC2","family":"f","repo":"o/nc2","tasks":["tts"],"licence":{"id":"cc-by-nc-4.0","name":"CC BY-NC 4.0","commercial":false,"requiresAcceptance":true}}]}`))
+	 {"id":"free","label":"Free","name":"Free","family":"f","repo":"o/free","tasks":["tts"],"licence":{"id":"apache-2.0","name":"Apache 2.0","commercial":true}},
+	 {"id":"nc","label":"NC","name":"NC","family":"f","repo":"o/nc","tasks":["tts"],"licence":{"id":"cc-by-nc-4.0","name":"CC BY-NC 4.0","url":"https://example.com/nc","commercial":false,"requiresAcceptance":true}},
+	 {"id":"nc2","label":"NC2","name":"NC2","family":"f","repo":"o/nc2","tasks":["tts"],"licence":{"id":"cc-by-nc-4.0","name":"CC BY-NC 4.0","commercial":false,"requiresAcceptance":true}}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}

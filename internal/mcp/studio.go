@@ -161,7 +161,7 @@ func (s *Server) listTakes(ctx context.Context, req *sdk.CallToolRequest, in lis
 		if m := strings.TrimSpace(in.Model); m != "" {
 			q.Model = m
 			for _, e := range catalog.Builtin().Entries {
-				if strings.EqualFold(e.ID, m) || strings.EqualFold(e.Label, m) {
+				if e.Named(m) {
 					q.Model = e.Repo
 				}
 			}

@@ -142,7 +142,7 @@ func TestLanguagePicker(t *testing.T) {
 	tt.Frame()
 	tt.Click("Auto-detect") // the recommended language: detected
 	tt.Frame()
-	if !tt.HasText("Auto-detect") || !tt.HasText("Not supported by Qwen3-TTS 0.6B CustomVoice") {
+	if !tt.HasText("Auto-detect") || !tt.HasText("Not supported by “Standard voices”") {
 		t.Fatalf("picker: %q", tt.Texts())
 	}
 	a.composer.langQuery = "japan"
@@ -383,7 +383,7 @@ func TestHistoryStarFilterSearchAndDetails(t *testing.T) {
 	}
 	a.history.filter = 0
 	// By model.
-	a.history.model = "OmniVoice"
+	a.history.model = "Multilingual all-rounder"
 	tt.Frame()
 	if tt.HasText("The quick brown fox.") || !tt.HasText("你好，世界。") {
 		t.Errorf("by model: %q", tt.Texts())

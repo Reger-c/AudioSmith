@@ -93,7 +93,7 @@ const Instructions = "AudioSmith is a speech app on this Mac, all local (MLX mod
 	"- Long work returns a job_id at once: call get_job with wait_seconds (≤ 60) until done, then report its files; " +
 	"cancel_job stops it.\n" +
 	"- delete_item needs confirm: true, only after the user said yes.\n" +
-	"- list_models (downloaded, licence_to_accept, needs_reference: cloned voices only), list_languages, check_health. " +
+	"- list_models (ui_name: the name the user sees, say it but pass the id; downloaded, licence_to_accept, needs_reference: cloned voices only), list_languages, check_health. " +
 	"Resources: voice://{id}, history://recent.\n" +
 	"Errors start with a code: licence_required or model_not_downloaded → ask the user to fix it in AudioSmith → Models; " +
 	"engine_unavailable, queue_timeout or busy → wait and retry; needs_reference → a cloned voice or another model; " +
@@ -595,8 +595,16 @@ func (s *Server) listModels(ctx context.Context, req *sdk.CallToolRequest, in li
 		for _, c := range e.Capabilities {
 			caps = append(caps, string(c))
 		}
-		item := map[string]any{"id": e.ID, "label": e.Label, "task": task, "capabilities": caps, "downloaded": m.Downloaded,
-			"licence": e.Licence.Name, "commercial_use": e.Licence.Commercial}
+		tags := []string{}
+		for _, t := range e.DisplayTags(0) {
+			tags = append(tags, string(t))
+		}
+		desc := e.Summary
+		if desc == "" {
+			desc = e.About
+		}
+		item := map[string]any{"id": e.ID, "label": e.Label, "display_name": e.Name, "ui_name": e.DisplayName(), "description": desc, "tags": tags,
+			"task": task, "capabilities": caps, "downloaded": m.Downloaded, "licence": e.Licence.Name, "commercial_use": e.Licence.Commercial}
 		if m.LicenceNeeded {
 			item["licence_to_accept"] = true
 		}
@@ -647,7 +655,7 @@ func (s *Server) addTools() {
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "list_voices", Title: "List voices",
 		Description: "The saved voices, and OpenAI voice names that map to built-in speakers."}, s.listVoices)
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "list_models", Title: "List models",
-		Description: "Speech and speech-to-text models: what they can do, their built-in voices, whether they are downloaded, their licence, and whether they speak cloned voices only (needs_reference)."}, s.listModels)
+		Description: "Speech and speech-to-text models: their friendly names (display_name in English; ui_name as AudioSmith's UI shows it, which is what the user knows: say it, pass the id), a description and tags, what they can do, their built-in voices, whether they are downloaded, their licence, and whether they speak cloned voices only (needs_reference)."}, s.listModels)
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "list_languages", Title: "List languages",
 		Description: "Languages a model speaks (or every speech model)."}, s.listLanguages)
 	sdk.AddTool(s.srv, &sdk.Tool{Name: "check_health", Title: "Check health",

@@ -129,7 +129,7 @@ func ttsEntry(name, def string, clone bool) (catalog.Entry, string, error) {
 		n = def
 	}
 	for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
-		if strings.EqualFold(e.ID, n) || strings.EqualFold(e.Repo, n) || strings.EqualFold(e.Label, n) || strings.EqualFold(catalog.ShortRepo(e.Repo), n) {
+		if e.Named(n) {
 			return e, "", nil
 		}
 	}

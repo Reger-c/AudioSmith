@@ -9,7 +9,8 @@
 // Licence; the engine confirms capabilities when it loads the model
 // (proto.LoadResult).
 //
-// Imports: lang (to validate language codes).
+// Imports: lang (to validate language codes), i18n (display names,
+// descriptions and tags in the UI's language: display.go).
 package catalog
 
 import (
@@ -109,8 +110,20 @@ func (r Removed) Repos() []string { return append([]string{r.Repo}, r.Aux...) }
 // snapshot's path, offline): an update of the repo never changes a model
 // under the user. Moving a pin is a catalogue change, tested on the Mac.
 type Entry struct {
-	ID       string `json:"id"`                 // stable slug, used in settings and the DB: "kokoro-82m-bf16"
-	Label    string `json:"label"`              // shown in pickers (not translated: product names)
+	ID string `json:"id"` // stable slug, used in settings and the DB: "kokoro-82m-bf16"
+	// Label is the technical name (family, size, variant: "Qwen3-TTS 0.6B
+	// CustomVoice"): stored in old settings, matched by the API, shown
+	// only in details and tooltips. The UI names a model by DisplayName.
+	Label string `json:"label"`
+	// Name is the friendly name in English, which says what the model is
+	// for, not its family or version ("Standard voices"); translated via
+	// i18n (context "model name", DisplayName). Summary is its one line
+	// (what it is for, when to pick it; English, translated), About when
+	// unset. Tags are a few words from a fixed vocabulary (Tag), most
+	// telling first; pickers show the first ones.
+	Name     string `json:"name"`
+	Summary  string `json:"summary,omitempty"`
+	Tags     []Tag  `json:"tags,omitempty"`
 	Family   string `json:"family"`             // engine model family (proto.HelloResult.Families): "kokoro", "qwen3_tts"…
 	Repo     string `json:"repo"`               // Hugging Face repo id
 	Revision string `json:"revision,omitempty"` // commit to download; "" = main
@@ -258,10 +271,10 @@ func (c *Catalog) Validate() error {
 	}
 	seen := map[string]bool{}
 	for _, e := range c.Entries {
-		if e.ID == "" || e.Repo == "" || e.Label == "" || e.Family == "" {
-			return fmt.Errorf("entry %q: id, label, family and repo are required", e.ID)
+		if e.ID == "" || e.Repo == "" || e.Label == "" || e.Family == "" || e.Name == "" {
+			return fmt.Errorf("entry %q: id, label, name, family and repo are required", e.ID)
 		}
-		for _, k := range []string{"id:" + e.ID, "repo:" + e.Repo, "label:" + e.Label} {
+		for _, k := range []string{"id:" + e.ID, "repo:" + e.Repo, "label:" + e.Label, "name:" + strings.ToLower(e.Name)} {
 			if seen[k] {
 				return fmt.Errorf("duplicate %s", k)
 			}
@@ -269,6 +282,11 @@ func (c *Catalog) Validate() error {
 		}
 		if len(e.Tasks) == 0 {
 			return fmt.Errorf("%s: no tasks", e.ID)
+		}
+		for i, tg := range e.Tags {
+			if !slices.Contains(staticTags, tg) || slices.Index(e.Tags, tg) != i {
+				return fmt.Errorf("%s: tag %q is unknown, computed or repeated", e.ID, tg)
+			}
 		}
 		for _, t := range e.Tasks {
 			if !slices.Contains(knownTasks, t) {
@@ -545,9 +563,20 @@ func ShortRepo(repo string) string {
 	return repo
 }
 
-// DisplayName is how to name a model in the UI: its label when the
-// catalogue has it (or had it), else the repo without its owner.
+// DisplayName is how the UI names the model of repo: its friendly name
+// in the UI's language when the catalogue has it, its label when the
+// catalogue had it (removed models), else the repo without its owner.
 func (c *Catalog) DisplayName(repo string) string {
+	if e, ok := c.ByRepo(repo); ok {
+		return e.DisplayName()
+	}
+	return c.TechnicalName(repo)
+}
+
+// TechnicalName is the model of repo's technical name, for details,
+// tooltips and the API: its label when the catalogue has (or had) it,
+// else the repo without its owner.
+func (c *Catalog) TechnicalName(repo string) string {
 	if e, ok := c.ByRepo(repo); ok {
 		return e.Label
 	}

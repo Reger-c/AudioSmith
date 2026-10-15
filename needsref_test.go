@@ -33,7 +33,7 @@ import (
 // app's model folder (newTestApp does it for the models it finds).
 func cloneOnly(t *testing.T, a *app) catalog.Entry {
 	t.Helper()
-	e := catalog.Entry{ID: "clone-only-nano", Label: "CloneOnly Nano", Family: "moss_tts_nano", Repo: "test/CloneOnly-Nano-100M",
+	e := catalog.Entry{ID: "clone-only-nano", Label: "CloneOnly Nano", Name: "CloneOnly Nano", Family: "moss_tts_nano", Repo: "test/CloneOnly-Nano-100M",
 		Revision: "0123456789abcdef0123456789abcdef01234567", Tasks: []catalog.Task{catalog.TaskTTS}, About: "A test model that only clones voices.",
 		NeedsReference: true, Capabilities: []catalog.Capability{catalog.CapSampling, catalog.CapClone, catalog.CapSeed},
 		SampleRate: 48000, MaxChars: 400, Licence: catalog.Licence{ID: "apache-2.0", Name: "Apache 2.0", Commercial: true, Verified: true}}
@@ -64,7 +64,7 @@ func TestStudioNeedsReference(t *testing.T) {
 	if a.canGenerate() || !tt.HasText(want) {
 		t.Fatalf("Generate allowed without a reference: %v, %q", a.canGenerate(), tt.Texts())
 	}
-	if !tt.HasText("Required: CloneOnly Nano only clones voices.") {
+	if !tt.HasText("Required: “CloneOnly Nano” only clones voices.") {
 		t.Errorf("no caption in the Voice cloning section: %q", tt.Texts())
 	}
 	tt.Click("Generate")
@@ -78,7 +78,7 @@ func TestStudioNeedsReference(t *testing.T) {
 	i18n.SetLocale("zh-Hans")
 	got := studioNeedsReferenceText(moss)
 	i18n.SetLocale("en")
-	if got != "CloneOnly Nano 只能克隆声音：请在右侧“音色”里选一个已保存的音色，或一段要克隆的音频。" {
+	if got != "“CloneOnly Nano”只能克隆声音：请在右侧“音色”里选一个已保存的音色，或一段要克隆的音频。" {
 		t.Errorf("zh: %q", got)
 	}
 
@@ -157,7 +157,7 @@ func TestServicesNeedReference(t *testing.T) {
 	if !errors.As(err, &nr) || !errors.Is(err, core.ErrInvalid) || nr.Model != "CloneOnly Nano" {
 		t.Fatalf("err %v", err)
 	}
-	if got := engineErrorText(err); got != needsReferenceText("CloneOnly Nano") {
+	if got := engineErrorText(err); got != needsReferenceText("“CloneOnly Nano”") {
 		t.Errorf("text %q", got)
 	}
 	if _, _, err := a.lib.svc.Render.Preview(context.Background(), core.Take{Text: "Hi", Model: moss.Repo}); !errors.As(err, &nr) {
@@ -174,7 +174,7 @@ func TestServicesNeedReference(t *testing.T) {
 	if !errors.As(err, &je) || je.Code != core.CodeNeedsReference {
 		t.Fatalf("render: %v", err)
 	}
-	if got := jobErrorText(je); got != needsReferenceText("CloneOnly Nano") {
+	if got := jobErrorText(je); got != needsReferenceText("“CloneOnly Nano”") {
 		t.Errorf("job text %q", got)
 	}
 	if len(eng.sent) != 0 {
@@ -192,9 +192,9 @@ func TestEngineErrorWords(t *testing.T) {
 		want string
 	}{
 		{jobs.Error{Code: proto.CodeBadRequest, Message: "CloneOnly-Nano-100M only clones voices: give it a reference clip (refAudio)"},
-			needsReferenceText("CloneOnly Nano")},
+			needsReferenceText("“CloneOnly Nano”")},
 		{jobs.Error{Code: proto.CodeBadRequest, Message: "CloneOnly Nano requires refAudio for voice_clone generation."},
-			needsReferenceText("CloneOnly Nano")},
+			needsReferenceText("“CloneOnly Nano”")},
 		{jobs.Error{Code: proto.CodeBadRequest, Message: "MOSS-TTS-Nano requires refAudio for voice_clone generation."},
 			"This model only clones voices: it needs a reference clip or a saved cloned voice."},
 		{jobs.Error{Code: proto.CodeInternal, Message: "internal: The operation couldn’t be completed. (MLXAudioTTS.MossTTSNanoError error 0.)"},
@@ -249,7 +249,7 @@ func TestWorkflowNeedsReference(t *testing.T) {
 			t.Errorf("with a cloned voice: %+v", d)
 		}
 	}
-	if got := wfErrorText(core.CodeNeedsReference, "CloneOnly Nano only clones voices: give it a reference clip, or a saved voice cloned from one"); got != needsReferenceText("CloneOnly Nano") {
+	if got := wfErrorText(core.CodeNeedsReference, "CloneOnly Nano only clones voices: give it a reference clip, or a saved voice cloned from one"); got != needsReferenceText("“CloneOnly Nano”") {
 		t.Errorf("wf text %q", got)
 	}
 }

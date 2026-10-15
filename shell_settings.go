@@ -611,13 +611,11 @@ func (a *app) engineSettings(c *ui.Context) {
 func (a *app) studioSettings(c *ui.Context) {
 	t := c.Theme()
 	settingRow(c, "default-model", i18n.T("Default model"), i18n.T("The model the Studio starts with. Choosing another one in the Studio changes it too."), func() {
-		labels := catalog.Builtin().Labels(catalog.TaskTTS)
-		labels = slices.DeleteFunc(slices.Clone(labels), func(l string) bool { return l == catalog.CustomLabel })
-		if ui.Select(c.Key("default-model-select"), &a.defaultModel, labels).Label(i18n.T("Default model")).Width(px(t, 260)).Changed() {
-			if e, ok := catalog.Builtin().ByLabel(a.defaultModel); ok {
-				id := e.ID
-				a.updateSettings(func(s *settings.Settings) { s.Studio.Model = id })
-			}
+		cur, _ := catalog.Builtin().ByLabel(a.defaultModel)
+		if e, ok := modelSelect(c, "default-model-select", cur, catalog.Builtin().ForTask(catalog.TaskTTS), i18n.T("Default model"), px(t, 260)); ok {
+			a.defaultModel = e.Label
+			id := e.ID
+			a.updateSettings(func(s *settings.Settings) { s.Studio.Model = id })
 		}
 	})
 	settingRow(c, "autoplay", i18n.T("Play each take when it is ready"), "", func() {

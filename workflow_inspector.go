@@ -241,7 +241,7 @@ func (a *app) wfVoicePanel(c *ui.Context, n *workflow.Node) {
 	labels := make([]string, 0, len(models)+1)
 	repos := make([]string, 0, len(models)+1)
 	for _, e := range models {
-		labels, repos = append(labels, e.Label), append(repos, e.Repo)
+		labels, repos = append(labels, e.DisplayName()), append(repos, e.Repo)
 	}
 	if n.P.Model != "" && !slices.Contains(repos, n.P.Model) {
 		labels, repos = append(labels, modelName(n.P.Model)), append(repos, n.P.Model)
@@ -267,7 +267,7 @@ func (a *app) wfVoicePanel(c *ui.Context, n *workflow.Node) {
 		if e := entryFor(n.P.Model); e.Repo != "" {
 			if ready, known := a.modelOnDisk(e); known && !ready {
 				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, i18n.T("%s is not downloaded yet.", e.Label)).FontSize(px(t, 12)).TextColor(t.Warning).Grow(1)
+					ui.Text(c, i18n.T("%s is not downloaded yet.", modelRef(e))).FontSize(px(t, 12)).TextColor(t.Warning).Grow(1)
 					if ui.Button(c.Key("wf-download-"+id), i18n.T("Download")).Clicked() {
 						a.askLicence(e, func() { a.download(e) })
 					}

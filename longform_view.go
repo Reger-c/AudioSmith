@@ -95,7 +95,7 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 	if m := a.model(e); e.ID != "custom" && m.known && m.local.State != hub.Downloaded {
 		ui.Row(c.Key("lf-download")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 			iconMark(c, icons.DangerTriangle, t.Warning, "")
-			caption(c, i18n.T("%s is not downloaded yet.", e.Label)).TextColor(t.Warning).Grow(1).MinWidth(0)
+			caption(c, i18n.T("%s is not downloaded yet.", modelRef(e))).TextColor(t.Warning).Grow(1).MinWidth(0)
 			if !m.downloading && secondaryIconButton(c.Key("lf-dl"), icons.DownloadMinimalistic, i18n.T("Download")).Label(i18n.T("Download")).Tooltip(e.Repo).Clicked() {
 				a.download(e)
 			}
@@ -113,7 +113,7 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 		}
 	})
 	if e.NeedsReference {
-		caption(c.Key("lf-needs-ref"), i18n.T("%s only clones voices: each line needs a saved cloned voice.", e.Label))
+		caption(c.Key("lf-needs-ref"), i18n.T("%s only clones voices: each line needs a saved cloned voice.", modelRef(e)))
 	} else if len(a.lfVoices(e)) == 0 {
 		caption(c, i18n.T("No voices for this model yet: clone or design one first."))
 	}

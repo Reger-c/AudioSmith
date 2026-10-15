@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Models named for what they do
+- Every model has a plain name that says what it is for — Standard voices, High-fidelity clone, Fast clone, Voice design, Fast English voices, English clone, Multilingual all-rounder; Chinese & English transcription, Writing assistant · Standard… (标准音色、高保真克隆、快速克隆…) — a one-line description and a few tags (Chinese, Cloning, Built-in voices, Low memory, Non-commercial…). Pickers, the Models page, ⌘E, Settings, the bar beside Generate, History, onboarding, notifications and messages use them.
+- The family, version, size, quantisation, repository and licence are still there: in a model card's Details on the Models page, in the pickers' tooltip and ⓘ, and in History's details (Technical name). Ids, repos and saved projects don't change.
+- The model picker and the Models page have a search field that finds a model by its name, its technical name, id, repo or a tag.
+- Local API and MCP: model lists add `display_name` (English), `ui_name` (as the app shows it), `description` and `tags`; a friendly name picks a model too.
+
 ### Portable voices, and simpler Design, Clone and Export
 - Make a portable copy of a model's built-in speaker or of a designed voice (My voices → ⋯, the Studio's voice list, or Make portable where a voice can't be used): its model says a ten-second line, evened out, and the take is saved as a cloned voice "<name> (approximate)" that every model that clones can speak with. It sounds close to the original, not the same, and says so.
 - When a voice can't be used with a model, the message says why and what to do (make a portable copy, or pick a model that designs).

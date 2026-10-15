@@ -81,9 +81,9 @@ func (a *app) statusBar(c *ui.Context) {
 		// Downloads.
 		for _, m := range a.downloads() {
 			e := m.entry
-			text := i18n.T("Downloading %s", e.Label)
+			text := i18n.T("Downloading %s", modelRef(e))
 			if m.progress.TotalBytes > 0 {
-				text = i18n.T("Downloading %s · %d%%", e.Label, int(100*m.progress.Bytes/m.progress.TotalBytes))
+				text = i18n.T("Downloading %s · %d%%", modelRef(e), int(100*m.progress.Bytes/m.progress.TotalBytes))
 			}
 			if statusButton(c, "status-dl-"+modelKey(e), i18n.T("Show the models"), func() {
 				ui.Icon(c, icons.DownloadMinimalistic.Linear).Size(px(t, 13), px(t, 13))
@@ -277,7 +277,7 @@ func (a *app) quickSwitch(c *ui.Context) {
 			for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
 				m := a.models[modelKey(e)]
 				chosen := a.preset().Repo == e.Repo
-				row := ui.ButtonBase(c.Key("switch-"+e.ID)).Padding(px(t, 5), px(t, sp2)).Radius(px(t, radiusControl)).Label(e.Label).Checked(chosen)
+				row := ui.ButtonBase(c.Key("switch-"+e.ID)).Padding(px(t, 5), px(t, sp2)).Radius(px(t, radiusControl)).Label(e.DisplayName()).Tooltip(modelTip(e)).Checked(chosen)
 				if chosen {
 					row.Background(k.Pressed)
 				} else if row.Hovered() {
@@ -285,7 +285,7 @@ func (a *app) quickSwitch(c *ui.Context) {
 				}
 				row.Children(func() {
 					ui.Row(c).Grow(1).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, e.Label).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
+						ui.Text(c, e.DisplayName()).Grow(1).SingleLine().Ellipsis("…").MinWidth(0)
 						if m != nil && m.known && m.local.State == hub.Downloaded {
 							ui.Text(c, i18n.T("Downloaded")).FontSize(px(t, fsMicro)).TextColor(k.Text3)
 						}

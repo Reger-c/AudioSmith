@@ -1,9 +1,12 @@
 {
-  "version": 6,
+  "version": 7,
   "entries": [
     {
       "id": "kokoro-82m-bf16",
       "label": "Kokoro 82M",
+      "name": "Fast English voices",
+      "summary": "The fastest, most natural built-in English voices; light on memory.",
+      "tags": ["english", "voices", "fast", "light"],
       "family": "kokoro",
       "repo": "mlx-community/Kokoro-82M-bf16",
       "revision": "a71e4d38b236d968966a2002c4c895dbd12b1c3c",
@@ -64,6 +67,9 @@
     {
       "id": "qwen3-tts-0.6b-customvoice-8bit",
       "label": "Qwen3-TTS 0.6B CustomVoice",
+      "name": "Standard voices",
+      "summary": "Ready-made Chinese and English voices that take a style such as \"calm and warm\"; no recording needed.",
+      "tags": ["chinese", "english", "voices", "fast"],
       "family": "qwen3_tts",
       "repo": "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit",
       "revision": "049ef77fe8816b536193c0c25f9a214d17921282",
@@ -102,6 +108,9 @@
     {
       "id": "qwen3-tts-0.6b-base-8bit",
       "label": "Qwen3-TTS 0.6B Base (voice clone)",
+      "name": "Fast clone",
+      "summary": "Speaks in a saved or cloned voice at about real time: long narration and dubbing.",
+      "tags": ["clone", "fast", "chinese", "english", "multilingual"],
       "family": "qwen3_tts",
       "repo": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit",
       "revision": "50f45ef0047cde7e84c2ef04326acb8ada2436a7",
@@ -131,6 +140,9 @@
     {
       "id": "omnivoice-bf16",
       "label": "OmniVoice",
+      "name": "Multilingual all-rounder",
+      "summary": "646 languages: clones, designs voices and hits exact durations; the most natural Chinese.",
+      "tags": ["multilingual", "clone", "design", "quality"],
       "family": "omnivoice",
       "repo": "mlx-community/OmniVoice-bf16",
       "revision": "8fb0b754cad788aaefec690cd55c207e8a628f85",
@@ -149,6 +161,9 @@
     {
       "id": "qwen3-tts-1.7b-voicedesign-4bit",
       "label": "Qwen3-TTS 1.7B VoiceDesign",
+      "name": "Voice design",
+      "summary": "Creates a new voice from a description; save it, then speak with it on a clone model.",
+      "tags": ["design", "chinese", "english", "multilingual"],
       "family": "qwen3_tts",
       "repo": "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-4bit",
       "revision": "5c390979e4b93af5f2932f90742ca99c7dd04687",
@@ -178,6 +193,9 @@
     {
       "id": "qwen3-tts-1.7b-base-8bit",
       "label": "Qwen3-TTS 1.7B Base (voice clone)",
+      "name": "High-fidelity clone",
+      "summary": "The closest to the reference and the steadiest saved voices; a little slower.",
+      "tags": ["clone", "quality", "chinese", "english", "multilingual"],
       "family": "qwen3_tts",
       "repo": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
       "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
@@ -207,6 +225,9 @@
     {
       "id": "chatterbox-turbo-8bit",
       "label": "Chatterbox Turbo",
+      "name": "English clone",
+      "summary": "Clones an English voice from a short clip, fast.",
+      "tags": ["english", "clone", "fast"],
       "family": "chatterbox",
       "repo": "mlx-community/chatterbox-turbo-8bit",
       "revision": "2f2e21a03863f86a1274d1060dcc188e7cde77e1",
@@ -230,6 +251,8 @@
     {
       "id": "whisper-large-v3-turbo-4bit",
       "label": "Whisper large-v3 turbo",
+      "name": "Multilingual transcription",
+      "tags": ["multilingual", "quality"],
       "family": "whisper",
       "repo": "mlx-community/whisper-large-v3-turbo-4bit",
       "revision": "0f058d38170d183f9fdee07908f5b515d91793a8",
@@ -259,6 +282,8 @@
     {
       "id": "qwen3-asr-0.6b-4bit",
       "label": "Qwen3-ASR 0.6B",
+      "name": "Chinese & English transcription",
+      "tags": ["chinese", "english", "fast"],
       "family": "qwen3_asr",
       "repo": "mlx-community/Qwen3-ASR-0.6B-4bit",
       "revision": "313d850181767edf09f00a9c289becca70e58cd0",
@@ -275,6 +300,9 @@
     {
       "id": "parakeet-tdt-0.6b-v3",
       "label": "Parakeet TDT 0.6B v3",
+      "name": "European transcription",
+      "summary": "Very fast transcription of 25 European languages, detected automatically.",
+      "tags": ["multilingual", "fast"],
       "family": "parakeet",
       "repo": "mlx-community/parakeet-tdt-0.6b-v3",
       "revision": "ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15",
@@ -316,6 +344,8 @@
     {
       "id": "qwen3-forcedaligner-0.6b-4bit",
       "label": "Qwen3 ForcedAligner 0.6B",
+      "name": "Word timing",
+      "tags": ["fast"],
       "family": "qwen3_forced_aligner",
       "repo": "mlx-community/Qwen3-ForcedAligner-0.6B-4bit",
       "revision": "2f652af86ae0c73fe189b9429225c908ce4bf020",
@@ -332,6 +362,8 @@
     {
       "id": "silero-vad",
       "label": "Silero VAD",
+      "name": "Speech detection",
+      "tags": ["fast", "light"],
       "family": "silero_vad",
       "repo": "mlx-community/silero-vad",
       "revision": "7bc17f22d3c0451bd3a6cd71e759b009271ff49a",
@@ -346,6 +378,8 @@
     {
       "id": "htdemucs",
       "label": "HTDemucs",
+      "name": "Fast voice separation",
+      "tags": ["fast"],
       "family": "htdemucs",
       "repo": "iky1e/demucs-mlx",
       "revision": "3ff2e582c1456c6a03a077b6e47254e0ba41bdcf",
@@ -364,6 +398,8 @@
     {
       "id": "mel-roformer-kim-vocal-2",
       "label": "Mel-RoFormer (Kim vocal 2)",
+      "name": "Fine voice separation",
+      "tags": ["quality"],
       "family": "mel_roformer",
       "repo": "mlx-community/mel-roformer-kim-vocal-2-mlx",
       "revision": "64cbfcb004e39430e5f584552c05949440ec39ce",
@@ -382,6 +418,7 @@
     {
       "id": "sortformer-4spk-v2.1",
       "label": "Sortformer (up to 4 speakers)",
+      "name": "Speaker turns",
       "family": "sortformer",
       "repo": "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16",
       "revision": "e23e6404bd9859e93edbf94a740eb1c7fc58f12e",
@@ -396,6 +433,8 @@
     {
       "id": "qwen3-4b-instruct-2507-4bit",
       "label": "Qwen3 4B Instruct (2507)",
+      "name": "Writing assistant · Standard",
+      "tags": ["chinese", "english", "quality"],
       "family": "qwen3",
       "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
       "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
@@ -422,6 +461,8 @@
     {
       "id": "qwen3-1.7b-4bit",
       "label": "Qwen3 1.7B",
+      "name": "Writing assistant · Mini",
+      "tags": ["fast", "light"],
       "family": "qwen3",
       "repo": "mlx-community/Qwen3-1.7B-4bit",
       "revision": "3b1b1768f8f8cf8351c712464f906e86c2b8269e",
@@ -447,6 +488,8 @@
     {
       "id": "gemma-4-e2b-it-4bit",
       "label": "Gemma 4 E2B",
+      "name": "Writing assistant · Light",
+      "tags": ["multilingual", "light"],
       "family": "gemma4",
       "repo": "mlx-community/gemma-4-e2b-it-4bit",
       "revision": "238767527555cb75a05732a84dff5d6ba0dd6809",
@@ -470,6 +513,9 @@
     {
       "id": "gemma-4-e4b-it-4bit",
       "label": "Gemma 4 E4B",
+      "name": "Writing assistant · Multilingual",
+      "summary": "A larger local model for translation and writing help, strong in many languages.",
+      "tags": ["multilingual", "quality"],
       "family": "gemma4",
       "repo": "mlx-community/gemma-4-e4b-it-4bit",
       "revision": "475b9088d29754a3379866cf5aeb6b41acd313c2",
@@ -494,6 +540,8 @@
     {
       "id": "audioseal-16bits",
       "label": "AudioSeal",
+      "name": "Invisible watermark",
+      "tags": ["light"],
       "family": "audioseal",
       "repo": "facebook/audioseal",
       "revision": "3c19eba53390776cf2cc9ed5f6c9ac67ce72ecba",
@@ -511,6 +559,8 @@
     {
       "id": "deepfilternet-v3",
       "label": "DeepFilterNet 3",
+      "name": "Noise removal",
+      "tags": ["fast", "light"],
       "family": "deepfilternet",
       "repo": "mlx-community/DeepFilterNet-mlx",
       "revision": "220d5dfb7266352272d74c2a7d2025c59e07b391",

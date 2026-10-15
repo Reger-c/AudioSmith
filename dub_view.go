@@ -1167,7 +1167,7 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 	})
 	caps := dubCaps(p.Settings.Model)
 	if caps.NeedsReference {
-		caption(c.Key("gen-needs-ref"), i18n.T("%s only clones voices: each line speaks in its speaker's own voice or a saved cloned voice.", entryFor(p.Settings.Model).Label)).TextColor(tok(t).Text3)
+		caption(c.Key("gen-needs-ref"), i18n.T("%s only clones voices: each line speaks in its speaker's own voice or a saved cloned voice.", modelRef(entryFor(p.Settings.Model)))).TextColor(tok(t).Text3)
 	}
 	if caps.Duration {
 		caption(c, i18n.T("This model can speak each line in exactly its time (Lip sync), but then it may change words: Smart fit is safer.")).TextColor(tok(t).Text3)

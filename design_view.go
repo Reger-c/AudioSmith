@@ -265,7 +265,7 @@ func (a *app) designTarget(c *ui.Context) {
 	d := &a.design
 	ms := designModels()
 	if len(ms) == 0 {
-		banner(c, icons.DangerTriangle, t.Warning, i18n.T("No model here can design voices. Download one that can, such as OmniVoice, on the Models page."), func() {
+		banner(c, icons.DangerTriangle, t.Warning, i18n.T("No model here can design voices. Download one that can, such as %s, on the Models page.", modelRefID(idVoiceDesign)), func() {
 			if ui.Button(c.Key("design-models"), i18n.T("Models")).Clicked() {
 				a.navigate("/models")
 			}
@@ -315,11 +315,11 @@ func (a *app) designTarget(c *ui.Context) {
 					parts = append(parts, op.Label.In(loc))
 				}
 			}
-			statusMark(c, icons.DangerTriangle, t.Warning, i18n.T("%s can't express: %s", e.Label, strings.Join(parts, ", ")))
+			statusMark(c, icons.DangerTriangle, t.Warning, i18n.T("%s can't express: %s", modelRef(e), strings.Join(parts, ", ")))
 		}
 		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-			caption(c, i18n.T("What %s will hear", e.Label)).TextColor(tok(t).Text3).SingleLine().Ellipsis("…").MinWidth(0)
-			infoTip(c.Key("design-sent"), i18n.T("Sent to %s", e.Label)+": "+voice)
+			caption(c, i18n.T("What %s will hear", modelRef(e))).TextColor(tok(t).Text3).SingleLine().Ellipsis("…").MinWidth(0)
+			infoTip(c.Key("design-sent"), i18n.T("Sent to %s", modelRef(e))+": "+voice)
 		})
 	})
 }

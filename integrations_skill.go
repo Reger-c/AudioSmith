@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/api"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 )
 
@@ -80,7 +81,7 @@ func skillTools() []skillTool {
 			arg(i18n.T("Speaking rate, 0.5–2 (1 = normal)."), "speed"),
 			arg(i18n.T("The same seed gives the same take again."), "seed"),
 			arg(i18n.T("true evens out the volume."), "normalize"),
-			arg(i18n.T("OmniVoice only: target length in seconds; diffusion steps (8 draft, 32 quality)."), "duration", "steps"),
+			arg(i18n.T("%s only: target length in seconds; diffusion steps (8 draft, 32 quality).", skillModel(idOmniVoice)), "duration", "steps"),
 			arg(i18n.T("%s writes a WAV to the agents' folder and returns its path in %s; %s returns the audio in the result; %s does both. Empty: AudioSmith's setting. Pass %s: inline audio comes into your context as base64.", "`file`", "`file`", "`inline`", "`both`", "`output: \"file\"`"), "output"),
 			arg(i18n.T("The WAV's name in file mode (no folders; .wav is added). A file of that name is replaced."), "filename"),
 		}, After: i18n.T("Returns take_id, model, voice, audio_seconds and file. Every take is also in AudioSmith's History.")},
@@ -113,7 +114,7 @@ func skillTools() []skillTool {
 		{Name: "list_voices", Lead: i18n.T("the saved voices (id, name, kind, language, style), your_voice and the OpenAI names."), Args: []skillArg{
 			arg(i18n.T("Filter by name, style, description or tags."), "search"),
 		}},
-		{Name: "list_models", Lead: i18n.T("the models: id, task, capabilities, built-in voices, downloaded, licence, licence_to_accept, needs_reference."), Args: []skillArg{
+		{Name: "list_models", Lead: i18n.T("the models: id, display_name and ui_name (the friendly name the user sees in AudioSmith: say it to the user, pass the id), description, tags, task, capabilities, built-in voices, downloaded, licence, licence_to_accept, needs_reference."), Args: []skillArg{
 			arg(i18n.T("tts or stt; empty: both."), "task"),
 		}},
 		{Name: "list_languages", Lead: i18n.T("the languages a model speaks."), Args: []skillArg{
@@ -166,7 +167,7 @@ func skillTools() []skillTool {
 			arg(i18n.T("true: renders also write one WAV per character (stems)."), "stems"),
 			arg(i18n.T("Title, language (BCP-47, or auto) and speaking rate (0.5–2)."), "title", "language", "speed"),
 			arg(i18n.T("Book details for the M4B's tags; cover is the absolute path of a PNG or JPEG (≤ 8 MB)."), "author", "narrator", "year", "genre", "description", "cover"),
-			arg(i18n.T("Stories' performance, never spoken: the scene (where, who, the mood), character → persona (%s), line id → direction (%s) and line id → its intensity 1–3. Models that take instructions (Qwen3-TTS CustomVoice and VoiceDesign) hear them; get_longform's continuity says what the model does with them.", "`seven, lively, coaxing`", "`pleading`"), "scene", "personas", "directions", "intensities"),
+			arg(i18n.T("Stories' performance, never spoken: the scene (where, who, the mood), character → persona (%s), line id → direction (%s) and line id → its intensity 1–3. Models that take instructions (%s and %s) hear them; get_longform's continuity says what the model does with them.", "`seven, lively, coaxing`", "`pleading`", skillModel(idCustomVoice), skillModel(idVoiceDesign)), "scene", "personas", "directions", "intensities"),
 			arg(i18n.T("Stories: the gaps between lines: dialogue (tight turns, the default of new stories), reading, relaxed or fixed (one gap); merge_turns says a character's consecutive lines in one go, even_out_voices levels each character (both default true)."), "pacing", "merge_turns", "even_out_voices"),
 			arg(i18n.T("Stories: %s or %s runs the AI director: the writing-help language model reads the story and writes the scene, personas and directions (only what is empty, or replacing all). Takes up to a minute or two; %s if no language model is set up.", "`fill`", "`all`", "`llm_unavailable`"), "direct"),
 		}},
@@ -783,4 +784,13 @@ func installSkill(dir string, files []skillDoc) (backups []string, err error) {
 		}
 	}
 	return backups, nil
+}
+
+// skillModel names a model for an agent: its id, then the friendly name
+// the user sees ("`omnivoice-bf16` (Multilingual all-rounder)").
+func skillModel(id string) string {
+	if e, ok := catalog.Builtin().ByID(id); ok {
+		return "`" + id + "` (" + e.DisplayName() + ")"
+	}
+	return "`" + id + "`"
 }

@@ -230,7 +230,7 @@ func (a *app) dubAuditionLine(id string) {
 					a.askLicence(entryFor(lic.Model), func() { a.dubAuditionLine(id) })
 				case errors.Is(err, core.ErrNotDownloaded):
 					e := entryFor(take.Model)
-					a.dubErr, a.dubNeed = i18n.T("%s is not downloaded yet.", e.Label), &e
+					a.dubErr, a.dubNeed = i18n.T("%s is not downloaded yet.", modelRef(e)), &e
 				default:
 					a.toast(engineErrorText(err))
 				}

@@ -21,7 +21,7 @@ import (
 // interface's language, the language left to detection, and the user's
 // changes ov (0 = recommended).
 func (s *studioState) loadPreset(e catalog.Entry, ov settings.ModelParams) {
-	pr, _ := catalog.PresetFor(e.ID)
+	pr, hasPreset := catalog.PresetFor(e.ID)
 	s.voice, s.language = "", ""
 	ids := e.VoiceIDs()
 	if v := pr.VoiceFor(i18n.Locale()); v != "" && slices.Contains(ids, v) {
@@ -31,7 +31,7 @@ func (s *studioState) loadPreset(e catalog.Entry, ov settings.ModelParams) {
 	}
 	if l := pr.Defaults.Language; l != "" && l != "auto" {
 		s.language = l
-	} else if pr.BestFor == "" {
+	} else if !hasPreset {
 		// No preset: the model's first language, as before (a model
 		// without "auto").
 		if l := e.LanguageOptions(); len(l) > 0 {

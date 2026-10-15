@@ -46,11 +46,11 @@ func (a *app) galleryPage(c *ui.Context) {
 			// The model previews use; models not downloaded say so, and
 			// are not chosen unless asked for (previewModel).
 			cur, _ := a.previewModel()
-			dropButton(c.Key("gallery-model"), icons.Soundwave, cur.Label).Tooltip(i18n.T("Preview with")).MaxWidth(px(t, 220)).Menu(func(m *ui.Menu) {
+			dropButton(c.Key("gallery-model"), icons.Soundwave, cur.DisplayName()).Tooltip(i18n.T("Preview with")).MaxWidth(px(t, 220)).Menu(func(m *ui.Menu) {
 				for _, e := range ms {
-					label := e.Label
+					label := e.DisplayName()
 					if ok, known := a.modelOnDisk(e); known && !ok {
-						label = i18n.T("%s (not downloaded)", e.Label)
+						label = i18n.T("%s (not downloaded)", e.DisplayName())
 					}
 					if m.Item(label).Checked(e.Label == cur.Label).Chosen() {
 						g.model = e.Label

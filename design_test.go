@@ -49,7 +49,7 @@ func TestDesignPage(t *testing.T) {
 	}
 	d.model = "OmniVoice"
 	tt.Frame()
-	if !tt.HasText("Describe the voice") || !tt.HasText("Sent to OmniVoice (non-commercial)") && !strings.Contains(strings.Join(tt.Texts(), "|"), "Sent to OmniVoice") {
+	if !tt.HasText("Describe the voice") || !strings.Contains(strings.Join(tt.Texts(), "|"), "Sent to “Multilingual all-rounder”") {
 		t.Fatalf("design page: %q", tt.Texts())
 	}
 
@@ -201,7 +201,7 @@ func TestDesignModels(t *testing.T) {
 		return &c
 	}
 	tt.Frame()
-	if !tt.HasText("No model here can design voices. Download one that can, such as OmniVoice, on the Models page.") {
+	if !tt.HasText("No model here can design voices. Download one that can, such as “Voice design”, on the Models page.") {
 		t.Errorf("no models: %q", tt.Texts())
 	}
 }

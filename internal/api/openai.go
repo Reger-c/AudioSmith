@@ -542,7 +542,7 @@ func (s *Server) openAIModels(ctx context.Context) ([]openAIModel, error) {
 			continue
 		}
 		out = append(out, openAIModel{ID: e.ID, Object: "model", OwnedBy: ownerOf(e.Repo),
-			AudioSmith: map[string]any{"kind": kind, "repo": e.Repo, "label": e.Label, "downloaded": m.Downloaded,
+			AudioSmith: map[string]any{"kind": kind, "repo": e.Repo, "label": e.Label, "display_name": e.Name, "ui_name": e.DisplayName(), "downloaded": m.Downloaded,
 				"licence": e.Licence.ID, "acceptance_needed": m.LicenceNeeded}})
 	}
 	return out, nil

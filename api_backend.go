@@ -128,7 +128,7 @@ func (b *apiBackend) DownloadModel(ctx context.Context, id string) (string, erro
 	if js, err := b.lib.sched.List(ctx, jobs.Filter{Owner: "model:" + e.Repo}); err == nil && len(js) > 0 {
 		return js[0].ID, nil
 	}
-	return b.lib.sched.Submit(ctx, hub.DownloadSpec(e, i18n.T("Download %s", e.Label)))
+	return b.lib.sched.Submit(ctx, hub.DownloadSpec(e, i18n.T("Download %s", modelRef(e))))
 }
 
 func (b *apiBackend) Voices(ctx context.Context, q core.VoiceQuery) ([]core.Voice, error) {

@@ -52,7 +52,7 @@ func TestRemovedStudioDraft(t *testing.T) {
 	if a.preset().ID != "kokoro-82m-bf16" || a.voice != "af_heart" || a.text != "Hello there." {
 		t.Fatalf("draft: %s %q %q", a.preset().ID, a.voice, a.text)
 	}
-	if countToasts(a, tt, "KittenTTS mini was removed; Kokoro 82M is used instead.") != 1 {
+	if countToasts(a, tt, "KittenTTS mini was removed; “Fast English voices” is used instead.") != 1 {
 		t.Errorf("toasts %q", a.toasts)
 	}
 	a.applyStudioDraft(studioDraft{Version: 3, Text: "Again.", ModelLabel: "KittenTTS mini"})
@@ -64,7 +64,7 @@ func TestRemovedStudioDraft(t *testing.T) {
 		t.Errorf("recipe %+v", p)
 	}
 	a.applyStudioDraft(studioDraft{Version: 3, Text: "Hi.", ModelLabel: "Pocket TTS", RefAudio: "/tmp/ref.wav", RefText: "Words."})
-	if a.preset().ID != "chatterbox-turbo-8bit" || a.refAudio != "/tmp/ref.wav" || countToasts(a, tt, "Pocket TTS was removed; Chatterbox Turbo is used instead.") != 1 {
+	if a.preset().ID != "chatterbox-turbo-8bit" || a.refAudio != "/tmp/ref.wav" || countToasts(a, tt, "Pocket TTS was removed; “English clone” is used instead.") != 1 {
 		t.Errorf("pocket clone: %s %q %q", a.preset().ID, a.refAudio, a.toasts)
 	}
 }
@@ -96,7 +96,7 @@ func TestRemovedSettings(t *testing.T) {
 		t.Errorf("studio on %s", b.preset().ID)
 	}
 	// One notice for all of them.
-	if countToasts(b, tt, "Removed models: Soprano 80M → Kokoro 82M, Pocket TTS → Chatterbox Turbo, Marvis TTS 250M → Kokoro 82M, Chatterbox → Chatterbox Turbo, KittenTTS mini → Kokoro 82M. Your settings now use the replacements.") != 1 {
+	if countToasts(b, tt, "Removed models: Soprano 80M → Fast English voices, Pocket TTS → English clone, Marvis TTS 250M → Fast English voices, Chatterbox → English clone, KittenTTS mini → Fast English voices. Your settings now use the replacements.") != 1 {
 		t.Errorf("toasts %q %q", b.toasts, tt.Texts())
 	}
 	// Nothing to do the next time.
@@ -138,7 +138,7 @@ func TestRemovedProjects(t *testing.T) {
 	if d := a.lfBook.doc; d.Model != entry(t, "chatterbox-turbo-8bit").Repo || d.Voice != clone.ID {
 		t.Errorf("book %q voice %q", d.Model, d.Voice)
 	}
-	if countToasts(a, tt, "KittenTTS mini was removed") != 1 || countToasts(a, tt, "Pocket TTS was removed; Chatterbox Turbo is used instead.") != 1 {
+	if countToasts(a, tt, "KittenTTS mini was removed") != 1 || countToasts(a, tt, "Pocket TTS was removed; “English clone” is used instead.") != 1 {
 		t.Errorf("toasts %q", a.toasts)
 	}
 
@@ -188,7 +188,7 @@ func TestRemovedDub(t *testing.T) {
 	if err != nil || p.Settings.Model != turbo {
 		t.Errorf("saved %v %+v", err, p.Settings)
 	}
-	if countToasts(a, tt, "Chatterbox was removed; Chatterbox Turbo is used instead.") != 1 {
+	if countToasts(a, tt, "Chatterbox was removed; “English clone” is used instead.") != 1 {
 		t.Errorf("toasts %q", a.toasts)
 	}
 }

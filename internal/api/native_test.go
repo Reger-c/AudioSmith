@@ -195,6 +195,15 @@ func TestModelsLanguagesTools(t *testing.T) {
 	if m.Licence.ID != "cc-by-nc-4.0" || m.Licence.Commercial {
 		t.Fatalf("omnivoice %+v", m)
 	}
+	// Thread #45: friendly names beside the technical ones, which stay.
+	if m.ID != "omnivoice-bf16" || m.Label != "OmniVoice" || m.DisplayName != "Multilingual all-rounder" || m.UIName != "Multilingual all-rounder" ||
+		m.Description == "" || len(m.Tags) == 0 || m.Tags[0] != "non-commercial" {
+		t.Errorf("names %+v", m)
+	}
+	// A friendly name picks the model as well as its id.
+	if e, ok := findEntry("multilingual ALL-rounder", "tts"); !ok || e.ID != "omnivoice-bf16" {
+		t.Errorf("findEntry by name: %s %v", e.ID, ok)
+	}
 	var dl map[string]any
 	resp := do(t, ts, "POST", "/api/models/kokoro-82m-bf16/download", nil, &dl)
 	if resp.StatusCode != 202 || dl["job_id"] == "" {
