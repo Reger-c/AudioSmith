@@ -42,6 +42,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/llm"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/translate"
@@ -140,6 +141,7 @@ type dictSession struct {
 	note     string // why it was copied, an error…: translated
 	need     *catalog.Entry
 	cancel   context.CancelFunc // clean-up and insertion
+	warming  bool               // clean-up waits for the language model to load
 }
 
 // openDictation sets dictation's defaults; connectDictation adds the OS
@@ -301,6 +303,9 @@ func (a *app) dictStart(target dictation.Target, hold bool) {
 		a.dictSys.PlaySound("Tink")
 	}
 	a.dictPreload()
+	if a.prefs.Dictation.Cleanup {
+		a.warmLocalLLM(llm.SkillDictationCleanup) // clean-up runs within 4 s: load the model while the user speaks
+	}
 	os.MkdirAll(filepath.Dir(out), 0o755)
 	p := proto.CaptureParams{Device: a.prefs.Dictation.Device, Channels: 1, SampleRate: services.TranscriptRate,
 		Output: proto.Output{Path: out, Format: "wav", Bits: 16}, MaxSeconds: dictMaxSeconds}
@@ -484,11 +489,19 @@ func (a *app) dictDeliver(s *dictSession, t core.Transcript) {
 	cleaner := &translate.Cleaner{Router: a.llmRouter}
 	_, who := a.llmAvailable()
 	req := translate.CleanupRequest{Text: raw, Lang: t.Language, Vocabulary: vocabulary(d.Vocabulary), NoLLM: !d.Cleanup}
+	cold := d.Cleanup && a.localLLMCold(llm.SkillDictationCleanup)
+	if cold {
+		// The model still loads (local_llm_warm.go): a longer budget once.
+		req.Budget, s.warming = coldCleanupBudget, true
+	}
 	in := dictation.Inserter{Sys: a.dictSys, Clip: a.dictClip, CopyOnly: d.Output == settings.OutputCopy, Sleep: dictSleep}
 	target := s.target
 	svc := a.trSvc
 	a.async(func() {
 		res := cleaner.Clean(ctx, req)
+		if cold && res.Fallback == translate.FallbackTimeout {
+			a.post(func() { a.warmLocalLLM(llm.SkillDictationCleanup) }) // for the next one
+		}
 		text := strings.TrimSpace(res.Text)
 		if text == "" {
 			text = raw
@@ -665,6 +678,9 @@ func (s *dictSession) status() string {
 	case dictTranscribing:
 		return s.stage
 	case dictCleaning:
+		if s.warming {
+			return i18n.T("Loading model…")
+		}
 		return i18n.T("Cleaning up…")
 	case dictInserting:
 		return i18n.T("Typing…")

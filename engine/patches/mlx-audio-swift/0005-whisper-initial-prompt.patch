@@ -1,0 +1,53 @@
+diff --git a/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift b/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
+index d58a5de..455c181 100644
+--- a/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
++++ b/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
+@@ -15,6 +15,10 @@ public final class WhisperModel: Module, STTGenerationModel {
+     /// "transcribe" (default) or "translate" (into English). AudioSmith patch.
+     public var task: String = "transcribe"
+ 
++    /// Text the decoder sees before each 30 s window, as OpenAI's
++    /// `initial_prompt` (names, vocabulary, style); "" for none. AudioSmith patch.
++    public var initialPrompt: String = ""
++
+     public init(config: WhisperConfig, generationConfig: WhisperGenerationConfig? = nil) {
+         self.config = config
+         self.generationConfig = generationConfig
+@@ -213,10 +217,22 @@ public final class WhisperModel: Module, STTGenerationModel {
+                 promptLanguage = best.key
+             }
+         }
+-        let promptIds = tokenizer.buildPromptTokens(
++        let sotSequence = tokenizer.buildPromptTokens(
+             language: promptLanguage,
+             task: task
+         )
++        // AudioSmith patch: the initial prompt goes after <|startofprev|>,
++        // before the SOT sequence, at most half the context (its end kept),
++        // as OpenAI's decoding does.
++        var promptIds = sotSequence
++        let initial = initialPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
++        if let prev = tokenizer.prevSotId, !initial.isEmpty {
++            let ids = tokenizer.inner.encode(text: " " + initial, addSpecialTokens: false)
++                .filter { $0 < tokenizer.timestampBeginId && !tokenizer.specialTokenIds.contains($0) }
++            if !ids.isEmpty {
++                promptIds = [prev] + ids.suffix(max(config.maxTargetPositions / 2 - 1, 0)) + sotSequence
++            }
++        }
+ 
+         let promptArray = MLXArray(promptIds.map(Int32.init)).expandedDimensions(axis: 0)
+         var hidden = model.decoder(
+@@ -287,10 +303,10 @@ public final class WhisperModel: Module, STTGenerationModel {
+         }
+ 
+         let text = tokenizer.decode(tokens: generated)
+-        // The language token sits at prompt index 1 for multilingual models.
++        // The language token sits at index 1 of the SOT sequence for multilingual models.
+         var language: String? = nil
+-        if tokenizer.isMultilingual, promptIds.count > 1 {
+-            let langTokenId = promptIds[1]
++        if tokenizer.isMultilingual, sotSequence.count > 1 {
++            let langTokenId = sotSequence[1]
+             for (code, id) in tokenizer.languageToId where id == langTokenId {
+                 language = code
+                 break

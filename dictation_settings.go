@@ -16,6 +16,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/dictation"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/lang"
+	"github.com/hehehai/AudioSmith/internal/llm"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -401,6 +402,9 @@ func (a *app) dictationSettings(c *ui.Context) {
 		if ui.Switch(c.Key("dict-cleanup-switch"), &f.cleanup).Label(i18n.T("Clean up with a language model")).Changed() {
 			on := f.cleanup
 			a.updateSettings(func(s *settings.Settings) { s.Dictation.Cleanup = on })
+			if on {
+				a.warmLocalLLM(llm.SkillDictationCleanup) // local_llm_warm.go
+			}
 		}
 		if !ok {
 			if ui.Button(c.Key("dict-writing"), i18n.T("Writing help…")).Clicked() {

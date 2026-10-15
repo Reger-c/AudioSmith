@@ -59,6 +59,7 @@ type llmState struct {
 	// localLLMHook replaces the engine call of the engine's own language
 	// model (local_llm.go) in tests.
 	localLLMHook llm.EngineCaller
+	llmWarmState // local_llm_warm.go
 }
 
 // llmForm is Settings → Writing help. Controls bind to its fields, which

@@ -640,3 +640,67 @@ func TestAgentSpeechFailures(t *testing.T) {
 		t.Errorf("failures: %s %s", res.End, res.Outcome)
 	}
 }
+
+// TestAgentIgnoresEarlyHangup replays Qwen3 4B's English call recorded by
+// thread #44 (HANGUP after every reply): the call goes on until the other
+// person says goodbye, and HANGUP is never spoken.
+func TestAgentIgnoresEarlyHangup(t *testing.T) {
+	f := &fakeSpeech{
+		heard: []string{"Good evening, Luigi's, how can I help you?", "Friday at seven... I'm sorry, we're fully booked at seven. I have seven forty-five.",
+			"Great. Any dietary requirements?", "Perfect, see you Friday."},
+		replies: []string{
+			"SAY: Hi, I'm calling on behalf of Sam to book a table for two this Friday at 7 pm.  \nSAY: Would 7 pm work, or would 7:30 or 8 be better?  \nOUTCOME: needs_you — Sam needs to confirm preferred time  \nHANGUP",
+			"SAY: We'd like to book a table for two this Friday at 7 pm, or if that's not available, 7:30 or 8.  \nSAY: Could you please confirm the availability?  \nOUTCOME: needs_you — Sam needs to confirm preferred time  \nHANGUP",
+			"SAY: Thank you for letting me know. Would 7:45 work for Sam?  \nOUTCOME: needs_you — Sam needs to confirm 7:45 or another time  \nHANGUP",
+			"SAY: Sam doesn't have any specific dietary requirements.  \nOUTCOME: needs_you — Sam needs to confirm preferred time  \nHANGUP",
+			"SAY: Thank you, Sam. We’ll see you Friday at 7:45.  \nOUTCOME: booked — Table confirmed for 7:45 Friday  \nHANGUP",
+		},
+	}
+	rig := newCallRig(t, func() *telephony.Agent {
+		return &telephony.Agent{STT: f.stt, LLM: f.llm, TTS: f.tts,
+			Brief: telephony.Brief{Task: "Book a table for two at 7 pm this Friday under the name Sam. If 7 is not available, 7:30 or 8 is fine.", User: "Sam"}}
+	})
+	m, _ := rig.dial()
+	agentLines := func() int {
+		rig.mu.Lock()
+		defer rig.mu.Unlock()
+		n := 0
+		for _, ev := range rig.events {
+			if ev.Kind == telephony.EvLine && ev.Line.Speaker == telephony.SpeakerAgent && ev.Index >= n {
+				n = ev.Index + 1
+			}
+		}
+		return n
+	}
+	for turn := range 4 {
+		// The agent answered the previous turn and still listens.
+		eventually(t, "agent reply", func() bool {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			return len(f.replies) == 4-turn && agentLines() > 0
+		})
+		rig.waitListening()
+		time.Sleep(50 * time.Millisecond)
+		select {
+		case <-m.Done():
+			t.Fatalf("the call ended after reply %d", turn+1)
+		default:
+		}
+		if err := m.Speak(0.6); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res := rig.wait()
+	<-m.Done()
+	if res.End != telephony.EndAgent || res.Outcome != telephony.OutcomeBooked {
+		t.Errorf("result %s %s", res.End, res.Outcome)
+	}
+	if n := strings.Count(lines(res), "caller: "); n != 4 {
+		t.Errorf("caller turns %d:\n%s", n, lines(res))
+	}
+	for _, s := range f.saidLines() {
+		if strings.Contains(s, "HANGUP") || strings.Contains(s, "OUTCOME") {
+			t.Errorf("spoke %q", s)
+		}
+	}
+}

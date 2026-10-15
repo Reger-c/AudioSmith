@@ -106,7 +106,7 @@ type Translated struct {
 const (
 	WarnTagsRepaired = "translate.tags_repaired" // the model dropped/garbled [tags]; they were put back at the line's edge
 	WarnUnchanged    = "translate.unchanged"     // output equals the source (names-only lines are fine)
-	WarnFitFailed    = "translate.fit_failed"    // the shortening rewrite failed; the line may overflow
+	WarnFitFailed    = "translate.fit_failed"    // the shortening rewrite failed or was rejected (mixed scripts, cut too far); the line may overflow
 	WarnAdaptFailed  = "translate.adapt_failed"  // Cinematic adapt failed for this line; the draft is kept
 )
 
