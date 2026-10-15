@@ -13,8 +13,9 @@ final class Analyzer: @unchecked Sendable {
     let store: ModelStore
 
     /// Model families this build loads for analysis (catalog.Entry.Family).
-    static let families = ["whisper", "qwen3_asr", "parakeet", "qwen3_forced_aligner", "silero_vad", "deepfilternet"]
-    /// The ones the listen worker loads (speech-to-text only).
+    static let families = ["whisper", "qwen3_asr", "parakeet", "moss_transcribe_diarize", "qwen3_forced_aligner", "silero_vad", "deepfilternet"]
+    /// The ones the listen worker loads (speech-to-text only; not MOSS,
+    /// which is too slow for dictation).
     static let listenFamilies = ["whisper", "qwen3_asr", "parakeet"]
 
     init(out: Writer, store: ModelStore) {
@@ -56,6 +57,8 @@ final class Analyzer: @unchecked Sendable {
                                            minChunkDuration: params.minChunkDuration)
             let output = try await runCancellable { whisper.generate(audio: audio, generationParameters: params) }
             (text, segments, detected) = convert(output)
+        } else if let moss = model as? MossTranscribeDiarizeModel {
+            (text, segments, detected) = try transcribeMoss(moss, samples: samples, prompt: p.prompt, progress: progress)
         } else if let qwen = model as? Qwen3ASRModel {
             // 30 s chunks give segments of a useful size; its own default
             // is one per 20 minutes.
@@ -85,8 +88,12 @@ final class Analyzer: @unchecked Sendable {
     /// The speech-to-text model, loaded when not resident (release it after).
     private func sttModel(_ model: String, path: String?, job: String, offline: Bool) async throws -> any STTGenerationModel {
         let dir = try modelDirectory(model, path: path, offline: offline)
+        let moss = Self.isMoss(model) || dir.map { modelType($0) == Self.mossModelType } ?? false
         let (m, _) = try await store.acquire(model, task: "stt", job: job, as: (any STTGenerationModel).self,
-                                             sampleRate: { _ in 16000 }) {
+                                             sampleRate: { _ in 16000 }, estimate: moss ? Self.mossEstimate : 0) {
+            if moss {
+                return try await self.loadMoss(model, dir: dir)
+            }
             if model.lowercased().contains("whisper"), let dir {
                 let m = try await WhisperModel.fromDirectory(dir)
                 dropEngineCopy(model)

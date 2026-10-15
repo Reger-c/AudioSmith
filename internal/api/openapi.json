@@ -327,7 +327,7 @@
         ],
         "summary": "Create transcription",
         "operationId": "createTranscription",
-        "description": "OpenAI's speech to text. The transcript is kept in Transcribe's history.",
+        "description": "OpenAI's speech to text. The transcript is kept in Transcribe's history. With speakers=true (or model gpt-4o-transcribe-diarize, or response_format diarized_json) the speakers model transcribes and labels who says what.",
         "requestBody": {
           "required": true,
           "content": {
@@ -342,7 +342,7 @@
                   },
                   "model": {
                     "type": "string",
-                    "description": "whisper-1 / gpt-4o-transcribe (Transcribe's Accurate model), gpt-4o-mini-transcribe (its Fast model), or a catalogue model. By default Qwen3-ASR (qwen3-asr-0.6b-4bit), or Whisper (whisper-large-v3-turbo-4bit) for a language Qwen3-ASR does not know. A removed model (parakeet-tdt-0.6b-v3) is answered by the default, with the X-AudioSmith-Replaced-By and X-AudioSmith-Warning headers."
+                    "description": "whisper-1 / gpt-4o-transcribe (Transcribe's Accurate model), gpt-4o-mini-transcribe (its Fast model), or a catalogue model. By default Qwen3-ASR (qwen3-asr-0.6b-4bit), or Whisper (whisper-large-v3-turbo-4bit) for a language Qwen3-ASR does not know. A removed model (parakeet-tdt-0.6b-v3) is answered by the default, with the X-AudioSmith-Replaced-By and X-AudioSmith-Warning headers. gpt-4o-transcribe-diarize, or moss-transcribe-diarize-8bit, tells speakers apart (as speakers=true)."
                   },
                   "language": {
                     "type": "string"
@@ -350,15 +350,21 @@
                   "prompt": {
                     "type": "string"
                   },
+                  "speakers": {
+                    "type": "boolean",
+                    "description": "AudioSmith's extension: tell who says what with the speakers model (MOSS-Transcribe-Diarize, moss-transcribe-diarize-8bit; slower than the default; download it first). Segments of verbose_json and diarized_json get a speaker (S1, S2…, or the name given in Transcribe); SRT cues start with it. Not with translations."
+                  },
                   "response_format": {
                     "type": "string",
                     "enum": [
                       "json",
                       "text",
                       "verbose_json",
+                      "diarized_json",
                       "srt",
                       "vtt"
-                    ]
+                    ],
+                    "description": "diarized_json (OpenAI's format for gpt-4o-transcribe-diarize) transcribes with speakers: one segment per turn with its speaker."
                   },
                   "temperature": {
                     "type": "number",
@@ -394,6 +400,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/TranscriptionVerbose"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TranscriptionDiarized"
                     }
                   ]
                 }
@@ -1151,7 +1160,7 @@
         ],
         "summary": "Transcribe a file",
         "operationId": "createTranscript",
-        "description": "With word timings unless words is false.",
+        "description": "With word timings unless words is false. speakers=true labels who says what (the speakers model, slower).",
         "requestBody": {
           "required": true,
           "content": {
@@ -1177,6 +1186,10 @@
                   },
                   "words": {
                     "type": "boolean"
+                  },
+                  "speakers": {
+                    "type": "boolean",
+                    "description": "Tell who says what: the speakers model (moss-transcribe-diarize-8bit) transcribes, whatever model says; segments get speaker labels S1, S2… (in order of appearance)."
                   }
                 },
                 "required": [
@@ -3438,6 +3451,10 @@
                 },
                 "no_speech_prob": {
                   "type": "number"
+                },
+                "speaker": {
+                  "type": "string",
+                  "description": "With speakers: its speaker's name or label (S1…)."
                 }
               }
             }
@@ -3465,6 +3482,61 @@
           "language",
           "duration",
           "text"
+        ]
+      },
+      "TranscriptionDiarized": {
+        "type": "object",
+        "description": "response_format diarized_json: OpenAI's shape for gpt-4o-transcribe-diarize.",
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "transcribe"
+            ]
+          },
+          "duration": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "transcript.text.segment"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "number"
+                },
+                "end": {
+                  "type": "number"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "speaker": {
+                  "type": "string",
+                  "description": "S1, S2… in order of appearance, or the name given in Transcribe."
+                }
+              }
+            }
+          },
+          "usage": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "text",
+          "segments"
         ]
       },
       "Word": {
@@ -4035,6 +4107,13 @@
           "clean": {
             "type": "string"
           },
+          "speakers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Names given to speaker labels in Transcribe (S1 → Ana)."
+          },
           "segments": {
             "type": "array",
             "items": {
@@ -4050,7 +4129,8 @@
                   "type": "string"
                 },
                 "speaker": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Who says it: S1, S2… in order of appearance (transcriptions with speakers)."
                 },
                 "words": {
                   "type": "array",

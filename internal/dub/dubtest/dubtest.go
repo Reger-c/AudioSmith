@@ -10,7 +10,9 @@
 //	separate.run      vocals = the input, background = the input × 0.1
 //	diarize.run       energy VAD regions, speakers taking turns (Speakers, default 2)
 //	stt.transcribe    one segment per VAD region, its text from Script (or "Line N."), with word times;
-//	                  a file with a "<audio>.txt" beside it (a rendered line) says that text, or Heard[text]
+//	                  a file with a "<audio>.txt" beside it (a rendered line) says that text, or Heard[text];
+//	                  a speakers model (MOSS-Transcribe-Diarize) labels the regions S01, S02… taking
+//	                  turns (Speakers, default 2), without word times
 //	stt.align         the text's words spread over the audio
 //	vad.detect        the energy VAD
 //	enhance.run       a copy
@@ -363,13 +365,22 @@ func (e *Engine) transcribe(p proto.TranscribeParams) (proto.TranscribeResult, e
 		return res, nil
 	}
 	var texts []string
+	speakers := strings.Contains(strings.ToLower(p.Model), "moss-transcribe-diarize")
+	e.mu.Lock()
+	n := e.Speakers
+	e.mu.Unlock()
+	if n <= 0 {
+		n = 2
+	}
 	for i, r := range regions {
 		t := fmt.Sprintf("Line %d.", i+1)
 		if i < len(script) {
 			t = script[i]
 		}
 		seg := proto.Segment{Start: round(r.Start), End: round(r.End), Text: t}
-		if p.Words {
+		if speakers {
+			seg.Speaker = fmt.Sprintf("S%02d", i%n+1)
+		} else if p.Words {
 			seg.Words = spread(t, r.Start, r.End)
 		}
 		res.Segments = append(res.Segments, seg)

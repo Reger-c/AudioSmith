@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -67,6 +68,8 @@ type dubEnv struct {
 	tr      *fakeTranslator
 	src     string
 	ytdlp   dub.YtDlp
+	models  *DubModels // replaces the default models when set
+	notDown []string   // models ModelPath reports not downloaded
 	mu      sync.Mutex
 	changes int
 	marked  []string // files the watermark hook marked (watermark_test.go)
@@ -99,9 +102,21 @@ func newDubEnv(t *testing.T, lines int) *dubEnv {
 	})
 	e.dubs = NewDubs(DubsConfig{
 		Store: st.Dubs(), Bus: e.bus, Scheduler: e.sched, Render: e.svc.Render,
-		Engine:    func(m string) jobs.Executor { return e.eng.Executor(m) },
-		ModelPath: func(_ context.Context, m string) (string, error) { return "/models/" + m, nil },
+		Engine: func(m string) jobs.Executor { return e.eng.Executor(m) },
+		ModelPath: func(_ context.Context, m string) (string, error) {
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			if slices.Contains(e.notDown, m) {
+				return "", fmt.Errorf("%s: %w", m, core.ErrNotDownloaded)
+			}
+			return "/models/" + m, nil
+		},
 		Models: func() DubModels {
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			if e.models != nil {
+				return *e.models
+			}
 			return DubModels{STT: "stt", Align: "align", Diarize: "diar", Separate: "sep", Enhance: "dfn"}
 		},
 		Caps: func(string) DubModelCaps { return DubModelCaps{Clone: true, Speed: true} },

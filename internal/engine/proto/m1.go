@@ -91,12 +91,17 @@ type TranscribeResult struct {
 }
 
 // Segment is a stretch of the transcript. Whisper gives about one per
-// 30 s window, Qwen3-ASR one per utterance.
+// 30 s window, Qwen3-ASR one per utterance, MOSS-Transcribe-Diarize one
+// per speaker turn.
 type Segment struct {
 	Start float64 `json:"start"`
 	End   float64 `json:"end"`
 	Text  string  `json:"text"`
 	Words []Word  `json:"words,omitempty"` // when asked and the model has them
+	// Speaker is the model's anonymous label of who says it ("S01",
+	// "S02"…, numbered in order of appearance within one call) for models
+	// that tell speakers apart (catalogue capability "speakers"); "" else.
+	Speaker string `json:"speaker,omitempty"`
 }
 
 // Word is one timed word (one character for Chinese/Japanese, as aligners

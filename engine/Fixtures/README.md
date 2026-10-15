@@ -11,7 +11,7 @@ Golden transcripts of the engine protocol: the contract between the Go app and t
 | `models.jsonl` | `models.load` / `loaded` / `unload`, `engine.stats`, `flush`, `shutdown` |
 | `errors.jsonl` | the M0 error codes, `input_too_long`, and a model that only clones (MOSS-TTS-Nano) without a reference (`bad_request`) |
 | `voice.jsonl` | `tts.encodeVoice`, a take from a voice prompt, VoiceDesign, CustomVoice + instruct, Chatterbox parameters |
-| `stt.jsonl` | `stt.transcribe` (auto language, word timings, translate refused, missing file), `stt.align` |
+| `stt.jsonl` | `stt.transcribe` (auto language, word timings, translate refused, missing file, speaker labels from MOSS-Transcribe-Diarize), `stt.align` |
 | `analysis.jsonl` | `vad.detect`, `enhance.run`, `unsupported_media` |
 | `media.jsonl` | a `media` worker: hello, `media.probe` (video, WAV, unreadable), `media.decode` of a window, `media.encode` of an M4B (and MP3 refused), `file_not_found`, a gpu method refused |
 | `capture.jsonl` | a `listen` worker: its own speech-to-text model (`models.load`, `stt.transcribe`), `capture.devices`, a recording with its meter stopped by `capture.stop`, refusals (device, permission), cancel, `maxSeconds` |

@@ -20,6 +20,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
 // Files of a dub project, in its directory.
@@ -374,6 +375,7 @@ func (s *Dubs) transcribe(ctx context.Context, sc *stageCtx) error {
 	q := p.Clone()
 	q.Segments, q.Names, q.NextSeg = nil, nil, 1
 	detected := ""
+	labelled := false // the speakers model labelled the lines
 	if p.Source.Captions != "" && !sc.params.Force {
 		data, err := os.ReadFile(p.Source.Captions)
 		if err == nil {
@@ -386,13 +388,38 @@ func (s *Dubs) transcribe(ctx context.Context, sc *stageCtx) error {
 			return stageErr(proto.CodeModelNotDownloaded, "No speech-to-text model.")
 		}
 		stt, wordTimes := m.STTFor(p.SourceLang)
-		tp := proto.TranscribeParams{Model: stt, Audio: speech, Language: p.SourceLang, Words: wordTimes}
 		var tr proto.TranscribeResult
-		if err := sc.call(ctx, proto.MethodSTTTranscribe, stt, &tp, &tp.ModelPath, &tr, func(pg jobs.Progress) {
-			pg.Stage = "transcribing"
-			sc.report(pg)
-		}); err != nil {
-			return err
+		call := func(model string) func(k, n int, tp *proto.TranscribeParams, tr *proto.TranscribeResult) error {
+			return func(k, n int, tp *proto.TranscribeParams, tr *proto.TranscribeResult) error {
+				return sc.call(ctx, proto.MethodSTTTranscribe, model, tp, &tp.ModelPath, tr, func(pg jobs.Progress) {
+					pg.Stage = "transcribing"
+					pg.Fraction = windowFraction(pg.Fraction, k, n)
+					sc.report(pg)
+				})
+			}
+		}
+		// More than one speaker: the speakers model transcribes and tells
+		// them apart (thread #48); Sortformer below only when it is not
+		// downloaded.
+		if spk := m.SpeakersFor(p.SourceLang); spk != "" && p.Speakers != 1 {
+			tp := proto.TranscribeParams{Model: spk, Audio: speech, Language: p.SourceLang, Prompt: glossaryPrompt(p.Glossary)}
+			res, err := TranscribeSpeakers(ctx, call(spk), tp, p.Source.Duration)
+			switch {
+			case ctx.Err() != nil:
+				return ctx.Err()
+			case missing(err):
+				sc.warn(DubWarnSpeakersModel)
+			case err != nil:
+				return err
+			default:
+				tr, stt, wordTimes, labelled = res, spk, false, true
+			}
+		}
+		if !labelled {
+			tp := proto.TranscribeParams{Model: stt, Audio: speech, Language: p.SourceLang, Words: wordTimes}
+			if err := call(stt)(0, 1, &tp, &tr); err != nil {
+				return err
+			}
 		}
 		if tr.AudioSeconds <= 0 {
 			tr.AudioSeconds = p.Source.Duration
@@ -421,7 +448,7 @@ func (s *Dubs) transcribe(ctx context.Context, sc *stageCtx) error {
 			if strings.TrimSpace(ts.Text) == "" {
 				continue
 			}
-			seg := q.NewSegment(ts.Start, ts.End, "", strings.TrimSpace(ts.Text))
+			seg := q.NewSegment(ts.Start, ts.End, ts.Speaker, strings.TrimSpace(ts.Text))
 			for _, w := range ts.Words {
 				seg.Words = append(seg.Words, dub.Word{Text: w.Text, Start: w.Start, End: w.End})
 			}
@@ -433,7 +460,17 @@ func (s *Dubs) transcribe(ctx context.Context, sc *stageCtx) error {
 	}
 	// Who speaks.
 	var turns []dub.Turn
-	if p.Speakers != 1 && !slices.ContainsFunc(q.Segments, func(s dub.Segment) bool { return s.Speaker != "" && q.Names != nil }) {
+	if labelled {
+		// S1, S2… in order of appearance already; a line the model gave
+		// no label is the speaker's before it.
+		last := "S1"
+		for i := range q.Segments {
+			if q.Segments[i].Speaker == "" {
+				q.Segments[i].Speaker = last
+			}
+			last = q.Segments[i].Speaker
+		}
+	} else if p.Speakers != 1 && !slices.ContainsFunc(q.Segments, func(s dub.Segment) bool { return s.Speaker != "" && q.Names != nil }) {
 		if m.Diarize == "" {
 			sc.warn(DubWarnNoDiarization)
 		} else {
@@ -457,7 +494,7 @@ func (s *Dubs) transcribe(ctx context.Context, sc *stageCtx) error {
 			}
 		}
 	}
-	if q.Names == nil {
+	if q.Names == nil && !labelled {
 		q.AssignSpeakers(turns)
 	}
 	return sc.save(ctx, func(p *dub.Project) {
@@ -474,6 +511,19 @@ func (s *Dubs) transcribe(ctx context.Context, sc *stageCtx) error {
 			}
 		}
 	})
+}
+
+// glossaryPrompt is the vocabulary a speakers model expects: the
+// glossary's source terms the user entered (not the ones extracted from
+// an earlier transcript), at most 40.
+func glossaryPrompt(g translate.Glossary) string {
+	var terms []string
+	for _, t := range g {
+		if src := strings.TrimSpace(t.Source); src != "" && !t.Auto && !slices.Contains(terms, src) && len(terms) < 40 {
+			terms = append(terms, src)
+		}
+	}
+	return strings.Join(terms, ", ")
 }
 
 // references picks each speaker's clone reference and cleans it.

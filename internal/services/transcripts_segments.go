@@ -26,14 +26,17 @@ type tok struct {
 	start, end float64
 	prob       *float64
 	timed      bool
+	speaker    string // its model segment's speaker label
 }
 
 // BuildSegments makes a transcript's segments from what the model said
 // (segs) and the words an aligner or the model timed (words, in text
 // order; their text may lack punctuation and case). With words, the text
 // is cut into sentences timed by their words, each word keeping its
-// punctuation; without, the model's segments are kept. duration (seconds,
-// 0 = unknown) bounds every time.
+// punctuation; without, the model's segments are kept. Segments keep
+// their model segment's speaker label: with words, a change of speaker
+// ends a sentence (a speakers model's turns often end without a full
+// stop). duration (seconds, 0 = unknown) bounds every time.
 func BuildSegments(segs []proto.Segment, words []proto.Word, duration float64) []core.TranscriptSegment {
 	clamp := func(v float64) float64 {
 		v = max(v, 0)
@@ -49,7 +52,7 @@ func BuildSegments(segs []proto.Segment, words []proto.Word, duration float64) [
 			if txt == "" {
 				continue
 			}
-			out = append(out, core.TranscriptSegment{Start: clamp(s.Start), End: clamp(max(s.End, s.Start)), Text: txt})
+			out = append(out, core.TranscriptSegment{Start: clamp(s.Start), End: clamp(max(s.End, s.Start)), Text: txt, Speaker: s.Speaker})
 		}
 		return out
 	}
@@ -59,8 +62,9 @@ func BuildSegments(segs []proto.Segment, words []proto.Word, duration float64) [
 	var bounds [][2]float64 // per token: its model segment's start/end
 	for _, s := range segs {
 		ts := tokenize(s.Text)
-		for range ts {
+		for i := range ts {
 			bounds = append(bounds, [2]float64{s.Start, s.End})
+			ts[i].speaker = s.Speaker
 		}
 		toks = append(toks, ts...)
 	}
@@ -80,7 +84,7 @@ func BuildSegments(segs []proto.Segment, words []proto.Word, duration float64) [
 		if len(cur) == 0 {
 			return
 		}
-		seg := core.TranscriptSegment{Start: cur[0].start, End: cur[len(cur)-1].end}
+		seg := core.TranscriptSegment{Start: cur[0].start, End: cur[len(cur)-1].end, Speaker: cur[0].speaker}
 		var b strings.Builder
 		for i, t := range cur {
 			if i > 0 && t.space && spaced(cur[i-1].text, t.text) {
@@ -102,6 +106,8 @@ func BuildSegments(segs []proto.Segment, words []proto.Word, duration float64) [
 		}
 		next := toks[i+1]
 		switch {
+		case next.speaker != t.speaker:
+			flush()
 		case endsSentence(t.text):
 			flush()
 		case len(cur) >= 2 && next.start-t.end >= sentencePause:

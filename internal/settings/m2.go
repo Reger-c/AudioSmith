@@ -58,6 +58,10 @@ type Transcribe struct {
 	FastModel     string `json:"fastModel,omitempty"`
 	AccurateModel string `json:"accurateModel,omitempty"`
 	Device        string `json:"device,omitempty"` // capture device id; "" = the system's
+	// Speakers transcribes with the speakers model (thread #48:
+	// MOSS-Transcribe-Diarize), labelling who says what, instead of the
+	// mode's model.
+	Speakers bool `json:"speakers,omitempty"`
 }
 
 // Dictation: system-wide dictation.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,18 +24,27 @@ const (
 var ExportFormats = []string{ExportTXT, ExportSRT, ExportVTT, ExportJSON}
 
 // Export writes a transcript as format: plain text (the preferred text:
-// the clean-up when there is one), SubRip or WebVTT subtitles cut to
-// Netflix-style limits for its language (speaker names as VTT voices), or
-// JSON with every segment and timed word.
+// the clean-up when there is one; with two or more speakers, one
+// paragraph per turn after its speaker's name), SubRip or WebVTT
+// subtitles cut to Netflix-style limits for its language (speaker names
+// before SRT cues, as VTT voices), or JSON with every segment and timed
+// word.
 func Export(t core.Transcript, format string) ([]byte, error) {
 	switch format {
 	case ExportTXT:
-		return []byte(t.Preferred() + "\n"), nil
+		return []byte(PlainText(t) + "\n"), nil
 	case ExportSRT, ExportVTT:
 		cues := Cues(t)
 		var b bytes.Buffer
 		var err error
 		if format == ExportSRT {
+			if len(Speakers(t)) > 1 {
+				for i := range cues {
+					if cues[i].Speaker != "" {
+						cues[i].Text = cues[i].Speaker + ": " + cues[i].Text
+					}
+				}
+			}
 			err = subtitle.WriteSRT(&b, cues)
 		} else {
 			err = subtitle.WriteVTT(&b, cues, subtitle.VTTOptions{Speakers: true})
@@ -68,6 +78,54 @@ func Cues(t core.Transcript) []subtitle.Cue {
 }
 
 func secs(s float64) time.Duration { return time.Duration(s * float64(time.Second)) }
+
+// Speakers are the transcript's speaker labels in order of appearance.
+func Speakers(t core.Transcript) []string {
+	var out []string
+	for _, s := range t.Segments {
+		if s.Speaker != "" && !slices.Contains(out, s.Speaker) {
+			out = append(out, s.Speaker)
+		}
+	}
+	return out
+}
+
+// PlainText is the transcript as text to copy or save: the preferred
+// text, or, when two or more speakers say it and there is no clean-up,
+// one paragraph per turn after its speaker's name ("Ana: …").
+func PlainText(t core.Transcript) string {
+	if t.Clean != "" || len(Speakers(t)) < 2 {
+		return t.Preferred()
+	}
+	var b strings.Builder
+	last := ""
+	var turn []core.TranscriptSegment
+	flush := func() {
+		if len(turn) == 0 {
+			return
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		if last != "" {
+			b.WriteString(speakerName(t, last) + ": ")
+		}
+		b.WriteString(core.Transcript{Segments: turn}.Text())
+		turn = nil
+	}
+	for _, s := range t.Segments {
+		if strings.TrimSpace(s.Text) == "" {
+			continue
+		}
+		if s.Speaker != last {
+			flush()
+			last = s.Speaker
+		}
+		turn = append(turn, s)
+	}
+	flush()
+	return b.String()
+}
 
 // speakerName is a speaker label's name, or the label.
 func speakerName(t core.Transcript, label string) string {
@@ -139,7 +197,7 @@ func ExportAll(ts []core.Transcript, date func(time.Time) string) []byte {
 		if t.Title != "" {
 			head += " " + t.Title
 		}
-		b.WriteString(head + "\n" + t.Preferred() + "\n")
+		b.WriteString(head + "\n" + PlainText(t) + "\n")
 	}
 	return []byte(b.String())
 }

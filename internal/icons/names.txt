@@ -109,3 +109,6 @@ add                     # increase
 
 # The Clone page in the sidebar.
 user-plus-rounded       # Clone
+
+# Transcription with speakers (thread #48).
+users-group-rounded     # Transcribe's Speakers option, speaker names

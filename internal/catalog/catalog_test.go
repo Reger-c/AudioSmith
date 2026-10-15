@@ -437,7 +437,7 @@ func TestRemovedAnalysis(t *testing.T) {
 	if l := c.ForTask(TaskSeparate); len(l) != 1 || l[0].ID != DefaultSeparate {
 		t.Errorf("separation models %v", l)
 	}
-	if l := c.ForTask(TaskSTT); len(l) != 2 || l[0].ID != DefaultSTT || l[1].ID != FallbackSTT {
+	if l := c.ForTask(TaskSTT); len(l) != 3 || l[0].ID != DefaultSTT || l[1].ID != FallbackSTT || l[2].ID != DefaultSpeakers {
 		t.Errorf("speech-to-text models %v", l)
 	}
 	bad := *c
@@ -474,5 +474,51 @@ func TestSTTFor(t *testing.T) {
 	w, _ := c.ByID(FallbackSTT)
 	if !slices.Contains(w.Tags, TagFallback) || slices.Contains(q.Tags, TagFallback) {
 		t.Errorf("tags %v %v", w.Tags, q.Tags)
+	}
+}
+
+// TestSpeakersModel: MOSS-Transcribe-Diarize (thread #48) is a pinned,
+// Apache-2.0, speech-to-text entry that labels speakers; nothing else
+// does, and it never answers for the default speech recognition.
+func TestSpeakersModel(t *testing.T) {
+	c := Builtin()
+	e, ok := c.SpeakersModel()
+	if !ok || e.Repo != "vanch007/mlx-MOSS-Transcribe-Diarize-8bit" || e.Family != "moss_transcribe_diarize" || len(e.Revision) != 40 {
+		t.Fatalf("speakers model %+v", e)
+	}
+	if !slices.Contains(e.Tasks, TaskSTT) || slices.Contains(e.Tasks, TaskDiarize) || e.Has(CapLanguage) || e.Has(CapWordTimes) {
+		t.Errorf("tasks %v capabilities %v", e.Tasks, e.Capabilities)
+	}
+	if e.Licence.ID != "apache-2.0" || !e.Licence.Commercial || !e.Licence.Verified || e.Licence.RequiresAcceptance {
+		t.Errorf("licence %+v", e.Licence)
+	}
+	var sum int64
+	for _, f := range e.Files {
+		sum += f.Size
+		if strings.HasSuffix(f.Path, ".safetensors") && len(f.SHA256) != 64 {
+			t.Errorf("%s: no hash", f.Path)
+		}
+	}
+	if sum != e.Size || e.Size < 1_200_000_000 || e.Size > 1_300_000_000 {
+		t.Errorf("size %d, files %d", e.Size, sum)
+	}
+	if e.DisplayName() != "Transcription with speakers" || e.Tags[0] != TagSpeakers {
+		t.Errorf("name %q tags %v", e.DisplayName(), e.Tags)
+	}
+	for _, x := range c.Entries {
+		if x.Has(CapSpeakers) != (x.ID == DefaultSpeakers) {
+			t.Errorf("%s: speakers %v", x.ID, x.Has(CapSpeakers))
+		}
+	}
+	if !c.LabelsSpeakers(e.Repo) || !c.LabelsSpeakers(e.ID) || c.LabelsSpeakers("mlx-community/Qwen3-ASR-0.6B-4bit") {
+		t.Error("LabelsSpeakers")
+	}
+	for _, lang := range []string{"", "zh", "en", "ja", "sw"} {
+		if s := c.STTFor(lang, false); s.ID == DefaultSpeakers {
+			t.Errorf("STTFor(%q) = the speakers model", lang)
+		}
+	}
+	if !e.Knows("zh") || !e.Knows("en") || !e.Knows("") || e.Knows("sw") {
+		t.Error("languages")
 	}
 }

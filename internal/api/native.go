@@ -486,7 +486,7 @@ func (s *Server) createTranscript(w http.ResponseWriter, r *http.Request) {
 	defer os.Remove(path)
 	words := r.FormValue("words") != "false" // word timings unless asked not to
 	tr, err := s.Transcribe(r.Context(), TranscribeParams{File: path, Title: firstNonEmpty(r.FormValue("title"), name), Model: r.FormValue("model"),
-		Language: r.FormValue("language"), Prompt: r.FormValue("prompt"), Words: words})
+		Language: r.FormValue("language"), Prompt: r.FormValue("prompt"), Words: words, Speakers: formBool(r, "speakers")})
 	if err != nil {
 		writeError(w, err)
 		return

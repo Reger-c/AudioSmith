@@ -34,6 +34,11 @@ type TranscribeParams struct {
 	// Words asks for word timings (the forced aligner runs when the model
 	// gives none).
 	Words bool
+	// Speakers asks who says what: the speakers model (thread #48,
+	// MOSS-Transcribe-Diarize) transcribes, whatever Model says, and the
+	// segments carry speaker labels. Naming that model, or OpenAI's
+	// gpt-4o-transcribe-diarize, does the same.
+	Speakers bool
 }
 
 // Transcription is a finished transcript.
@@ -51,6 +56,13 @@ func (s *Server) Transcribe(ctx context.Context, p TranscribeParams) (Transcript
 		return Transcription{}, err
 	}
 	e, rep, err := s.resolveSTT(p.Model, p.Language)
+	if p.Speakers || isSpeakersAlias(p.Model) {
+		var ok bool
+		if e, ok = catalog.Builtin().SpeakersModel(); !ok {
+			return Transcription{}, errInvalid("speakers", "This build has no model that tells speakers apart.")
+		}
+		rep, err = nil, nil
+	}
 	if err != nil {
 		return Transcription{}, err
 	}
@@ -179,4 +191,13 @@ func atoi(s string) int {
 		return -1
 	}
 	return n
+}
+
+// formBool reads a form field as a boolean: "true", "1", "yes", "on".
+func formBool(r *http.Request, field string) bool {
+	switch strings.ToLower(strings.TrimSpace(r.FormValue(field))) {
+	case "true", "1", "yes", "on":
+		return true
+	}
+	return false
 }

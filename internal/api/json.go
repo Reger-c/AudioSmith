@@ -250,17 +250,19 @@ func jobJSON(j jobs.Job, withResult bool) JobJSON {
 
 // TranscriptJSON is a transcript.
 type TranscriptJSON struct {
-	ID        string        `json:"id"`
-	Object    string        `json:"object"` // "transcript"
-	CreatedAt time.Time     `json:"created_at"`
-	Title     string        `json:"title,omitempty"`
-	Source    string        `json:"source"`
-	Model     string        `json:"model"`
-	Language  string        `json:"language,omitempty"`
-	Duration  float64       `json:"duration"`
-	Text      string        `json:"text"`
-	Clean     string        `json:"clean,omitempty"`
-	Segments  []SegmentJSON `json:"segments,omitempty"`
+	ID        string    `json:"id"`
+	Object    string    `json:"object"` // "transcript"
+	CreatedAt time.Time `json:"created_at"`
+	Title     string    `json:"title,omitempty"`
+	Source    string    `json:"source"`
+	Model     string    `json:"model"`
+	Language  string    `json:"language,omitempty"`
+	Duration  float64   `json:"duration"`
+	Text      string    `json:"text"`
+	Clean     string    `json:"clean,omitempty"`
+	// Speakers names speaker labels ("S1" → "Ana") the user named.
+	Speakers map[string]string `json:"speakers,omitempty"`
+	Segments []SegmentJSON     `json:"segments,omitempty"`
 }
 
 // SegmentJSON is a sentence of a transcript.
@@ -281,7 +283,7 @@ type WordJSON struct {
 
 func transcriptJSON(t core.Transcript, segments bool) TranscriptJSON {
 	j := TranscriptJSON{ID: t.ID, Object: "transcript", CreatedAt: t.CreatedAt, Title: t.Title, Source: string(t.Source),
-		Model: t.Model, Language: t.Language, Duration: t.Duration, Text: t.Text(), Clean: t.Clean}
+		Model: t.Model, Language: t.Language, Duration: t.Duration, Text: t.Text(), Clean: t.Clean, Speakers: t.Speakers}
 	if segments {
 		for _, s := range t.Segments {
 			sj := SegmentJSON{Start: s.Start, End: s.End, Text: s.Text, Speaker: s.Speaker}
