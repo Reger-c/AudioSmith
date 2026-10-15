@@ -356,6 +356,8 @@ func TestDeliveryPerModel(t *testing.T) {
 		{"customvoice", customVoice, core.Take{Voice: "Vivian"}, "Vivian, " + ins, 0, ContinuityInstruct},
 		{"voicedesign", voiceDesign, core.Take{Voice: "温柔的年轻女声"}, "温柔的年轻女声, " + ins, 0, ContinuityInstruct},
 		{"voicedesign auto", voiceDesign, core.Take{}, ins, 0, ContinuityInstruct},
+		{"customvoice styled", customVoice, core.Take{Voice: "Vivian, 用明亮的声音说话。"}, "Vivian, 用明亮的声音说话。 " + ins, 0, ContinuityInstruct},
+		{"voicedesign long", voiceDesign, core.Take{Voice: "女声，温柔"}, "女声，温柔 " + ins, 0, ContinuityInstruct},
 		{"style only", styleOnly, core.Take{Voice: "Serena"}, "Serena, " + ins, 0, ContinuityInstruct},
 		{"base clone", base, core.Take{RefAudio: "/r.wav"}, "", 0, ContinuityLines},
 		{"voicedesign clone", voiceDesign, core.Take{Voice: "x", VoicePrompt: "/p"}, "x", 0, ContinuityInstruct},

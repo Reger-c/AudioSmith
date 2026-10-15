@@ -610,10 +610,14 @@ func directionExaggeration(intensity int) float64 {
 func withDelivery(t *core.Take, info ModelInfo, instruct, direction string, intensity int) {
 	switch {
 	case info.Instruct && instruct != "" && t.RefAudio == "" && t.VoicePrompt == "":
-		if t.Voice != "" {
-			t.Voice += ", " + instruct
-		} else {
+		switch {
+		case t.Voice == "":
 			t.Voice = instruct
+		case strings.ContainsAny(t.Voice, ",，"):
+			// "Speaker, instruction" or a description already: goes on.
+			t.Voice = strings.TrimRight(t.Voice, " ") + " " + instruct
+		default:
+			t.Voice += ", " + instruct
 		}
 	case info.Exaggeration && direction != "" && t.Exaggeration == 0:
 		t.Exaggeration = directionExaggeration(intensity)
