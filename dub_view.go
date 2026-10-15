@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -1176,29 +1177,15 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 	p := a.dub
 	locked := a.dubBusy()
 	dubPanelTitle(c, i18n.T("Generate"))
-	models := dubTTSModels()
-	names := make([]string, len(models))
-	cur := ""
-	for i, e := range models {
-		names[i] = e.Label
-		if !e.Has("clone") {
-			names[i] += " · " + i18n.T("no cloning")
-		}
-		if ready, known := a.modelOnDisk(e); known && !ready {
-			names[i] += " · " + i18n.T("not downloaded")
-		}
-		if e.Repo == p.Settings.Model {
-			cur = names[i]
-		}
-	}
-	if cur == "" && len(names) > 0 {
-		cur = names[0]
+	cur := entryFor(p.Settings.Model)
+	if p.Settings.Model == "" {
+		cur = entryFor(a.dubDefaultModel())
 	}
 	ui.Field(c, i18n.T("Voice model"), func() {
-		if ui.Select(c.Key("gen-model"), &cur, names).Label(i18n.T("Voice model")).Disabled(locked).Changed() {
-			repo := models[slices.Index(names, cur)].Repo
+		a.modelPicker(c, "gen-model", catalog.WorkflowDub, cur, func(e catalog.Entry) {
+			repo := e.Repo
 			a.dubSettings(func(s *dub.Settings) { s.Model = repo })
-		}
+		}, pickerOpts{Locked: locked})
 	})
 	caps := dubCaps(p.Settings.Model)
 	if caps.NeedsReference {

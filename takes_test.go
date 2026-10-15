@@ -31,7 +31,7 @@ func TestHistoryReuseAndDelete(t *testing.T) {
 	second := &a.takes[0]
 	a.reuse(second)
 	if a.currentPage() != "studio" || a.text != "Second take" || a.modelLabel != "Qwen3-TTS 0.6B CustomVoice" ||
-		a.voice != "Vivian, cheerful" || a.modelDefaults || a.temperature != 0.4 || a.maxTokens != 900 {
+		a.voice != "Vivian, cheerful" || a.temperature != 0.4 || a.topP != 0.8 {
 		t.Errorf("reuse: %+v", a)
 	}
 

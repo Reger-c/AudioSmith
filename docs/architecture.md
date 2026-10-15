@@ -17,7 +17,7 @@ github.com/hehehai/AudioSmith
 │   ├── engine/          Supervisor (one engine process per role), job executors
 │   │   ├── proto/       protocol-2 wire types (leaf); fixtures in engine/Fixtures/
 │   │   └── enginetest/  a scripted protocol-2 engine for tests (the test binary re-runs itself)
-│   ├── catalog/         model catalogue: catalog.json (entries, pinned commits, licences)
+│   ├── catalog/         model catalogue: catalog.json (entries, pinned commits, licences, retired models); presets.json (recommended models per page and language, tuned defaults: thread #41)
 │   ├── hub/             model files: HF cache layout, downloader, model.download jobs, token, proxy
 │   ├── licence/         the licence gate (core.LicenceService) over the store's licences
 │   ├── settings/        the typed, versioned settings document + Service                (leaf)

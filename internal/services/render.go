@@ -96,6 +96,10 @@ type RenderParams struct {
 	// NoWatermark leaves the file unmarked: an intermediate render that
 	// is watermarked later as part of something else (a dub's track).
 	NoWatermark bool `json:"noWatermark,omitempty"`
+	// Workflow picks the model's recommended parameters
+	// (ModelInfo.Defaults): "" (the Studio, the API), "story",
+	// "audiobook", "dub".
+	Workflow string `json:"workflow,omitempty"`
 }
 
 // RenderResult is a take.render job's result.
@@ -133,6 +137,43 @@ type ModelInfo struct {
 	// tags ("Chinese" → "zh"); VoiceLanguages built-in voices to theirs.
 	Languages      map[string]string
 	VoiceLanguages map[string]string
+	// Defaults are the model's recommended parameters (the catalogue's
+	// presets, thread #41) by workflow; "" holds the general ones. A
+	// recipe that sets none of them gets these (FillDefaults).
+	Defaults map[string]ParamDefaults
+}
+
+// ParamDefaults are recommended generation parameters; 0 = none (the
+// model's own).
+type ParamDefaults struct {
+	Temperature, TopP, Guidance, Exaggeration float64
+	Steps                                     int
+}
+
+// FillDefaults gives recipe t the model's recommended parameters for
+// workflow where t sets none (0): the Studio, a story or an API request
+// that leaves the temperature unset gets the tuned one, not the model's
+// built-in default.
+func (m ModelInfo) FillDefaults(t *core.Take, workflow string) {
+	d, ok := m.Defaults[workflow]
+	if !ok {
+		d = m.Defaults[""]
+	}
+	if t.Temperature == 0 {
+		t.Temperature = d.Temperature
+	}
+	if t.TopP == 0 {
+		t.TopP = d.TopP
+	}
+	if t.Guidance == 0 {
+		t.Guidance = d.Guidance
+	}
+	if t.Exaggeration == 0 {
+		t.Exaggeration = d.Exaggeration
+	}
+	if t.Steps == 0 {
+		t.Steps = d.Steps
+	}
 }
 
 // Lang is the BCP-47 tag of a recipe's language for the text pipeline:
@@ -433,6 +474,7 @@ func (r *renderer) publish(ev RenderProgress) {
 // (longform's "vary repeated lines").
 func (r *renderer) chunks(p *RenderParams, pl *plan.Plan, info ModelInfo, modelPath string, seed *int64, dir string, extra map[string]string) ([]renderChunk, error) {
 	t := p.Take
+	info.FillDefaults(&t, p.Workflow)
 	speech := pl.Speech()
 	totalChars := 0
 	for _, i := range speech {

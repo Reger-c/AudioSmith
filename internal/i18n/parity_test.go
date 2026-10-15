@@ -143,6 +143,24 @@ func dataKeys(t *testing.T) []string {
 			out = append(out, e.About)
 		}
 	}
+	// The recommended models' one-line "best for" (presets.json).
+	data, err = os.ReadFile(filepath.Join(moduleRoot, "internal", "catalog", "presets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p struct {
+		Models map[string]struct {
+			BestFor string `json:"bestFor"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range p.Models {
+		if m.BestFor != "" {
+			out = append(out, m.BestFor)
+		}
+	}
 	return out
 }
 

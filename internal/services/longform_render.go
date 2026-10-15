@@ -77,6 +77,8 @@ type ChapterParams struct {
 	Lexicon    []LexiconEntry       `json:"lexicon,omitempty"`
 	Loudness   string               `json:"loudness,omitempty"`
 	Scene      string               `json:"scene,omitempty"` // the story's (instructions)
+	// Workflow is "story" or "audiobook" (RenderParams.Workflow).
+	Workflow string `json:"workflow,omitempty"`
 	// Output is the chapter's WAV (absolute); its sidecar is Output+".json".
 	Output string `json:"output"`
 }
@@ -360,7 +362,7 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 				return nil, err
 			}
 			pl := planOf(t, sp.Text)
-			chunks, err := r.chunks(&RenderParams{Take: t}, &pl, info, modelPath, seed, r.longformChunkDir(), extra)
+			chunks, err := r.chunks(&RenderParams{Take: t, Workflow: p.Workflow}, &pl, info, modelPath, seed, r.longformChunkDir(), extra)
 			if err != nil {
 				return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 			}
@@ -453,7 +455,7 @@ func (cr chapterRenderer) turn(p *ChapterParams, g []int,
 	if len(pl.Segments) != 1 || pl.Segments[0].Kind == plan.Silence {
 		return nil, nil
 	}
-	chunks, err := cr.r.chunks(&RenderParams{Take: t}, &pl, info, modelPath, seed, cr.r.longformChunkDir(), extra)
+	chunks, err := cr.r.chunks(&RenderParams{Take: t, Workflow: p.Workflow}, &pl, info, modelPath, seed, cr.r.longformChunkDir(), extra)
 	if err != nil {
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}

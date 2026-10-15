@@ -389,7 +389,7 @@ func (s *Longform) submit(ctx context.Context, id string) error {
 	for i, ch := range spec.Chapters {
 		p := ChapterParams{Render: id, Index: i, Title: ch.Title, Model: spec.Model, Lang: spec.Lang, Seed: spec.Seed,
 			Voices: map[string]core.Take{}, Lines: ch.Lines, Production: spec.Production, Lexicon: spec.Lexicon,
-			Loudness: loud, Output: chapterPath(dir, i), Scene: spec.Scene}
+			Loudness: loud, Output: chapterPath(dir, i), Scene: spec.Scene, Workflow: string(spec.Kind)}
 		for _, l := range ch.Lines {
 			for _, sp := range l.Spans {
 				p.Voices[sp.Voice] = spec.Voices[sp.Voice]

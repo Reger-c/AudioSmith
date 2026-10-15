@@ -408,7 +408,7 @@ func TestQuickSwitch(t *testing.T) {
 	if err := tt.Click("Qwen3-TTS 0.6B CustomVoice"); err != nil {
 		t.Fatal(err)
 	}
-	if a.preset().ID != "qwen3-tts-0.6b-customvoice-8bit" || a.voice != "Vivian" {
+	if a.preset().ID != "qwen3-tts-0.6b-customvoice-8bit" || a.voice != "Serena" {
 		t.Errorf("chosen %s voice %q", a.preset().ID, a.voice)
 	}
 	for _, e := range catalog.Builtin().Entries {

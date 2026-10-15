@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -163,13 +164,14 @@ func (a *app) previewModel() (catalog.Entry, bool) {
 // galleryModel describes a model to the preview planner.
 func galleryModel(e catalog.Entry) gallery.Model {
 	m := gallery.Model{ID: e.ID, Family: e.Family, Repo: e.Repo}
+	p, _ := catalog.PresetFor(e.ID)
 	for _, l := range e.Languages {
 		code, _, _ := strings.Cut(l.Code, "-")
-		m.Languages = append(m.Languages, code)
+		if !slices.Contains(p.HideLanguages, code) { // Kokoro's Chinese
+			m.Languages = append(m.Languages, code)
+		}
 	}
-	for _, v := range e.Voices {
-		m.Speakers = append(m.Speakers, v.ID)
-	}
+	m.Speakers = e.VoiceIDs()
 	return m
 }
 

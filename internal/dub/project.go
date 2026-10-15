@@ -381,7 +381,7 @@ func New(id string, now time.Time) *Project {
 // DefaultSettings are a new project's settings.
 func DefaultSettings() Settings {
 	return Settings{
-		Translator: "llm", Quality: translate.Fast, Timing: TimingLipSync, KeepBackground: true,
+		Translator: "llm", Quality: translate.Fast, Timing: TimingSmart, KeepBackground: true,
 		VoiceMatch: MatchConsistent, Review: true,
 		Export: ExportPrefs{Bits: 24},
 	}

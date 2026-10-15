@@ -99,10 +99,14 @@ type lfPage struct {
 	edSynced    string
 	edVersion   uint64
 	dismissed   string // fp when the warnings were dismissed
-	reactions   bool
-	ra          readAlong
-	panel       panelState // the inspector: beside the page, or a drawer
-	narrow      bool       // the main column is narrow: rows fold actions into ⋯
+	// auto: the model and voice were picked for a new user (the
+	// presets); they follow the saved voices while the page is empty and
+	// the user has not chosen a model (autoLfModel).
+	auto      bool
+	reactions bool
+	ra        readAlong
+	panel     panelState // the inspector: beside the page, or a drawer
+	narrow    bool       // the main column is narrow: rows fold actions into ⋯
 }
 
 func newLfPage(kind core.ProjectKind, model string) *lfPage {
@@ -118,6 +122,7 @@ type lfDraft struct {
 	Project string               `json:"project,omitempty"`
 	Saved   string               `json:"saved,omitempty"`
 	Render  string               `json:"render,omitempty"`
+	Auto    bool                 `json:"auto,omitempty"` // lfPage.auto
 }
 
 // openLongform connects the longform pages to the library: render events
@@ -174,6 +179,12 @@ func (a *app) restoreLfDraft(p *lfPage) {
 		var d lfDraft
 		ok, err := drafts.Load(context.Background(), key, &d)
 		if err != nil || !ok || d.Doc.Version == 0 {
+			a.post(func() {
+				if p.draftJSON == "" && p.empty() {
+					p.auto = true // a new user's page
+					a.autoLfModel(p)
+				}
+			})
 			return
 		}
 		a.post(func() {
@@ -183,6 +194,8 @@ func (a *app) restoreLfDraft(p *lfPage) {
 			a.setLfDoc(p, d.Doc, d.Project, d.Saved)
 			p.render = d.Render
 			p.draftJSON = docJSON(&p.doc)
+			p.auto = d.Auto
+			a.autoLfModel(p)
 		})
 	})
 }
@@ -225,8 +238,8 @@ func (a *app) autosaveLf(p *lfPage) {
 	}
 	p.fp = fp
 	a.compileLf(p)
-	d := lfDraft{Version: 1, Doc: p.doc, Project: p.project, Saved: p.savedJSON, Render: p.render}
-	if js := docJSON(&p.doc) + "|" + p.doc.Render + "|" + p.project + "|" + p.render; js != p.draftJSON {
+	d := lfDraft{Version: 1, Doc: p.doc, Project: p.project, Saved: p.savedJSON, Render: p.render, Auto: p.auto}
+	if js := docJSON(&p.doc) + "|" + p.doc.Render + "|" + p.project + "|" + p.render + "|" + strconv.FormatBool(p.auto); js != p.draftJSON {
 		p.draftJSON = js
 		a.lib.svc.Drafts.Save(p.draftKey(), d)
 	}
@@ -314,8 +327,8 @@ func lfVoicesOf(voices []core.Voice, e catalog.Entry) []lfVoice {
 			out = append(out, lfVoice{v.ID, v.Name})
 		}
 	}
-	for _, v := range e.Voices {
-		out = append(out, lfVoice{services.SpeakerRef + v.ID, v.ID})
+	for _, id := range e.VoiceIDs() {
+		out = append(out, lfVoice{services.SpeakerRef + id, id})
 	}
 	return out
 }
@@ -913,9 +926,11 @@ func (a *app) lfFitModel(p *lfPage, v *core.Voice) {
 	if ok, _ := voiceUsable(v, entryFor(p.doc.Model)); ok {
 		return
 	}
-	var pick []catalog.Entry
+	// The page's recommended models first (a designed voice speaks best
+	// cloned from its sample on Qwen3-TTS Base, thread #41).
+	pick := catalog.Builtin().Recommended(lfWorkflow(p), i18n.Locale())
 	if v.Kind == core.VoiceDesigned {
-		pick = designModels()
+		pick = append(pick, designModels()...)
 	}
 	for _, e := range append(pick, cloneModels()...) {
 		if ok, _ := voiceUsable(v, e); ok {
@@ -982,4 +997,54 @@ func (a *app) askOpenProject(id string, kind core.ProjectKind, title string) {
 		return
 	}
 	a.openLfProject(id)
+}
+
+// lfWorkflow is a page's workflow in the presets.
+func lfWorkflow(p *lfPage) catalog.Workflow {
+	if p.kind == core.ProjectAudiobook {
+		return catalog.WorkflowAudiobook
+	}
+	return catalog.WorkflowStory
+}
+
+// autoLfModel picks a new user's model and voice for a page by the
+// presets: the model for the interface's language and whether they have
+// saved voices (Chinese audiobook: Qwen3-TTS 0.6B Base narrated by the
+// starter voice, or CustomVoice + Serena without one; English: Kokoro +
+// af_heart). It acts while the page is automatic and empty.
+func (a *app) autoLfModel(p *lfPage) {
+	if !p.auto || !p.empty() {
+		return
+	}
+	saved := a.savedVoices()
+	starter := a.starterVoice()
+	e, ok := catalog.Builtin().DefaultModel(lfWorkflow(p), i18n.Locale(), len(saved) > 0)
+	if !ok {
+		return
+	}
+	d := &p.doc
+	d.Model, d.Voice = e.Repo, ""
+	pr, _ := catalog.PresetFor(e.ID)
+	if pr.NeedsVoice != "" {
+		if starter != nil && p.kind == core.ProjectAudiobook {
+			saved = append([]*core.Voice{starter}, saved...)
+		}
+		for _, v := range saved {
+			if ok, _ := voiceUsable(v, e); ok {
+				d.Voice = v.ID
+				break
+			}
+		}
+	} else if sp := pr.VoiceFor(i18n.Locale()); sp != "" && slices.Contains(e.VoiceIDs(), sp) {
+		d.Voice = services.SpeakerRef + sp
+	}
+}
+
+// autoLfModels re-picks the automatic pages' models (voices changed).
+func (a *app) autoLfModels() {
+	for _, p := range []*lfPage{a.lfStories, a.lfBook} {
+		if p != nil {
+			a.autoLfModel(p)
+		}
+	}
 }

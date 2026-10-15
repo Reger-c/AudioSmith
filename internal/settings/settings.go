@@ -79,6 +79,21 @@ type Studio struct {
 	// KeepTakes caps the history: beyond it the oldest takes that are not
 	// starred (nor part of a project) are deleted. 0 = keep every take.
 	KeepTakes int `json:"keepTakes,omitempty"`
+	// Overrides are the user's changes to each model's recommended
+	// settings (the catalogue's presets), by catalogue id: picking the
+	// model again brings them back; "Restore recommended" clears them.
+	Overrides map[string]ModelParams `json:"overrides,omitempty"`
+}
+
+// ModelParams are generation parameters changed from a model's
+// recommendation; 0 = not changed.
+type ModelParams struct {
+	Temperature  float64 `json:"temperature,omitempty"`
+	TopP         float64 `json:"topP,omitempty"`
+	Steps        int     `json:"steps,omitempty"`
+	Guidance     float64 `json:"guidance,omitempty"`
+	Exaggeration float64 `json:"exaggeration,omitempty"`
+	Speed        float64 `json:"speed,omitempty"` // 0 = 1×
 }
 
 // Models: where and how models download.
