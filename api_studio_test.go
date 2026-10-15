@@ -549,6 +549,9 @@ func TestStudioDub(t *testing.T) {
 	}
 	var d2 api.DubJSON
 	json.Unmarshal(body, &d2)
+	if !slices.Equal(d2.Targets, []string{dub.DefaultTarget}) { // none given, none in Settings → Dubbing: Chinese
+		t.Errorf("default targets %v", d2.Targets)
+	}
 	if status, body = e.rest(t, "DELETE", "/api/dubs/"+d2.ID, nil); status != 400 || !strings.Contains(string(body), api.CodeConfirmRequired) {
 		t.Fatalf("DELETE %d %s", status, body)
 	}
@@ -588,6 +591,9 @@ func TestStudioBatch(t *testing.T) {
 	e.must(t, "list_batch", nil, &b)
 	if len(b.Queue) != 2 || b.Watch == nil || b.Watch.Active || b.Prefs == nil {
 		t.Fatalf("queue %+v", b)
+	}
+	if !slices.Equal(b.Prefs.Targets, []string{dub.DefaultTarget}) {
+		t.Errorf("batch default targets %v", b.Prefs.Targets)
 	}
 	e.fails(t, "batch_dub", map[string]any{}, api.CodeInvalid)
 	if status, body := e.rest(t, "GET", "/api/batch", nil); status != 200 || !strings.Contains(string(body), `"watch_folder"`) {

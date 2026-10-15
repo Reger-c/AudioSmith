@@ -71,6 +71,8 @@ func newDubTest(t *testing.T, lines int) *dubTest {
 	if _, err := dubtest.Speech(d.src, lines); err != nil {
 		t.Fatal(err)
 	}
+	// Settings → Dubbing chose Spanish (TestDubDefaultTargetPage: none chosen).
+	a.updateSettings(func(s *settings.Settings) { s.Dubbing.Targets = []string{"es"} })
 	a.navigate("/dub")
 	return d
 }

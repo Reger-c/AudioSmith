@@ -97,6 +97,7 @@ func (s *Dubs) fetch(ctx context.Context, sc *stageCtx) error {
 		if p.SourceLang == "" && info.Language != "" {
 			p.Detected = info.Language
 		}
+		p.AutoRetarget() // a defaulted target is not the spoken language
 	})
 }
 
@@ -465,6 +466,7 @@ func (s *Dubs) transcribe(ctx context.Context, sc *stageCtx) error {
 		if detected != "" {
 			p.Detected = detected
 		}
+		p.AutoRetarget() // a defaulted target is not the spoken language
 		// A new transcript: translations, renders and references go.
 		p.Tracks, p.References, p.RefTried = nil, nil, nil
 		for k := range p.Stages {

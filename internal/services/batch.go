@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -34,7 +35,10 @@ const (
 
 // BatchSettings are the batch queue's defaults for the videos it adds.
 type BatchSettings struct {
-	Targets        []string            `json:"targets"`
+	Targets []string `json:"targets"`
+	// TargetsAuto: Targets are the default (dub.DefaultTarget), switched
+	// per video in that language (dub.Project.AutoRetarget).
+	TargetsAuto    bool                `json:"targetsAuto,omitempty"`
 	SourceLang     string              `json:"sourceLang,omitempty"`
 	Voice          string              `json:"voice,omitempty"` // a VoiceRef for every speaker; "" = clone each speaker
 	KeepBackground bool                `json:"keepBackground"`
@@ -47,7 +51,7 @@ type BatchSettings struct {
 
 // DefaultBatchSettings are the batch queue's first settings.
 func DefaultBatchSettings() BatchSettings {
-	return BatchSettings{Targets: []string{"es"}, KeepBackground: true, Translator: "llm", Quality: translate.Fast, Timing: dub.TimingSmart}
+	return BatchSettings{Targets: []string{dub.DefaultTarget}, TargetsAuto: true, KeepBackground: true, Translator: "llm", Quality: translate.Fast, Timing: dub.TimingSmart}
 }
 
 // WatchState is the watch folder, as persisted.
@@ -82,6 +86,7 @@ func (s *Dubs) BatchSettings(ctx context.Context) BatchSettings {
 		return bs
 	}
 	if data, ok, err := s.cfg.Documents.Get(ctx, batchSettingsDoc); err == nil && ok {
+		bs.TargetsAuto = false // saved targets are a choice unless they say otherwise
 		json.Unmarshal(data, &bs)
 	}
 	return bs
@@ -129,6 +134,7 @@ func (s *Dubs) Enqueue(ctx context.Context, paths []string, bs BatchSettings) ([
 		p.Source = dub.Source{Kind: dub.SourceFile, Path: path, Name: filepath.Base(path)}
 		p.SourceLang = bs.SourceLang
 		p.Targets = append([]string(nil), bs.Targets...)
+		p.TargetsAuto = bs.TargetsAuto && slices.Equal(bs.Targets, []string{dub.DefaultTarget})
 		p.Settings.Review = false
 		p.Settings.KeepBackground = bs.KeepBackground
 		p.Settings.Model = bs.Model

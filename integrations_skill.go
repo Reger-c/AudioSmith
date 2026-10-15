@@ -185,7 +185,7 @@ func skillTools() []skillTool {
 		}, After: i18n.T("Returns files: the paths written. It is listed in Projects → Exports.")},
 		{Name: "create_dub", Lead: i18n.T("dub a video or audio file into other languages: transcribe, translate, speak each line in its speaker's voice, mix."), Args: []skillArg{
 			must(i18n.T("Absolute path of the video or audio (mp4, mov, mkv, webm, mp3, wav, m4a…)."), "path"),
-			arg(i18n.T("BCP-47 codes to dub into, the main one first; empty: AudioSmith's Dubbing settings."), "target_languages"),
+			arg(i18n.T("BCP-47 codes to dub into, the main one first; empty: AudioSmith's Dubbing settings (by default Chinese, or English for a video in Chinese)."), "target_languages"),
 			arg(i18n.T("The language spoken; empty: detected."), "source_language"),
 			arg(i18n.T("How far to run now: transcript (stop to review the lines), translation, dub (default: everything) or none."), "through"),
 			arg(i18n.T("One voice for every speaker (a saved voice's name or id); empty: each speaker's own voice, cloned from the source."), "voice"),

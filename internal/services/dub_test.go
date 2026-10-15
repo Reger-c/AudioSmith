@@ -143,6 +143,7 @@ func (e *dubEnv) create(t *testing.T, edit func(*dub.Project)) *dub.Project {
 	p.Source = dub.Source{Kind: dub.SourceFile, Path: e.src, Name: "interview.wav"}
 	p.Settings.Model = "tts"
 	p.Settings.Review = false
+	p.ChooseTargets([]string{"es"}) // TestDubDefaultTarget covers the default
 	if edit != nil {
 		edit(p)
 	}

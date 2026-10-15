@@ -661,6 +661,8 @@ func (s *Dubs) stage(st dub.Stage, fn stageFunc) jobs.Executor {
 			}
 			return nil, err
 		}
+		// A stage planned before AutoRetarget switched its language runs in the new one.
+		params.Lang = p.RetargetedLang(params.Lang)
 		key := dub.StageKey(st, params.Lang)
 		mark := func(state dub.StageState) {
 			state.Job, state.At = job.ID, s.cfg.Now()

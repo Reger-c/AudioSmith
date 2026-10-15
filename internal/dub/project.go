@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hehehai/AudioSmith/internal/lang"
 	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
@@ -50,6 +51,12 @@ type Project struct {
 	Speakers int `json:"speakers,omitempty"`
 	// Targets are the languages to dub into, the primary first.
 	Targets []string `json:"targets"`
+	// TargetsAuto: Targets are the default (DefaultTarget; nobody chose
+	// them), so AutoRetarget may switch them when the video turns out to
+	// be in that language; TargetSwitched is the default it replaced.
+	// Choosing a target clears both (ChooseTargets).
+	TargetsAuto    bool   `json:"targetsAuto,omitempty"`
+	TargetSwitched string `json:"targetSwitched,omitempty"`
 
 	Segments []Segment `json:"segments"`
 	// NextSeg numbers new segments ("s<n>").
@@ -369,13 +376,78 @@ type QCLine struct {
 	MeasuredAt float64 `json:"measuredAt,omitempty"`
 }
 
-// New makes an empty project with the defaults.
+// DefaultTarget is the language a dub is made in when nobody chose one
+// (Settings → Dubbing, the project, the API): Chinese (user,
+// 2026-10-16). FallbackTarget replaces it when the video itself is in
+// Chinese (AutoRetarget).
+const (
+	DefaultTarget  = "zh-Hans"
+	FallbackTarget = "en"
+)
+
+// New makes an empty project with the defaults: dubbed into
+// DefaultTarget, which AutoRetarget may still switch.
 func New(id string, now time.Time) *Project {
 	return &Project{
 		Version: Version, ID: id, CreatedAt: now, UpdatedAt: now, NextSeg: 1,
-		Targets:  []string{"es"},
+		Targets: []string{DefaultTarget}, TargetsAuto: true,
 		Settings: DefaultSettings(),
 	}
+}
+
+// ChooseTargets sets the targets someone chose: AutoRetarget leaves
+// them alone from then on.
+func (p *Project) ChooseTargets(targets []string) {
+	p.Targets = slices.Clone(targets)
+	p.TargetsAuto, p.TargetSwitched = false, ""
+}
+
+// AutoRetarget keeps defaulted targets away from the spoken language
+// (as chosen, else as detected): a video in the default language is
+// dubbed into FallbackTarget (a Chinese video into English), and back to
+// the default when the spoken language changes again. It does nothing
+// to targets someone chose and reports whether Targets changed.
+func (p *Project) AutoRetarget() bool {
+	if !p.TargetsAuto || len(p.Targets) != 1 {
+		return false
+	}
+	def := p.TargetSwitched
+	if def == "" {
+		def = p.Targets[0]
+	}
+	want, switched := def, ""
+	if src := p.SourceLanguage(); src != "" && spokenIn(src, def) {
+		want, switched = FallbackTarget, def
+		if spokenIn(src, FallbackTarget) {
+			want = DefaultTarget
+		}
+	}
+	if p.Targets[0] == want && p.TargetSwitched == switched {
+		return false
+	}
+	p.Targets[0], p.TargetSwitched = want, switched
+	return true
+}
+
+// spokenIn reports whether speech in src needs no dub into target
+// ("zh", "cmn" and "zh-CN" are all Chinese).
+func spokenIn(src, target string) bool {
+	if sameLanguage(src, target) {
+		return true
+	}
+	c := lang.Canonical(src)
+	return c != "" && c == lang.Canonical(target)
+}
+
+// RetargetedLang is the language a stage planned for l runs in: the
+// replacement when AutoRetarget switched lang away after the run was
+// planned (the run's stages were made before transcription found the
+// spoken language), else l.
+func (p *Project) RetargetedLang(l string) string {
+	if l != "" && p.TargetsAuto && l == p.TargetSwitched && !slices.Contains(p.Targets, l) && len(p.Targets) > 0 {
+		return p.Targets[0]
+	}
+	return l
 }
 
 // DefaultSettings are a new project's settings.
