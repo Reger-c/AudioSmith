@@ -94,7 +94,7 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 	ui.Field(c, i18n.T("Model"), func() {
 		if ui.Select(c.Key("lf-model"), &model, labels).Label(i18n.T("Model")).Disabled(locked).Changed() {
 			if ne, ok := catalog.Builtin().ByLabel(model); ok {
-				d.Model = ne.Repo
+				d.Model, p.auto = ne.Repo, false
 			}
 		}
 	})
@@ -112,7 +112,11 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 		label = i18n.T("Default voice")
 	}
 	ui.Field(c, label, func() {
+		before := d.Voice
 		a.lfVoiceSelect(c, "lf-voice", &d.Voice, e, i18n.T("None"), locked)
+		if d.Voice != before {
+			p.auto = false
+		}
 	})
 	if e.NeedsReference {
 		caption(c.Key("lf-needs-ref"), i18n.T("%s only clones voices: each line needs a saved cloned voice.", e.Label))

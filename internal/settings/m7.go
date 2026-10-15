@@ -19,6 +19,10 @@ type Setup struct {
 	// "max"; "" = none), FirstSound whether the welcome line played.
 	Pack       string `json:"pack,omitempty"`
 	FirstSound bool   `json:"firstSound,omitempty"`
+	// Starters maps the bundled starter voices imported (their file
+	// names) to the voices they became: each is imported once, so one
+	// the user deleted stays deleted.
+	Starters map[string]string `json:"starters,omitempty"`
 }
 
 // Media: the optional ffmpeg build that adds formats AVFoundation lacks

@@ -118,6 +118,8 @@ func (a *app) loadVoices() {
 			sortVoices(vs)
 			a.voices, a.voicesLoaded = vs, true
 			a.autoStudioModel() // a new user with saved voices
+			a.autoLfModels()
+			a.importStarterVoices()
 		})
 	})
 }
@@ -161,6 +163,7 @@ func (a *app) voiceChanged(ev core.VoiceChanged) {
 		a.edit.refresh(ev.Voice)
 	}
 	a.autoStudioModel() // a new user's first saved voice
+	a.autoLfModels()
 }
 
 // findVoice is the snapshot's voice with id, or nil.
