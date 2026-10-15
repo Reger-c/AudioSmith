@@ -38,10 +38,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
-// fastSTT is the Fast mode's model until the catalogue lists a smaller
-// dictation model (thread #14): Qwen3-ASR 0.6B, then the default.
-const fastSTT = "qwen3-asr-0.6b-4bit"
-
 // transcribeState is the Transcribe page's view state.
 type transcribeState struct {
 	trSvc *services.Transcripts
@@ -273,25 +269,52 @@ func sttEntries() []catalog.Entry {
 	return out
 }
 
-// sttEntry is the catalogue entry of id, else of fallback.
-func sttEntry(id, fallback string) catalog.Entry {
+// sttEntry is the speech-to-text model a setting names (id, a catalogue
+// id), else the default for language (BCP-47, "" = detected): Qwen3-ASR,
+// or Whisper for a language Qwen3-ASR does not know (catalog.STTFor,
+// thread #46). A removed model's id (Parakeet) gets the default too.
+func sttEntry(id, language string) catalog.Entry {
 	c := catalog.Builtin()
 	if e, ok := c.ByID(id); ok && slices.Contains(e.Tasks, catalog.TaskSTT) {
 		return e
 	}
-	if e, ok := c.ByID(fallback); ok {
-		return e
-	}
-	e, _ := c.ByID(catalog.DefaultSTT)
-	return e
+	return c.STTFor(language, false)
 }
 
-// trModel is the model of a mode: Fast's smaller one, or Accurate's.
+// trModel is the model of a mode for the page's language: both modes
+// use the same one (Settings → Transcribe may name one for each); Fast
+// skips the word timings.
 func (a *app) trModel(fast bool) catalog.Entry {
 	if fast {
-		return sttEntry(a.prefs.Transcribe.FastModel, fastSTT)
+		return sttEntry(a.prefs.Transcribe.FastModel, a.prefs.Transcribe.Language)
 	}
-	return sttEntry(a.prefs.Transcribe.AccurateModel, catalog.DefaultSTT)
+	return sttEntry(a.prefs.Transcribe.AccurateModel, a.prefs.Transcribe.Language)
+}
+
+// trLanguages are the languages the page can transcribe in a mode: the
+// chosen model's, or, when it follows the language (no model in the
+// settings), every language a speech-to-text model knows; nil = any.
+func (a *app) trLanguages(fast bool) []string {
+	id := a.prefs.Transcribe.AccurateModel
+	if fast {
+		id = a.prefs.Transcribe.FastModel
+	}
+	if e, ok := catalog.Builtin().ByID(id); ok && slices.Contains(e.Tasks, catalog.TaskSTT) {
+		return sttLanguages(e)
+	}
+	var out []string
+	for _, e := range sttEntries() {
+		l := sttLanguages(e)
+		if l == nil {
+			return nil
+		}
+		for _, code := range l {
+			if !slices.Contains(out, code) {
+				out = append(out, code)
+			}
+		}
+	}
+	return out
 }
 
 // trAligner is the aligner Accurate runs after a model that does not

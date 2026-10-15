@@ -102,6 +102,32 @@ type DubModels struct {
 	STT, Align, Diarize, Separate, Enhance string
 	// WordTimes: STT times words itself (no aligner needed).
 	WordTimes bool
+	// STTLanguages are the base languages STT knows (nil: any); OtherSTT
+	// (OtherWordTimes) transcribes the rest (thread #46: Qwen3-ASR, then
+	// Whisper). "" = STT for every language.
+	STTLanguages   []string
+	OtherSTT       string
+	OtherWordTimes bool
+}
+
+// STTFor is the speech-to-text model for a language (BCP-47; "" =
+// detected) and whether it times words itself.
+func (m DubModels) STTFor(lang string) (string, bool) {
+	if pickOther(m.STTLanguages, m.OtherSTT, lang) {
+		return m.OtherSTT, m.OtherWordTimes
+	}
+	return m.STT, m.WordTimes
+}
+
+// pickOther reports whether a language (BCP-47) needs the other
+// speech-to-text model: there is one, and the first one lists its
+// languages without lang. Detection ("") stays on the first.
+func pickOther(langs []string, other, lang string) bool {
+	lang = strings.TrimSpace(lang)
+	if other == "" || langs == nil || lang == "" || strings.EqualFold(lang, "auto") {
+		return false
+	}
+	return !slices.Contains(langs, strings.ToLower(baseLang(lang)))
 }
 
 // DubModelCaps are what a TTS model can do, as the pipeline needs it.

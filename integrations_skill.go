@@ -90,7 +90,8 @@ func skillTools() []skillTool {
 			arg(i18n.T("Or the audio itself as base64, with its file name for the format."), "audio_base64", "filename"),
 			arg(i18n.T("BCP-47 code; empty: detected."), "language"),
 			arg(i18n.T("Names and terms to expect, for their spelling."), "prompt"),
-			arg(i18n.T("A speech-to-text model (list_models with task stt); empty: AudioSmith's default."), "model"),
+			arg(i18n.T("A speech-to-text model (list_models with task stt); empty: AudioSmith's default for the language: %s (Chinese, English and 28 more), else %s. A removed model's id is answered by its replacement (replaced_by in the result).",
+				skillModel(catalog.DefaultSTT), skillModel(catalog.FallbackSTT)), "model"),
 			arg(i18n.T("true returns segments with start and end in seconds (and words): use them for subtitles."), "timestamps"),
 		}, After: i18n.T("Returns text, language, duration and transcript_id. The transcript is also kept on AudioSmith's Transcribe page.")},
 		{Name: "clone_voice", Lead: i18n.T("a new saved voice from a recording."), Args: []skillArg{

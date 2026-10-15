@@ -75,7 +75,7 @@ type Catalog struct {
 	Version int     `json:"version"`
 	Entries []Entry `json:"entries"`
 	// Removed are the models AudioSmith offered once and no longer does
-	// (thread #43): what still names them maps to their replacement.
+	// (threads #43, #46): what still names them maps to their replacement.
 	Removed []Removed `json:"removed,omitempty"`
 }
 
@@ -88,6 +88,9 @@ type Removed struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
 	Repo  string `json:"repo"`
+	// Task is what the model did ("" = tts): its replacement does the
+	// same, and only work of that task maps to it.
+	Task Task `json:"task,omitempty"`
 	// Aux are auxiliary repos only this model used: removed with it.
 	Aux             []string `json:"aux,omitempty"`
 	ReplacedBy      string   `json:"replacedBy"`
@@ -103,6 +106,14 @@ func (r Removed) Warning(by Entry) string {
 // Repos are the repos a removed model leaves on disk: its own, then its
 // auxiliary ones.
 func (r Removed) Repos() []string { return append([]string{r.Repo}, r.Aux...) }
+
+// Did is the task the removed model did.
+func (r Removed) Did() Task {
+	if r.Task == "" {
+		return TaskTTS
+	}
+	return r.Task
+}
 
 // Entry is one downloadable model.
 //
@@ -335,9 +346,12 @@ func (c *Catalog) Validate() error {
 			if i == 1 && by == "" {
 				continue // no other replacement for clones
 			}
-			if n, ok := c.ByID(by); !ok || n.Hidden || !slices.Contains(n.Tasks, TaskTTS) {
-				return fmt.Errorf("removed %s: no live speech model replaces it (%q)", r.ID, by)
+			if n, ok := c.ByID(by); !ok || n.Hidden || !slices.Contains(n.Tasks, r.Did()) {
+				return fmt.Errorf("removed %s: no live %s model replaces it (%q)", r.ID, r.Did(), by)
 			}
+		}
+		if !slices.Contains(knownTasks, r.Did()) {
+			return fmt.Errorf("removed %s: unknown task %q", r.ID, r.Task)
 		}
 		if n, _ := c.ByID(r.CloneReplacedBy); r.CloneReplacedBy != "" && !n.Has(CapClone) {
 			return fmt.Errorf("removed %s: %s can't clone", r.ID, r.CloneReplacedBy)
@@ -365,26 +379,33 @@ func (c *Catalog) UsesRepo(repo string) bool {
 var knownCaps = []Capability{CapSpeed, CapSampling, CapClone, CapVoiceStyle, CapLanguage, CapInstruct, CapDesign, CapSeed, CapDuration, CapStream, CapWordTimes,
 	CapVoicePrompt, CapSteps, CapGuidance, CapNonVerbal, CapTranslate}
 
-// Default models of the M1 analysis tasks: what the app runs to clean,
-// cut and transcribe a clone reference. Their entries may be hidden from
+// Default models of the analysis tasks. Their entries may be hidden from
 // pickers; find them with ByID.
 const (
-	DefaultSTT     = "whisper-large-v3-turbo-4bit"
+	// DefaultSTT is the speech recognition of every workflow (thread
+	// #44): dictation, Transcribe's Fast and Accurate modes, dubbing, the
+	// dub's read-back check, clone references. Qwen3-ASR 0.6B: Chinese
+	// 0.5–3.7 % errors where Whisper makes 1–20 %, with punctuation, 24–30×
+	// real time, 0.2–0.33 s for 5 s of dictation on a MacBook Air M4.
+	// STTFor picks FallbackSTT for the languages it does not know.
+	DefaultSTT = "qwen3-asr-0.6b-4bit"
+	// FallbackSTT transcribes the languages DefaultSTT does not know, and
+	// translates speech into English (task "translate"): Whisper large-v3
+	// turbo, 99 languages.
+	FallbackSTT    = "whisper-large-v3-turbo-4bit"
 	DefaultAlign   = "qwen3-forcedaligner-0.6b-4bit"
 	DefaultVAD     = "silero-vad"
 	DefaultEnhance = "deepfilternet-v3"
-	// DefaultDictation is the speech-to-text model dictation starts with:
-	// on a MacBook Air M4 it transcribes 5 s of speech in 0.2–0.33 s warm
-	// (Whisper turbo: 1.2–1.3 s) and Chinese exactly (TestDictationLatency).
-	DefaultDictation = "qwen3-asr-0.6b-4bit"
-	// DefaultSeparate and DefaultDiarize serve dubbing (M4): HTDemucs
-	// (fast; Mel-RoFormer is the quality option) and Sortformer (≤ 4
-	// speakers).
+	// DefaultDictation is the speech-to-text model dictation starts with
+	// (DefaultSTT; STTFor for a language it does not know).
+	DefaultDictation = DefaultSTT
+	// DefaultSeparate and DefaultDiarize serve dubbing (M4): HTDemucs and
+	// Sortformer (≤ 4 speakers).
 	DefaultSeparate = "htdemucs"
 	DefaultDiarize  = "sortformer-4spk-v2.1"
 	// DefaultLLM is the local language model (llm.generate) for offline
 	// translation and writing help: Qwen3 4B Instruct 2507, 4-bit
-	// (Apache-2.0); Qwen3 1.7B is the light one for 8 GB Macs.
+	// (Apache-2.0), the only one since thread #46.
 	DefaultLLM = "qwen3-4b-instruct-2507-4bit"
 	// DefaultWatermark marks generated speech (AudioSeal, 16 bits).
 	DefaultWatermark = "audioseal-16bits"
@@ -493,6 +514,39 @@ func (e Entry) AllVoiceIDs() []string {
 	return ids
 }
 
+// STTFor is the speech-to-text model for language (BCP-47; "" or "auto"
+// detects it): DefaultSTT when it knows the language (or detects it),
+// else FallbackSTT; FallbackSTT too when the work translates speech into
+// English (translate), which only it does.
+func (c *Catalog) STTFor(language string, translate bool) Entry {
+	def, ok := c.ByID(DefaultSTT)
+	fb, fok := c.ByID(FallbackSTT)
+	switch {
+	case !fok:
+		return def
+	case !ok, translate, !def.Knows(language):
+		return fb
+	}
+	return def
+}
+
+// Knows reports whether the model takes language (BCP-47, matched by
+// its base language: "zh-Hans" is "zh"); "" and "auto" (detection) and
+// models that list no languages take any.
+func (e Entry) Knows(language string) bool {
+	language = strings.TrimSpace(language)
+	if language == "" || strings.EqualFold(language, "auto") || len(e.Languages) == 0 {
+		return true
+	}
+	base := BaseLanguage(language)
+	for _, l := range e.Languages {
+		if BaseLanguage(l.Code) == base || strings.EqualFold(l.Value, language) {
+			return true
+		}
+	}
+	return false
+}
+
 // RemovedModel finds a removed model by id, repo, short repo or label
 // (case-insensitive).
 func (c *Catalog) RemovedModel(ref string) (Removed, bool) {
@@ -508,12 +562,13 @@ func (c *Catalog) RemovedModel(ref string) (Removed, bool) {
 	return Removed{}, false
 }
 
-// Replace maps ref, when it names a removed model, to the entry that
-// replaces it: CloneReplacedBy when the request clones a voice (and the
-// model has one), else ReplacedBy. ok is false for anything else.
+// Replace maps ref, when it names a removed speech model, to the entry
+// that replaces it: CloneReplacedBy when the request clones a voice (and
+// the model has one), else ReplacedBy. ok is false for anything else,
+// removed models of other tasks too (ReplaceTask).
 func (c *Catalog) Replace(ref string, clone bool) (e Entry, r Removed, ok bool) {
 	r, ok = c.RemovedModel(ref)
-	if !ok {
+	if !ok || r.Did() != TaskTTS {
 		return Entry{}, Removed{}, false
 	}
 	id := r.ReplacedBy
@@ -521,6 +576,24 @@ func (c *Catalog) Replace(ref string, clone bool) (e Entry, r Removed, ok bool) 
 		id = r.CloneReplacedBy
 	}
 	e, ok = c.ByID(id)
+	return e, r, ok
+}
+
+// ReplaceTask maps ref, when it names a removed model of task, to the
+// entry that replaces it. A removed speech-to-text model is replaced by
+// the model STTFor gives language (Qwen3-ASR, or Whisper for a language
+// it does not know); speech models by Replace (without cloning).
+func (c *Catalog) ReplaceTask(ref string, task Task, language string) (e Entry, r Removed, ok bool) {
+	r, ok = c.RemovedModel(ref)
+	if !ok || r.Did() != task {
+		return Entry{}, Removed{}, false
+	}
+	if task == TaskSTT {
+		if e = c.STTFor(language, false); e.ID != "" {
+			return e, r, true
+		}
+	}
+	e, ok = c.ByID(r.ReplacedBy)
 	return e, r, ok
 }
 

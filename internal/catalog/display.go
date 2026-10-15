@@ -26,7 +26,8 @@ const (
 	TagVoices       Tag = "voices" // built-in voices
 	TagFast         Tag = "fast"
 	TagQuality      Tag = "quality"
-	TagLight        Tag = "light" // little memory
+	TagLight        Tag = "light"    // little memory
+	TagFallback     Tag = "fallback" // used where the default can't (Whisper: other languages)
 
 	// Computed tags: recommended for a workflow (presets.json), a
 	// non-commercial licence, not downloaded yet.
@@ -35,7 +36,7 @@ const (
 	TagDownload      Tag = "download"
 )
 
-var staticTags = []Tag{TagChinese, TagEnglish, TagMultilingual, TagClone, TagDesign, TagVoices, TagFast, TagQuality, TagLight}
+var staticTags = []Tag{TagChinese, TagEnglish, TagMultilingual, TagClone, TagDesign, TagVoices, TagFast, TagQuality, TagLight, TagFallback}
 
 // AllTags is the whole vocabulary, static then computed.
 func AllTags() []Tag {
@@ -63,6 +64,8 @@ func (t Tag) Label() string {
 		return i18n.X("model tag", "High quality")
 	case TagLight:
 		return i18n.X("model tag", "Low memory")
+	case TagFallback:
+		return i18n.X("model tag", "Fallback")
 	case TagRecommended:
 		return i18n.X("model tag", "Recommended")
 	case TagNonCommercial:

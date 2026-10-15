@@ -334,7 +334,7 @@ func (a *app) runConvert() {
 	if cv.file == "" || !ok || a.trSvc == nil {
 		return
 	}
-	stt := sttEntry(a.prefs.Transcribe.FastModel, fastSTT)
+	stt := sttEntry(a.prefs.Transcribe.FastModel, "")
 	req := services.TranscribeRequest{Input: cv.file, Source: core.SourceFile, Title: i18n.T("Convert: %s", cv.name), Mode: "fast", Model: stt.Repo}
 	cv.stage, cv.err, cv.note, cv.heard, cv.take = i18n.T("Listening…"), "", "", "", nil
 	svc, file := a.trSvc, cv.file

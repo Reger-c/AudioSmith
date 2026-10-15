@@ -224,9 +224,9 @@ func TestModelSearch(t *testing.T) {
 	if err := tt.Click("Search models"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Type("parakeet")
+	tt.Type("whisper")
 	tt.Frame()
-	if a.modelsFind != "parakeet" || !tt.HasText("European transcription") || tt.HasText("Multilingual transcription") {
+	if a.modelsFind != "whisper" || !tt.HasText("Multilingual transcription") || tt.HasText("Word timing") {
 		t.Errorf("typed %q: %q", a.modelsFind, tt.Texts())
 	}
 }

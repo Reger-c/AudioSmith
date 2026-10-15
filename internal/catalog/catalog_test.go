@@ -191,7 +191,7 @@ func TestUnknownLanguageCode(t *testing.T) {
 
 func TestM1Entries(t *testing.T) {
 	c := Builtin()
-	for id, task := range map[string]Task{DefaultSTT: TaskSTT, DefaultAlign: TaskAlign, DefaultVAD: TaskVAD, DefaultEnhance: TaskEnhance, DefaultDictation: TaskSTT, DefaultSeparate: TaskSeparate, DefaultDiarize: TaskDiarize, DefaultLLM: TaskLLM} {
+	for id, task := range map[string]Task{DefaultSTT: TaskSTT, DefaultAlign: TaskAlign, DefaultVAD: TaskVAD, DefaultEnhance: TaskEnhance, FallbackSTT: TaskSTT, DefaultSeparate: TaskSeparate, DefaultDiarize: TaskDiarize, DefaultLLM: TaskLLM} {
 		e, ok := c.ByID(id)
 		if !ok || !slices.Contains(e.Tasks, task) || e.SampleRate == 0 && task != TaskLLM {
 			t.Errorf("default %s: %+v", id, e)
@@ -315,7 +315,7 @@ func TestRemoved(t *testing.T) {
 		{"soprano-80m-bf16", "mlx-community/Soprano-80M-bf16", "kokoro-82m-bf16", "chatterbox-turbo-8bit"},
 		{"pocket-tts", "mlx-community/pocket-tts", "kokoro-82m-bf16", "chatterbox-turbo-8bit"},
 	}
-	if len(c.Removed) != len(want) {
+	if len(c.Removed) != len(want)+5 {
 		t.Fatalf("%d removed", len(c.Removed))
 	}
 	for _, w := range want {
@@ -341,7 +341,7 @@ func TestRemoved(t *testing.T) {
 			t.Errorf("DisplayName(%s) = %q", w.repo, c.DisplayName(w.repo))
 		}
 	}
-	for _, ref := range []string{"", "kokoro-82m-bf16", "mlx-community/Kokoro-82M-bf16", "someone/else"} {
+	for _, ref := range []string{"", "kokoro-82m-bf16", "mlx-community/Kokoro-82M-bf16", "someone/else", "parakeet-tdt-0.6b-v3", "Gemma 4 E2B", "htdemucs"} {
 		if _, _, ok := c.Replace(ref, false); ok {
 			t.Errorf("Replace(%q) maps", ref)
 		}
@@ -379,5 +379,100 @@ func TestRemoved(t *testing.T) {
 		if bad.Validate() == nil {
 			t.Errorf("%s validates", name)
 		}
+	}
+}
+
+// TestRemovedAnalysis: thread #46 removed Parakeet (→ Qwen3-ASR, or
+// Whisper for a language Qwen3-ASR does not know), Mel-RoFormer (→
+// HTDemucs) and Gemma 4 E4B, E2B and Qwen3 1.7B (→ Qwen3 4B): by every
+// name, only for work of their task; no picker offers them; the one
+// language model left is the default.
+func TestRemovedAnalysis(t *testing.T) {
+	c := Builtin()
+	want := []struct {
+		id   string
+		task Task
+		by   string
+	}{
+		{"parakeet-tdt-0.6b-v3", TaskSTT, DefaultSTT},
+		{"mel-roformer-kim-vocal-2", TaskSeparate, DefaultSeparate},
+		{"gemma-4-e4b-it-4bit", TaskLLM, DefaultLLM},
+		{"gemma-4-e2b-it-4bit", TaskLLM, DefaultLLM},
+		{"qwen3-1.7b-4bit", TaskLLM, DefaultLLM},
+	}
+	for _, w := range want {
+		if _, ok := c.ByID(w.id); ok {
+			t.Errorf("%s is still an entry", w.id)
+		}
+		r, ok := c.RemovedModel(w.id)
+		if !ok || r.Did() != w.task || r.ReplacedBy != w.by {
+			t.Fatalf("%s: %+v", w.id, r)
+		}
+		for _, ref := range []string{w.id, r.Repo, strings.ToLower(r.Repo), ShortRepo(r.Repo), r.Label} {
+			if e, rr, ok := c.ReplaceTask(ref, w.task, ""); !ok || e.ID != w.by || rr.ID != w.id {
+				t.Errorf("ReplaceTask(%q) = %s %v", ref, e.ID, ok)
+			}
+			if _, _, ok := c.ReplaceTask(ref, TaskTTS, ""); ok {
+				t.Errorf("ReplaceTask(%q, tts) maps", ref)
+			}
+		}
+		for _, e := range c.ForTask(w.task) {
+			if e.ID == w.id {
+				t.Errorf("%s is offered", w.id)
+			}
+		}
+		if c.DisplayName(r.Repo) != r.Label {
+			t.Errorf("DisplayName(%s) = %q", r.Repo, c.DisplayName(r.Repo))
+		}
+	}
+	// Parakeet's European languages Qwen3-ASR lacks go to Whisper.
+	for lang, id := range map[string]string{"": DefaultSTT, "en": DefaultSTT, "de": DefaultSTT, "bg": FallbackSTT, "uk": FallbackSTT, "sk-SK": FallbackSTT} {
+		if e, _, ok := c.ReplaceTask("parakeet-tdt-0.6b-v3", TaskSTT, lang); !ok || e.ID != id {
+			t.Errorf("parakeet in %q → %s", lang, e.ID)
+		}
+	}
+	if l := c.ForTask(TaskLLM); len(l) != 1 || l[0].ID != DefaultLLM {
+		t.Errorf("language models %v", l)
+	}
+	if l := c.ForTask(TaskSeparate); len(l) != 1 || l[0].ID != DefaultSeparate {
+		t.Errorf("separation models %v", l)
+	}
+	if l := c.ForTask(TaskSTT); len(l) != 2 || l[0].ID != DefaultSTT || l[1].ID != FallbackSTT {
+		t.Errorf("speech-to-text models %v", l)
+	}
+	bad := *c
+	bad.Removed = slices.Clone(c.Removed)
+	bad.Removed[len(bad.Removed)-1].ReplacedBy = "kokoro-82m-bf16" // a speech model can't replace a language model
+	if bad.Validate() == nil {
+		t.Error("an LLM replaced by a TTS model validates")
+	}
+}
+
+// TestSTTFor: Qwen3-ASR transcribes Chinese, English, detection and its
+// other 28 languages; Whisper the rest, and every translation into
+// English.
+func TestSTTFor(t *testing.T) {
+	c := Builtin()
+	for lang, id := range map[string]string{
+		"": DefaultSTT, "auto": DefaultSTT, "zh": DefaultSTT, "zh-Hans": DefaultSTT, "zh-TW": DefaultSTT, "en": DefaultSTT, "en-GB": DefaultSTT,
+		"yue": DefaultSTT, "ja": DefaultSTT, "ko": DefaultSTT, "fr": DefaultSTT, "de": DefaultSTT, "ru": DefaultSTT, "fil": DefaultSTT,
+		"sw": FallbackSTT, "uk": FallbackSTT, "he": FallbackSTT, "bg": FallbackSTT, "cy": FallbackSTT,
+	} {
+		if e := c.STTFor(lang, false); e.ID != id {
+			t.Errorf("STTFor(%q) = %s, want %s", lang, e.ID, id)
+		}
+	}
+	for _, lang := range []string{"", "zh", "en", "sw"} {
+		if e := c.STTFor(lang, true); e.ID != FallbackSTT || !e.Has(CapTranslate) {
+			t.Errorf("STTFor(%q, translate) = %s", lang, e.ID)
+		}
+	}
+	q, _ := c.ByID(DefaultSTT)
+	if len(q.Languages) != 30 || q.Has(CapTranslate) {
+		t.Errorf("qwen3-asr: %d languages", len(q.Languages))
+	}
+	w, _ := c.ByID(FallbackSTT)
+	if !slices.Contains(w.Tags, TagFallback) || slices.Contains(q.Tags, TagFallback) {
+		t.Errorf("tags %v %v", w.Tags, q.Tags)
 	}
 }

@@ -505,6 +505,9 @@ func (s *Server) transcribe(ctx context.Context, req *sdk.CallToolRequest, in tr
 	}
 	t := tr.Transcript
 	out := map[string]any{"text": t.Text(), "language": t.Language, "duration": t.Duration, "transcript_id": t.ID}
+	if r := tr.Replaced; r != nil {
+		out["replaced_by"], out["warning"] = r.ReplacedBy, r.Warning
+	}
 	if in.Timestamps {
 		var segs []map[string]any
 		for _, sg := range t.Segments {

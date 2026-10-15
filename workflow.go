@@ -111,12 +111,9 @@ func (a *app) openWorkflows(lib *library) {
 			return engine.Executor(host.sup, dub.RoleOf(method), method)
 		},
 		ModelPath: lib.modelSnapshot,
-		STT: func() services.WorkflowSTT {
-			m := dubModels(lib)
-			return services.WorkflowSTT{Model: m.STT, Aligner: m.Align, Words: m.WordTimes}
-		},
-		Caps:  dubCaps,
-		Voice: a.dubVoiceResolver(lib),
+		STT:       func() services.WorkflowSTT { return workflowSTT(lib) },
+		Caps:      dubCaps,
+		Voice:     a.dubVoiceResolver(lib),
 		Translator: func(ctx context.Context, name string) (translate.Translator, error) {
 			return dubMakeTranslator(router, dub.Settings{Translator: name})
 		},
@@ -895,4 +892,11 @@ func wfWarningText(code string) string {
 // wfLLMReady reports whether a language model can translate.
 func (a *app) wfLLMReady() bool {
 	return a.llmRouter != nil && a.llmRouter.Available(llm.SkillTranslate)
+}
+
+// workflowSTT are the speech-to-text models of Transcribe and Convert
+// steps: the dub pipeline's (Qwen3-ASR, Whisper for other languages).
+func workflowSTT(lib *library) services.WorkflowSTT {
+	m := dubModels(lib)
+	return services.WorkflowSTT{Model: m.STT, Aligner: m.Align, Words: m.WordTimes, Languages: m.STTLanguages, Other: m.OtherSTT, OtherWords: m.OtherWordTimes}
 }

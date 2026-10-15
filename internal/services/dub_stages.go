@@ -385,30 +385,36 @@ func (s *Dubs) transcribe(ctx context.Context, sc *stageCtx) error {
 		if m.STT == "" {
 			return stageErr(proto.CodeModelNotDownloaded, "No speech-to-text model.")
 		}
-		tp := proto.TranscribeParams{Model: m.STT, Audio: speech, Language: p.SourceLang, Words: m.WordTimes}
+		stt, wordTimes := m.STTFor(p.SourceLang)
+		tp := proto.TranscribeParams{Model: stt, Audio: speech, Language: p.SourceLang, Words: wordTimes}
 		var tr proto.TranscribeResult
-		if err := sc.call(ctx, proto.MethodSTTTranscribe, m.STT, &tp, &tp.ModelPath, &tr, func(pg jobs.Progress) {
+		if err := sc.call(ctx, proto.MethodSTTTranscribe, stt, &tp, &tp.ModelPath, &tr, func(pg jobs.Progress) {
 			pg.Stage = "transcribing"
 			sc.report(pg)
 		}); err != nil {
 			return err
 		}
+		if tr.AudioSeconds <= 0 {
+			tr.AudioSeconds = p.Source.Duration
+		}
+		CleanTranscription(stt, &tr)
 		detected = tr.Language
 		words := segmentWords(tr.Segments)
 		if len(words) == 0 && m.Align != "" && strings.TrimSpace(tr.Text) != "" {
 			ap := proto.AlignParams{Model: m.Align, Audio: speech, Text: strings.TrimSpace(tr.Text), Language: dubFirst(tr.Language, p.SourceLang)}
-			var ar proto.AlignResult
-			err := sc.call(ctx, proto.MethodSTTAlign, m.Align, &ap, &ap.ModelPath, &ar, func(pg jobs.Progress) {
-				pg.Stage = "aligning"
-				sc.report(pg)
-			})
+			aw, err := alignWords(ctx, func(ap *proto.AlignParams, out *proto.AlignResult) error {
+				return sc.call(ctx, proto.MethodSTTAlign, m.Align, ap, &ap.ModelPath, out, func(pg jobs.Progress) {
+					pg.Stage = "aligning"
+					sc.report(pg)
+				})
+			}, ap, tr.Segments, tr.AudioSeconds)
 			switch {
 			case ctx.Err() != nil:
 				return ctx.Err()
 			case err != nil:
 				sc.warn(WarnNoWordTimes)
 			default:
-				words = ar.Words
+				words = aw
 			}
 		}
 		for _, ts := range BuildSegments(tr.Segments, words, p.Source.Duration) {

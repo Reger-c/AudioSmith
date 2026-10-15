@@ -390,7 +390,7 @@ func TestTranscriptionsOpenAISDK(t *testing.T) {
 	f.mu.Lock()
 	reqs := f.transcribed
 	f.mu.Unlock()
-	accurate, fast := defaultSTT(f.st, false), defaultSTT(f.st, true)
+	accurate, fast := defaultSTT(f.st, false, ""), defaultSTT(f.st, true, "")
 	if reqs[0].Model != accurate.Repo || reqs[0].Words || reqs[1].Language != "fr" || !reqs[1].Words {
 		t.Fatalf("requests %+v", reqs[:2])
 	}
@@ -590,3 +590,77 @@ func TestRemovedModels(t *testing.T) {
 		t.Errorf("download: %d %+v", resp.StatusCode, e)
 	}
 }
+
+// TestRemovedAnalysisModels: thread #46's removed models. A transcription
+// on Parakeet is answered by Qwen3-ASR (Whisper for a language Qwen3-ASR
+// does not know) with the replacement headers, or replaced_by / warning
+// in the native answer; the default (whisper-1, none) is Qwen3-ASR for
+// Chinese and English and Whisper for Swahili; the removed language and
+// separation models are not listed, are described with their
+// replacement, can't be downloaded and are no speech models.
+func TestRemovedAnalysisModels(t *testing.T) {
+	f := newFake(t)
+	_, ts := f.server()
+	qwen, _ := catalog.Builtin().ByID(catalog.DefaultSTT)
+	whisper, _ := catalog.Builtin().ByID(catalog.FallbackSTT)
+	last := func() TranscribeRequestSeen {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		r := f.transcribed[len(f.transcribed)-1]
+		return TranscribeRequestSeen{r.Model, r.Language}
+	}
+	for _, c := range []struct {
+		fields []string
+		repo   string
+		rep    string
+	}{
+		{[]string{"model", "parakeet-tdt-0.6b-v3"}, qwen.Repo, qwen.ID},
+		{[]string{"model", "mlx-community/parakeet-tdt-0.6b-v3", "language", "bg"}, whisper.Repo, whisper.ID},
+		{[]string{"model", "Parakeet TDT 0.6B v3", "language", "de"}, qwen.Repo, qwen.ID},
+		{[]string{"model", "whisper-1"}, qwen.Repo, ""},
+		{[]string{"model", "whisper-1", "language", "zh"}, qwen.Repo, ""},
+		{[]string{"model", "gpt-4o-transcribe", "language", "sw"}, whisper.Repo, ""},
+		{[]string{"language", "en"}, qwen.Repo, ""},
+		{[]string{"model", catalog.FallbackSTT, "language", "zh"}, whisper.Repo, ""}, // named: kept
+	} {
+		resp := sdkTranscribe(t, ts, "/v1/audio/transcriptions", c.fields...)
+		io.Copy(io.Discard, resp.Body)
+		if resp.StatusCode != 200 || last().Model != c.repo || resp.Header.Get("X-AudioSmith-Replaced-By") != c.rep ||
+			(c.rep != "") != strings.Contains(resp.Header.Get("X-AudioSmith-Warning"), "Parakeet TDT 0.6B v3 was removed") {
+			t.Errorf("%v: %d %s %v", c.fields, resp.StatusCode, last().Model, resp.Header)
+		}
+	}
+	ct, body := multipartFile(t, "a.m4a", []byte("x"), "model", "parakeet-tdt-0.6b-v3")
+	var out map[string]any
+	if resp := do(t, ts, "POST", "/api/transcripts", body.String(), &out, "Content-Type", ct); resp.StatusCode != 201 || out["replaced_by"] != qwen.ID ||
+		!strings.Contains(fmt.Sprint(out["warning"]), "was removed") {
+		t.Errorf("native: %d %v", resp.StatusCode, out)
+	}
+	var list struct{ Data []map[string]any }
+	for _, path := range []string{"/v1/models", "/api/models"} {
+		do(t, ts, "GET", path, nil, &list)
+		for _, m := range list.Data {
+			if _, ok := catalog.Builtin().RemovedModel(fmt.Sprint(m["id"])); ok {
+				t.Errorf("%s lists %v", path, m["id"])
+			}
+		}
+	}
+	for id, by := range map[string]string{"gemma-4-e2b-it-4bit": catalog.DefaultLLM, "Gemma 4 E4B": catalog.DefaultLLM, "qwen3-1.7b-4bit": catalog.DefaultLLM,
+		"mel-roformer-kim-vocal-2": catalog.DefaultSeparate, "parakeet-tdt-0.6b-v3": catalog.DefaultSTT} {
+		var rm RemovedModelJSON
+		if resp := do(t, ts, "GET", "/api/models/"+strings.ReplaceAll(id, " ", "%20"), nil, &rm); resp.StatusCode != 200 || !rm.Removed || rm.ReplacedBy != by || rm.Warning == "" {
+			t.Errorf("%s: %d %+v", id, resp.StatusCode, rm)
+		}
+	}
+	var e apiErr
+	if resp := do(t, ts, "POST", "/api/models/gemma-4-e2b-it-4bit/download", nil, &e); resp.StatusCode != 410 || e.Error.Code != CodeModelRemoved {
+		t.Errorf("download: %d %+v", resp.StatusCode, e)
+	}
+	// Not speech models: no speech model answers for them.
+	if resp := sdkSpeech(t, ts, `{"model":"gemma-4-e2b-it-4bit","input":"hi"}`); resp.StatusCode != 404 {
+		t.Errorf("speech on Gemma: %d", resp.StatusCode)
+	}
+}
+
+// TranscribeRequestSeen is what the fake backend was asked to transcribe.
+type TranscribeRequestSeen struct{ Model, Language string }

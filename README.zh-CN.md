@@ -47,7 +47,7 @@ ad-hoc 签名的版本每次更新后，macOS 会忘掉辅助功能授权，需�
 | **故事 / 有声书 / 项目库** | 多角色剧本，自动分配角色。<br>有声书：导入 EPUB 等，按章节渲染；每章符合 ACX 或播客响度标准；跟读播放器；导出带章节和封面的 M4B。<br>可断点续渲，只重渲改过的行。 |
 | **视频配音 / 批量** | 分离人声与背景、识别说话人（≤4 人）、转写。<br>翻译可用本地 LLM、Ollama、云端模型、DeepL、Google、微软，支持术语表和按时长改写。<br>逐行克隆配音并贴合时长。<br>时间线编辑、A/B 对比、视频预览、增量重配。<br>导出多音轨 MP4（带软字幕）、M4A、WAV、SRT/VTT/ASS、分轨。<br>支持批量队列和监控文件夹。 |
 | **转写 / 听写** | 词级时间戳；导出 SRT/VTT/TXT/JSON；可用 LLM 清理文字。<br>全局听写：⌘⇧Space 切换或按住说话，文字直接输入任意应用，并保留原剪贴板。<br>听写约 0.3 秒出结果。 |
-| **本地 LLM** | 内置 Qwen3 4B（默认）或 Gemma 4 E2B（轻量），用于离线翻译、文字清理、术语提取。<br>调用顺序：本机 → Ollama；云端只有你主动选择才会用。 |
+| **本地 LLM** | 内置 Qwen3 4B，用于离线翻译、文字清理、术语提取。<br>调用顺序：本机 → Ollama；云端只有你主动选择才会用。 |
 | **本地 API / MCP / 集成 / 工具** | `127.0.0.1:3901` 上的 OpenAI 兼容 `/v1`，另有原生 `/api` 和 WebSocket 流式接口。<br>MCP 支持 HTTP 和 stdio。<br>提供 Claude Code、Cursor、Codex、n8n、OpenAI SDK 的配置页。<br>工具：A/B 对比、语音转语音、语速贴合、语气指令、水印检测。 |
 | **工作流** | 节点画布：朗读、转写、翻译、换声、响度、条件、导出等步骤。<br>可续跑，最多 50 个输入，带模板。 |
 | **电话** | 基于你自己的 Twilio 账号的 AI 电话代理。<br>强制播报 AI 身份声明，只能使用设计音色或已验证授权的克隆音色，可人工接管。<br>未设置前不生效。 |
@@ -59,9 +59,9 @@ ad-hoc 签名的版本每次更新后，macOS 会忘掉辅助功能授权，需�
 |---|---|---|---|
 | 语音合成 | Kokoro 82M | Qwen3-TTS 0.6B/1.7B、Chatterbox Turbo（英文克隆） | Apache-2.0 / MIT |
 | 646 种语言合成 | — | **OmniVoice**（克隆、音色设计、精确时长） | **CC-BY-NC-4.0，禁止商用**，使用前需确认许可 |
-| 转写 | Whisper large-v3 turbo | Qwen3-ASR 0.6B（听写默认）、Parakeet v3 | MIT / Apache-2.0 / CC-BY-4.0 |
-| 分离 / 说话人 | HTDemucs、Sortformer | Mel-RoFormer | MIT / NVIDIA Open Model |
-| 语言模型 | Qwen3 4B Instruct 2507 | Gemma 4 E2B | Apache-2.0 |
+| 转写 | Qwen3-ASR 0.6B（30 种语言） | Whisper large-v3 turbo（其他语言、译成英文） | Apache-2.0 / MIT |
+| 分离 / 说话人 | HTDemucs、Sortformer | — | MIT / NVIDIA Open Model |
+| 语言模型 | Qwen3 4B Instruct 2507 | — | Apache-2.0 |
 | 水印 | AudioSeal | | MIT |
 
 ## 已知限制

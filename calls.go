@@ -155,7 +155,7 @@ func callOptions(st settings.Settings, gatewayOn bool) services.CallOptions {
 
 // callSTT is the model that transcribes callers.
 func callSTT(st settings.Settings) catalog.Entry {
-	return sttEntry(firstOf(st.Calls.STTModel, st.Dictation.Model), catalog.DefaultDictation)
+	return sttEntry(firstOf(st.Calls.STTModel, st.Dictation.Model), "")
 }
 
 // callModelFor is the TTS model a call speaks voice v with: the chosen

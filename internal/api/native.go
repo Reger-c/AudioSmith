@@ -491,7 +491,11 @@ func (s *Server) createTranscript(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"transcript": transcriptJSON(tr.Transcript, true), "warnings": tr.Warnings})
+	out := map[string]any{"transcript": transcriptJSON(tr.Transcript, true), "warnings": tr.Warnings}
+	if r := tr.Replaced; r != nil {
+		out["replaced_by"], out["warning"] = r.ReplacedBy, r.Warning
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 func (s *Server) deleteTranscript(w http.ResponseWriter, r *http.Request) {
@@ -588,7 +592,7 @@ func (s *Server) modelList(ctx context.Context) ([]ModelJSON, error) {
 		return nil, err
 	}
 	st := s.b.Settings()
-	defaults := map[string]bool{defaultTTS(st).ID: true, defaultSTT(st, false).ID: true}
+	defaults := map[string]bool{defaultTTS(st).ID: true, defaultSTT(st, false, "").ID: true}
 	out := make([]ModelJSON, len(models))
 	for i, m := range models {
 		out[i] = modelJSON(m, defaults[m.Entry.ID])
@@ -682,9 +686,13 @@ func (s *Server) Languages(model string) ([]LanguageJSON, error) {
 			e, _, ok = replaceRemoved(model, false)
 		}
 		if !ok {
-			if e, ok = findEntry(model, catalog.TaskSTT); !ok {
-				return nil, errNotFound(CodeModelNotFound, "There is no model %q.", model)
-			}
+			e, ok = findEntry(model, catalog.TaskSTT)
+		}
+		if !ok {
+			e, _, ok = catalog.Builtin().ReplaceTask(model, catalog.TaskSTT, "")
+		}
+		if !ok {
+			return nil, errNotFound(CodeModelNotFound, "There is no model %q.", model)
 		}
 		entries = []catalog.Entry{e}
 	} else {
