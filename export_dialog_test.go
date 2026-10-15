@@ -95,6 +95,12 @@ func TestExportDialogState(t *testing.T) {
 		t.Errorf("availability %v", f.availOK)
 	}
 	tt.Frame()
+	// The format's details are under Advanced (thread #42).
+	if tt.HasText("Bit depth") || !tt.HasText("Recommended settings") {
+		t.Errorf("advanced closed: %q", tt.Texts())
+	}
+	a.setAdvancedOpen("export", true)
+	tt.Frame()
 	for _, s := range []string{"Export audio", "Studio take", "Bit depth", "Sample rate", "Original (24 kHz)", "Loudness", "Trim silence",
 		"File name", ".wav", "Also save", "Subtitles timed to the audio (.srt)", "About 144 KB · 2.0 s", "Export…", "Cancel"} {
 		if !tt.HasText(s) {
@@ -373,4 +379,24 @@ func TestTakeOrigins(t *testing.T) {
 		t.Error(got)
 	}
 	_ = services.FormatM4A
+}
+
+// TestExportAdvanced: the dialog counts what its Advanced changes from
+// the kind's defaults, and Restore recommended puts them back.
+func TestExportAdvanced(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	tk := exportTake(t, a, "T1", core.TakeStudio)
+	a.openExport(tk)
+	f := a.exp
+	if n := len(f.changes()); n != 0 {
+		t.Fatalf("fresh: %v", f.changes())
+	}
+	f.bits[f.format], f.trim, f.channels = 0, true, 1
+	if n := len(f.changes()); n != 3 {
+		t.Errorf("changes %v", f.changes())
+	}
+	f.restore()
+	if len(f.changes()) != 0 || f.bits[f.format] != 1 {
+		t.Errorf("restored %v bits %d", f.changes(), f.bits[f.format])
+	}
 }

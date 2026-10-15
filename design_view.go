@@ -37,8 +37,7 @@ func (a *app) designPage(c *ui.Context) {
 	recipe := func() {
 		a.designDescribe(c)
 		a.designPresets(c)
-		a.designDetails(c)
-		a.designSeed(c)
+		a.designDetails(c) // the seed is inside
 		a.designSavedVoices(c)
 	}
 	main := func() {
@@ -199,6 +198,7 @@ func (a *app) designDetails(c *ui.Context) {
 					}
 				})
 			}
+			a.designSeed(c)
 		})
 	})
 }
@@ -297,16 +297,16 @@ func (a *app) designTarget(c *ui.Context) {
 	if err != nil {
 		return
 	}
+	// What the model will hear, behind ⓘ; in view only what it can't
+	// say (decision D5, thread #42).
 	loc := i18n.Locale()
-	fillCard(c.Key("design-lowered")).Gap(px(t, sp1)).Padding(px(t, sp3)).Children(func() {
-		ui.Text(c, i18n.T("Sent to %s", e.Label)).FontSize(px(t, fsMicro)).TextColor(tok(t).Text2)
-		voice := low.Voice
-		if voice == "" {
-			voice = i18n.T("(nothing: the model picks a voice)")
-		}
-		ui.Text(c, voice).Selectable()
+	voice := low.Voice
+	if voice == "" {
+		voice = i18n.T("(nothing: the model picks a voice)")
+	}
+	ui.Column(c.Key("design-lowered")).Gap(px(t, sp1)).Children(func() {
 		if low.DescriptionDropped && d.description != "" {
-			ui.Text(c, i18n.T("This model only understands the details, not the description as written.")).FontSize(px(t, fsCaption)).TextColor(t.Warning)
+			statusMark(c, icons.DangerTriangle, t.Warning, i18n.T("This model only understands the details, not the description as written."))
 		}
 		if len(low.Dropped) > 0 {
 			var parts []string
@@ -315,8 +315,12 @@ func (a *app) designTarget(c *ui.Context) {
 					parts = append(parts, op.Label.In(loc))
 				}
 			}
-			ui.Text(c, i18n.T("%s can't express: %s", e.Label, strings.Join(parts, ", "))).FontSize(px(t, fsCaption)).TextColor(t.Warning)
+			statusMark(c, icons.DangerTriangle, t.Warning, i18n.T("%s can't express: %s", e.Label, strings.Join(parts, ", ")))
 		}
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+			caption(c, i18n.T("What %s will hear", e.Label)).TextColor(tok(t).Text3).SingleLine().Ellipsis("…").MinWidth(0)
+			infoTip(c.Key("design-sent"), i18n.T("Sent to %s", e.Label)+": "+voice)
+		})
 	})
 }
 
