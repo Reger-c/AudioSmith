@@ -239,7 +239,7 @@ func dubModels(lib *library) services.DubModels {
 func dubCaps(repo string) services.DubModelCaps {
 	e := entryFor(repo)
 	c := services.DubModelCaps{Clone: e.Has(catalog.CapClone), Duration: e.Has(catalog.CapDuration),
-		Instruct: e.Has(catalog.CapInstruct) || e.Has(catalog.CapVoiceStyle) && !e.Has(catalog.CapClone), Speed: e.Has(catalog.CapSpeed),
+		Instruct: services.TakesInstruct(capNames(e)), Speed: e.Has(catalog.CapSpeed),
 		Steps: e.Has(catalog.CapSteps), Guidance: e.Has(catalog.CapGuidance), NeedsReference: e.NeedsReference}
 	if e.Has(catalog.CapLanguage) {
 		c.Languages = map[string]string{}

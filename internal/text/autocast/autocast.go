@@ -30,6 +30,11 @@ type Line struct {
 	Text    string    // what is spoken: the name prefix and quote marks removed
 	Span    text.Span // Text's range in the source
 	Kind    Kind
+	// Direction is a stage direction of a speaker line, never spoken:
+	// "妈妈（温柔地）：…", "MOM (softly): …", "[Mom] (softly) …" give
+	// "温柔地" and "softly". Screenplay extensions (V.O., O.S., CONT'D) are
+	// not directions.
+	Direction string
 }
 
 // Result lists the lines in order and the distinct speakers in order of
@@ -211,8 +216,47 @@ func trim(src string, sp text.Span) text.Span {
 var (
 	tagRe = regexp.MustCompile(`^\[([^\[\]]{1,40})\][ \t]*`)
 	// Screenplay: a name, an optional parenthetical "(V.O.)", a colon.
-	playRe = regexp.MustCompile(`^([^:：\[\]()（）"“”「」]{1,40}?)[ \t]*(?:[(（][^()（）]{1,20}[)）])?[ \t]*[:：][ \t]*`)
+	playRe = regexp.MustCompile(`^([^:：\[\]()（）"“”「」]{1,40}?)[ \t]*(?:[(（]([^()（）]{1,20})[)）])?[ \t]*[:：][ \t]*`)
+	// A parenthetical at the start of a speaker's line: a stage direction.
+	leadRe = regexp.MustCompile(`^[(（]([^()（）]{1,30})[)）][ \t]*`)
 )
+
+// extensions are screenplay parentheticals that say where a voice comes
+// from, not how it is said.
+var extensions = map[string]bool{
+	"v.o.": true, "vo": true, "v.o": true, "o.s.": true, "os": true, "o.s": true, "o.c.": true, "oc": true,
+	"cont'd": true, "cont’d": true, "contd": true, "continuing": true, "off": true, "off-screen": true, "voice-over": true,
+	"画外音": true, "画外": true, "旁白": true, "内心": true, "独白": true, "续": true,
+}
+
+// direction is a parenthetical's text as a stage direction ("" for an
+// extension).
+func direction(p string) string {
+	p = strings.TrimSpace(p)
+	if extensions[strings.ToLower(p)] {
+		return ""
+	}
+	return p
+}
+
+// withDirection moves a parenthetical at the start of a speaker line's
+// text into its Direction (when it has none).
+func withDirection(src string, l Line) Line {
+	m := leadRe.FindStringSubmatchIndex(l.Text)
+	if m == nil {
+		return l
+	}
+	d := direction(l.Text[m[2]:m[3]])
+	if d == "" {
+		return l
+	}
+	if l.Direction == "" {
+		l.Direction = d
+	}
+	l.Span.Start += m[1]
+	l.Text = l.Span.Of(src)
+	return l
+}
 
 // speakerLine recognises "[Name] text" and "NAME: text".
 func speakerLine(src string, ln text.Span, extra map[string]bool) (Line, bool) {
@@ -224,7 +268,7 @@ func speakerLine(src string, ln text.Span, extra map[string]bool) (Line, bool) {
 		base, _, _ = strings.Cut(base, ":")
 		if !reserved[base] && !extra[low] && !strings.HasPrefix(low, "/") && isName(name) {
 			body := text.Span{Start: ln.Start + m[1], End: ln.End}
-			return Line{Speaker: cleanName(name), Text: body.Of(src), Span: body, Kind: Tagged}, true
+			return withDirection(src, Line{Speaker: cleanName(name), Text: body.Of(src), Span: body, Kind: Tagged}), true
 		}
 	}
 	if m := playRe.FindStringSubmatchIndex(s); m != nil && m[1] < len(s) {
@@ -235,7 +279,11 @@ func speakerLine(src string, ln text.Span, extra map[string]bool) (Line, bool) {
 		}
 		if isScreenplayName(name) {
 			body := text.Span{Start: ln.Start + m[1], End: ln.End}
-			return Line{Speaker: cleanName(name), Text: body.Of(src), Span: body, Kind: Screenplay}, true
+			l := Line{Speaker: cleanName(name), Text: body.Of(src), Span: body, Kind: Screenplay}
+			if m[4] >= 0 {
+				l.Direction = direction(s[m[4]:m[5]])
+			}
+			return withDirection(src, l), true
 		}
 	}
 	return Line{}, false

@@ -28,8 +28,12 @@ import (
 	"github.com/hehehai/AudioSmith/internal/text/markup"
 )
 
-// LongformVersion is the version of LongformDoc.
-const LongformVersion = 1
+// LongformVersion is the version of LongformDoc. Version 2 added the
+// optional dialogue fields (Scene, CastMember.Persona, StoryLine.Direction
+// and Intensity, Production.Pacing and NoMerge): a version 1 document
+// reads as a version 2 one with them empty, which renders exactly as
+// version 1 did, so no migration rewrites anything.
+const LongformVersion = 2
 
 // Loudness targets of a book (dsp/loudness presets).
 const (
@@ -64,6 +68,11 @@ type LongformDoc struct {
 	Seed int64 `json:"seed,omitempty"`
 
 	// Stories.
+	// Scene is where and how the story's dialogue happens ("evening, the
+	// living room; the child wants a kitten, the mother hesitates"): a
+	// summary models that take an instruction hear with every line.
+	// Never spoken.
+	Scene      string       `json:"scene,omitempty"`
 	Lines      []StoryLine  `json:"lines,omitempty"`
 	Cast       []CastMember `json:"cast,omitempty"`
 	ImportText string       `json:"importText,omitempty"` // the review buffer
@@ -93,13 +102,29 @@ type StoryLine struct {
 	// gap between lines; 0 = the gap.
 	PauseAfter int  `json:"pauseAfter,omitempty"`
 	Chapter    bool `json:"chapter,omitempty"` // a chapter heading: Text is its title
+	// Direction is how the line is delivered ("pleading", "softly",
+	// "无奈地笑"): an instruction for models that take one. Never spoken.
+	Direction string `json:"direction,omitempty"`
+	// Intensity of the direction: 0 = unset, IntensityLight, Medium or
+	// Strong.
+	Intensity int `json:"intensity,omitempty"`
 }
+
+// Direction intensities (StoryLine.Intensity).
+const (
+	IntensityLight  = 1
+	IntensityMedium = 2
+	IntensityStrong = 3
+)
 
 // CastMember is a character of a story and its voice.
 type CastMember struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Voice string `json:"voice,omitempty"` // a VoiceRef; "" = the default voice
+	// Persona is the character's performance baseline ("a seven-year-old
+	// girl, lively, coaxing"), for models that take an instruction.
+	Persona string `json:"persona,omitempty"`
 }
 
 // LexiconEntry is one of a book's pronunciations: Word is said as Say.
@@ -121,10 +146,26 @@ type Production struct {
 	// KeepEdges keeps the silence engines pad onto each chunk; the default
 	// trims it before joining.
 	KeepEdges bool `json:"keepEdges,omitempty"`
+	// Pacing picks turn-aware gaps between a story's lines (PacingDialogue,
+	// PacingReading, PacingRelaxed: story_pacing.go) in place of LineGapMs,
+	// and lets consecutive lines of one character be synthesized as one;
+	// "" (PacingFixed) keeps one gap for every line, as stories made
+	// before it was added do.
+	Pacing string `json:"pacing,omitempty"`
+	// NoMerge keeps every line its own synthesis under a pacing preset.
+	NoMerge bool `json:"noMerge,omitempty"`
 }
 
 // DefaultProduction are the production settings of a new project.
 func DefaultProduction() Production { return Production{LineGapMs: 400, ParagraphGapMs: 800} }
+
+// DefaultStoryProduction are the production settings of a new story: the
+// dialogue pacing.
+func DefaultStoryProduction() Production {
+	p := DefaultProduction()
+	p.Pacing = PacingDialogue
+	return p
+}
 
 // BookInfo are a book's details: the metadata of encoded books, the cover
 // and the loudness target.
@@ -146,8 +187,12 @@ const MaxCoverBytes = 8 << 20
 func NewLongformDoc(kind core.ProjectKind, model string) LongformDoc {
 	var b [8]byte
 	rand.Read(b[:])
+	prod := DefaultProduction()
+	if kind == core.ProjectStory {
+		prod = DefaultStoryProduction()
+	}
 	return LongformDoc{Version: LongformVersion, Kind: kind, Model: model, Speed: 1, Format: FormatWAV,
-		Seed: int64(binary.LittleEndian.Uint64(b[:])>>34) + 1, Production: DefaultProduction()}
+		Seed: int64(binary.LittleEndian.Uint64(b[:])>>34) + 1, Production: prod}
 }
 
 // VoiceResolver says what a voice reference (or a name in a [voice:] tag)
@@ -173,6 +218,8 @@ type LongformSpec struct {
 	Format     string               `json:"format,omitempty"`
 	Stems      bool                 `json:"stems,omitempty"`
 	Lexicon    []LexiconEntry       `json:"lexicon,omitempty"`
+	// Scene is the story's scene (LongformDoc.Scene), for instructions.
+	Scene string `json:"scene,omitempty"`
 	// Audition renders the chapters for listening only: no book, no
 	// stems, no loudness target (a chapter or a line preview).
 	Audition bool `json:"audition,omitempty"`
@@ -195,6 +242,11 @@ type LineSpec struct {
 	// Repeat counts the earlier lines with the same text and voice (for
 	// VaryRepeats).
 	Repeat int `json:"repeat,omitempty"`
+	// The line's direction and its intensity, and its character's persona
+	// (stories): the instruction of models that take one.
+	Direction string `json:"direction,omitempty"`
+	Intensity int    `json:"intensity,omitempty"`
+	Persona   string `json:"persona,omitempty"`
 }
 
 // SpanSpec is a part of a line in one voice.
@@ -276,6 +328,9 @@ func Compile(d *LongformDoc, resolve VoiceResolver) (LongformSpec, []Problem) {
 	c.spec = LongformSpec{Kind: d.Kind, Title: strings.TrimSpace(d.Title), Model: d.Model, Lang: d.Language, Seed: d.Seed,
 		Voices: map[string]core.Take{}, Production: d.Production, Book: d.Book, Format: d.Format, Stems: d.Stems,
 		Lexicon: cleanLexicon(d.Lexicon)}
+	if d.Kind != core.ProjectAudiobook {
+		c.spec.Scene = strings.TrimSpace(d.Scene)
+	}
 	if d.Production.Seed != 0 {
 		c.spec.Seed = d.Production.Seed
 	}
@@ -335,9 +390,9 @@ func (c *compiler) story() {
 		}
 		ch := len(c.spec.Chapters) - 1
 		// The line's voice: its own, its character's, the story's.
-		ref, who := d.Voice, ""
+		ref, who, persona := d.Voice, "", ""
 		if m, ok := cast[l.Character]; ok {
-			who = m.Name
+			who, persona = m.Name, strings.TrimSpace(m.Persona)
 			if m.Voice != "" {
 				ref = m.Voice
 			}
@@ -376,6 +431,10 @@ func (c *compiler) story() {
 		})
 		for _, ls := range lines {
 			ls.ID, ls.Speed, ls.PauseAfter = l.ID, speed, l.PauseAfter
+			ls.Direction, ls.Persona = strings.TrimSpace(l.Direction), persona
+			if ls.Direction != "" {
+				ls.Intensity = min(max(l.Intensity, 0), IntensityStrong)
+			}
 			cur.Lines = append(cur.Lines, c.counted(ls))
 		}
 	}

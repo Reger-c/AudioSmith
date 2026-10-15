@@ -39,6 +39,11 @@ type Traits struct {
 	// NonVerbalTags are the tags the model renders ("laughter"…, without
 	// brackets); nil with NonVerbal = every tag markup knows.
 	NonVerbalTags []string `json:"nonVerbalTags,omitempty"`
+	// Instruct: takes a delivery instruction in its voice field
+	// (TakesInstruct): stories send their scene, personas and directions.
+	Instruct bool `json:"instruct,omitempty"`
+	// Exaggeration: takes an emotion intensity (Chatterbox).
+	Exaggeration bool `json:"exaggeration,omitempty"`
 }
 
 // WithCatalog applies what the catalogue knows of the model (v3): its
@@ -75,6 +80,8 @@ func TraitsFor(family string, caps []string) Traits {
 		Steps:     slices.Contains(caps, "steps"),
 		NonVerbal: slices.Contains(caps, "nonVerbal"),
 		MaxChars:  400, MaxCharsCJK: 200,
+		Instruct:     TakesInstruct(caps),
+		Exaggeration: slices.Contains(caps, "exaggeration"),
 	}
 	switch family {
 	case "kokoro", "kitten":
