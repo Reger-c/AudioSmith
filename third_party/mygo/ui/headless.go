@@ -242,6 +242,12 @@ func coreNewTester(view func(c *context), width, height int) *Tester {
 	return t
 }
 
+// ForgetGlyphs empties the glyph atlases every window shares, so that
+// what a Tester draws next does not depend on what earlier tests drew:
+// where a glyph sits in its atlas can round text drawn scaled (a zoomed
+// canvas) by a level. Call it between Testers, not while one draws.
+func ForgetGlyphs() { textSystem().ForgetGlyphs() }
+
 // settle runs frames until the view asks for no more, or 20 of them.
 func (t *Tester) settle() {
 	t.frameAt = t.Now()

@@ -234,6 +234,12 @@ func (a *Atlas) Reset() {
 	a.changedAll()
 }
 
+// ResetSize empties the atlas and makes it w×h, as NewAtlas would.
+func (a *Atlas) ResetSize(w, h int) {
+	a.W, a.H, a.Pix = w, h, make([]byte, w*h*a.BPP)
+	a.Reset()
+}
+
 // changedAll makes renderers upload the whole atlas.
 func (a *Atlas) changedAll() {
 	a.gen++

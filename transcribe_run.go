@@ -151,9 +151,9 @@ func (a *app) transcriptRefused(req services.TranscribeRequest, err error) {
 }
 
 // transcriptJobUpdated follows transcription jobs: the page's, and
-// dictation's (dictation.go).
+// dictation's (dictation_run.go).
 func (a *app) transcriptJobUpdated(u jobs.Job) {
-	if a.dictJobUpdated(u) { // dictation.go
+	if a.dictJobUpdated(u) { // dictation_run.go
 		return
 	}
 	j := a.trJob

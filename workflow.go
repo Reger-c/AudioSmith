@@ -9,15 +9,17 @@ package main
 //
 // Files of the area:
 //
-//	workflow.go            this: state, wiring, the library
-//	workflow_edit.go       edits: autosave, add / place / remove / connect steps
-//	workflow_run.go        runs: the run panel (progress, results), checks, start, cancel
-//	workflow_files.go      files: export all, the inputs (scripts, clips, a folder)
-//	workflow_text.go       texts: errors and warnings
-//	workflow_canvas.go     the canvas: pan and zoom, step cards, ports, links, minimap, keys
-//	workflow_view.go       the page: library rail, toolbar, the right panel
-//	workflow_inspector.go  the step details and inputs (scripts, clips)
-//	workflow_pages.go      sidebar, route, title, palette
+//	workflow.go               this: state, wiring, the library
+//	workflow_edit.go          edits: autosave, add / place / remove / connect steps
+//	workflow_run.go           runs: the run panel (progress, results), checks, start, cancel
+//	workflow_files.go         files: export all, the inputs (scripts, clips, a folder)
+//	workflow_text.go          texts: errors and warnings
+//	workflow_canvas.go        the canvas: state, geometry (ports, links, hits), pan and zoom
+//	workflow_canvas_input.go  the canvas's gestures and keys
+//	workflow_canvas_draw.go   drawing the canvas: links, step cards, minimap
+//	workflow_view.go          the page: library rail, toolbar, the right panel
+//	workflow_inspector.go     the step details and inputs (scripts, clips)
+//	workflow_pages.go         sidebar, route, title, palette
 
 import (
 	"context"

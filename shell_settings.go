@@ -58,7 +58,7 @@ func settingsSections() []settingsSection {
 		{"studio", i18n.T("Studio"), "Studio"},
 		{"engine", i18n.T("Engine"), "Engine"},
 		{"pronunciation", i18n.T("Pronunciation"), "Pronunciation"}, // M1-G: pronunciation_settings.go
-		// M2 (thread #17): dictation_settings.go, transcribe_llm.go, permissions.go.
+		// M2 (thread #17): dictation_settings.go, transcribe_llm_settings.go, permissions.go.
 		{"dictation", i18n.T("Dictation"), "Dictation"},
 		{"writing", i18n.T("Writing help"), "Writing help"},
 		{"permissions", i18n.T("Permissions"), "Permissions"},

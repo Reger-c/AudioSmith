@@ -38,7 +38,7 @@ import (
 // holds the lane and the request goes straight to the engine. Budgets
 // made with llm.WithBudget (the client's timeout, the coach's, the story
 // director's, transcript clean-up's) do not count the wait; dictation
-// clean-up keeps a wall-clock budget (dictation.go).
+// clean-up keeps a wall-clock budget (dictation_run.go).
 
 // localProvider is the registry id of the engine's language model.
 const localProvider = "local"

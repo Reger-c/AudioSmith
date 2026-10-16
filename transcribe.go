@@ -21,7 +21,8 @@ package main
 //	transcribe_view_history.go   the history list, the status, sources and the recorder
 //	transcribe_view_detail.go    the open transcript: exports, player, clean-up
 //	transcribe_view_segments.go  the segments and the speakers bar
-//	transcribe_llm.go            language models: clean-up, Settings → Writing help
+//	transcribe_llm.go            language models: routes, clean-up
+//	transcribe_llm_settings.go   Settings → Writing help
 
 import (
 	"context"
