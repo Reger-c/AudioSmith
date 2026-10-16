@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "entries": [
     {
       "id": "kokoro-82m-bf16",
@@ -330,6 +330,47 @@
           {"path": "vocab.json", "size": 1036558}
         ]}
       ]
+    },
+    {
+      "id": "moss-transcribe-diarize-8bit",
+      "label": "MOSS-Transcribe-Diarize 0.9B",
+      "name": "Transcription with speakers",
+      "summary": "Tells who says what: Transcribe's Speakers option and dubbing; Chinese, English and 13 more languages. Slower than the default.",
+      "tags": ["speakers", "chinese", "english"],
+      "family": "moss_transcribe_diarize",
+      "repo": "vanch007/mlx-MOSS-Transcribe-Diarize-8bit",
+      "revision": "7210aef739be6b9e068fba9b1d60369ec053655b",
+      "tasks": ["stt"],
+      "about": "Transcribes and tells speakers apart in one pass: every turn with its speaker and times. Takes names and terms to expect.",
+      "languages": [
+        {"code": "zh"}, {"code": "en"}, {"code": "ja"}, {"code": "ko"}, {"code": "de"}, {"code": "fr"}, {"code": "es"}, {"code": "it"},
+        {"code": "pt"}, {"code": "ru"}, {"code": "th"}, {"code": "vi"}, {"code": "fil"}, {"code": "ur"}, {"code": "tr"}
+      ],
+      "capabilities": ["speakers"],
+      "sampleRate": 16000,
+      "rtf": 2.5,
+      "size": 1269855425,
+      "files": [
+        {"path": "added_tokens.json", "size": 707},
+        {"path": "config.json", "size": 2543},
+        {"path": "generation_config.json", "size": 107},
+        {"path": "model.safetensors", "size": 1258427152, "sha256": "a7ed3c83a357347472ea35f7266c916c15a59b6700c5f4e861db532743fe7c86"},
+        {"path": "preprocessor_config.json", "size": 315},
+        {"path": "processor_config.json", "size": 292},
+        {"path": "special_tokens_map.json", "size": 613},
+        {"path": "tokenizer.json", "size": 11423222, "sha256": "bcf03774334462d6e34b5005cb11120a62275f146ee2953e68731ecdbce84fbb"},
+        {"path": "tokenizer_config.json", "size": 474}
+      ],
+      "minMemoryGB": 8,
+      "quantization": "8bit",
+      "licence": {
+        "id": "apache-2.0",
+        "name": "Apache 2.0",
+        "url": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize",
+        "commercial": true,
+        "verified": true,
+        "note": "OpenMOSS-Team/MOSS-Transcribe-Diarize's model card (revision 704aa4a, checked 2026-10-15) and vanch007's 8-bit conversion both say apache-2.0. The conversion quantizes the Qwen3 decoder only (8-bit, group 64)."
+      }
     },
     {
       "id": "qwen3-forcedaligner-0.6b-4bit",

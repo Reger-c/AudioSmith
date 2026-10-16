@@ -67,12 +67,17 @@ public struct Segment: Codable, Sendable, Equatable {
     public var end: Double
     public var text: String
     public var words: [Word]?
+    /// Who says it: the model's anonymous label ("S01", "S02"…, in order of
+    /// appearance within one call), for models that tell speakers apart
+    /// (MOSS-Transcribe-Diarize); nil else.
+    public var speaker: String?
 
-    public init(start: Double, end: Double, text: String, words: [Word]? = nil) {
+    public init(start: Double, end: Double, text: String, words: [Word]? = nil, speaker: String? = nil) {
         self.start = start
         self.end = end
         self.text = text
         self.words = words
+        self.speaker = speaker
     }
 }
 

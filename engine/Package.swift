@@ -47,10 +47,18 @@ let package = Package(
             path: "Sources/AudioSmithProtocol",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // Text helpers without MLX (MOSS-Transcribe-Diarize's output), so
+        // the tests can check them.
+        .target(
+            name: "AudioSmithText",
+            path: "Sources/AudioSmithText",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "AudioSmithEngine",
             dependencies: [
                 "AudioSmithProtocol",
+                "AudioSmithText",
                 .product(name: "MLXAudioCore", package: "mlx-audio-swift"),
                 .product(name: "MLXAudioTTS", package: "mlx-audio-swift"),
                 .product(name: "MLXAudioSTT", package: "mlx-audio-swift"),
@@ -70,10 +78,11 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", infoPlist])]
         ),
-        // Decodes engine/Fixtures with the Swift types (scripts/test-engine.sh).
+        // Decodes engine/Fixtures with the Swift types, and checks the text
+        // helpers (scripts/test-engine.sh).
         .testTarget(
             name: "AudioSmithEngineTests",
-            dependencies: ["AudioSmithProtocol"],
+            dependencies: ["AudioSmithProtocol", "AudioSmithText"],
             path: "Tests/AudioSmithEngineTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

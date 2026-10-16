@@ -69,6 +69,9 @@ type transcribeState struct {
 	trSide    panelState // the history list: beside the page, or a drawer
 	trNarrow  bool       // the page is narrow: actions show as icons
 	trTight   bool       // the header is short of room: its buttons show icons
+	trRename  string     // the speaker label being renamed ("" none)
+	trRenOpen bool       // its popover is open
+	trRenBuf  string     // the name typed
 }
 
 // trPage is how many more segments "Show more" shows.
@@ -258,11 +261,13 @@ func (a *app) selectTranscript(id string) {
 // --- models --------------------------------------------------------------
 
 // sttEntries are the speech-to-text models (hidden ones included: the
-// catalogue hides models the app did not run end to end yet).
+// catalogue hides models the app did not run end to end yet), without
+// the speakers model, which Transcribe's Speakers option and the dub use
+// (too slow for dictation and calls).
 func sttEntries() []catalog.Entry {
 	var out []catalog.Entry
 	for _, e := range catalog.Builtin().Entries {
-		if slices.Contains(e.Tasks, catalog.TaskSTT) {
+		if slices.Contains(e.Tasks, catalog.TaskSTT) && !e.Has(catalog.CapSpeakers) {
 			out = append(out, e)
 		}
 	}
@@ -272,10 +277,11 @@ func sttEntries() []catalog.Entry {
 // sttEntry is the speech-to-text model a setting names (id, a catalogue
 // id), else the default for language (BCP-47, "" = detected): Qwen3-ASR,
 // or Whisper for a language Qwen3-ASR does not know (catalog.STTFor,
-// thread #46). A removed model's id (Parakeet) gets the default too.
+// thread #46). A removed model's id (Parakeet) gets the default too, and
+// so does the speakers model (only the Speakers option uses it).
 func sttEntry(id, language string) catalog.Entry {
 	c := catalog.Builtin()
-	if e, ok := c.ByID(id); ok && slices.Contains(e.Tasks, catalog.TaskSTT) {
+	if e, ok := c.ByID(id); ok && slices.Contains(e.Tasks, catalog.TaskSTT) && !e.Has(catalog.CapSpeakers) {
 		return e
 	}
 	return c.STTFor(language, false)
@@ -283,8 +289,12 @@ func sttEntry(id, language string) catalog.Entry {
 
 // trModel is the model of a mode for the page's language: both modes
 // use the same one (Settings → Transcribe may name one for each); Fast
-// skips the word timings.
+// skips the word timings. With Speakers on, the speakers model (thread
+// #48) in both modes.
 func (a *app) trModel(fast bool) catalog.Entry {
+	if e, ok := a.trSpeakersModel(); ok {
+		return e
+	}
 	if fast {
 		return sttEntry(a.prefs.Transcribe.FastModel, a.prefs.Transcribe.Language)
 	}
@@ -295,6 +305,9 @@ func (a *app) trModel(fast bool) catalog.Entry {
 // chosen model's, or, when it follows the language (no model in the
 // settings), every language a speech-to-text model knows; nil = any.
 func (a *app) trLanguages(fast bool) []string {
+	if e, ok := a.trSpeakersModel(); ok {
+		return sttLanguages(e)
+	}
 	id := a.prefs.Transcribe.AccurateModel
 	if fast {
 		id = a.prefs.Transcribe.FastModel
@@ -315,6 +328,15 @@ func (a *app) trLanguages(fast bool) []string {
 		}
 	}
 	return out
+}
+
+// trSpeakersModel is the speakers model when the page's Speakers option
+// is on.
+func (a *app) trSpeakersModel() (catalog.Entry, bool) {
+	if !a.prefs.Transcribe.Speakers {
+		return catalog.Entry{}, false
+	}
+	return catalog.Builtin().SpeakersModel()
 }
 
 // trAligner is the aligner Accurate runs after a model that does not
@@ -408,6 +430,10 @@ func (a *app) startTranscription(req services.TranscribeRequest) {
 	e := a.trModel(fast)
 	req.Model, req.Mode, req.Language = e.Repo, settings.TranscribeFast, a.prefs.Transcribe.Language
 	req.Words = e.Has(catalog.CapWordTimes)
+	if e.Has(catalog.CapSpeakers) {
+		// Its vocabulary: the names and terms dictation expects.
+		req.Prompt = a.prefs.Dictation.Vocabulary
+	}
 	if !fast {
 		req.Mode = settings.TranscribeAccurate
 		if al := trAligner(e); al.Repo != "" {
@@ -600,6 +626,32 @@ func (a *app) saveSegmentEdit() {
 			t.Segments[i].Text, t.Segments[i].Edited = text, true
 		}
 	})
+}
+
+// renameSpeaker names a speaker label of the transcript shown ("" = the
+// label again): the segments, exports and API show the name.
+func (a *app) renameSpeaker(label, name string) {
+	name = strings.TrimSpace(name)
+	a.trRename, a.trRenOpen = "", false
+	if t := a.trDetail; t == nil || t.Speakers[label] == name {
+		return
+	}
+	a.updateTranscript(func(t *core.Transcript) {
+		if name == "" || name == label {
+			delete(t.Speakers, label)
+			return
+		}
+		if t.Speakers == nil {
+			t.Speakers = map[string]string{}
+		}
+		t.Speakers[label] = name
+	})
+}
+
+// toggleTranscribeSpeakers turns the Speakers option on or off.
+func (a *app) toggleTranscribeSpeakers() {
+	on := !a.prefs.Transcribe.Speakers
+	a.updateSettings(func(s *settings.Settings) { s.Transcribe.Speakers = on })
 }
 
 // deleteTranscript deletes a transcript and its audio.

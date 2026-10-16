@@ -234,6 +234,18 @@ Encodes a clone reference once (speaker embedding, codec tokens… whatever the 
 
 Segments are in time order and cover `text`. Whisper gives about one per 30 s window, Qwen3-ASR one per utterance.
 
+**Speakers (MOSS-Transcribe-Diarize, family `moss_transcribe_diarize`, catalogue capability `speakers`).** One segment per speaker turn, with an optional `speaker`: the model's anonymous label (`"S01"`, `"S02"`…, numbered in order of appearance within this call). The field is additive within protocol 2: other models never set it, and older apps ignore it.
+
+```json
+← {"id":"01JB…","result":{"model":"vanch007/mlx-MOSS-Transcribe-Diarize-8bit","text":"今天我们聊聊 AudioSmith。好啊，从哪儿说起？","language":"zh",
+   "segments":[{"start":0.48,"end":3.9,"text":"今天我们聊聊 AudioSmith。","speaker":"S01"},{"start":4.2,"end":7.66,"text":"好啊，从哪儿说起？","speaker":"S02"}],…}}
+```
+
+- The model writes `[0.48][S01]text[3.90]`: the engine parses the timestamp and speaker tags into segments and strips them (and acoustic events such as `[laughter]`) from the text. It takes no language: `result.language` is detected from the text (Han/kana/Hangul share first, then Apple's `NLLanguageRecognizer`). `words` is ignored (no word timings: run `stt.align`).
+- `prompt` becomes the model card's hotword hint (`热词提示：a, b`, terms split on commas, 、, ; and newlines).
+- It loads only from the snapshot directory (`modelPath`, or the repo's snapshot in the cache), read-only; never by repo id, so mlx-audio-swift's "incomplete cache → delete" never runs on it.
+- The engine decodes the whole input in one pass. The app sends at most 10 minutes per call: longer audio goes in 10-minute windows that overlap by 60 s, and the app links the windows' labels through the overlap (`services.TranscribeSpeakers`). The app also skips windows without speech (the model answers silence like a chat model: "I'm sorry, I can't assist…") and drops such answers.
+
 ### `stt.align` (job, gpu)
 
 `{model, modelPath, audio, text, language?}` → `{model, words:[{text,start,end}], audioSeconds, seconds}`. Qwen3-ForcedAligner: words in order, one per character for Chinese and Japanese; punctuation is not a word. The app maps words back onto its lines (subtitles, script chunks).

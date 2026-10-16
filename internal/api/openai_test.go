@@ -21,6 +21,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
@@ -664,3 +665,64 @@ func TestRemovedAnalysisModels(t *testing.T) {
 
 // TranscribeRequestSeen is what the fake backend was asked to transcribe.
 type TranscribeRequestSeen struct{ Model, Language string }
+
+// TestTranscriptionsSpeakers (thread #48): speakers=true, OpenAI's
+// gpt-4o-transcribe-diarize or diarized_json transcribe with the speakers
+// model; segments carry speakers (names given in Transcribe); SRT cues
+// start with them; translations refuse speakers.
+func TestTranscriptionsSpeakers(t *testing.T) {
+	f := newFake(t)
+	_, ts := f.server()
+	moss, _ := catalog.Builtin().SpeakersModel()
+	last := func() services.TranscribeRequest {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.transcribed[len(f.transcribed)-1]
+	}
+	resp := sdkTranscribe(t, ts, "/v1/audio/transcriptions", "model", "whisper-1", "speakers", "true", "response_format", "verbose_json")
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 || last().Model != moss.Repo || !strings.Contains(string(body), `"speaker":"Ana"`) || !strings.Contains(string(body), `"speaker":"S2"`) {
+		t.Fatalf("speakers=true: %d %s (%+v)", resp.StatusCode, body, last())
+	}
+	resp = sdkTranscribe(t, ts, "/v1/audio/transcriptions", "model", "gpt-4o-transcribe-diarize", "response_format", "diarized_json")
+	body, _ = io.ReadAll(resp.Body)
+	var d struct {
+		Text     string
+		Segments []struct{ Type, ID, Speaker, Text string }
+	}
+	json.Unmarshal(body, &d)
+	if resp.StatusCode != 200 || last().Model != moss.Repo || len(d.Segments) != 2 || d.Segments[0].Type != "transcript.text.segment" ||
+		d.Segments[0].Speaker != "Ana" || d.Segments[1].Speaker != "S2" {
+		t.Fatalf("diarized_json: %d %s", resp.StatusCode, body)
+	}
+	resp = sdkTranscribe(t, ts, "/v1/audio/transcriptions", "response_format", "srt", "speakers", "1")
+	body, _ = io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Ana: Bonjour") || !strings.Contains(string(body), "S2: Ça va bien.") {
+		t.Fatalf("srt: %s", body)
+	}
+	resp = sdkTranscribe(t, ts, "/v1/audio/translations", "speakers", "true")
+	var e apiErr
+	json.NewDecoder(resp.Body).Decode(&e)
+	if resp.StatusCode != 400 || e.Error.Param != "speakers" {
+		t.Fatalf("translation: %d %+v", resp.StatusCode, e)
+	}
+	// AudioSmith's own endpoint.
+	ct, mb := multipartFile(t, "panel.m4a", []byte("fake audio"), "speakers", "true")
+	req, _ := http.NewRequest("POST", ts.URL+"/api/transcripts", mb)
+	req.Header.Set("Content-Type", ct)
+	req.Header.Set("X-AudioSmith-Request", "1")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ = io.ReadAll(resp.Body)
+	if resp.StatusCode != 201 || last().Model != moss.Repo || !strings.Contains(string(body), `"speaker":"S1"`) || !strings.Contains(string(body), `"speakers":{"S1":"Ana"}`) {
+		t.Fatalf("/api/transcripts: %d %s", resp.StatusCode, body)
+	}
+	// Without it, the default.
+	sdkTranscribe(t, ts, "/v1/audio/transcriptions", "model", "whisper-1")
+	if last().Model == moss.Repo {
+		t.Fatal("the speakers model without asking")
+	}
+}

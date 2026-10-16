@@ -34,6 +34,14 @@ func isSTTAlias(name string) bool {
 	return n == "" || n == "default" || slices.Contains(sttAliases, n) || sttAliasExpr.MatchString(n)
 }
 
+// isSpeakersAlias reports whether name asks for transcription with
+// speakers by OpenAI's name ("gpt-4o-transcribe-diarize"): AudioSmith's
+// speakers model answers.
+func isSpeakersAlias(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	return strings.HasPrefix(n, "gpt-") && strings.Contains(n, "-transcribe-diarize")
+}
+
 // fastSTTAlias: the "mini" names pick the fast model.
 func fastSTTAlias(name string) bool { return strings.Contains(strings.ToLower(name), "mini") }
 

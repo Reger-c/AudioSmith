@@ -69,13 +69,16 @@ const (
 	DubWarnNoSeparation  = "dub.no_separation"     // the engine cannot separate (or no model): the original is ducked under the dub
 	DubWarnNoDiarization = "dub.no_diarization"    // the engine cannot tell speakers apart: one speaker
 	DubWarnTooManySpk    = "dub.too_many_speakers" // more speakers than the model separates
-	DubWarnNoPoster      = "dub.no_poster"         // no media.thumbnail
-	DubWarnNoProxy       = "dub.no_proxy"          // the video cannot play in the preview (no media.transcode)
-	DubWarnNoEnhance     = "dub.no_enhance"        // references kept as they are
-	DubWarnCaptions      = "dub.captions"          // the downloaded captions were used instead of transcription
-	DubWarnNoReference   = "dub.no_reference"      // a speaker with too little speech: the default voice
-	DubWarnVoice         = "dub.voice"             // a cast voice could not be resolved: the default voice
-	DubWarnNoBackground  = "dub.no_background"     // keep background, but nothing to keep it from
+	// DubWarnSpeakersModel: the model that tells speakers apart best is
+	// not downloaded; Sortformer did (thread #48).
+	DubWarnSpeakersModel = "dub.speakers_model"
+	DubWarnNoPoster      = "dub.no_poster"     // no media.thumbnail
+	DubWarnNoProxy       = "dub.no_proxy"      // the video cannot play in the preview (no media.transcode)
+	DubWarnNoEnhance     = "dub.no_enhance"    // references kept as they are
+	DubWarnCaptions      = "dub.captions"      // the downloaded captions were used instead of transcription
+	DubWarnNoReference   = "dub.no_reference"  // a speaker with too little speech: the default voice
+	DubWarnVoice         = "dub.voice"         // a cast voice could not be resolved: the default voice
+	DubWarnNoBackground  = "dub.no_background" // keep background, but nothing to keep it from
 	DubCodeNoSource      = "dub.no_source"
 	DubCodeNoSpeech      = "dub.no_speech"     // transcription found no speech
 	DubCodeNoTranslator  = "dub.no_translator" // no translation engine is set up
@@ -100,6 +103,13 @@ func (DubChanged) Topic() string { return "dub.changed" }
 // ids; "" = that step is skipped).
 type DubModels struct {
 	STT, Align, Diarize, Separate, Enhance string
+	// Speakers transcribes and labels speakers in one pass (thread #48:
+	// MOSS-Transcribe-Diarize): the transcript of a source with more than
+	// one speaker, in a language it knows (SpeakersLanguages; nil = any).
+	// When it is not downloaded, STT and Diarize (Sortformer) do it, and
+	// the stage warns DubWarnSpeakersModel.
+	Speakers          string
+	SpeakersLanguages []string
 	// WordTimes: STT times words itself (no aligner needed).
 	WordTimes bool
 	// STTLanguages are the base languages STT knows (nil: any); OtherSTT
@@ -117,6 +127,17 @@ func (m DubModels) STTFor(lang string) (string, bool) {
 		return m.OtherSTT, m.OtherWordTimes
 	}
 	return m.STT, m.WordTimes
+}
+
+// SpeakersFor is the speakers model for a source language (BCP-47; "" =
+// detected), "" when there is none or it does not know the language.
+func (m DubModels) SpeakersFor(lang string) string {
+	lang = strings.TrimSpace(lang)
+	if m.Speakers == "" || m.SpeakersLanguages == nil || lang == "" || strings.EqualFold(lang, "auto") ||
+		slices.Contains(m.SpeakersLanguages, strings.ToLower(baseLang(lang))) {
+		return m.Speakers
+	}
+	return ""
 }
 
 // pickOther reports whether a language (BCP-47) needs the other

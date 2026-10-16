@@ -42,6 +42,7 @@ import (
 
 	"github.com/hehehai/AudioSmith/internal/api"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/services"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
@@ -83,7 +84,8 @@ const Instructions = "AudioSmith is a speech app on this Mac, all local (MLX mod
 	"- generate_speech: text (≤ 100,000 chars) to a WAV. voice = a saved voice (list_voices), a built-in speaker " +
 	"(list_models → voices) or empty for your own. output \"file\" writes it to the agents' folder and returns its path " +
 	"(name it with filename); \"inline\" puts base64 in your context. instructions sets the delivery.\n" +
-	"- transcribe: path = absolute path of audio or video; timestamps: true returns segments (for SRT or VTT); export_transcript saves txt/srt/vtt.\n" +
+	"- transcribe: path = absolute path of audio or video; timestamps: true returns segments (for SRT or VTT); speakers: true labels who says what " +
+	"(meetings, interviews; slower); export_transcript saves txt/srt/vtt.\n" +
 	"- Voices: design_voice (a description), describe_voice, clone_voice (name + path; consent: true only after the user " +
 	"confirms the speaker agreed), search_voices and use_gallery_voice (Discover voices).\n" +
 	"- Books and stories: create_audiobook (path of an EPUB, TXT, MD or DOCX), create_story (text of 'Name: line' lines), " +
@@ -488,6 +490,7 @@ type transcribeIn struct {
 	Language    string `json:"language,omitempty" jsonschema:"BCP-47 code; empty detects it."`
 	Prompt      string `json:"prompt,omitempty" jsonschema:"Names and terms to expect."`
 	Timestamps  bool   `json:"timestamps,omitempty" jsonschema:"Return sentences with their times (and words)."`
+	Speakers    bool   `json:"speakers,omitempty" jsonschema:"Tell who says what (a slower model): segments get speaker labels S1, S2…"`
 }
 
 func (s *Server) transcribe(ctx context.Context, req *sdk.CallToolRequest, in transcribeIn) (*sdk.CallToolResult, any, error) {
@@ -499,7 +502,7 @@ func (s *Server) transcribe(ctx context.Context, req *sdk.CallToolRequest, in tr
 	defer done()
 	title := filepath.Base(firstNonEmpty(in.Filename, in.Path, "audio")) + " (MCP)"
 	tr, err := s.o.API.Transcribe(ctx, api.TranscribeParams{File: path, Title: title, Model: in.Model, Language: in.Language,
-		Prompt: in.Prompt, Words: in.Timestamps})
+		Prompt: in.Prompt, Words: in.Timestamps, Speakers: in.Speakers})
 	if err != nil {
 		return nil, nil, toolError(err)
 	}
@@ -508,10 +511,19 @@ func (s *Server) transcribe(ctx context.Context, req *sdk.CallToolRequest, in tr
 	if r := tr.Replaced; r != nil {
 		out["replaced_by"], out["warning"] = r.ReplacedBy, r.Warning
 	}
-	if in.Timestamps {
+	if in.Speakers {
+		out["text"] = services.PlainText(t) // "S1: …" paragraphs
+	}
+	if in.Timestamps || in.Speakers {
 		var segs []map[string]any
 		for _, sg := range t.Segments {
 			seg := map[string]any{"start": sg.Start, "end": sg.End, "text": sg.Text}
+			if sg.Speaker != "" {
+				seg["speaker"] = sg.Speaker
+				if n := t.Speakers[sg.Speaker]; n != "" {
+					seg["speaker_name"] = n
+				}
+			}
 			if len(sg.Words) > 0 {
 				var ws []map[string]any
 				for _, w := range sg.Words {

@@ -1,0 +1,114 @@
+diff --git a/Sources/MLXAudioSTT/Models/MossTranscribeDiarize/MossTranscribeDiarize.swift b/Sources/MLXAudioSTT/Models/MossTranscribeDiarize/MossTranscribeDiarize.swift
+index 3449540..8838825 100644
+--- a/Sources/MLXAudioSTT/Models/MossTranscribeDiarize/MossTranscribeDiarize.swift
++++ b/Sources/MLXAudioSTT/Models/MossTranscribeDiarize/MossTranscribeDiarize.swift
+@@ -10,6 +10,9 @@ private let mossAudioPadToken = "<|audio_pad|>"
+ private let mossAudioStartToken = "<|audio_start|>"
+ private let mossAudioEndToken = "<|audio_end|>"
+ private let mossWhisperEncoderStride = 2
++/// 30 s chunks the Whisper encoder runs at once (cancellation is checked
++/// between batches).
++private let mossEncoderBatch = 2
+ 
+ public let mossTranscribeDiarizeDefaultRepo = "OpenMOSS-Team/MOSS-Transcribe-Diarize"
+ 
+@@ -138,7 +141,22 @@ public final class MossTranscribeDiarizeBackbone: Module {
+         audioFeatureLengths: MLXArray,
+         audioChunkMapping: MLXArray? = nil
+     ) throws -> [MLXArray] {
+-        let whisperFeatures = whisperEncoder(inputFeatures)
++        // Encode the 30 s chunks a few at a time: one batch of a long
++        // recording's chunks holds every layer's attention scores for all of
++        // them at once (gigabytes for an hour). The chunks are independent,
++        // so the result is the same. Cancellation is checked between batches.
++        let chunkCount = inputFeatures.dim(0)
++        var encoded: [MLXArray] = []
++        var first = 0
++        while first < chunkCount {
++            try Task.checkCancellation()
++            let last = min(first + mossEncoderBatch, chunkCount)
++            let part = whisperEncoder(inputFeatures[first..<last])
++            eval(part)
++            encoded.append(part)
++            first = last
++        }
++        let whisperFeatures = encoded.count == 1 ? encoded[0] : MLX.concatenated(encoded, axis: 0)
+         let lengths = audioFeatureLengths.asArray(Int32.self).map(Int.init)
+         let mapping = audioChunkMapping?.asArray(Int32.self).map(Int.init)
+             ?? [Int](repeating: 0, count: inputFeatures.dim(0))
+@@ -402,6 +420,48 @@ public final class MossTranscribeDiarizeModel: Module, STTGenerationModel {
+         }
+     }
+ 
++    /// Transcribes in the calling task, chunk by chunk (`chunkDuration`;
++    /// `maxTokens` is per chunk), and throws `CancellationError` when that
++    /// task is cancelled — checked between encoder batches, prefill steps and
++    /// tokens — where `generate` would trap. `onText` gets the decoded text as
++    /// it comes, timestamps offset to the whole input, chunks separated by a
++    /// newline.
++    public func transcribe(
++        audio: MLXArray,
++        generationParameters: STTGenerateParameters,
++        prompt: String?,
++        onText: ((String) -> Void)? = nil
++    ) throws -> STTOutput {
++        let start = Date()
++        let chunks = audioChunks(
++            audio,
++            chunkDuration: generationParameters.chunkDuration,
++            minChunkDuration: generationParameters.minChunkDuration
++        )
++        var outputs: [STTOutput] = []
++        outputs.reserveCapacity(chunks.count)
++        for (index, (chunkAudio, offsetSeconds)) in chunks.enumerated() {
++            try Task.checkCancellation()
++            if index > 0 { onText?("\n") }
++            let output = try generateSingleChunk(
++                audio: chunkAudio,
++                maxTokens: generationParameters.maxTokens,
++                temperature: generationParameters.temperature,
++                repetitionPenalty: generationParameters.repetitionPenalty,
++                repetitionContextSize: generationParameters.repetitionContextSize,
++                prompt: prompt,
++                offsetSeconds: Double(offsetSeconds),
++                kvBits: generationParameters.kvBits,
++                kvGroupSize: generationParameters.kvGroupSize,
++                quantizedKVStart: generationParameters.quantizedKVStart,
++                onText: onText
++            )
++            outputs.append(output)
++            Memory.clearCache()
++        }
++        return Self.combineChunkOutputs(outputs, totalTime: Date().timeIntervalSince(start))
++    }
++
+     public func generate(
+         audio: MLXArray,
+         maxTokens: Int = 2048,
+@@ -949,7 +1009,6 @@ extension MossTranscribeDiarizeModel {
+     }
+ 
+     static func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
+-        let alreadyConverted = weights.keys.contains { $0.contains("scales") }
+         var sanitized: [String: MLXArray] = [:]
+         sanitized.reserveCapacity(weights.count)
+ 
+@@ -982,11 +1041,15 @@ extension MossTranscribeDiarizeModel {
+                 )
+             }
+ 
+-            if !alreadyConverted,
+-               key.hasPrefix("model.whisper_encoder."),
++            // PyTorch's Conv1d weights are [out, in, kernel], MLX's [out,
++            // kernel, in]. Decide by shape (the kernel, 3, is the smallest
++            // axis): some MLX conversions quantize the decoder but keep the
++            // encoder's convolutions in PyTorch's layout.
++            if key.hasPrefix("model.whisper_encoder."),
+                key.contains("conv"),
+                key.hasSuffix(".weight"),
+-               value.ndim == 3 {
++               value.ndim == 3,
++               value.dim(2) < value.dim(1) {
+                 value = value.transposed(0, 2, 1)
+             }
+             sanitized[key] = value

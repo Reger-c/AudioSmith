@@ -269,12 +269,22 @@ func (s *Transcripts) run(ctx context.Context, job jobs.Job, req TranscribeReque
 	// Speech to text.
 	tp := proto.TranscribeParams{Model: req.Model, Audio: audio, Language: req.Language, Words: req.Words, Prompt: ASRPrompt(req.Model, req.Prompt, seconds)}
 	var tr proto.TranscribeResult
-	if err := s.call(ctx, job, proto.KindFor(req.Role, proto.MethodSTTTranscribe), req.Model, &tp, &tp.ModelPath, &tr, func(p jobs.Progress) {
-		if p.Stage == "" {
-			p.Stage = "transcribing"
-		}
-		report(p)
-	}); err != nil {
+	transcribe := func(k, n int, tp *proto.TranscribeParams, tr *proto.TranscribeResult) error {
+		return s.call(ctx, job, proto.KindFor(req.Role, proto.MethodSTTTranscribe), req.Model, tp, &tp.ModelPath, tr, func(p jobs.Progress) {
+			if p.Stage == "" {
+				p.Stage = "transcribing"
+			}
+			p.Fraction = windowFraction(p.Fraction, k, n)
+			report(p)
+		})
+	}
+	if IsSpeakersModel(req.Model) {
+		// Who speaks (thread #48): windows of at most 10 minutes, linked.
+		tr, err = TranscribeSpeakers(ctx, transcribe, tp, seconds)
+	} else {
+		err = transcribe(0, 1, &tp, &tr)
+	}
+	if err != nil {
 		keep(false)
 		return res, err
 	}
@@ -339,6 +349,15 @@ func (s *Transcripts) run(ctx context.Context, job jobs.Job, req TranscribeReque
 	s.bus.Publish(core.TranscriptChanged{Transcript: t})
 	res.Transcript = t
 	return res, nil
+}
+
+// windowFraction maps the fraction done of window k of n onto the
+// whole (-1, unknown, stays so).
+func windowFraction(f float64, k, n int) float64 {
+	if n <= 1 || f < 0 {
+		return f
+	}
+	return (float64(k) + min(f, 1)) / float64(n)
 }
 
 // segmentWords are the words the model timed itself, if it did.

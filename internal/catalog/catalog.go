@@ -67,6 +67,9 @@ const (
 	CapGuidance    Capability = "guidance"    // honours guidance (classifier-free guidance scale)
 	CapNonVerbal   Capability = "nonVerbal"   // renders inline non-verbal tags (Entry.NonVerbal)
 	CapTranslate   Capability = "translate"   // STT: can translate speech into English (task "translate")
+	// CapSpeakers: STT tells speakers apart, labelling each segment
+	// (proto.Segment.Speaker; MOSS-Transcribe-Diarize, thread #48).
+	CapSpeakers Capability = "speakers"
 )
 
 // Catalog is a versioned list of entries.
@@ -377,7 +380,7 @@ func (c *Catalog) UsesRepo(repo string) bool {
 }
 
 var knownCaps = []Capability{CapSpeed, CapSampling, CapClone, CapVoiceStyle, CapLanguage, CapInstruct, CapDesign, CapSeed, CapDuration, CapStream, CapWordTimes,
-	CapVoicePrompt, CapSteps, CapGuidance, CapNonVerbal, CapTranslate}
+	CapVoicePrompt, CapSteps, CapGuidance, CapNonVerbal, CapTranslate, CapSpeakers}
 
 // Default models of the analysis tasks. Their entries may be hidden from
 // pickers; find them with ByID.
@@ -400,9 +403,18 @@ const (
 	// (DefaultSTT; STTFor for a language it does not know).
 	DefaultDictation = DefaultSTT
 	// DefaultSeparate and DefaultDiarize serve dubbing (M4): HTDemucs and
-	// Sortformer (≤ 4 speakers).
+	// Sortformer (≤ 4 speakers). Sortformer only tells speakers apart when
+	// DefaultSpeakers is not downloaded.
 	DefaultSeparate = "htdemucs"
 	DefaultDiarize  = "sortformer-4spk-v2.1"
+	// DefaultSpeakers transcribes and tells speakers apart in one pass
+	// (thread #48): the dub's source analysis and Transcribe's Speakers
+	// option. MOSS-Transcribe-Diarize 0.9B, 8-bit: sentences given the
+	// right speaker 0.98–1.00 of the time on 2–4 speaker dialogues, where
+	// speech recognition + Sortformer managed 0.42–0.71 (thread #44,
+	// research/model-eval-stt-llm.md §3). Not for dictation (4× slower
+	// than Qwen3-ASR).
+	DefaultSpeakers = "moss-transcribe-diarize-8bit"
 	// DefaultLLM is the local language model (llm.generate) for offline
 	// translation and writing help: Qwen3 4B Instruct 2507, 4-bit
 	// (Apache-2.0), the only one since thread #46.
@@ -657,4 +669,22 @@ func (c *Catalog) TechnicalName(repo string) string {
 		return r.Label
 	}
 	return ShortRepo(repo)
+}
+
+// SpeakersModel is the model that transcribes and tells speakers apart
+// (DefaultSpeakers); ok is false when the catalogue has none.
+func (c *Catalog) SpeakersModel() (Entry, bool) {
+	e, ok := c.ByID(DefaultSpeakers)
+	return e, ok && e.Has(CapSpeakers)
+}
+
+// LabelsSpeakers reports whether the model of repo (a repo, id or label)
+// tells speakers apart (CapSpeakers).
+func (c *Catalog) LabelsSpeakers(repo string) bool {
+	for _, e := range c.Entries {
+		if e.Has(CapSpeakers) && (e.Repo == repo || e.ID == repo || e.Label == repo) {
+			return true
+		}
+	}
+	return false
 }

@@ -93,6 +93,8 @@ func skillTools() []skillTool {
 			arg(i18n.T("A speech-to-text model (list_models with task stt); empty: AudioSmith's default for the language: %s (Chinese, English and 28 more), else %s. A removed model's id is answered by its replacement (replaced_by in the result).",
 				skillModel(catalog.DefaultSTT), skillModel(catalog.FallbackSTT)), "model"),
 			arg(i18n.T("true returns segments with start and end in seconds (and words): use them for subtitles."), "timestamps"),
+			arg(i18n.T("true tells who says what with %s (slower; download it first): each segment gets a speaker (S1, S2…, and speaker_name when the user named them) and text reads as one paragraph per turn (%s). For meetings, interviews, dialogue.",
+				skillModel(catalog.DefaultSpeakers), "`S1: …`"), "speakers"),
 		}, After: i18n.T("Returns text, language, duration and transcript_id. The transcript is also kept on AudioSmith's Transcribe page.")},
 		{Name: "clone_voice", Lead: i18n.T("a new saved voice from a recording."), Args: []skillArg{
 			must(i18n.T("The new voice's name."), "name"),

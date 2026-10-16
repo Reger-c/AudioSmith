@@ -40,6 +40,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/gallery"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/lang"
 	"github.com/hehehai/AudioSmith/internal/llm"
@@ -230,6 +231,15 @@ func dubModels(lib *library) services.DubModels {
 	}
 	if e, ok := c.ByID(catalog.FallbackSTT); ok && m.STTLanguages != nil {
 		m.OtherSTT, m.OtherWordTimes = e.Repo, e.Has(catalog.CapWordTimes)
+	}
+	// Who speaks (thread #48): the speakers model when it is downloaded
+	// (the pipeline falls back to STT + Sortformer when it is not).
+	if e, ok := c.SpeakersModel(); ok {
+		m.Speakers = e.Repo
+		m.SpeakersLanguages = []string{}
+		for _, l := range e.Languages {
+			m.SpeakersLanguages = append(m.SpeakersLanguages, catalog.BaseLanguage(l.Code))
+		}
 	}
 	if lib != nil {
 		s := lib.settings.Get()
@@ -1132,6 +1142,8 @@ func dubWarningText(code string) string {
 		return i18n.T("Speakers could not be told apart (the engine cannot yet): every line is one speaker's. Set speakers by hand.")
 	case services.DubWarnTooManySpk:
 		return i18n.T("The speaker model tells at most 4 speakers apart: set the others by hand.")
+	case services.DubWarnSpeakersModel:
+		return i18n.T("Speakers were guessed without %s, which tells them apart far more reliably: download it and transcribe again.", modelRef(dubSpeakersEntry()))
 	case services.DubWarnNoPoster:
 		return i18n.T("No preview frame: the engine cannot make one yet.")
 	case services.DubWarnNoProxy:
@@ -1215,4 +1227,56 @@ func dubLangName(code string) string {
 		return strings.TrimSpace(l.Flag() + " " + name)
 	}
 	return code
+}
+
+// dubSpeakersEntry is the model that transcribes and tells speakers
+// apart (thread #48).
+func dubSpeakersEntry() catalog.Entry {
+	e, _ := catalog.Builtin().SpeakersModel()
+	return e
+}
+
+// dubSpeakersHint recommends the speakers model while it is not
+// downloaded, for a source with more than one speaker: a Download button,
+// and, once the source is transcribed without it, Transcribe again.
+// Nothing downloads without the click.
+func (a *app) dubSpeakersHint(c *ui.Context, key string) {
+	p := a.dub
+	e := dubSpeakersEntry()
+	if p == nil || e.ID == "" || p.Speakers == 1 || a.dubDismissed["speakers-model"] {
+		return
+	}
+	if ready, known := a.modelOnDisk(e); ready || !known {
+		return
+	}
+	m := a.model(e)
+	text := i18n.T("Lines get the right speaker far more often with %s (%s): it transcribes and tells speakers apart in one pass.", modelRef(e), catalog.HumanSize(e.Size))
+	notice(c, key, noticeInfo, text, "", func() {
+		label := i18n.T("Download")
+		if m.downloading {
+			label = i18n.T("Downloading…")
+		}
+		if secondaryIconButton(c.Key(key+"-download"), icons.DownloadMinimalistic, label).Label(label).Disabled(m.downloading).Clicked() {
+			a.download(e)
+		}
+	}, func() { a.dubDismissed["speakers-model"] = true })
+}
+
+// dubRetranscribeHint offers to transcribe again once the speakers model
+// is downloaded, when the transcript was made without it.
+func (a *app) dubRetranscribeHint(c *ui.Context, key string) {
+	p := a.dub
+	e := dubSpeakersEntry()
+	if p == nil || e.ID == "" || len(p.Segments) == 0 || a.dubBusy() || a.dubDismissed["speakers-again"] ||
+		!slices.Contains(p.Stage(dub.StageTranscribe, "").Warnings, services.DubWarnSpeakersModel) {
+		return
+	}
+	if ready, _ := a.modelOnDisk(e); !ready {
+		return
+	}
+	notice(c, key, noticeInfo, i18n.T("%s is ready: transcribe again to tell the speakers apart with it.", modelRef(e)), "", func() {
+		if ui.Button(c.Key(key+"-again"), i18n.T("Transcribe again")).Clicked() {
+			a.dubConfirm, a.dubConfirmOpen = "transcribe", true
+		}
+	}, func() { a.dubDismissed["speakers-again"] = true })
 }

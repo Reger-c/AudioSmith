@@ -838,8 +838,15 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 	if note := dubRetargetNote(p); note != "" {
 		caption(c, note)
 	}
+	if len(p.Segments) == 0 {
+		a.dubSpeakersHint(c, "src-speakers-model")
+	}
 	a.dubAdvanced(c, dubStepSource, locked, func() {
-		fieldInfo(c, i18n.T("Speakers"), i18n.T("How many people speak? Leave it on Auto to detect them; the speaker model tells up to 4 apart."), func() {
+		info := i18n.T("How many people speak? Leave it on Auto to detect them; the speaker model tells up to 4 apart.")
+		if ready, _ := a.modelOnDisk(dubSpeakersEntry()); ready {
+			info = i18n.T("How many people speak? Leave it on Auto to detect them; 1 skips telling speakers apart.")
+		}
+		fieldInfo(c, i18n.T("Speakers"), info, func() {
 			names := []string{i18n.T("Auto-detect")}
 			for i := 1; i <= dub.MaxSpeakers; i++ {
 				names = append(names, strconv.Itoa(i))
@@ -889,6 +896,8 @@ func (a *app) dubTranscribePanel(c *ui.Context) {
 			caption(c, s.Message).TextColor(t.Danger).Padding(0, 0, 0, px(t, 22))
 		}
 	}
+	a.dubSpeakersHint(c, "tr-speakers-model")
+	a.dubRetranscribeHint(c, "tr-speakers-again")
 	if len(p.Segments) > 0 {
 		sectionTitle(c, i18n.T("Speakers"))
 		for _, sp := range p.SpeakerLabels() {

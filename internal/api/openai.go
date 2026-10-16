@@ -419,14 +419,21 @@ func (s *Server) v1Transcribe(w http.ResponseWriter, r *http.Request, translateI
 	if format == "" {
 		format = "json"
 	}
-	if !slices.Contains([]string{"json", "text", "verbose_json", "srt", "vtt"}, format) {
+	if !slices.Contains([]string{"json", "text", "verbose_json", "diarized_json", "srt", "vtt"}, format) {
 		writeError(w, &Error{Status: http.StatusBadRequest, Code: CodeUnsupportedFormat, Param: "response_format",
-			Message: "response_format is json, text, verbose_json, srt or vtt."})
+			Message: "response_format is json, text, verbose_json, diarized_json, srt or vtt."})
 		return
 	}
 	grans := append(r.Form["timestamp_granularities[]"], r.Form["timestamp_granularities"]...)
 	words := format == "verbose_json" && slices.Contains(grans, "word")
-	p := TranscribeParams{File: path, Title: name + " (API)", Model: r.FormValue("model"), Prompt: r.FormValue("prompt"), Words: words}
+	// Who says what: AudioSmith's speakers=true, OpenAI's
+	// gpt-4o-transcribe-diarize, or its diarized_json format.
+	speakers := formBool(r, "speakers") || format == "diarized_json"
+	if speakers && translateIt {
+		writeError(w, errInvalid("speakers", "Translations do not tell speakers apart."))
+		return
+	}
+	p := TranscribeParams{File: path, Title: name + " (API)", Model: r.FormValue("model"), Prompt: r.FormValue("prompt"), Words: words, Speakers: speakers}
 	if !translateIt {
 		p.Language = r.FormValue("language")
 	}
@@ -476,8 +483,12 @@ func writeTranscript(w http.ResponseWriter, t core.Transcript, format, task stri
 		if segments {
 			segs := []map[string]any{}
 			for i, s := range t.Segments {
-				segs = append(segs, map[string]any{"id": i, "seek": 0, "start": s.Start, "end": s.End, "text": s.Text,
-					"tokens": []int{}, "temperature": 0.0, "avg_logprob": 0.0, "compression_ratio": 0.0, "no_speech_prob": 0.0})
+				seg := map[string]any{"id": i, "seek": 0, "start": s.Start, "end": s.End, "text": s.Text,
+					"tokens": []int{}, "temperature": 0.0, "avg_logprob": 0.0, "compression_ratio": 0.0, "no_speech_prob": 0.0}
+				if s.Speaker != "" {
+					seg["speaker"] = speakerName(t, s.Speaker)
+				}
+				segs = append(segs, seg)
 			}
 			out["segments"] = segs
 		}
@@ -495,6 +506,14 @@ func writeTranscript(w http.ResponseWriter, t core.Transcript, format, task stri
 			out["words"] = ws
 		}
 		writeJSON(w, http.StatusOK, out)
+	case "diarized_json":
+		// OpenAI's shape: one segment per turn, with its speaker.
+		segs := []map[string]any{}
+		for i, s := range t.Segments {
+			segs = append(segs, map[string]any{"type": "transcript.text.segment", "id": "seg_" + itoa(i), "start": s.Start, "end": s.End,
+				"text": s.Text, "speaker": speakerName(t, s.Speaker)})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"task": task, "duration": t.Duration, "text": text, "segments": segs, "usage": usage})
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"text": text, "usage": usage})
 	}
@@ -636,4 +655,13 @@ func (s *Server) v1Voices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"object": "list", "default_model": def.ID, "data": data})
+}
+
+// speakerName is a speaker label's name (the transcript's Speakers), or
+// the label.
+func speakerName(t core.Transcript, label string) string {
+	if n := t.Speakers[label]; n != "" {
+		return n
+	}
+	return label
 }
