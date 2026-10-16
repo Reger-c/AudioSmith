@@ -3253,5 +3253,6 @@
   "≈ %s": "约 %s",
   "≈ %s of audio": "约 %s 音频",
   "Hear %s": "试听 %s",
-  "Stop the preview": "停止试听"
+  "Stop the preview": "停止试听",
+  "The site offers this video only as separate video and audio streams, which need ffmpeg to join: set ffmpeg up in Settings → Audio tools, then try again.": "这个网站只提供分开的视频流和音频流，需要 ffmpeg 合并：请在 设置 → 音频工具 里设置 ffmpeg 后重试。"
 }

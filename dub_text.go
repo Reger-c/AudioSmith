@@ -82,6 +82,9 @@ func dubURLErrorText(err error) string {
 	case dub.CodeChecksum:
 		return i18n.T("The download of yt-dlp did not match its checksum, so it was not installed.")
 	case dub.CodeYtDlp:
+		if strings.Contains(ue.Detail, "Requested format is not available") {
+			return i18n.T("The site offers this video only as separate video and audio streams, which need ffmpeg to join: set ffmpeg up in Settings → Audio tools, then try again.")
+		}
 		if ue.Detail != "" {
 			return i18n.T("The download failed: %s", ue.Detail)
 		}

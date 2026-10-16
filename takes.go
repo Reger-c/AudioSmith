@@ -92,6 +92,7 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 		log.Printf("history.json: imported %d takes", n)
 	}
 	bus := core.NewBus()
+	logJobFailures(bus)
 	l := &library{
 		store:     st,
 		bus:       bus,

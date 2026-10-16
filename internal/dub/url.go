@@ -131,6 +131,10 @@ type YtDlp struct {
 	Path string
 	// Proxy is passed as --proxy ("" = none).
 	Proxy string
+	// FFmpeg is the ffmpeg yt-dlp merges separate video and audio streams
+	// with ("" = none: only files that hold both can be downloaded, and
+	// YouTube offers few or none of those).
+	FFmpeg string
 }
 
 // InstallYtDlp downloads yt-dlp into dir (as "yt-dlp"), checks it and
@@ -299,8 +303,11 @@ func (y YtDlp) Download(ctx context.Context, u, dir string, o DownloadOptions, p
 	}
 	format := "b[ext=mp4][vcodec^=avc1]/b[ext=mp4]/b"
 	args := y.base()
+	if o.FFmpeg == "" {
+		o.FFmpeg = y.FFmpeg
+	}
 	if o.FFmpeg != "" {
-		format = "bv*[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b"
+		format = "bv*[height<=1080][ext=mp4][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba/bv*+ba/b"
 		args = append(args, "--ffmpeg-location", o.FFmpeg, "--merge-output-format", "mp4")
 	}
 	args = append(args, "--no-playlist", "--newline", "--no-part", "--restrict-filenames",

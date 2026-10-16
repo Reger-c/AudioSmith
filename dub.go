@@ -158,7 +158,13 @@ func (a *app) openDubs(lib *library) {
 			if !s.Dubbing.URLImport {
 				return dub.YtDlp{}
 			}
-			return dub.YtDlp{Path: ytdlpPath(), Proxy: s.Models.Proxy}
+			y := dub.YtDlp{Path: ytdlpPath(), Proxy: s.Models.Proxy}
+			if t := a.mediaTool(); t != nil {
+				y.FFmpeg = t.FFmpeg
+			} else if found := ffmpegFind(); len(found) > 0 {
+				y.FFmpeg = found[0] // yt-dlp only merges streams with it
+			}
+			return y
 		},
 	})
 	if a.win != nil {

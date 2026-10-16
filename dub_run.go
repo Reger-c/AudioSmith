@@ -38,6 +38,9 @@ func (a *app) dubJobUpdated(j jobs.Job) {
 
 // dubFailed shows why a stage failed, with its fix.
 func (a *app) dubFailed(e *jobs.Error) {
+	if e.Code == jobs.CodeDependency && a.dubErr != "" {
+		return // the stage that failed first already said why
+	}
 	a.dubErr, a.dubErrCode = dubErrorText(e), e.Code
 	if e.Code == "model_not_downloaded" {
 		var d struct{ Model string }
