@@ -252,6 +252,10 @@ func TestHealthAndDiscovery(t *testing.T) {
 	if resp.StatusCode != 200 || h.Status != "ok" || h.Version != "1.2.3" || h.Engine.Device != "Apple M4" {
 		t.Fatalf("%d %+v", resp.StatusCode, h)
 	}
+	// AGPL-3.0 §13: whoever uses the server can find its source.
+	if h.SourceURL != "https://github.com/hehehai/AudioSmith" || h.License != "AGPL-3.0-only" {
+		t.Fatalf("source %q, licence %q", h.SourceURL, h.License)
+	}
 	f.update(func(f *fakeBackend) { f.status = Status{State: StateStarting} })
 	resp = do(t, ts, "GET", "/health", nil, &h)
 	if resp.StatusCode != 503 || h.Status != "starting" || resp.Header.Get("Retry-After") == "" {
@@ -259,12 +263,18 @@ func TestHealthAndDiscovery(t *testing.T) {
 	}
 	var caps map[string]any
 	do(t, ts, "GET", "/.well-known/audiosmith-speech", nil, &caps)
-	if caps["schema"] != "audiosmith.speech-capabilities" {
+	if caps["schema"] != "audiosmith.speech-capabilities" || caps["source_url"] != SourceURL || caps["license"] != License {
 		t.Fatalf("caps %v", caps)
 	}
 	var spec map[string]any
 	do(t, ts, "GET", "/openapi.json", nil, &spec)
-	if spec["openapi"] != "3.1.0" || spec["info"].(map[string]any)["version"] != "1.2.3" {
+	var root map[string]any
+	do(t, ts, "GET", "/", nil, &root)
+	if root["source_url"] != SourceURL || root["license"] != License {
+		t.Fatalf("root %v", root)
+	}
+	if spec["openapi"] != "3.1.0" || spec["info"].(map[string]any)["version"] != "1.2.3" ||
+		spec["info"].(map[string]any)["license"].(map[string]any)["identifier"] != License {
 		t.Fatalf("spec %v", spec["info"])
 	}
 	r, _ := http.Get(ts.URL + "/docs")

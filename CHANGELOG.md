@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Licence
+- AudioSmith is now licensed under the GNU Affero General Public License, version 3 (AGPL-3.0); earlier releases, up to and including 0.4.0-beta.1, remain under the Apache License 2.0. Settings → Diagnostics and about shows the licence and links to the source code; the Local API's `/`, `/health` and capabilities document carry `source_url` and `license`. The app ships LICENSE and NOTICE.
+- Contributions need the Contributor License Agreement (CLA.md): a bot asks you to sign it on your first pull request, by a comment. See CONTRIBUTING.md.
+
 ## 0.4.0-beta.1
 
 The first signed release is a beta (a GitHub prerelease): copies that receive beta updates get the next beta, and 0.4.0 once it is out.

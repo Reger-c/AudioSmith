@@ -13,6 +13,8 @@ While AudioSmith runs, it serves an HTTP API on **`http://127.0.0.1:3901`** (Set
 | `/health`, `/.well-known/audiosmith-speech` | readiness; capabilities for discovery |
 | `/openapi.json`, `/docs` | the OpenAPI 3.1 description (hand-written, `internal/api/openapi.json`; `TestOpenAPIMatchesRoutes` keeps it equal to the routes) and the bundled RapiDoc viewer (also Settings → Local API → Open the reference) |
 
+**Source code (AGPL-3.0).** AudioSmith is licensed under the GNU AGPL version 3, whose section 13 asks a program that users reach over a network to offer them its source. `/`, `/health` and `/.well-known/audiosmith-speech` carry `"source_url": "https://github.com/hehehai/AudioSmith"` and `"license": "AGPL-3.0-only"` (SPDX), the spec's `info.license` says the same, and Settings → Diagnostics and about shows both (`internal/api/health.go`). Someone who changes AudioSmith and lets others use it over the network (LAN sharing, for instance) should point `api.SourceURL` at their own source.
+
 ## OpenAI compatibility
 
 Point any OpenAI SDK at `base_url="http://127.0.0.1:3901/v1"` with any `api_key` (it is ignored on this Mac unless a key is required).

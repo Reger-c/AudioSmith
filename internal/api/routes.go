@@ -94,7 +94,7 @@ func (s *Server) serveMCP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) root(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"name": "AudioSmith", "version": s.o.Version,
+		"name": "AudioSmith", "version": s.o.Version, "source_url": SourceURL, "license": License,
 		"openai_base_url": "/v1", "openapi": "/openapi.json", "docs": "/docs", "mcp": "/mcp", "health": "/health",
 	})
 }

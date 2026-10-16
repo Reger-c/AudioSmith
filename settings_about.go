@@ -22,6 +22,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/api"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -31,7 +32,10 @@ import (
 )
 
 // issuesURL is where bugs are reported.
-const issuesURL = "https://github.com/hehehai/AudioSmith/issues/new"
+const issuesURL = api.SourceURL + "/issues/new"
+
+// licenceURL is AudioSmith's licence, the GNU AGPL version 3 (LICENSE).
+const licenceURL = "https://www.gnu.org/licenses/agpl-3.0.html"
 
 // aboutState is the Diagnostics page's state (and the machine, which the
 // first-run wizard reads too).
@@ -364,6 +368,11 @@ func (a *app) aboutSettings(c *ui.Context) {
 			}
 			ui.Text(c, r[1]).Selectable()
 		}
+		// AGPL-3.0: the licence, and where the source code is.
+		ui.Text(c, i18n.T("Licence")).TextColor(t.TextMuted)
+		ui.Link(c, "GNU AGPL-3.0", licenceURL)
+		ui.Text(c, i18n.T("Source code")).TextColor(t.TextMuted)
+		ui.Link(c, strings.TrimPrefix(api.SourceURL, "https://"), api.SourceURL)
 	})
 	ui.Text(c, i18n.T("AudioSmith runs every model on this Mac. Each model keeps its own licence: see Settings → Models and downloads.")).
 		FontSize(px(t, 12)).TextColor(t.TextMuted)
