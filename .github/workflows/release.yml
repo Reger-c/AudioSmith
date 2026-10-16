@@ -40,7 +40,7 @@ jobs:
     # The engine needs Xcode 26 (swift-tools-version 6.2) and MLX needs
     # Apple silicon; macos-26 runners are arm64.
     runs-on: macos-26
-    timeout-minutes: 120
+    timeout-minutes: 240 # a team's first notarizations can take an hour or more
     env:
       RELEASE: ${{ github.event_name == 'push' }}
       SIGN: ${{ github.event_name == 'push' || inputs.sign }}
