@@ -113,11 +113,18 @@ func (c *Config) updateFeed(target string) string {
 // updateFile returns the URL of a published update file; manifests come
 // from the latest release on GitHub, or with a tag prefix from the newest
 // release tagged with it (a feed that update.ResolveFeed resolves),
-// archives from the release of this version.
+// archives from the release of this version. From a URL, the files of a
+// prerelease are in its beta directory (update.PrereleaseDir), the feed
+// that of the releases, beside which apps find the beta one
+// (update.PrereleaseFeed).
 func (c *Config) updateFile(name string, latest bool) string {
 	u := c.Updates
 	if u.GitHub == "" {
-		return strings.TrimSuffix(u.URL, "/") + "/" + url.PathEscape(name)
+		base := strings.TrimSuffix(u.URL, "/")
+		if !latest && update.IsPrerelease(c.Version) {
+			base += "/" + update.PrereleaseDir
+		}
+		return base + "/" + url.PathEscape(name)
 	}
 	if latest && u.tagged() {
 		return update.TaggedFeed(u.GitHub, u.TagPrefix, name)
@@ -374,11 +381,12 @@ func writeDelta(key ed25519.PrivateKey, base update.Archive, work, path, version
 
 // publishedArchives returns the archives of the published versions of
 // target, newest first: the version of its published manifest, the one
-// apps check, and those the manifest lists as previous. On GitHub, the
-// newest version may be a prerelease, which apps that take prereleases
-// check (mygo.Updater.SetPrereleases): its manifest and those it lists
-// count too, so that the next prerelease, or the release that follows
-// them, has deltas from the versions both kinds of app run.
+// apps check, and those the manifest lists as previous. The newest version
+// may be a prerelease, which apps that take prereleases check
+// (mygo.Updater.SetPrereleases), on GitHub or in the beta directory of a
+// URL: its manifest and those it lists count too, so that the next
+// prerelease, or the release that follows them, has deltas from the
+// versions both kinds of app run.
 func publishedArchives(c *Config, target string) ([]update.Archive, error) {
 	feed := c.updateFeed(target)
 	var manifests []*update.Manifest
@@ -389,14 +397,12 @@ func publishedArchives(c *Config, target string) ([]update.Archive, error) {
 	case !errors.Is(err, errNotPublished):
 		return nil, err
 	}
-	if c.Updates.GitHub != "" {
-		pre, perr := fetchManifest(feed, true)
-		switch {
-		case perr == nil:
-			manifests = append(manifests, pre)
-		case len(manifests) > 0 && !errors.Is(perr, errNotPublished):
-			warnf("No delta updates from prereleases for %s: %v", target, perr)
-		}
+	pre, perr := fetchManifest(feed, true)
+	switch {
+	case perr == nil:
+		manifests = append(manifests, pre)
+	case len(manifests) > 0 && !errors.Is(perr, errNotPublished):
+		warnf("No delta updates from prereleases for %s: %v", target, perr)
 	}
 	if len(manifests) == 0 {
 		return nil, err
@@ -417,10 +423,13 @@ var errNotPublished = errors.New("not published")
 
 // fetchManifest downloads a published manifest, from its feed: that of the
 // newest version, or with prereleases the newest prerelease or release on
-// GitHub (update.ResolvePrereleaseFeed).
+// GitHub (update.ResolvePrereleaseFeed), or the manifest in the beta
+// directory of a URL (update.PrereleaseFeed).
 func fetchManifest(feed string, prereleases bool) (*update.Manifest, error) {
 	resolve := update.ResolveFeed
-	if prereleases {
+	if beta, ok := update.PrereleaseFeed(feed); ok && prereleases {
+		feed = beta
+	} else if prereleases {
 		resolve = update.ResolvePrereleaseFeed
 	}
 	u, err := resolve(context.Background(), feed, func(_ context.Context, u string) (io.ReadCloser, error) {

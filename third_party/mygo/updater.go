@@ -115,8 +115,10 @@ func (u *UpdaterModule) Check(ctx context.Context) (*Update, error) {
 // become the latest release; Check then finds the newest version among
 // all releases through the GitHub API, one request a check within its 60
 // requests an hour for each address, and when the API fails it checks the
-// latest release instead. Updates from a URL have a single manifest, which
-// Check reads either way.
+// latest release instead. Updates from a URL keep the prereleases' files in
+// a beta directory beside the releases' (update.PrereleaseFeed), which
+// `mygo build -upload` fills: Check reads both manifests and offers the
+// newer version, and the releases' alone when the beta one is missing.
 //
 // Turning it off never offers an older version: an app running a
 // prerelease is offered the next release newer than it.
@@ -143,6 +145,9 @@ func checkUpdate(ctx context.Context, feed, key, current string, prereleases boo
 // cannot be listed, such as past the GitHub API's limit, it reads the
 // manifest of the newest release.
 func fetchManifest(ctx context.Context, feed string, prereleases bool) (update.Manifest, error) {
+	if beta, ok := update.PrereleaseFeed(feed); ok && prereleases {
+		return newerManifest(ctx, beta, feed)
+	}
 	if prereleases {
 		u, err := update.ResolvePrereleaseFeed(ctx, feed, httpGet)
 		if err == nil {
@@ -163,6 +168,55 @@ func fetchManifest(ctx context.Context, feed string, prereleases bool) (update.M
 		return update.Manifest{}, err
 	}
 	return getManifest(ctx, u)
+}
+
+// newerManifest downloads the manifests of the prereleases (beta) and of
+// the releases (feed) of a feed served from a URL, and returns the newer.
+// When one cannot be read, such as a beta manifest that was never
+// published (404), it returns the other; when neither can, the releases'
+// error, or the prereleases' when the releases have none published.
+func newerManifest(ctx context.Context, beta, feed string) (update.Manifest, error) {
+	pre, perr := getManifest(ctx, beta)
+	if perr != nil && ctx.Err() != nil {
+		return update.Manifest{}, perr
+	}
+	m, err := getManifest(ctx, feed)
+	switch {
+	case perr == nil && err == nil:
+		if update.Compare(pre.Version, m.Version) > 0 {
+			return pre, nil
+		}
+		return m, nil
+	case perr == nil:
+		if !isNotFound(err) {
+			log.Printf("mygo: checked the prereleases for updates, as the releases' manifest could not be read: %v", err)
+		}
+		return pre, nil
+	case err == nil:
+		if !isNotFound(perr) {
+			log.Printf("mygo: checked the releases for updates, as the prereleases' manifest could not be read: %v", perr)
+		}
+		return m, nil
+	case isNotFound(err) && !isNotFound(perr):
+		return update.Manifest{}, perr
+	}
+	return update.Manifest{}, err
+}
+
+// statusError is an answer other than the one a request of an update file
+// asked for.
+type statusError struct {
+	url, status string
+	code        int
+}
+
+func (e *statusError) Error() string { return "GET " + e.url + ": " + e.status }
+
+// isNotFound reports whether err is a 404 Not Found: a file that is not
+// published.
+func isNotFound(err error) bool {
+	var s *statusError
+	return errors.As(err, &s) && s.code == http.StatusNotFound
 }
 
 // getManifest downloads the manifest at url.
@@ -495,7 +549,7 @@ func httpGetFrom(ctx context.Context, rawURL string, offset int64) (io.ReadClose
 	}
 	if resp.StatusCode != want {
 		resp.Body.Close()
-		return nil, fmt.Errorf("GET %s: %s", rawURL, resp.Status)
+		return nil, &statusError{url: rawURL, status: resp.Status, code: resp.StatusCode}
 	}
 	return resp.Body, nil
 }

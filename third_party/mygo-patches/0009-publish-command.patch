@@ -1,0 +1,237 @@
+cmd/mygo: `mygo publish` uploads a build made before
+
+`mygo build -upload` builds and uploads in one go. With updates.s3 the
+upload publishes at once (apps see the update when its manifest is
+there; there is no draft as on GitHub), so a release could not be checked
+(signature, notarization, Gatekeeper) between the build and the moment
+apps see it, and the files could not be renamed for a server that wants
+other names (AudioSmith's site keeps its disk images as
+<prefix>/AudioSmith-<version>.dmg).
+
+`mygo publish [-platform …] [-o …] [dir]` uploads what `mygo build` left in
+<out>/<goos>-<goarch> through the same publish() as -upload (GitHub draft
+or S3, manifests last, the beta directory of patch 0008), under the
+files' current names. It checks that every update manifest there is of
+mygo.json's version, and refuses the web platform and missing builds.
+
+Test: TestRunPublish (a renamed disk image, archive, delta and manifest of
+a prerelease into beta/, skipping the bundle and dotfiles; another
+version, no build, web).
+---
+diff --git a/cmd/mygo/main.go b/cmd/mygo/main.go
+index 58a221c..96c2cc6 100644
+--- a/cmd/mygo/main.go
++++ b/cmd/mygo/main.go
+@@ -30,6 +30,7 @@ Commands:
+ 	i18n check [dir]     check the app's catalogs of messages
+ 	dev                  run a development build with live reload
+ 	build                build production apps (a .app and a .dmg on macOS)
++	publish              upload what build made, as build -upload does
+ 	keygen               create the key pair that signs updates
+ 	doctor               check that the development environment is ready
+ 	version              print the MyGo version
+@@ -78,6 +79,8 @@ func main() {
+ 		err = runI18n(args)
+ 	case "build":
+ 		err = runBuild(args)
++	case "publish":
++		err = runPublish(args)
+ 	case "doctor":
+ 		err = runDoctor(args)
+ 	case "keygen":
+diff --git a/cmd/mygo/publish.go b/cmd/mygo/publish.go
+index f3921d7..68e6c44 100644
+--- a/cmd/mygo/publish.go
++++ b/cmd/mygo/publish.go
+@@ -1,12 +1,14 @@
+ package main
+ 
+ import (
++	"encoding/json"
+ 	"errors"
+ 	"fmt"
+ 	"net/http"
+ 	"os"
+ 	"os/exec"
+ 	"path/filepath"
++	"runtime"
+ 	"slices"
+ 	"strings"
+ 
+@@ -35,6 +37,75 @@ func publish(c *Config, artifacts []string) error {
+ 	return publishGitHub(c, artifacts)
+ }
+ 
++func runPublish(args []string) error {
++	flags := newFlags("publish", "[flags] [dir]", `Uploads what mygo build made for each platform, in <out>/<goos>-<goarch>,
++where updates point to, as mygo build -upload does: to the GitHub release of
++this version (updates.github), as a draft, or to the bucket of updates.s3,
++the manifests last. Build first, check the build, then publish it: with
++updates.s3, apps see the update once its manifest is uploaded.
++
++The installers, archives, deltas and manifests of the directory are
++uploaded, under the names they have there, so a disk image renamed after
++the build is uploaded under its new name. The manifests must be of the
++version in mygo.json.`)
++	platforms := flags.String("platform", runtime.GOOS+"/"+runtime.GOARCH, "comma separated GOOS/GOARCH targets that were built, e.g. darwin/universal,linux/amd64")
++	out := flags.String("o", "", "output directory of the build (default: out from mygo.json or dist)")
++	if err := flags.Parse(args); err != nil {
++		return err
++	}
++	c, err := loadConfig(dirArg(flags.Args()))
++	if err != nil {
++		return err
++	}
++	if *out != "" {
++		c.Out = *out
++	}
++	if err := checkUpload(c); err != nil {
++		return err
++	}
++	artifacts, err := builtArtifacts(c, splitList(*platforms))
++	if err != nil {
++		return err
++	}
++	return publish(c, artifacts)
++}
++
++// builtArtifacts returns the files that mygo build left for platforms, in
++// <out>/<goos>-<goarch>, after checking that their update manifests are of
++// this version.
++func builtArtifacts(c *Config, platforms []string) ([]string, error) {
++	var artifacts []string
++	for _, p := range platforms {
++		goos, goarch, ok := strings.Cut(p, "/")
++		if !ok || isWebPlatform(p) {
++			return nil, fmt.Errorf("cannot publish the platform %q: want GOOS/GOARCH of an app", p)
++		}
++		dir := filepath.Join(c.path(c.Out), goos+"-"+goarch)
++		entries, err := os.ReadDir(dir)
++		if err != nil {
++			return nil, fmt.Errorf("no build of %s: %w", p, err)
++		}
++		for _, e := range entries {
++			path := filepath.Join(dir, e.Name())
++			if name := e.Name(); strings.HasPrefix(name, "update-") && strings.HasSuffix(name, ".json") {
++				var m update.Manifest
++				data, err := os.ReadFile(path)
++				if err == nil {
++					err = json.Unmarshal(data, &m)
++				}
++				switch {
++				case err != nil:
++					return nil, fmt.Errorf("%s: %w", relPathTo(c.root, path), err)
++				case m.Version != c.Version:
++					return nil, fmt.Errorf("%s is of version %s, not %s: build again", relPathTo(c.root, path), m.Version, c.Version)
++				}
++			}
++			artifacts = append(artifacts, path)
++		}
++	}
++	return artifacts, nil
++}
++
+ // uploads returns the artifacts of a build to publish: the installers and
+ // update files, and apart the update manifests, which go last so that they
+ // never point at a file that is not there.
+diff --git a/cmd/mygo/s3_test.go b/cmd/mygo/s3_test.go
+index 6fdcb98..930d0a6 100644
+--- a/cmd/mygo/s3_test.go
++++ b/cmd/mygo/s3_test.go
+@@ -1,8 +1,11 @@
+ package main
+ 
+ import (
++	"crypto/ed25519"
+ 	"crypto/sha256"
++	"encoding/base64"
+ 	"encoding/hex"
++	"encoding/json"
+ 	"fmt"
+ 	"io"
+ 	"net/http"
+@@ -218,3 +221,67 @@ func btoi(b bool) int {
+ 	}
+ 	return 0
+ }
++
++// TestRunPublish uploads a build made before, checked against the version.
++func TestRunPublish(t *testing.T) {
++	t.Setenv("AWS_ACCESS_KEY_ID", "id")
++	t.Setenv("AWS_SECRET_ACCESS_KEY", "secret")
++	var (
++		mu  sync.Mutex
++		put []string
++	)
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		io.Copy(io.Discard, r.Body)
++		mu.Lock()
++		put = append(put, r.URL.EscapedPath())
++		mu.Unlock()
++	}))
++	defer srv.Close()
++	pub, _, _ := ed25519.GenerateKey(nil)
++	root := t.TempDir()
++	config := func(version string) {
++		data, _ := json.Marshal(map[string]any{
++			"name": "App", "version": version, "out": "build",
++			"updates": map[string]any{"publicKey": base64.StdEncoding.EncodeToString(pub), "url": "https://dl.example.com/app",
++				"s3": map[string]any{"bucket": "downloads", "prefix": "app", "endpoint": srv.URL}},
++		})
++		os.WriteFile(filepath.Join(root, "mygo.json"), data, 0o644)
++	}
++	config("1.3.0-beta.1")
++	dir := filepath.Join(root, "build", "darwin-arm64")
++	os.MkdirAll(filepath.Join(dir, "App.app", "Contents"), 0o755)
++	for name, content := range map[string]string{
++		"App-1.3.0-beta.1.dmg":                         "disk image, renamed",
++		"app-1.3.0-beta.1-darwin-arm64.tar.gz":         "archive",
++		"app-1.2.0-to-1.3.0-beta.1-darwin-arm64.delta": "delta",
++		"update-darwin-arm64.json":                     `{"version": "1.3.0-beta.1"}`,
++		".DS_Store":                                    "",
++	} {
++		os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644)
++	}
++	if err := runPublish([]string{"-platform", "darwin/arm64", root}); err != nil {
++		t.Fatal(err)
++	}
++	slices.Sort(put[:3])
++	if want := []string{
++		"/downloads/app/beta/App-1.3.0-beta.1.dmg",
++		"/downloads/app/beta/app-1.2.0-to-1.3.0-beta.1-darwin-arm64.delta",
++		"/downloads/app/beta/app-1.3.0-beta.1-darwin-arm64.tar.gz",
++		"/downloads/app/beta/update-darwin-arm64.json",
++	}; !slices.Equal(put, want) {
++		t.Errorf("uploaded\n%v\nwant\n%v", put, want)
++	}
++
++	// A build of another version, or of none, is not published.
++	put = nil
++	config("1.3.0-beta.2")
++	if err := runPublish([]string{"-platform", "darwin/arm64", root}); err == nil || !strings.Contains(err.Error(), "is of version 1.3.0-beta.1, not 1.3.0-beta.2") || put != nil {
++		t.Errorf("another version: %v, uploaded %v", err, put)
++	}
++	if err := runPublish([]string{"-platform", "linux/amd64", root}); err == nil || !strings.Contains(err.Error(), "no build of linux/amd64") {
++		t.Errorf("no build: %v", err)
++	}
++	if err := runPublish([]string{"-platform", "web", root}); err == nil {
++		t.Error("published the web platform")
++	}
++}
+diff --git a/docs/updates.md b/docs/updates.md
+index 99da3cb..7efc431 100644
+--- a/docs/updates.md
++++ b/docs/updates.md
+@@ -181,6 +181,12 @@ of each platform. It needs no other tool: the credentials come from
+ manifests and `install.sh`, whose names stay from version to version, are
+ uploaded with `Cache-Control: no-cache`, so a CDN checks them again.
+ 
++To check a build before apps see it, build without `-upload`, check it,
++then upload it with `mygo publish` (same `-platform` and `-o`), which
++uploads the files the build left, under their names there, as `-upload`
++would have: a disk image renamed in between is uploaded under its new
++name. It refuses manifests of another version than `mygo.json`'s.
++
+ A prerelease (`1.3.0-beta.1`) is uploaded to the `beta` directory of the
+ prefix, `my-app/beta/`, which only apps that take
+ [prereleases](#prereleases) read. A release writes its manifests in
