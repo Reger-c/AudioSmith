@@ -1,7 +1,7 @@
 package main
 
 // TestV02's Workflow, Local API, MCP stdio, watermark and crash steps;
-// split from e2e_v02_test.go.
+// split from e2e_release_test.go.
 
 import (
 	"bufio"

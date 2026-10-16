@@ -2,7 +2,7 @@ package main
 
 // TestV02's harness: the steps' rows, waits, jobs and models, the checks
 // on audio and transcripts, ffprobe, and the memory sampler; split from
-// e2e_v02_test.go.
+// e2e_release_test.go.
 
 import (
 	"context"

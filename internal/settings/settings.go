@@ -32,14 +32,14 @@ type Settings struct {
 	Models     Models     `json:"models"`
 	Engine     Engine     `json:"engine"`
 	Privacy    Privacy    `json:"privacy"`
-	// M2 (thread #17, m2.go).
+	// M2 (thread #17, llm.go).
 	LLM        LLM        `json:"llm"`
 	Transcribe Transcribe `json:"transcribe"`
 	Dictation  Dictation  `json:"dictation"`
-	Dubbing    Dubbing    `json:"dubbing"` // M4 (thread #19, m4.go)
+	Dubbing    Dubbing    `json:"dubbing"` // M4 (thread #19, dubbing.go)
 	// M5 (thread #20, api.go).
 	API API `json:"api"`
-	// M7a (thread #22, m7.go): the first-run setup and the media tools.
+	// M7a (thread #22, setup.go): the first-run setup and the media tools.
 	Setup Setup `json:"setup"`
 	Media Media `json:"media"`
 	Calls Calls `json:"calls"` // M6b (thread #23, calls.go)
@@ -76,7 +76,7 @@ type Appearance struct {
 	Theme        string  `json:"theme"`        // "system" | "light" | "dark"
 	Scale        float64 `json:"scale"`        // UI scale, 0.9–1.25 (1 = 100 %)
 	ReduceMotion bool    `json:"reduceMotion"` // in addition to the system setting
-	// M7a (m7.go): the sidebar as icons only, its width in DIPs at 100 %
+	// M7a (setup.go): the sidebar as icons only, its width in DIPs at 100 %
 	// (0 = the default) and the sidebar sections the user closed. (0.3
 	// dropped M7a's accent palette: a stored "palette" is ignored, and
 	// gone after the next save.)

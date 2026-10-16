@@ -21,9 +21,9 @@ package main
 // Models must be downloaded (the HF cache); ffmpeg/ffprobe on PATH make
 // the source video and check the MP4 and M4B.
 //
-// Files: e2e_v02_test.go (this: TestV02, TestV02FirstRun),
-// e2e_v02_harness_test.go (the harness, the memory sampler) and one file
-// per group of steps: e2e_v02_{studio,transcribe,stories,dub,flows}_test.go.
+// Files: e2e_release_test.go (this: TestV02, TestV02FirstRun),
+// e2e_release_harness_test.go (the harness, the memory sampler) and one file
+// per group of steps: e2e_release_{studio,transcribe,stories,dub,flows}_test.go.
 
 import (
 	"bytes"

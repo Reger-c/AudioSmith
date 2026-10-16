@@ -1,6 +1,6 @@
 package main
 
-// TestV02's Stories and Audiobook steps; split from e2e_v02_test.go.
+// TestV02's Stories and Audiobook steps; split from e2e_release_test.go.
 
 import (
 	"context"
