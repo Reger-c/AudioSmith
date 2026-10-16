@@ -321,7 +321,7 @@ func (a *app) setStudioVoice(t *core.Take, e catalog.Entry) {
 	if e.Has(catalog.CapClone) && strings.TrimSpace(a.refAudio) != "" && !a.studioUsesSavedVoice(e) {
 		t.RefAudio, t.RefText = strings.TrimSpace(a.refAudio), strings.TrimSpace(a.refText)
 	}
-	// A voice from the library (voices.go): its reference, design, seed,
+	// A voice from the library (voices_studio.go): its reference, design, seed,
 	// style, and the encoded prompt the engine prefers to the reference.
 	a.applyStudioVoice(t, e)
 	t.VoicePrompt = a.studioVoicePrompt(e)

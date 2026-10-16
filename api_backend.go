@@ -42,7 +42,7 @@ type apiBackend struct {
 	version string
 	tmp     string
 	data    string
-	// fill applies a saved voice to a take for a model (voices.go's
+	// fill applies a saved voice to a take for a model (voices_studio.go's
 	// fillVoice, which reads only the library).
 	fill func(t *core.Take, v *core.Voice, e catalog.Entry)
 	// ffmpeg is the optional ffmpeg in use (M7a: MP3, Opus, FLAC).
