@@ -1,6 +1,6 @@
 package main
 
-// TestV02's Transcribe step; split from e2e_v02_test.go.
+// TestV02's Transcribe step; split from e2e_release_test.go.
 
 import (
 	"bytes"

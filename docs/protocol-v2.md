@@ -191,7 +191,7 @@ Takes `{job}` and returns `{cancelled:bool}`. See §4.6.
 
 ## 5.2 Methods added in M1
 
-Types: [`media.go`](../internal/engine/proto/media.go) (Go), [`WireM1.swift`](../engine/Sources/AudioSmithProtocol/WireM1.swift). Fixtures: `stt.jsonl`, `analysis.jsonl`, `media.jsonl`, `capture.jsonl`, `voice.jsonl`.
+Types: [`media.go`](../internal/engine/proto/media.go) (Go), [`WireMedia.swift`](../engine/Sources/AudioSmithProtocol/WireMedia.swift). Fixtures: `stt.jsonl`, `analysis.jsonl`, `media.jsonl`, `capture.jsonl`, `voice.jsonl`.
 
 Shared rules:
 - **Inputs** (`audio`, `input`, `refAudio`) are absolute paths to anything AVFoundation reads: WAV, AIFF, CAF, MP3, M4A/AAC, ALAC, FLAC, and the audio of MOV/MP4/M4V. The engine converts to what the model needs. A missing file fails with `file_not_found` (`data.path`), an unreadable one with `unsupported_media` (`data.path`).
@@ -316,7 +316,7 @@ Returns `{devices:[{id, name, channels, sampleRate, default?, transport?}]}`, th
 
 ## 5.3 Methods added in M4 (dubbing)
 
-Types: [`dub.go`](../internal/engine/proto/dub.go) (Go; `internal/dub/engineapi.go` aliases them), [`WireM4.swift`](../engine/Sources/AudioSmithProtocol/WireM4.swift). Fixtures: `separate.jsonl`, `diarize.jsonl`, `mux.jsonl`, `thumbnail.jsonl`, `transcode.jsonl`. The §5.2 shared rules apply (absolute paths, `file_not_found` / `unsupported_media`, temporary name + rename, BCP-47, model jobs). New progress stages: `separating`, `diarizing`, `muxing`, `transcoding`.
+Types: [`dub.go`](../internal/engine/proto/dub.go) (Go; `internal/dub/engineapi.go` aliases them), [`WireDub.swift`](../engine/Sources/AudioSmithProtocol/WireDub.swift). Fixtures: `separate.jsonl`, `diarize.jsonl`, `mux.jsonl`, `thumbnail.jsonl`, `transcode.jsonl`. The §5.2 shared rules apply (absolute paths, `file_not_found` / `unsupported_media`, temporary name + rename, BCP-47, model jobs). New progress stages: `separating`, `diarizing`, `muxing`, `transcoding`.
 
 ### `separate.run` (job, gpu)
 
