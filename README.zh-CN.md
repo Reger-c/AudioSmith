@@ -1,78 +1,229 @@
-# AudioSmith
+<p align="center">
+  <img src="docs/images/hero-zh.webp" alt="AudioSmith 工作室窗口：脚本、模型与音色，以及生成好的一条音频" width="100%">
+</p>
 
-[English](README.md) · **简体中文**
+<h1 align="center">AudioSmith</h1>
 
-AudioSmith 是一款运行在 Apple 芯片 Mac 上的本地语音工作室。
+<p align="center">
+  <b>装在你 Mac 里的录音棚。</b><br>
+  语音合成、音色、故事、有声书、视频配音、转写和听写，跑在 Apple 芯片上。
+</p>
 
-它能做：文字转语音（预设、克隆、设计音色）、多角色故事与有声书、视频配音、转写与全局听写，另外提供本地 OpenAI 兼容 API、MCP 服务和工作流。
+<p align="center">
+  <a href="https://github.com/hehehai/AudioSmith/releases"><img alt="下载" src="https://img.shields.io/github/v/release/hehehai/AudioSmith?include_prereleases&label=%E4%B8%8B%E8%BD%BD&color=0d9384"></a>
+  <img alt="macOS 15 及以上" src="https://img.shields.io/badge/macOS-15%2B-0d9384">
+  <img alt="Apple 芯片" src="https://img.shields.io/badge/Apple%20%E8%8A%AF%E7%89%87-M1%20%E5%8F%8A%E4%BB%A5%E4%B8%8A-0d9384">
+  <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF-Apache--2.0-0d9384"></a>
+</p>
 
-所有模型都用 [MLX](https://github.com/ml-explore/mlx) 在 Mac 的 GPU 上运行。不需要 Python，不需要云账号；除非你主动选择，数据不会离开这台 Mac。
+<p align="center"><a href="README.md">English</a> · <b>简体中文</b></p>
 
-> **状态：0.3 预览版。** 已实现 VoiceStudio 开源版的全部功能，并已在 0.2 完成验证；0.3 重新设计了界面，可能还有粗糙的地方，见[已知限制](#已知限制)。
+AudioSmith 能把文字变成语音，克隆和设计音色，给故事配齐角色，把一本书读成 M4B，把视频配成另一种语言，转写录音并分清谁说了什么，还能把你说的话直接打进任何应用。所有模型都用 [MLX](https://github.com/ml-explore/mlx) 在 Mac 的 GPU 上运行：不用注册账号，不用云服务，不用装 Python。本机运行，模型下载后可离线使用。
 
-![工作室](docs/screenshots/studio.png)
+[功能](#功能) · [安装](#安装) · [模型](#模型) · [隐私](#隐私) · [从源码构建](#从源码构建) · [许可证](#许可证与致谢)
+
+> **0.4.0-beta.1 是第一个正式签名的版本，也是 Beta 版。** 它用 Developer ID 签名、经过 Apple 公证，并且能自动更新。可能还有不完善的地方，见[已知限制](#已知限制)。
+
+## 功能
+
+### 工作室
+
+<img src="docs/images/studio-generate-zh.webp" alt="在工作室里生成一条音频" width="100%">
+
+- **写或导入**脚本（TXT、MD、DOCX、EPUB、SRT、VTT）。标记可以加停顿（`[pause 400ms]`）、快慢（`[slow]`、`[fast]`）、重音、逐字母拼读和单次读音（`[[词|读法]]`）。
+- **按用途选模型**：标准音色、快速克隆、高保真克隆、音色设计、英文极速音色、英文克隆、多语种全能。技术名称点一下就能看到。
+- **控件很少**：模型、一个“音色”列表和语速。其余都在“高级”里，填好了针对每个模型实测过的推荐设置。
+- **长文本**分段生成，边生成边播放；没改过的文字直接从缓存取。
+- **导出音频**：WAV、M4A；装了 ffmpeg 还能导出 MP3、FLAC、Opus。可把响度统一到 −16、−18 或 −23 LUFS，裁掉首尾静音，写入标签，并在旁边保存脚本和字幕。
+
+<img src="docs/images/model-picker-zh.webp" alt="模型选择：易懂的名称、标签和搜索" width="100%">
+
+### 音色
+
+<img src="docs/images/design-type-zh.webp" alt="设计音色：边输入描述，边解析出性别、年龄和风格" width="100%">
+
+| 音色发现 | 我的音色 |
+|---|---|
+| <img src="docs/images/discover-zh.webp" alt="音色发现：约 1,200 个可试听的音色"> | <img src="docs/images/voices-zh.webp" alt="我的音色：保存、设计和克隆的音色"> |
+
+- **音色发现**：约 1,200 个现成音色，可以试听，喜欢的存下来。
+- **克隆**：从一段录音或任意音视频文件克隆音色。AudioSmith 会自动挑出最合适的片段、转写并降噪。录一段授权声明，可以把音色标记为你本人的声音。
+- **设计**：用一句中文或英文描述设计音色（“三十岁左右的温暖女声，语速平稳，像纪录片旁白”）。
+- **可移植副本**：把某个模型的内置说话人或设计出的音色，做成所有克隆模型都能用的克隆音色。听起来接近原声，但不完全一样，界面也会这样说明。
+- 音色是可以分享的 `.asvoice` 文件，也能导入 VoiceStudio 的 `.ovsvoice`。
+
+### 故事
+
+<img src="docs/images/stories-zh.webp" alt="一个故事：角色、场景和每句的演绎提示" width="100%">
+
+- **按 `名字：台词` 写**，AudioSmith 会自动分配角色。`妈妈（温柔地）：` 这样的舞台提示会变成这句的演绎提示，不会被读出来。
+- **对话更连贯**：句间停顿跟着对话走（对话、朗读、舒缓三种节奏）；同一角色连续的几句一口气说完；每个角色的音量自动拉齐。
+- **AI 导演**：写作助手（本机的 Qwen3 4B）会补全场景、每个角色的人设和每句的演绎提示。能接收指令的模型会按提示演绎；其他模型照原文朗读，页面上会注明。
+- 可导出 WAV、M4B，或每个角色单独一条分轨。
+
+### 有声书
+
+<img src="docs/images/audiobook-zh.webp" alt="一本有章节和封面的有声书" width="100%">
+
+- **导入** EPUB、TXT、Markdown 或 DOCX，按标题自动分章。
+- **响度**：每章符合 ACX（Audible）或播客标准；跟读播放器会跟着文字走。
+- **导出**带章节、封面和标签的 M4B，也可导出章节时间表，或每章一个文件。
+- **断点续渲**：退出后可以接着渲染；改动之后只重渲改过的句子。
+
+### 视频配音
+
+<img src="docs/images/dub-steps-zh.webp" alt="把一段英文视频配成中文和西班牙语：来源、转写、翻译、角色、生成、导出" width="100%">
+
+- **拖入视频或音频**，也可以粘贴链接（需要你自己开启 yt-dlp）。新建配音默认配成中文；如果视频本来就是中文，会自动改成英文。还可以再加其他语言。
+- **四步完成**：
+  1. 分离人声和背景声（HTDemucs）。
+  2. 转写并区分说话人（区分说话人转写，或 Qwen3-ASR 加 Sortformer）。
+  3. 翻译：本机写作助手、Ollama、云端模型、DeepL、Google 或微软任选，术语表保证名字译得一致。
+  4. 用每位说话人的克隆音色逐句配音，并贴合原片时长。
+- **编辑**：在时间线上改句子、A/B 对比、预览视频，只重配改动的部分。
+- **导出**：每种语言一条音轨、带软字幕的 MP4，或 M4A、WAV、SRT、VTT、ASS 和分轨。“批量配音”可以处理整个文件夹，也能监控文件夹。
+
+### 转写与听写
+
+<img src="docs/images/transcribe-zh.webp" alt="一份标好说话人名字的转写" width="100%">
+
+- **转写**录音和视频，带词级时间。Qwen3-ASR 支持中文、英文等 30 种语言；其他语言用 Whisper，它也能把语音直接译成英文。
+- **区分说话人转写**：一次就分清谁说了什么（S1、S2……），点一下就能给说话人起名。拷贝以及 TXT、SRT、VTT、JSON 导出都会带上名字。
+- **全局听写**：在任何应用里按 ⌘⇧Space 说话，文字会打在光标处，说完后约 0.2–0.3 秒出字，并且不会覆盖你的剪贴板。菜单栏图标和一个小浮窗会提示正在听。
+
+### 工作流与批量
+
+<img src="docs/images/workflows-zh.webp" alt="画布上的一个工作流" width="100%">
+
+- **工作流**：在画布上串起步骤（来源、朗读、转写、翻译、换声、响度、条件、导出），可以从模板开始，一次处理最多 50 个输入；重启后会接着跑。
+- **批量配音**：排队处理多个配音，也能监控文件夹。
+
+### 给 Agent 和脚本用
+
+<img src="docs/images/integrations-zh.webp" alt="集成页：给 Claude Code 的一键接入提示词" width="100%">
+
+- **OpenAI 兼容 API**：`http://127.0.0.1:3901/v1`，支持语音合成、转写、翻译、模型和音色，任何 OpenAI SDK 都能直接指过来。
+- **AudioSmith 原生 API**（`/api`）能驱动每个页面：音色、故事、有声书、配音、批量、工作流、导出。任务进度走 SSE，`/ws/tts` 可以流式合成。
+- **MCP 服务**：HTTP（`/mcp`）和 stdio（`AudioSmith --mcp-stdio`）两种方式，共 33 个工具。删除需要 `confirm: true`，克隆需要确认授权。
+- **集成页**：一段提示词就能让 Claude Code、Codex 或 Cursor 自己完成接入（MCP 服务和 Agent 技能）；另有 n8n、curl、Python、JavaScript 和 OpenAI Agents SDK 的示例。
+
+```sh
+curl http://127.0.0.1:3901/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{"model": "tts-1", "voice": "alloy", "input": "构建完成，测试全部通过。"}' \
+  -o speech.wav
+```
+
+完整说明见 [docs/local-api.md](docs/local-api.md)（英文），运行中的应用也在 `/docs` 提供接口参考。
+
+### 还有
+
+<img src="docs/images/dark-zh.webp" alt="深色模式下的配音页" width="100%">
+
+- **工具**：A/B 对比音色、用另一个音色重说一段录音、按时长改写文字、查看文件信息、检测水印。
+- **隐形水印**：生成的音频默认带 AudioSeal 水印（设置 → 隐私），可以在“工具”里检测。
+- **电话**：基于你自己 Twilio 账号的 AI 电话代理。它总会说明自己是 AI，只用设计音色或已授权的音色；设置之前不会启用。
+- **应用本身**：项目库和历史、重启后自动继续的统一任务队列、命令面板（⌘K）、⌘1–9 打开常用页面、浅色和深色主题、英文和简体中文界面。
 
 ## 安装
 
 **要求**
 - macOS 15 及以上，Apple 芯片（M1 及以上）。
-- 建议 16 GB 内存；8 GB 可用轻量模型。
-- 模型需要约 1.3–15 GB 磁盘空间，取决于模型包（快速 1.3 GB、均衡 4.7、高质量 12.8、最强 14.9）。
+- 内存：8 GB 可以用“快速”模型包；建议 16 GB；24 GB 可以用“高质量”模型包（高保真克隆、音色设计、视频配音和写作助手）。
+- 磁盘：模型需要 1.3–17 GB，取决于模型包。
 
 **步骤**
-1. 从 [Releases](https://github.com/hehehai/AudioSmith/releases) 下载 DMG，或[从源码构建](README.md#build-from-source)。
-2. 把 **AudioSmith** 拖进“应用程序”。
-3. 目前是 ad-hoc 签名，首次打开会被 macOS 拦截。任选一种方式放行：
-   - 在终端执行 `xattr -dr com.apple.quarantine /Applications/AudioSmith.app`；
-   - 或先尝试打开一次，再到 **系统设置 → 隐私与安全性** 点 **仍要打开**（macOS 15 起，右键 → 打开已不能绕过拦截）。
-4. 首次运行会进入设置向导：
-   - **检查这台 Mac**：系统版本、芯片、内存、磁盘、网络、权限。
-   - **推荐模型包**：根据内存推荐“快速 / 均衡 / 高质量 / 最强”之一，也可以跳过，之后在“模型”页下载。
-   - **隐私和听写**：设置完成后，用 Kokoro 跟你打声招呼。
+1. 从 [Releases](https://github.com/hehehai/AudioSmith/releases) 下载 DMG。第一个版本 0.4.0-beta.1 标为 Pre-release（预发布）。
+2. 把 **AudioSmith** 拖进“应用程序”并打开。正式版本经过签名和公证，Gatekeeper 会放行；macOS 只会询问一次是否打开从网上下载的应用。
+3. 设置向导会检查这台 Mac（系统、芯片、内存、磁盘、网络），推荐一个模型包，并询问隐私和听写设置。也可以跳过模型包，之后在“模型”页下载。
 
-模型从 huggingface.co 或 hf-mirror.com 下载，自动选更快的那个，并走系统代理。国内网络下载慢时，可在 **设置 → 网络** 选择 hf-mirror.com。
+| 模型包 | 包含 | 下载量 |
+|---|---|---|
+| **快速** | 内置音色和听写；任何 Mac | 英文界面 1.3 GB，中文界面 2.8 GB |
+| **均衡** | 加上克隆、词级时间、降噪；16 GB 内存 | 4.3 / 5.8 GB |
+| **高质量** | 加上高保真克隆、音色设计、视频配音、区分说话人、写作助手；24 GB | 13.4 / 14.9 GB |
+| **极致** | 加上多语种全能（非商用许可）和 Whisper；48 GB | 15.5 / 17.0 GB |
 
-**权限**（用到时才会请求）
-- **麦克风**：录制参考音、听写、实时转写。
-- **辅助功能**：听写时把文字输入到其他应用。
+**更新**：AudioSmith 每天检查一次 GitHub 上有没有新版本，有的话会显示更新说明，等你确认后再安装。更新包带签名，安装前会先校验，通常只下载有变化的部分。**AudioSmith → 检查更新…** 可以立即检查。
 
-ad-hoc 签名的版本每次更新后，macOS 会忘掉辅助功能授权，需要在 **系统设置 → 隐私与安全性 → 辅助功能** 里重新勾选 AudioSmith。
+**Beta 版更新**：设置 → 诊断与关于 → **接收 Beta 版更新**。Beta 版（比如 0.4.0-beta.1）里默认打开，正式版里默认关闭，直到你自己选择。关掉之后也不会退回旧版本：Beta 版会一直保留，直到有更新的正式版。
 
-## 功能
+**下载**：模型从 huggingface.co 或 hf-mirror.com 下载，自动选更快的那个，并走系统代理。国内网络下载慢时，可在 **设置 → 网络** 选择 hf-mirror.com。
 
-| 模块 | 能做什么 |
-|---|---|
-| **工作室** | 支持标记的脚本编辑器：停顿、重音、快慢、`[[词\|读法]]`、非语言标签。<br>可导入 TXT/MD/DOCX/EPUB/SRT/VTT。<br>参数随模型变化：音色、语言、语速、步数、引导强度、目标时长、seed。<br>长文本分段生成，边生成边播放，带分段缓存。<br>音量均衡到 −18 LUFS、发音词典、音频质检。<br>导出 WAV（16/24/32 位）；装了 ffmpeg 后还能导出 MP3/FLAC/Opus。 |
-| **音色发现 / 我的音色 / 设计** | 从录音或任意音视频文件克隆音色：自动选最佳片段、自动转写、降噪，可录制本人授权声明。<br>用中英文描述设计音色（Qwen3 VoiceDesign、OmniVoice）。<br>约 1,200 个原型音色可试听。<br>`.asvoice` 导入导出，兼容 VoiceStudio 的 `.ovsvoice`。 |
-| **故事 / 有声书 / 项目库** | 多角色剧本，自动分配角色。<br>有声书：导入 EPUB 等，按章节渲染；每章符合 ACX 或播客响度标准；跟读播放器；导出带章节和封面的 M4B。<br>可断点续渲，只重渲改过的行。 |
-| **视频配音 / 批量** | 分离人声与背景、识别说话人（≤4 人）、转写。<br>翻译可用本地 LLM、Ollama、云端模型、DeepL、Google、微软，支持术语表和按时长改写。<br>逐行克隆配音并贴合时长。<br>时间线编辑、A/B 对比、视频预览、增量重配。<br>导出多音轨 MP4（带软字幕）、M4A、WAV、SRT/VTT/ASS、分轨。<br>支持批量队列和监控文件夹。 |
-| **转写 / 听写** | 词级时间戳；导出 SRT/VTT/TXT/JSON；可用 LLM 清理文字。<br>全局听写：⌘⇧Space 切换或按住说话，文字直接输入任意应用，并保留原剪贴板。<br>听写约 0.3 秒出结果。 |
-| **本地 LLM** | 内置 Qwen3 4B，用于离线翻译、文字清理、术语提取。<br>调用顺序：本机 → Ollama；云端只有你主动选择才会用。 |
-| **本地 API / MCP / 集成 / 工具** | `127.0.0.1:3901` 上的 OpenAI 兼容 `/v1`，另有原生 `/api` 和 WebSocket 流式接口。<br>MCP 支持 HTTP 和 stdio。<br>提供 Claude Code、Cursor、Codex、n8n、OpenAI SDK 的配置页。<br>工具：A/B 对比、语音转语音、语速贴合、语气指令、水印检测。 |
-| **工作流** | 节点画布：朗读、转写、翻译、换声、响度、条件、导出等步骤。<br>可续跑，最多 50 个输入，带模板。 |
-| **电话** | 基于你自己的 Twilio 账号的 AI 电话代理。<br>强制播报 AI 身份声明，只能使用设计音色或已验证授权的克隆音色，可人工接管。<br>未设置前不生效。 |
-| **负责任使用** | 生成的音频默认带 AudioSeal 隐形水印，可在“设置 → 隐私”关闭。<br>克隆需要授权录音，非商用模型需要先确认许可。 |
+**权限**：只在用到时才请求。**麦克风**用于录制音色、听写和实时转写；**辅助功能**用于听写时把文字打进其他应用。
 
 ## 模型
 
-| 任务 | 默认 | 其他 | 许可 |
+AudioSmith 用“能做什么”来给模型起名。技术名称、大小和许可都在“模型”页每个模型的“详情”里。
+
+<img src="docs/images/models-zh.webp" alt="模型页：易懂的名称和标签" width="100%">
+
+| 应用里的名称 | 模型 | 用途 | 许可 |
 |---|---|---|---|
-| 语音合成 | Kokoro 82M | Qwen3-TTS 0.6B/1.7B、Chatterbox Turbo（英文克隆） | Apache-2.0 / MIT |
-| 646 种语言合成 | — | **OmniVoice**（克隆、音色设计、精确时长） | **CC-BY-NC-4.0，禁止商用**，使用前需确认许可 |
-| 转写 | Qwen3-ASR 0.6B（30 种语言） | Whisper large-v3 turbo（其他语言、译成英文） | Apache-2.0 / MIT |
-| 分离 / 说话人 | HTDemucs、Sortformer | — | MIT / NVIDIA Open Model |
-| 语言模型 | Qwen3 4B Instruct 2507 | — | Apache-2.0 |
-| 水印 | AudioSeal | | MIT |
+| **标准音色** | Qwen3-TTS 0.6B CustomVoice | 内置中英文说话人，可接收演绎指令 | Apache-2.0 |
+| **快速克隆** | Qwen3-TTS 0.6B Base | 快速克隆音色 | Apache-2.0 |
+| **高保真克隆** | Qwen3-TTS 1.7B Base | 最还原的克隆 | Apache-2.0 |
+| **音色设计** | Qwen3-TTS 1.7B VoiceDesign | 用描述生成音色 | Apache-2.0 |
+| **英文极速音色** | Kokoro 82M | 自然的英文内置音色，占用小 | Apache-2.0 |
+| **英文克隆** | Chatterbox Turbo | 快速的英文克隆 | MIT |
+| **多语种全能** | OmniVoice | 600 多种语言，克隆、设计、精确时长 | **CC BY-NC 4.0：禁止商用**，使用前需确认许可 |
+| **中英文转写** | Qwen3-ASR 0.6B | 转写和听写，30 种语言 | Apache-2.0 |
+| **多语种转写** | Whisper large-v3 turbo | 其他语言；语音译成英文 | MIT |
+| **区分说话人转写** | MOSS-Transcribe-Diarize 0.9B | 一次分清谁说了什么 | Apache-2.0 |
+| **写作助手** | Qwen3 4B Instruct 2507 | 翻译、文字清理、AI 导演 | Apache-2.0 |
+| 逐词对齐 · 语音检测 · 语音降噪 | Qwen3-ForcedAligner 0.6B · Silero VAD · DeepFilterNet 3 | | Apache-2.0 · MIT · MIT/Apache-2.0 |
+| 快速人声分离 · 说话人区分 | HTDemucs · Sortformer（备用，最多 4 人） | | MIT · NVIDIA Open Model License |
+| 隐形水印 | AudioSeal | | MIT |
+
+在 MacBook Air M4（24 GB）上实测：
+
+| 项目 | 结果 |
+|---|---|
+| 听写（Qwen3-ASR） | 说完后 0.2–0.3 秒出字 |
+| 高保真克隆 | 约等于实时：940 个汉字，3.5 分钟音频，约 3¼ 分钟生成 |
+| 标准音色 | 约 1.7 倍实时 |
+| 区分说话人转写 | 10 分钟录音约 4 分钟 |
+| 写作助手 | 每秒 36–40 个 token |
+
+## 隐私
+
+- **语音在你的 Mac 上合成和识别。** 引擎本身从不联网，只加载应用下载好的模型。
+- **AudioSmith 只在这些时候联网**：下载模型（Hugging Face 或其镜像）；你下载 ffmpeg 和 yt-dlp 时；下载你粘贴的视频链接；你主动设置了云端写作或翻译服务时；每天一次的更新检查（不会发送任何关于你的信息）。
+- **没有统计**：不收集使用数据、崩溃报告或任何标识，也没有能打开它们的设置。
+- **本地 API 只监听 127.0.0.1**，除非你主动在局域网共享（需要 PIN 码）。
+- **文字只留在这台 Mac**：一个开关就能让写作助手和翻译只用本地模型。
+- 你的资料库在 `~/Library/Application Support/AudioSmith`（可以移到其他磁盘），密钥保存在登录钥匙串里。
+
+## 从源码构建
+
+需要 Xcode 26（Swift 6.2 及以上）和 Go 1.27.1（`GOTOOLCHAIN=auto` 会自动下载）。
+
+```sh
+scripts/fetch-engine-deps.sh    # 上游 mlx-audio-swift + AudioSmith 的补丁
+scripts/build-engine.sh         # Swift 引擎（xcodebuild；首次约 4 分钟）
+go tool mygo dev                # 热重载运行
+go tool mygo build              # 生成 build/darwin-arm64/AudioSmith.app 和 DMG
+```
+
+- 界面用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写；模型在 Swift 辅助进程 `audiosmith-engine` 里运行，基于 [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) 和 mlx-swift。
+- `CGO_ENABLED=0 go test ./...` 可以在任何系统上无界面地跑完整个 UI 的测试（引擎用假实现）；`scripts/mac.sh` 可以从 Linux 在 Mac 上构建和测试。
+- 更多（英文）：[架构](docs/architecture.md)、[引擎协议](docs/protocol-v2.md)、[本地 API 与 MCP](docs/local-api.md)、[发布流程](docs/release.zh-CN.md)。
 
 ## 已知限制
 
-- 目前是 ad-hoc 签名，还没有公证和自动更新。
-- ffmpeg 不内置，属于可选：装了 Homebrew 版 ffmpeg 后，才能导出 MP3/Opus/FLAC、读取 WebM/MKV、给视频烧录硬字幕。
-- 说话人识别最多 4 人；听写要说完一句才出文字，不能边说边出；界面只有英文和简体中文。
-- 时间拉伸超过约 ±5% 时，水印会失效。因此配音的水印在贴合时长之后再加。
+- **Beta 版**：0.4.0-beta.1 是第一个签名版本。
+- **ffmpeg 可选，不内置。** 没有它也能读写 WAV、AIFF、M4A、MOV、MP4，并读取 MP3；装了它（Homebrew 版，或你自己指定的）还能导出 MP3、Opus、FLAC，读取 WebM、MKV，并给视频烧录字幕。
+- **听写**要说完才出文字，不能边说边出。
+- **界面语言**只有英文和简体中文。
+- **水印**在时间拉伸超过约 ±5% 时会失效，所以配音的水印在贴合时长之后再加。
+- **电话**需要你自己的 Twilio 账号和一个公网隧道。
+- 自己构建的版本是 ad-hoc 签名：不会自动更新，每次重新构建后 macOS 会忘掉它的辅助功能授权。
 
-开发、构建、测试和架构说明见[英文 README](README.md)与 [docs/architecture.md](docs/architecture.md)。
+## 许可证与致谢
 
-## 许可证
+AudioSmith 使用 [Apache-2.0](LICENSE) 许可。模型权重各有自己的许可（见[模型](#模型)），其中 OmniVoice 禁止商用。
 
-[Apache-2.0](LICENSE)。模型权重各有自己的许可，见上方“模型”一节。界面图标为 480 Design 的 [Solar](https://icon-sets.iconify.design/solar/)，CC BY 4.0 许可（见 [NOTICE](NOTICE)）。
+- 模型来自 Qwen 团队（Qwen3-TTS、Qwen3-ASR、Qwen3 4B）、hexgrad（Kokoro）、Resemble AI（Chatterbox）、k2-fsa（OmniVoice）、OpenMOSS（MOSS-Transcribe-Diarize）、OpenAI（Whisper）、Meta（HTDemucs、AudioSeal）、NVIDIA（Sortformer）、Silero 和 DeepFilterNet；MLX 版本由 mlx-community 等转换。
+- 运行在 [MLX](https://github.com/ml-explore/mlx)、[mlx-swift](https://github.com/ml-explore/mlx-swift) 和 [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) 之上。
+- 界面基于 [MyGo](https://github.com/egoist/mygo)（MIT）。
+- 图标：480 Design 的 [Solar](https://icon-sets.iconify.design/solar/)，CC BY 4.0 许可（见 [NOTICE](NOTICE)）。
