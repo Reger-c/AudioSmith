@@ -1,7 +1,7 @@
 import Foundation
 
 // The methods M4 (dubbing) adds (docs/protocol-v2.md §5.3): the Swift
-// mirror of internal/engine/proto/m4.go. Optional here = omitempty there.
+// mirror of internal/engine/proto/dub.go. Optional here = omitempty there.
 
 public struct SeparateParams: Codable, Sendable {
     public var model: String

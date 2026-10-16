@@ -56,7 +56,7 @@ const (
 	MethodCaptureLevel   = "capture.level"   // notification, engine → app: input meter, ~20 Hz
 )
 
-// Methods added in M4, dubbing (docs/protocol-v2.md §5.3; types in m4.go).
+// Methods added in M4, dubbing (docs/protocol-v2.md §5.3; types in dub.go).
 const (
 	MethodSeparateRun    = "separate.run"    // request, job (gpu): vocals / background stems
 	MethodDiarizeRun     = "diarize.run"     // request, job (gpu): who speaks when

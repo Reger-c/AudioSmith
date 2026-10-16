@@ -17,7 +17,7 @@
 // tts.*, stt.*, vad.detect, enhance.run), media (media.*), listen
 // (capture.*). It reads and writes real WAV files (Audio, ReadWAV,
 // WriteWAV), so code downstream of it (joining, analysis, playback) can be
-// tested on its output. See fake_m1.go for what each M1 method does.
+// tested on its output. See fake_media.go for what each M1 method does.
 package enginetest
 
 //
