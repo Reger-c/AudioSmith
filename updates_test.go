@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
 	"os"
 	"regexp"
 	"slices"
@@ -32,6 +33,7 @@ func (f *fakeUpdates) SetAutomaticDownloads(on bool) { f.download = on }
 func (f *fakeUpdates) LastCheck() time.Time          { return f.last }
 func (f *fakeUpdates) OnChange(fn func())            { f.changed = fn }
 func (f *fakeUpdates) SetPrereleases(on bool)        { f.prereleases = append(f.prereleases, on) }
+func (f *fakeUpdates) SetHTTPClient(*http.Client)    {}
 
 func TestSoftwareUpdateSettings(t *testing.T) {
 	a, _, _ := newTestApp(t)

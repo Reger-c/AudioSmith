@@ -26,6 +26,8 @@ package main
 
 import (
 	"log"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -33,6 +35,7 @@ import (
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/plugins/updater/native"
 
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -59,6 +62,10 @@ type updateService interface {
 	// only (mygo.Updater.SetPrereleases). AudioSmith keeps the choice
 	// (settings.Updates.Beta) and sets it at every launch.
 	SetPrereleases(on bool)
+	// SetHTTPClient is the client of checks and downloads (MyGo patch
+	// 0007): AudioSmith's, which follows Settings → Models' proxy and the
+	// macOS system proxy, which Go's default client ignores.
+	SetHTTPClient(c *http.Client)
 }
 
 // updateInfo is what Settings shows of the updater, read off the main
@@ -95,6 +102,7 @@ func (pluginUpdates) SetAutomaticDownloads(on bool) { updater.SetAutomaticDownlo
 func (pluginUpdates) LastCheck() time.Time          { return updater.LastCheck() }
 func (pluginUpdates) OnChange(fn func())            { updater.OnChange(fn) }
 func (pluginUpdates) SetPrereleases(on bool)        { mygo.Updater.SetPrereleases(on) }
+func (pluginUpdates) SetHTTPClient(c *http.Client)  { mygo.Updater.SetHTTPClient(c) }
 
 // noUpdates is a build without the plugin: tests, and the MCP relay.
 type noUpdates struct{}
@@ -108,12 +116,17 @@ func (noUpdates) SetAutomaticDownloads(bool) {}
 func (noUpdates) LastCheck() time.Time       { return time.Time{} }
 func (noUpdates) OnChange(func())            {}
 func (noUpdates) SetPrereleases(bool)        {}
+func (noUpdates) SetHTTPClient(*http.Client) {}
 
 // connectUpdates sets the channel and hears the updater's changes; it
 // runs once the window is open (a.version is known), before the plugin's
 // first check (10 s after launch at the soonest).
 func (a *app) connectUpdates() {
 	a.updates.SetPrereleases(betaUpdates(a.prefs, a.version))
+	if a.lib != nil {
+		set := a.lib.settings
+		a.updates.SetHTTPClient(updateHTTPClient(func() string { return set.Get().Models.Proxy }))
+	}
 	a.updates.OnChange(func() { a.post(a.refreshUpdates) })
 	a.refreshUpdates()
 }
@@ -163,4 +176,16 @@ func (a *app) refreshUpdates() {
 func (a *app) checkForUpdates() {
 	log.Print("updates: check asked")
 	a.updates.Check()
+}
+
+// updateHTTPClient is the updater's HTTP client: through the proxy that
+// Settings → Models names at the time of each request ("" automatic: the
+// environment, then the macOS system proxy), with a bound on the wait for
+// response headers; downloads themselves are bounded by their context.
+func updateHTTPClient(mode func() string) *http.Client {
+	c := hub.NewHTTPClient("", 30*time.Second)
+	if t, ok := c.Transport.(*http.Transport); ok {
+		t.Proxy = func(r *http.Request) (*url.URL, error) { return hub.ProxyFunc(mode())(r) }
+	}
+	return c
 }

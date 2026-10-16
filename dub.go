@@ -158,7 +158,7 @@ func (a *app) openDubs(lib *library) {
 			if !s.Dubbing.URLImport {
 				return dub.YtDlp{}
 			}
-			y := dub.YtDlp{Path: ytdlpPath(), Proxy: s.Models.Proxy}
+			y := dub.YtDlp{Path: ytdlpPath(), Proxy: ytdlpProxy(s.Models.Proxy)}
 			if t := a.mediaTool(); t != nil {
 				y.FFmpeg = t.FFmpeg
 			} else if found := ffmpegFind(); len(found) > 0 {

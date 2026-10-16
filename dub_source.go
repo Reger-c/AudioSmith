@@ -5,12 +5,14 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/hehehai/AudioSmith/internal/dub"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 )
 
@@ -116,4 +118,19 @@ func (a *app) dubLoadPeaks() {
 			}
 		})
 	})
+}
+
+// ytdlpProxy is the --proxy yt-dlp gets for a proxy mode of Settings →
+// Models: the proxy named, or with "" (automatic) the one the environment
+// or the macOS system proxy gives for the web; "" for none. yt-dlp itself
+// only reads the environment, which apps started from the Finder lack.
+func ytdlpProxy(mode string) string {
+	if mode == hub.ProxyDirect {
+		return ""
+	}
+	req, _ := http.NewRequest(http.MethodGet, "https://www.youtube.com/", nil)
+	if u, err := hub.ProxyFunc(mode)(req); err == nil && u != nil {
+		return u.String()
+	}
+	return ""
 }

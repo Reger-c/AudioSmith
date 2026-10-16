@@ -311,17 +311,33 @@ func applyDelta(ctx context.Context, d update.Delta, pub ed25519.PublicKey, vers
 // download fetches url into the file path and checks its size and
 // signature.
 func download(ctx context.Context, url string, size int64, signature string, pub ed25519.PublicKey, path string, progress func(downloaded, total int64)) error {
-	body, err := httpGet(ctx, url)
-	if err != nil {
-		return err
-	}
-	defer body.Close()
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	sum := sha256.New()
-	n, err := io.Copy(io.MultiWriter(f, sum), &progressReader{r: io.LimitReader(body, size+1), total: size, fn: progress})
+	// A connection that drops part way (common through proxies and on
+	// slow networks: "unexpected EOF") resumes where it stopped, a few
+	// times, instead of failing the update.
+	var n int64
+	for try := 0; ; try++ {
+		var body io.ReadCloser
+		body, err = httpGetFrom(ctx, url, n)
+		if err != nil {
+			break
+		}
+		var got int64
+		got, err = io.Copy(io.MultiWriter(f, sum), &progressReader{r: io.LimitReader(body, size+1-n), n: n, total: size, fn: progress})
+		body.Close()
+		n += got
+		if err == nil || ctx.Err() != nil || try >= downloadRetries || n > size {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(downloadRetryDelay):
+		}
+	}
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -426,9 +442,32 @@ func cleanUpdateLeftovers() {
 	}
 }
 
+// downloadRetries and downloadRetryDelay bound the resumes of a download
+// whose connection dropped.
+var (
+	downloadRetries    = 4
+	downloadRetryDelay = 2 * time.Second
+)
+
+// updateClient is the HTTP client of update checks and downloads (nil:
+// http.DefaultClient). See SetHTTPClient.
+var updateClient atomic.Pointer[http.Client]
+
+// SetHTTPClient makes the updater check and download through c, nil for
+// http.DefaultClient. Apps set it to honour a proxy: http.DefaultClient
+// only reads the proxy environment variables, which apps started from the
+// Finder do not get, and not the macOS system proxy.
+func (u *UpdaterModule) SetHTTPClient(c *http.Client) { updateClient.Store(c) }
+
 // httpGet fetches a URL over HTTPS (or plain HTTP from the loopback
 // interface, for tests).
 func httpGet(ctx context.Context, rawURL string) (io.ReadCloser, error) {
+	return httpGetFrom(ctx, rawURL, 0)
+}
+
+// httpGetFrom is httpGet from byte offset on (a Range request when
+// offset > 0, which must be answered with 206 Partial Content).
+func httpGetFrom(ctx context.Context, rawURL string, offset int64) (io.ReadCloser, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -441,11 +480,20 @@ func httpGet(ctx context.Context, rawURL string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "MyGo/"+Version+" "+App.Name()+"/"+App.Version())
-	resp, err := http.DefaultClient.Do(req)
+	want := http.StatusOK
+	if offset > 0 {
+		req.Header.Set("Range", "bytes="+strconv.FormatInt(offset, 10)+"-")
+		want = http.StatusPartialContent
+	}
+	client := updateClient.Load()
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != want {
 		resp.Body.Close()
 		return nil, fmt.Errorf("GET %s: %s", rawURL, resp.Status)
 	}

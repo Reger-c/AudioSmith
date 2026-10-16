@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0-beta.4
+
+### Updates and downloads behind a proxy
+- Updating failed behind a proxy ("unexpected EOF" part way through the download): the updater did not use the system proxy. It now goes through the proxy of Settings → Models (automatic: the environment, then the macOS system proxy), like model downloads, and a download whose connection drops resumes where it stopped.
+- Importing a video from a link also uses that proxy: yt-dlp, started from the app, did not get it.
+
 ## 0.4.0-beta.3
 
 ### Dubbing
