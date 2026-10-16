@@ -252,7 +252,16 @@ func TestCapture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// At least 150 ms and three meter readings (a loaded machine may be late).
 	time.Sleep(150 * time.Millisecond)
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		mu.Lock()
+		n := len(levels)
+		mu.Unlock()
+		if n >= 3 || time.Now().After(deadline) {
+			break
+		}
+	}
 	res, err := rec.Stop(ctx)
 	if err != nil || res.Reason != proto.CaptureStopped || res.Device != enginetest.FakeUSBDevice || res.SampleRate != 24000 || res.AudioSeconds < 0.1 {
 		t.Fatalf("stop: %+v %v", res, err)

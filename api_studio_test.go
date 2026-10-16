@@ -137,6 +137,14 @@ func newStudioEnv(t *testing.T) *studioEnv {
 	return &studioEnv{a: a, lib: lib, fe: fe, b: b, srv: srv, ts: ts, cs: cs, out: out, gate: g}
 }
 
+// onMain runs fn on the app's main thread (the app's state is its own)
+// and waits for it.
+func (e *studioEnv) onMain(fn func()) {
+	done := make(chan struct{})
+	e.a.postQueue(func() { defer close(done); fn() })
+	<-done
+}
+
 // call calls a tool and decodes its JSON answer into v (nil: ignored);
 // it returns the error text, "" on success.
 func (e *studioEnv) call(t *testing.T, name string, args map[string]any, v any) string {

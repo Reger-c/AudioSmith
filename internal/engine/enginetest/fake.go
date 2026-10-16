@@ -167,6 +167,17 @@ func (f *fakeEngine) writeRaw(line string) {
 }
 
 func (f *fakeEngine) send(m proto.Message) {
+	if m.Kind() == proto.KindResponse {
+		// As the real engine does, a job's slot is free before its
+		// response is written: a job sent once the app has the response
+		// is never answered busy.
+		f.release(m.ID)
+	}
+	f.put(m)
+}
+
+// put writes m as it is.
+func (f *fakeEngine) put(m proto.Message) {
 	line, _ := proto.Encode(m)
 	f.wmu.Lock()
 	defer f.wmu.Unlock()
@@ -275,6 +286,11 @@ func (f *fakeEngine) handle(m proto.Message) {
 // concurrency.
 func (f *fakeEngine) startJob(m proto.Message) {
 	f.mu.Lock()
+	if _, dup := f.running[m.ID]; dup {
+		f.mu.Unlock()
+		f.put(proto.NewError(m.ID, proto.Errorf(proto.CodeBadRequest, "Job %s is already running", m.ID))) // not send: the running job keeps its slot
+		return
+	}
 	if len(f.running) >= Concurrency(f.role) {
 		f.mu.Unlock()
 		f.fail(m.ID, proto.CodeBusy, "The engine runs %d job(s) at a time", Concurrency(f.role))
@@ -286,13 +302,11 @@ func (f *fakeEngine) startJob(m proto.Message) {
 	f.mu.Unlock()
 	go func() {
 		defer func() {
+			f.release(m.ID)
 			f.mu.Lock()
-			delete(f.running, m.ID)
-			delete(f.cancel, m.ID)
-			delete(f.stop, m.ID)
 			delete(f.finished, m.ID)
 			f.mu.Unlock()
-			close(done)
+			close(done) // after the response: capture.stop answers after the job
 		}()
 		switch m.Method {
 		case proto.MethodModelsLoad:
@@ -335,6 +349,15 @@ func (f *fakeEngine) startJob(m proto.Message) {
 			f.fail(m.ID, proto.CodeMethodNotFound, "Unknown method %s", m.Method)
 		}
 	}()
+}
+
+// release frees job id's slot (send calls it before the job's response).
+func (f *fakeEngine) release(id string) {
+	f.mu.Lock()
+	delete(f.running, id)
+	delete(f.cancel, id)
+	delete(f.stop, id)
+	f.mu.Unlock()
 }
 
 func (f *fakeEngine) handleHello(m proto.Message) {

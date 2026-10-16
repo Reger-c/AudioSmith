@@ -355,6 +355,12 @@ func (s *Server) wsSpeak(ctx context.Context, c *wsConn, req wsRequest, client s
 		}
 		return c.write(wsBinary, data)
 	})
+	// Stop reading for cancels before anything ends the request (done, or
+	// an error): the client sends its next request once it has the end,
+	// and that request must reach the loop, not the watcher (which would
+	// answer busy).
+	stop()
+	<-watching
 	if gone.Load() {
 		return false
 	}
@@ -378,11 +384,6 @@ func (s *Server) wsSpeak(ctx context.Context, c *wsConn, req wsRequest, client s
 			return false
 		}
 	}
-	// Stop reading for cancels before done: the client sends its next
-	// request once it has done, and that request must reach the loop, not
-	// the watcher (which would answer busy).
-	stop()
-	<-watching
 	wall := time.Since(t0).Seconds()
 	rtf := 0.0
 	if wall > 0 {

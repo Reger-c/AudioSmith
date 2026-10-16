@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -94,6 +95,23 @@ func newTestSup(t *testing.T, opts string, mod ...func(*Config)) (Supervisor, *w
 	return s, w
 }
 
+// jobStarted returns a notify for a job's call and a wait that returns
+// once the job's first notification arrived: the engine runs the job.
+func jobStarted() (func(proto.Message), func(*testing.T)) {
+	ch := make(chan struct{})
+	var once sync.Once
+	notify := func(proto.Message) { once.Do(func() { close(ch) }) }
+	wait := func(t *testing.T) {
+		t.Helper()
+		select {
+		case <-ch:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the job did not start")
+		}
+	}
+	return notify, wait
+}
+
 func synth(text string, stream bool) proto.SynthesizeParams {
 	return proto.SynthesizeParams{Model: "mlx-community/Kokoro-82M-bf16", Text: text, Stream: stream}
 }
@@ -169,11 +187,12 @@ func TestSupervisorHandshakeAndJobs(t *testing.T) {
 	// Control requests are answered while a job runs.
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
+	notify, waitStarted := jobStarted()
 	go func() {
-		_, err := s.Call(ctx, proto.RoleGPU, "J3", proto.MethodTTSSynthesize, synth("slow", false), nil)
+		_, err := s.Call(ctx, proto.RoleGPU, "J3", proto.MethodTTSSynthesize, synth("slow", false), notify)
 		done <- err
 	}()
-	time.Sleep(50 * time.Millisecond)
+	waitStarted(t)
 	raw, err = s.Call(context.Background(), proto.RoleGPU, "", proto.MethodStats, nil, nil)
 	var stats proto.StatsResult
 	json.Unmarshal(raw, &stats)
@@ -195,6 +214,21 @@ func TestSupervisorHandshakeAndJobs(t *testing.T) {
 	}
 	if st := s.Status()[0]; st.State != WorkerReady || st.Restarts != 0 {
 		t.Errorf("after cancel %+v", st)
+	}
+}
+
+// A job sent as soon as the previous one is answered is never busy: the
+// engine frees a job's slot before it writes the job's response (the
+// scheduler starts the next job of a lane as soon as one ends).
+func TestSupervisorBackToBackJobs(t *testing.T) {
+	s, w := newTestSup(t, "")
+	w.until(t, "ready", ready)
+	ctx := context.Background()
+	for i := range 200 {
+		id := "B" + strconv.Itoa(i)
+		if _, err := s.Call(ctx, proto.RoleGPU, id, proto.MethodModelsLoad, proto.LoadParams{Model: "a/one"}, nil); err != nil {
+			t.Fatalf("job %d: %v", i, err)
+		}
 	}
 }
 
@@ -417,11 +451,12 @@ func TestSupervisorStopAndRestartDuringCalls(t *testing.T) {
 	s, w := newTestSup(t, "")
 	w.until(t, "ready", ready)
 	done := make(chan error, 1)
+	notify, waitStarted := jobStarted()
 	go func() {
-		_, err := s.Call(context.Background(), proto.RoleGPU, "J1", proto.MethodTTSSynthesize, synth("slow", false), nil)
+		_, err := s.Call(context.Background(), proto.RoleGPU, "J1", proto.MethodTTSSynthesize, synth("slow", false), notify)
 		done <- err
 	}()
-	time.Sleep(50 * time.Millisecond)
+	waitStarted(t)
 	w.reset()
 	if err := s.Restart(proto.RoleGPU); err != nil {
 		t.Fatal(err)
@@ -437,11 +472,12 @@ func TestSupervisorStopAndRestartDuringCalls(t *testing.T) {
 		t.Errorf("call while starting: %v", err)
 	}
 
+	notify, waitStarted = jobStarted()
 	go func() {
-		_, err := s.Call(context.Background(), proto.RoleGPU, "J2", proto.MethodTTSSynthesize, synth("slow", false), nil)
+		_, err := s.Call(context.Background(), proto.RoleGPU, "J2", proto.MethodTTSSynthesize, synth("slow", false), notify)
 		done <- err
 	}()
-	time.Sleep(50 * time.Millisecond)
+	waitStarted(t)
 	start := time.Now()
 	s.Stop()
 	if d := time.Since(start); d > 3*time.Second {
