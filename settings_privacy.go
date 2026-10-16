@@ -32,7 +32,7 @@ func (a *app) privacySettings(c *ui.Context) {
 			i18n.T("Videos from links you paste on the Dub page."),
 			i18n.T("Writing help and translation, only with a cloud provider you set up (Settings → Writing help)."),
 			i18n.T("The Local API, which listens on this Mac only unless you share it on your network."),
-			i18n.T("Checking for updates: once a day AudioSmith reads the version file of its latest release on GitHub (with beta updates on, it first asks GitHub's API for the list of releases); nothing about you is sent. Turn it off in Settings → Diagnostics and about."),
+			i18n.T("Checking for updates: once a day AudioSmith reads the version file of its newest version on actnow.dev, AudioSmith's website (with beta updates on, the betas' one too); nothing about you is sent. Turn it off in Settings → Diagnostics and about."),
 		} {
 			ui.Text(c, "• "+s).FontSize(px(t, 12))
 		}

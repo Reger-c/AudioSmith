@@ -43,7 +43,7 @@ func TestSoftwareUpdateSettings(t *testing.T) {
 	a.navigate("/settings/about")
 	tt.Frame()
 	tt.Frame()
-	if !tt.HasText("Software updates") || !tt.HasText("This copy doesn't update itself: development builds and copies built on this Mac don't. Releases from GitHub do.") {
+	if !tt.HasText("Software updates") || !tt.HasText("This copy doesn't update itself: development builds and copies built on this Mac don't. Copies downloaded from actnow.dev do.") {
 		t.Fatalf("page %q", tt.Texts())
 	}
 	if err := tt.Click("Check once a day"); err != nil {

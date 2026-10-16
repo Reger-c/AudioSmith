@@ -10,11 +10,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hehehai/AudioSmith/releases"><img alt="下载" src="https://img.shields.io/github/v/release/hehehai/AudioSmith?include_prereleases&label=%E4%B8%8B%E8%BD%BD&color=0d9384"></a>
+  <a href="https://actnow.dev/download/audiosmith"><img alt="下载" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-actnow.dev-0d9384"></a>
   <img alt="macOS 15 及以上" src="https://img.shields.io/badge/macOS-15%2B-0d9384">
   <img alt="Apple 芯片" src="https://img.shields.io/badge/Apple%20%E8%8A%AF%E7%89%87-M1%20%E5%8F%8A%E4%BB%A5%E4%B8%8A-0d9384">
   <a href="LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF-AGPL--3.0-0d9384"></a>
 </p>
+
+<p align="center"><a href="https://actnow.dev/audiosmith">官网</a> · <a href="https://actnow.dev/download/audiosmith">下载</a> · <a href="https://actnow.dev/audiosmith/changelog">更新日志</a></p>
 
 <p align="center"><a href="README.md">English</a> · <b>简体中文</b></p>
 
@@ -134,7 +136,7 @@ curl http://127.0.0.1:3901/v1/audio/speech \
 - 磁盘：模型需要 1.3–17 GB，取决于模型包。
 
 **步骤**
-1. 从 [Releases](https://github.com/hehehai/AudioSmith/releases) 下载 DMG。第一个版本 0.4.0-beta.1 标为 Pre-release（预发布）。
+1. 从官网 [actnow.dev/download/audiosmith](https://actnow.dev/download/audiosmith) 下载 DMG。AudioSmith 免费，下载需要一个免费账号；不想注册也可以[从源码构建](#从源码构建)。当前版本是 Beta 版，[更新日志](https://actnow.dev/audiosmith/changelog)列出了所有版本。
 2. 把 **AudioSmith** 拖进“应用程序”并打开。正式版本经过签名和公证，Gatekeeper 会放行；macOS 只会询问一次是否打开从网上下载的应用。
 3. 设置向导会检查这台 Mac（系统、芯片、内存、磁盘、网络），推荐一个模型包，并询问隐私和听写设置。也可以跳过模型包，之后在“模型”页下载。
 
@@ -145,7 +147,7 @@ curl http://127.0.0.1:3901/v1/audio/speech \
 | **高质量** | 加上高保真克隆、音色设计、视频配音、区分说话人、写作助手；24 GB | 13.4 / 14.9 GB |
 | **极致** | 加上多语种全能（非商用许可）和 Whisper；48 GB | 15.5 / 17.0 GB |
 
-**更新**：AudioSmith 每天检查一次 GitHub 上有没有新版本，有的话会显示更新说明，等你确认后再安装。更新包带签名，安装前会先校验，通常只下载有变化的部分。**AudioSmith → 检查更新…** 可以立即检查。
+**更新**：AudioSmith 每天检查一次 actnow.dev 上有没有新版本，有的话会显示更新说明，等你确认后再安装（不需要账号）。更新包带签名，安装前会先校验，通常只下载有变化的部分。**AudioSmith → 检查更新…** 可以立即检查。
 
 **Beta 版更新**：设置 → 诊断与关于 → **接收 Beta 版更新**。Beta 版（比如 0.4.0-beta.1）里默认打开，正式版里默认关闭，直到你自己选择。关掉之后也不会退回旧版本：Beta 版会一直保留，直到有更新的正式版。
 
