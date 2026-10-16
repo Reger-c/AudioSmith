@@ -84,21 +84,30 @@ func (a *app) voicePicker(c *ui.Context, key, cur string, opts []voiceOption, o 
 		label = i18n.T("None")
 	}
 	open := vp.open[key] && !o.locked
-	b := ui.ButtonBase(c.Key(key)).Padding(px(t, 6), px(t, 10)).Gap(px(t, sp2)).Radius(px(t, radiusControl)).Background(t.Surface).
-		Border(1, t.Border).AlignItems(ui.Center).MinHeight(px(t, 32)).MinWidth(px(t, 140)).Label(o.label).Tooltip(label).
+	// The trigger looks as ui.Select's does.
+	b := ui.ButtonBase(c.Key(key)).Padding(t.Space(1.5), t.Space(3.5)).Gap(t.Space(1.5)).Radius(t.Radius).Background(t.Surface).
+		TextColor(t.Text).Border(1, t.Border).AlignItems(ui.Center).MinWidth(t.Space(35)).Label(o.label).Tooltip(label).
 		Disabled(o.locked).Role(ui.RolePopUpButton).Expanded(open)
-	if b.Hovered() && !o.locked {
+	switch {
+	case o.locked:
+	case b.Pressed():
+		b.Background(t.SurfacePressed)
+	case b.Hovered():
 		b.Background(t.SurfaceHover)
 	}
 	b.Children(func() {
 		if voice != nil {
-			ui.Avatar(c, voice.Name, a.portrait(voice)).Size(px(t, 20), px(t, 20))
+			ui.Avatar(c, voice.Name, a.portrait(voice)).Size(px(t, 18), px(t, 18))
 		}
 		txt := ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0).Grow(1)
 		if warn {
 			txt.TextColor(t.Warning)
 		}
-		ui.Icon(c, icons.AltArrowDown.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Text2).Shrink(0)
+		ui.Box(c).Size(t.Space(2.5), t.Space(2.5)).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
+			var path ui.Path
+			path.MoveTo(r.X+r.W*0.1, r.Y+r.H*0.3).LineTo(r.X+r.W*0.5, r.Y+r.H*0.7).LineTo(r.X+r.W*0.9, r.Y+r.H*0.3)
+			p.StrokePath(&path, 1.5, t.TextMuted)
+		})
 	})
 	picked, ok := "", false
 	pick := func(i int) {
