@@ -281,7 +281,10 @@ func (a *app) directionTool(c *ui.Context) {
 		}
 		if d.busy {
 			ui.Spinner(c)
-			if d.warming {
+			switch {
+			case d.waiting:
+				caption(c, i18n.T("Waiting for the current job to finish…"))
+			case d.warming:
 				caption(c, i18n.T("Loading model…"))
 			}
 		}
@@ -294,6 +297,9 @@ func (a *app) directionTool(c *ui.Context) {
 	res := d.res
 	if res == nil {
 		return
+	}
+	if res.Fallback == coachFallbackBusy {
+		caption(c, i18n.T("The engine was busy with another job, so the note was read by keywords."))
 	}
 	card(c.Key("dir-res")).Gap(px(t, 6)).Children(func() {
 		row := func(k, label, value string) {

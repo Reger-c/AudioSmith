@@ -39,8 +39,8 @@ func TestLocalLLMWarm(t *testing.T) {
 	var budgets []time.Duration
 	var answer string
 	a.localLLMHook = func(ctx context.Context, method string, params any, notify func(string, json.RawMessage)) (json.RawMessage, error) {
-		if d, ok := ctx.Deadline(); ok {
-			budgets = append(budgets, time.Until(d).Round(time.Second))
+		if d, ok := llm.Remaining(ctx); ok {
+			budgets = append(budgets, d.Round(time.Second))
 		}
 		raw, _ := json.Marshal(map[string]any{"text": answer, "finishReason": "stop"})
 		return raw, nil

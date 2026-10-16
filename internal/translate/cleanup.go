@@ -2,6 +2,7 @@ package translate
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 	"unicode"
@@ -23,6 +24,7 @@ const (
 	FallbackDiverged = "cleanup.diverged"  // the reply wasn't a cleanup of the input (answered it, rewrote it…)
 	FallbackEmpty    = "cleanup.empty"     // the reply was empty
 	FallbackTooShort = "cleanup.too_short" // too little text to be worth a model call
+	FallbackBusy     = "cleanup.busy"      // the model was busy with other work (CleanupRequest.Busy)
 )
 
 // Cleanup warnings.
@@ -36,6 +38,7 @@ type CleanupRequest struct {
 	Lang       string        // BCP-47 of the dictation, "" if unknown (mixed zh/en is fine)
 	Vocabulary []string      // names and jargon to keep (the dictation vocabulary hint)
 	NoLLM      bool          // polish only
+	Busy       bool          // the model is busy with other work (a render on the gpu lane): polish only, FallbackBusy
 	Budget     time.Duration // 0: the Cleaner's
 }
 
@@ -77,7 +80,9 @@ type cleanupData struct {
 }
 
 // Clean cleans req.Text within the budget. It never fails: on any problem
-// it returns the polished raw text.
+// it returns the polished raw text. The budget does not count a wait for
+// the model's turn (llm.WithBudget); a caller that must not wait longer
+// in all (dictation's paste) bounds ctx itself.
 func (c *Cleaner) Clean(ctx context.Context, req CleanupRequest) CleanupResult {
 	start := time.Now()
 	res := CleanupResult{Raw: req.Text}
@@ -93,6 +98,9 @@ func (c *Cleaner) Clean(ctx context.Context, req CleanupRequest) CleanupResult {
 	case req.NoLLM:
 		res.Fallback = FallbackDisabled
 		return done()
+	case req.Busy:
+		res.Fallback = FallbackBusy
+		return done()
 	case !c.Router.Available(llm.SkillDictationCleanup):
 		res.Fallback = FallbackNoLLM
 		return done()
@@ -107,7 +115,7 @@ func (c *Cleaner) Clean(ctx context.Context, req CleanupRequest) CleanupResult {
 	if budget <= 0 {
 		budget = DefaultCleanupBudget
 	}
-	bctx, cancel := context.WithTimeout(ctx, budget)
+	bctx, cancel := llm.WithBudget(ctx, budget) // from when the model's turn comes (the gpu lane may be busy)
 	defer cancel()
 
 	l, known := parseLang(req.Lang)
@@ -139,7 +147,7 @@ func (c *Cleaner) Clean(ctx context.Context, req CleanupRequest) CleanupResult {
 	res.Usage = resp.Usage
 	if err != nil {
 		switch {
-		case bctx.Err() != nil && ctx.Err() == nil, llm.Code(err) == llm.CodeTimeout:
+		case bctx.Err() != nil && (ctx.Err() == nil || errors.Is(ctx.Err(), context.DeadlineExceeded)), llm.Code(err) == llm.CodeTimeout:
 			res.Fallback = FallbackTimeout
 		default:
 			res.Fallback, res.Detail = FallbackError, Code(err)

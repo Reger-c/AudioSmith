@@ -83,7 +83,8 @@ type Sched struct {
 	done       map[string]State    // every job known to be terminal, by id
 	dependents map[string][]string // job id → ids of jobs that wait on it
 	running    map[Lane]int
-	finished   []string // ids of terminal entries in s.jobs, oldest first
+	holds      map[*hold]struct{} // lane holds waiting or running (hold.go)
+	finished   []string           // ids of terminal entries in s.jobs, oldest first
 	timer      *time.Timer
 
 	outMu   sync.Mutex
@@ -534,7 +535,8 @@ func (s *Sched) loop() {
 	}
 }
 
-// dispatch starts every queued job that has a free slot in its lane.
+// dispatch starts every queued job (and lane hold, hold.go) that has a
+// free slot in its lane.
 func (s *Sched) dispatch() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -542,7 +544,15 @@ func (s *Sched) dispatch() {
 		return
 	}
 	now := s.opts.Now()
-	var queued []*entry
+	type cand struct {
+		lane    Lane
+		prio    Priority
+		created time.Time
+		id      string
+		e       *entry
+		h       *hold
+	}
+	var queued []cand
 	var wake time.Time
 	for _, e := range s.jobs {
 		if e.job.State != StateQueued {
@@ -554,22 +564,31 @@ func (s *Sched) dispatch() {
 			}
 			continue
 		}
-		queued = append(queued, e)
+		queued = append(queued, cand{lane: e.job.Lane, prio: e.job.Priority, created: e.job.Created, id: e.job.ID, e: e})
 	}
-	slices.SortFunc(queued, func(a, b *entry) int {
-		if a.job.Priority != b.job.Priority {
-			return int(b.job.Priority - a.job.Priority)
+	for h := range s.holds {
+		if !h.running {
+			queued = append(queued, cand{lane: h.lane, prio: h.prio, created: h.created, id: h.id, h: h})
 		}
-		if c := a.job.Created.Compare(b.job.Created); c != 0 {
+	}
+	slices.SortFunc(queued, func(a, b cand) int {
+		if a.prio != b.prio {
+			return int(b.prio - a.prio)
+		}
+		if c := a.created.Compare(b.created); c != 0 {
 			return c
 		}
-		return strings.Compare(a.job.ID, b.job.ID)
+		return strings.Compare(a.id, b.id)
 	})
-	for _, e := range queued {
-		if s.running[e.job.Lane] >= s.slots(e.job.Lane) {
+	for _, c := range queued {
+		if s.running[c.lane] >= s.slots(c.lane) {
 			continue
 		}
-		s.startLocked(e)
+		if c.h != nil {
+			s.startHoldLocked(c.h)
+		} else {
+			s.startLocked(c.e)
+		}
 	}
 	if !wake.IsZero() {
 		if s.timer != nil {
@@ -585,7 +604,7 @@ func (s *Sched) startLocked(e *entry) {
 		s.finishLocked(e, StateFailed, &Error{Code: CodeNoExecutor, Message: "Nothing can run jobs of kind " + e.job.Kind})
 		return
 	}
-	ctx, cancel := context.WithCancelCause(s.root)
+	ctx, cancel := context.WithCancelCause(withLane(s.root, e.job.Lane)) // work inside it holds the lane (hold.go)
 	e.cancel = cancel
 	e.run++
 	e.job.State = StateRunning
@@ -858,6 +877,9 @@ func (s *Sched) List(ctx context.Context, f Filter) ([]Job, error) {
 func (s *Sched) Idle() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(s.holds) > 0 {
+		return false
+	}
 	for _, e := range s.jobs {
 		switch e.job.State {
 		case StateWaiting, StateQueued, StateRunning:
@@ -882,6 +904,9 @@ func (s *Sched) Close() error {
 		if e.job.State == StateRunning && e.cancel != nil {
 			e.cancel(errShutdown)
 		}
+	}
+	for h := range s.holds {
+		h.cancel(errShutdown)
 	}
 	if s.timer != nil {
 		s.timer.Stop()

@@ -165,7 +165,7 @@ func (d *StoryDirector) Direct(ctx context.Context, s StoryScript) (StoryDirecti
 		var got StoryDirection
 		req := llm.Request{Messages: msgs, Schema: storySchema, Timeout: budget, Temperature: llm.F64(0.4),
 			MaxTokens: 400 + 48*(last-first)}
-		bctx, cancel := context.WithTimeout(ctx, budget)
+		bctx, cancel := llm.WithBudget(ctx, budget) // from when the model's turn comes
 		_, err = d.Router.JSON(bctx, llm.SkillDirectionParse, req, &got, 1)
 		cancel()
 		if err != nil {

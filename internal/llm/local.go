@@ -26,9 +26,9 @@ type (
 )
 
 // EngineCaller sends one engine request and waits for its result. The app
-// wires it to engine.Supervisor.Call on the gpu role (through a jobs
-// executor if LLM work should queue behind TTS); notify receives the
-// request's notifications in order, before the call returns.
+// wires it to engine.Supervisor.Call on the gpu role (EngineBackend.Queue
+// first waits for the gpu lane, so it queues behind TTS); notify receives
+// the request's notifications in order, before the call returns.
 type EngineCaller func(ctx context.Context, method string, params any, notify func(method string, params json.RawMessage)) (json.RawMessage, error)
 
 // EngineBackend is the local MLX model behind the engine protocol.
@@ -38,6 +38,13 @@ type EngineBackend struct {
 	DefaultModel string
 	// ListModels returns the downloaded LLM catalogue entries; nil → DefaultModel only.
 	ListModels func(ctx context.Context) ([]ModelInfo, error)
+	// Queue, when set, waits for the engine's turn before each request
+	// (the app holds the gpu lane, so the request does not collide with
+	// a render and fail with busy) and returns the context to send it
+	// with and a func that ends the turn. The wait does not count against
+	// WithBudget budgets (the Client's timeout among them), and OnWait
+	// observers hear it.
+	Queue func(ctx context.Context) (context.Context, func(), error)
 	// MapError converts the caller's errors (e.g. *proto.Error codes) to
 	// *Error; nil uses the core sentinels only.
 	MapError func(error) error
@@ -81,6 +88,16 @@ func (e *EngineBackend) Chat(ctx context.Context, req Request) (Response, error)
 		if b, err := json.Marshal(req.Schema); err == nil {
 			p.Schema = b
 		}
+	}
+	if e.Queue != nil {
+		resume := Waiting(ctx)
+		qctx, release, err := e.Queue(ctx)
+		resume()
+		if err != nil {
+			return Response{}, e.mapErr(ctx, err, model, req.Timeout)
+		}
+		defer release()
+		ctx = qctx
 	}
 	start := time.Now()
 	var notify func(string, json.RawMessage)

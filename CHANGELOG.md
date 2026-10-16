@@ -69,6 +69,10 @@ The first signed release is a beta (a GitHub prerelease): copies that receive be
 - History's takes have an Export button (and Export… in ⋯); the Studio's latest take, a take's details and Projects open the same Export audio dialog, which replaces the Save as… menu.
 - Choose the format (WAV; M4A through the engine; MP3, FLAC and Opus with ffmpeg, greyed out with a pointer to Settings → Audio tools without it), the bit depth or bitrate, the sample rate and the channels; bring the file to −16, −18 or −23 LUFS with a true-peak ceiling; trim the silence at both ends; name the file and its title and artist tags; save the script and subtitles beside it. The dialog shows the size and length before you export, and remembers your choices for each kind of take (Studio, voice preview, converted recording, Local API).
 
+### Writing help no longer fails during a render
+- The language model on this Mac now waits for its turn when a render, dub or batch is using the engine, instead of failing with "the engine is busy": writing help, the AI director, dub translation, transcript clean-up, the direction coach, phone calls and API/MCP requests go next, ahead of queued batch work (a running job is never interrupted). These short requests don't appear in the jobs list. Their time limits count from when the model starts.
+- Dictation never waits for a render: while one runs, it types the polished text at once without the model's clean-up. The Tools direction coach shows 「等待当前任务完成…」 (Waiting for the current job to finish…) and, if the job is still running after 30 s, reads the note by keywords.
+
 ## 0.3.0 — 2026-10-14
 
 A new look for every page: flat, quiet and black-white-grey, in the spirit of Typeless. Nothing was removed; some actions moved into menus. Your library, voices and settings carry over unchanged.

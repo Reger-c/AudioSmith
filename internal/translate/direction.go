@@ -82,7 +82,7 @@ func (d *Director) Parse(ctx context.Context, note string) Direction {
 	if budget <= 0 {
 		budget = DefaultDirectionBudget
 	}
-	bctx, cancel := context.WithTimeout(ctx, budget)
+	bctx, cancel := llm.WithBudget(ctx, budget) // from when the model's turn comes (the gpu lane may be busy)
 	defer cancel()
 	msgs, err := messages("direction", directionData{Text: clipRunes(note, 1000), Taxonomy: Taxonomy, Zh: cjkShare(note) > 0})
 	if err != nil {

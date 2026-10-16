@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -27,6 +28,17 @@ import (
 	"github.com/hehehai/AudioSmith/internal/llm"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
+
+// Local LLM calls take their turn on the gpu lane (thread #53): each
+// request holds the lane (jobs.Sched.Hold, interactive priority) so it
+// waits for a running render instead of failing with busy, and goes
+// before queued batch work. The hold is not a job: it is not persisted
+// or listed (the requests are short and someone waits for them). Inside
+// a gpu job (a dub's translation on the gpu lane) the context already
+// holds the lane and the request goes straight to the engine. Budgets
+// made with llm.WithBudget (the client's timeout, the coach's, the story
+// director's, transcript clean-up's) do not count the wait; dictation
+// clean-up keeps a wall-clock budget (dictation.go).
 
 // localProvider is the registry id of the engine's language model.
 const localProvider = "local"
@@ -76,9 +88,33 @@ func (a *app) registerLocalLLM() bool {
 		return false
 	}
 	e := a.localLLMEntry()
+	var sched jobs.Scheduler
+	if a.lib != nil {
+		sched = a.lib.sched
+	}
 	a.llmReg.Register(localProvider, &llm.EngineBackend{ID: localProvider, DefaultModel: e.Repo, Call: a.localLLMCall,
+		Queue:      func(ctx context.Context) (context.Context, func(), error) { return localLLMQueue(ctx, sched) },
 		ListModels: func(context.Context) ([]llm.ModelInfo, error) { return []llm.ModelInfo{{ID: e.Repo}}, nil }})
 	return true
+}
+
+// localLLMQueue waits for the gpu lane for one request of the engine's
+// language model. No wait when the context holds the lane already (inside
+// a gpu job), or when the scheduler does not run (the engine did not
+// start: the request then fails at once as before). Any goroutine.
+func localLLMQueue(ctx context.Context, sched jobs.Scheduler) (context.Context, func(), error) {
+	h, ok := sched.(jobs.Holder)
+	if !ok || jobs.Holds(ctx, jobs.LaneGPU) {
+		return ctx, func() {}, nil
+	}
+	if st, ok := sched.(interface{ Started() bool }); ok && !st.Started() {
+		return ctx, func() {}, nil
+	}
+	hctx, release, err := h.Hold(ctx, jobs.LaneGPU, jobs.PriorityInteractive)
+	if errors.Is(err, jobs.ErrClosed) {
+		err = fmt.Errorf("AudioSmith is quitting: %w", core.ErrCancelled)
+	}
+	return hctx, release, err
 }
 
 // localLLMCall sends llm.generate to the gpu worker, with the model's

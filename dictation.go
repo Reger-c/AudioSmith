@@ -494,11 +494,24 @@ func (a *app) dictDeliver(s *dictSession, t core.Transcript) {
 		// The model still loads (local_llm_warm.go): a longer budget once.
 		req.Budget, s.warming = coldCleanupBudget, true
 	}
+	if d.Cleanup && a.localLLMFirst(llm.SkillDictationCleanup) && a.gpuLaneBusy() {
+		// A render holds the gpu lane: the model would only get its turn
+		// after it, so the polished text is typed at once (thread #53).
+		req.Busy = true
+	}
+	// The paste waits at most the budget, from now: the clean-up's own
+	// budget does not count a wait for the gpu lane (llm.WithBudget).
+	wall := req.Budget
+	if wall <= 0 {
+		wall = translate.DefaultCleanupBudget
+	}
 	in := dictation.Inserter{Sys: a.dictSys, Clip: a.dictClip, CopyOnly: d.Output == settings.OutputCopy, Sleep: dictSleep}
 	target := s.target
 	svc := a.trSvc
 	a.async(func() {
-		res := cleaner.Clean(ctx, req)
+		cctx, ccancel := context.WithTimeout(ctx, wall)
+		res := cleaner.Clean(cctx, req)
+		ccancel()
 		if cold && res.Fallback == translate.FallbackTimeout {
 			a.post(func() { a.warmLocalLLM(llm.SkillDictationCleanup) }) // for the next one
 		}
@@ -538,6 +551,18 @@ func (a *app) dictDeliver(s *dictSession, t core.Transcript) {
 			a.dictEnd(s, dictCopied, copiedReason(out))
 		})
 	})
+}
+
+// gpuLaneBusy reports whether a job other than the language model's
+// warm-up runs on the gpu lane (a render, a dub stage): a request of the
+// engine's language model would wait for it to end. Main thread.
+func (a *app) gpuLaneBusy() bool {
+	for _, j := range a.jobList {
+		if j.Lane == jobs.LaneGPU && j.State == jobs.StateRunning && j.Owner != llmWarmOwner {
+			return true
+		}
+	}
+	return false
 }
 
 // copiedReason says why a dictation was copied rather than typed.
