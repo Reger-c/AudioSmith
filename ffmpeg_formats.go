@@ -113,7 +113,7 @@ func (a *app) encodeFile(ctx context.Context, o ffmpeg.EncodeOptions) error {
 }
 
 // ffmpegBookItems adds the book in ffmpeg's formats, with its chapters,
-// tags and cover, to Save book… (longform_view.go).
+// tags and cover, to Save book… (longform_view_outputs.go).
 func (a *app) ffmpegBookItems(m *ui.Menu, r *lfRender) {
 	out := r.body.Output
 	if out == nil {

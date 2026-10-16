@@ -163,7 +163,7 @@ func (a *app) usageSettings(c *ui.Context) {
 	for _, l := range u.ByLanguage {
 		name := i18n.T("Not set")
 		if l.Key != "" {
-			name = langName(l.Key) // transcribe.go: flag and name in the UI's language
+			name = langName(l.Key) // transcribe_models.go: flag and name in the UI's language
 		}
 		byLang = append(byLang, struct {
 			name string

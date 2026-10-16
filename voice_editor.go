@@ -214,7 +214,7 @@ func (a *app) voiceEditor(c *ui.Context) {
 			if iconButton(c.Key("editor-delete"), icons.TrashBinMinimalistic, i18n.T("Delete")).Clicked() {
 				a.askDeleteVoice(v.ID)
 			}
-			a.voiceLongformMenu(c, v) // M3: Use in Stories, Narrate an audiobook (longform.go, thread #18)
+			a.voiceLongformMenu(c, v) // M3: Use in Stories, Narrate an audiobook (longform_voices.go, thread #18)
 			ui.Spacer(c)
 			if ui.Button(c.Key("editor-studio"), i18n.T("Use in Studio")).Clicked() {
 				a.useVoiceInStudio(v)
@@ -466,7 +466,7 @@ func (a *app) editorUsage(c *ui.Context, v *core.Voice) {
 		}
 		caption(c, strings.Join(parts, " · "))
 		for _, p := range u.Projects {
-			a.projectUsageLink(c, p) // M3: opens the project (longform.go, thread #18)
+			a.projectUsageLink(c, p) // M3: opens the project (longform_projects.go, thread #18)
 		}
 		if u.Takes > 0 {
 			ui.Row(c).Children(func() {
