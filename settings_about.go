@@ -482,7 +482,7 @@ func (a *app) softwareUpdateSettings(c *ui.Context) {
 	}
 	u := a.updInfo
 	sectionTitle(c, i18n.T("Software updates"))
-	note := i18n.T("This copy doesn't update itself: development builds and copies built on this Mac don't. Copies downloaded from actnow.dev do.")
+	note := i18n.T("Development builds and copies built on this Mac don't update themselves; copies from actnow.dev do.")
 	switch {
 	case !u.read:
 		note = ""
