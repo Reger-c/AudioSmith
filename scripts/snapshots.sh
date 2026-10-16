@@ -15,7 +15,8 @@
 # check and twice exit 1 when a snapshot differs and leave the pictures of
 # the differences (before | after | red pixels) in $SNAP_TMP/diff; they
 # delete the renders (about 300 MB each) unless SNAP_KEEP=1. SNAP_TMP
-# defaults to /tmp/audiosmith-snapcheck-$USER. Rendering runs under
+# defaults to /tmp/audiosmith-snapcheck-$USER-<checkout>, one per worktree,
+# so checks run at once in different worktrees do not share it. Rendering runs under
 # nice -n 19 (the Linux host is shared) and takes about two minutes.
 #
 # The comparison is go run ./internal/tools/snapcmp BEFORE AFTER, with the
@@ -24,7 +25,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-tmp="${SNAP_TMP:-/tmp/audiosmith-snapcheck-${USER:-$(id -u)}}"
+tmp="${SNAP_TMP:-/tmp/audiosmith-snapcheck-${USER:-$(id -u)}-$(basename "$root")}"
 
 render() { # render SRC_DIR OUT_DIR
 	local src="$1" out="$2"
