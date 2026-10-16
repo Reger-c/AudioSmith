@@ -1,5 +1,28 @@
 AudioSmith
-Copyright 2026 the AudioSmith authors. Licensed under the Apache License 2.0 (LICENSE).
+Copyright (C) 2026 hehehai and the AudioSmith contributors
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, version 3.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public
+License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program (LICENSE). If not, see <https://www.gnu.org/licenses/>.
+
+Source code: https://github.com/hehehai/AudioSmith
+
+AudioSmith was released under the Apache License 2.0 up to and including
+version 0.4.0-beta.1; copies of those versions remain under that licence.
+Later versions are under the GNU AGPL version 3. Contributions are accepted
+under the Contributor License Agreement in CLA.md (see CONTRIBUTING.md).
+
+The models AudioSmith downloads are not part of it: each keeps its own
+licence, shown on the Models page (some, such as OmniVoice, allow
+non-commercial use only).
 
 This product includes third-party material:
 
@@ -18,9 +41,30 @@ MyGo
   builds against a copy with its own patches (third_party/mygo-patches),
   made by scripts/vendor-mygo.sh, until upstream releases the fixes.
 
+RapiDoc 10.1.0 (the Local API's reference page, internal/api/docs)
+  Copyright (c) 2022 Mrinmoy Majumdar — https://github.com/rapi-doc/RapiDoc
+  Licensed under the MIT License (internal/api/docs/RAPIDOC-LICENSE.txt).
+
 Voice previews (assets/voice-previews)
   Short clips of the built-in speakers of Qwen3-TTS 12Hz 0.6B CustomVoice
   (Apache License 2.0, https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice)
   and Kokoro 82M (Apache License 2.0, https://huggingface.co/hexgrad/Kokoro-82M),
   made with AudioSmith's engine by scripts/make-voice-previews.sh (2026-10-16).
   The voices are the models' own synthetic speakers, not recordings of people.
+
+Libraries
+  The app (Go) links: purego (Apache-2.0), go-text/typesetting (Unlicense
+  OR BSD-3-Clause), google/jsonschema-go (MIT), jfreymuth/oggvorbis and
+  jfreymuth/vorbis (MIT), the MCP Go SDK (MIT and Apache-2.0),
+  segmentio/asm (MIT-0), segmentio/encoding (MIT), yosida95/uritemplate
+  (BSD-3-Clause) and golang.org/x/image, oauth2, sync, sys, text and time
+  (BSD-3-Clause).
+  The engine (Swift) links: mlx-audio-swift (MIT, with AudioSmith's
+  patches in engine/patches), mlx-swift and mlx-swift-lm (MIT, with MLX
+  and xgrammar), swift-transformers, swift-huggingface and swift-jinja
+  (Apache-2.0), demucs-mlx-swift and mel-roformer-mlx-swift (MIT),
+  EventSource (MIT), yyjson (MIT), and Apple's swift-argument-parser,
+  swift-asn1, swift-collections, swift-crypto, swift-numerics and
+  swift-syntax (Apache-2.0).
+  Their licences and notices are in their source repositories, at the
+  versions pinned in go.mod and engine/Package.resolved.

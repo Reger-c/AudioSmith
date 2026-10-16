@@ -17,7 +17,7 @@ e2e_v02_test.go                           1373  # B3
 enginelink.go                              730  # B3
 export_dialog.go                           804  # B3
 integrations_skill.go                      799  # B3
-internal/api/native.go                     811  # B4
+internal/api/native.go                     777  # B4
 internal/api/openai.go                     667  # B4
 internal/catalog/catalog.go                690  # B4
 internal/dub/project.go                    746  # B4

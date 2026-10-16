@@ -250,6 +250,10 @@ func TestAboutPage(t *testing.T) {
 	if !tt.HasText("Apple M4") || !tt.HasText("16 GB") {
 		t.Fatalf("about %q", tt.Texts())
 	}
+	// The licence and the source code (AGPL-3.0).
+	if !tt.HasText("GNU AGPL-3.0") || !tt.HasText("Source code") || !tt.HasText("github.com/hehehai/AudioSmith") {
+		t.Fatalf("about %q", tt.Texts())
+	}
 	if err := tt.Click("Run the check"); err != nil {
 		t.Fatal(err)
 	}

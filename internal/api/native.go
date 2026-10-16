@@ -1,8 +1,8 @@
 package api
 
 // AudioSmith's own API (/api): voices, generation, takes, transcripts,
-// models, languages and tools, plus /health and the capabilities
-// document.
+// models, languages and tools, plus the capabilities document (/health is
+// in health.go).
 
 import (
 	"context"
@@ -26,42 +26,6 @@ import (
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
-// --- health ----------------------------------------------------------------
-
-// Health is GET /health's answer.
-type Health struct {
-	Status  string `json:"status"` // "ok", "starting", "unavailable"
-	Version string `json:"version"`
-	Engine  Status `json:"engine"`
-}
-
-// Health reports whether requests can run now.
-func (s *Server) Health() Health {
-	st := s.b.Status()
-	h := Health{Status: "ok", Version: s.o.Version, Engine: st}
-	switch st.State {
-	case StateStarting, StateRestarting:
-		h.Status = "starting"
-	case StateFailed, StateStopped:
-		h.Status = "unavailable"
-	}
-	return h
-}
-
-func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	h := s.Health()
-	status := http.StatusOK
-	if h.Status != "ok" {
-		status = http.StatusServiceUnavailable
-		retry := h.Engine.RetryAfter
-		if retry <= 0 {
-			retry = 5
-		}
-		w.Header().Set("Retry-After", strconv.Itoa(retry))
-	}
-	writeJSON(w, status, h)
-}
-
 // capabilities is GET /.well-known/audiosmith-speech: what this server
 // offers, for agents and scripts that discover it.
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +43,8 @@ func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 		"schema":      "audiosmith.speech-capabilities",
 		"version":     1,
 		"app_version": s.o.Version,
+		"source_url":  SourceURL,
+		"license":     License,
 		"endpoints": map[string]string{
 			"openai_base_url": "/v1", "speech": "/v1/audio/speech", "transcriptions": "/v1/audio/transcriptions",
 			"translations": "/v1/audio/translations", "models": "/v1/models", "voices": "/v1/audio/voices",
