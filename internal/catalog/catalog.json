@@ -348,7 +348,7 @@
       ],
       "capabilities": ["speakers"],
       "sampleRate": 16000,
-      "rtf": 5,
+      "rtf": 2.5,
       "size": 1269855425,
       "files": [
         {"path": "added_tokens.json", "size": 707},
