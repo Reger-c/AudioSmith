@@ -114,7 +114,7 @@ func (c *Client) Chat(ctx context.Context, req Request) (Response, error) {
 		if filter != nil {
 			filter.reset()
 		}
-		actx, cancel := context.WithTimeout(ctx, timeout)
+		actx, cancel := WithBudget(ctx, timeout) // not counting a wait for the engine's gpu lane (budget.go)
 		resp, err := c.Backend.Chat(actx, req)
 		cancel()
 		if err == nil {

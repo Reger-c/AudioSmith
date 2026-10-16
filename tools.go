@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -97,6 +98,8 @@ type toolDirection struct {
 	note    string
 	busy    bool
 	warming bool // the language model was not loaded when the note was read
+	waiting bool // the language model waits for the gpu lane (a render runs)
+	run     int  // counts readings: a late report of an older one is dropped
 	res     *translate.Direction
 	preview *toolRun
 }
@@ -535,14 +538,68 @@ func (a *app) runDirection() {
 	if d.warming {
 		budget = coldCoachBudget // the model still loads (local_llm_warm.go)
 	}
-	d.busy = true
+	d.busy, d.waiting = true, false
+	d.run++
+	run := d.run
+	post := a.post
 	a.async(func() {
-		res := (&translate.Director{Router: router, Budget: budget}).Parse(context.Background(), note)
-		a.post(func() {
-			a.dir.busy = false
+		ctx, cancel := context.WithCancelCause(context.Background())
+		defer cancel(nil)
+		ctx = llm.OnWait(ctx, coachWaitWatch(cancel, func(waiting bool) {
+			post(func() {
+				if a.dir.run == run && a.dir.busy {
+					a.dir.waiting = waiting
+				}
+			})
+		}))
+		res := (&translate.Director{Router: router, Budget: budget}).Parse(ctx, note)
+		if errors.Is(context.Cause(ctx), errCoachBusy) {
+			res.Fallback = coachFallbackBusy
+		}
+		post(func() {
+			if a.dir.run != run {
+				return
+			}
+			a.dir.busy, a.dir.waiting = false, false
 			a.dir.res = &res
 		})
 	})
+}
+
+// The direction coach and the gpu lane (thread #53): its budget counts
+// from when the model's turn comes (llm.WithBudget), but the user is
+// watching, so it waits for a running render at most coachQueueWait,
+// saying so after coachWaitShow, then reads the note by keywords.
+var coachQueueWait = 30 * time.Second // a var for tests
+
+const (
+	coachWaitShow     = 300 * time.Millisecond
+	coachFallbackBusy = "busy" // translate.Direction.Fallback: the gpu lane stayed busy
+)
+
+var errCoachBusy = errors.New("the engine stayed busy")
+
+// coachWaitWatch is the coach's llm.OnWait observer: show(true) when a
+// wait lasts coachWaitShow, show(false) when it ends, and cancel with
+// errCoachBusy when it lasts coachQueueWait.
+func coachWaitWatch(cancel context.CancelCauseFunc, show func(bool)) func(bool) {
+	var mu sync.Mutex
+	var giveUp, reveal *time.Timer
+	return func(waiting bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		if giveUp != nil {
+			giveUp.Stop()
+			reveal.Stop()
+			giveUp, reveal = nil, nil
+		}
+		if waiting {
+			giveUp = time.AfterFunc(coachQueueWait, func() { cancel(errCoachBusy) })
+			reveal = time.AfterFunc(coachWaitShow, func() { show(true) })
+			return
+		}
+		show(false)
+	}
 }
 
 // directionModel is the model the direction preview speaks with: one
