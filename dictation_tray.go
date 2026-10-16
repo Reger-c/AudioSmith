@@ -6,11 +6,7 @@ package main
 // shortcut keeps working; the Dock icon or the menu brings it back.
 
 import (
-	"bytes"
-	"image"
-	"image/color"
-	"image/png"
-	"math"
+	_ "embed"
 
 	"github.com/egoist/mygo"
 	"github.com/hehehai/AudioSmith/internal/dictation"
@@ -27,50 +23,18 @@ type trayState struct {
 	quitting  bool
 }
 
-// Tray icons, drawn once: a microphone (template: macOS tints it) and a
-// red one while recording.
+// Tray icons: Solar's music library (assets/tray/tray.svg, CC BY 4.0)
+// at 36×36 px (18 pt @2x), black as a template (macOS tints it) and red
+// while dictation listens. Make them again with
+//
+//	sed 's/currentColor/#000000/' assets/tray/tray.svg | rsvg-convert -w 36 -h 36 -o assets/tray/tray.png
+//	sed 's/currentColor/#ff3b30/' assets/tray/tray.svg | rsvg-convert -w 36 -h 36 -o assets/tray/tray-recording.png
 var (
-	trayIcon    = drawMic(color.NRGBA{0, 0, 0, 255})
-	trayRecIcon = drawMic(color.NRGBA{255, 59, 48, 255})
+	//go:embed assets/tray/tray.png
+	trayIcon []byte
+	//go:embed assets/tray/tray-recording.png
+	trayRecIcon []byte
 )
-
-// drawMic draws a 36×36 (18 pt @2x) microphone.
-func drawMic(c color.NRGBA) []byte {
-	const n = 36
-	img := image.NewNRGBA(image.Rect(0, 0, n, n))
-	cover := func(x, y float64) float64 {
-		// Capsule: x 12–24, y 3–22, radius 6.
-		cy := min(max(y, 9), 16)
-		d := math.Hypot(x-18, y-cy) - 6
-		inside := clamp01(0.5 - d)
-		// Arc: radius 10 around (18, 15), lower half, 2 px wide.
-		r := math.Hypot(x-18, y-15)
-		if y >= 15 {
-			inside = max(inside, clamp01(1-math.Abs(r-10)))
-		}
-		// Stem and base.
-		if x >= 17 && x <= 19 && y >= 25 && y <= 31 {
-			inside = 1
-		}
-		if x >= 12 && x <= 24 && y >= 30 && y <= 32 {
-			inside = 1
-		}
-		return inside
-	}
-	for y := 0; y < n; y++ {
-		for x := 0; x < n; x++ {
-			a := cover(float64(x)+0.5, float64(y)+0.5)
-			if a > 0 {
-				img.SetNRGBA(x, y, color.NRGBA{c.R, c.G, c.B, uint8(a * float64(c.A))})
-			}
-		}
-	}
-	var b bytes.Buffer
-	png.Encode(&b, img)
-	return b.Bytes()
-}
-
-func clamp01(v float64) float64 { return min(max(v, 0), 1) }
 
 // openTray makes the menu bar icon.
 func (a *app) openTray() {
