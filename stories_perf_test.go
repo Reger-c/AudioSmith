@@ -209,14 +209,16 @@ func TestStoryPerformanceAPI(t *testing.T) {
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "directions": map[string]string{"nope": "x"}}, api.CodeInvalid)
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "intensities": map[string]int{id: 4}}, api.CodeInvalid)
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "personas": map[string]string{"Ghost": "x"}}, api.CodeInvalid)
-	e.a.llmReg.Register(localProvider, nil)
+	e.onMain(func() { e.a.llmReg.Register(localProvider, nil) })
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "all"}, api.CodeLLMUnavailable)
 
 	// The AI director, through the writing-help model.
-	useFakeLLM(e.a, &fakeLLM{answer: func(llm.Request) (string, error) {
-		return `{"scene":"Kitchen, after school","cast":[{"name":"Kid","persona":"eager"},{"name":"Mom","persona":"tired, kind"}],
+	e.onMain(func() {
+		useFakeLLM(e.a, &fakeLLM{answer: func(llm.Request) (string, error) {
+			return `{"scene":"Kitchen, after school","cast":[{"name":"Kid","persona":"eager"},{"name":"Mom","persona":"tired, kind"}],
 		"lines":[{"n":1,"direction":"hopeful","intensity":2},{"n":2,"direction":"begging","intensity":3},{"n":3,"direction":"gentle doubt","intensity":1}]}`, nil
-	}})
+		}})
+	})
 	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "fill"}, &p)
 	if p.Scene != scene || persona("Kid") != "seven, lively" || persona("Mom") != "tired, kind" || p.Lines[1].Direction != "pleading" || p.Lines[0].Direction != "hopeful" {
 		t.Fatalf("filled %+v", p)
@@ -225,7 +227,9 @@ func TestStoryPerformanceAPI(t *testing.T) {
 	if p.Scene != "Kitchen, after school" || p.Lines[1].Direction != "begging" {
 		t.Fatalf("replaced %+v", p)
 	}
-	useFakeLLM(e.a, &fakeLLM{answer: func(llm.Request) (string, error) { return "", &llm.Error{Code: llm.CodeTimeout} }})
+	e.onMain(func() {
+		useFakeLLM(e.a, &fakeLLM{answer: func(llm.Request) (string, error) { return "", &llm.Error{Code: llm.CodeTimeout} }})
+	})
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "all"}, api.CodeDirectorFailed)
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "maybe"}, api.CodeInvalid)
 
