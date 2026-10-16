@@ -30,7 +30,7 @@ import (
 // TestSpeakersE2E evaluates transcription with speakers (thread #48) on
 // a Mac, through the app: dialogues of 2, 3 and 4 speakers made with
 // Qwen3-TTS CustomVoice 0.6B (built-in voices, known lines and turns) and
-// a 12-minute 4-speaker one (two windows), transcribed
+// a 12-minute 5-speaker one (two windows), transcribed
 //
 //   - moss: Transcribe with Speakers on (MOSS-Transcribe-Diarize + the
 //     forced aligner, services.TranscribeSpeakers);
@@ -581,17 +581,21 @@ func spkDialogues() []spkDialogue {
 		{"D", "And I'm waiting for the final logo files from the designer."},
 		{"A", "Let's check in again on Thursday morning."},
 	}}
-	// Twelve minutes, four people: the Chinese lines four times over, each
-	// time said by other people (two windows of the speakers model).
-	people := []string{"P", "Q", "R", "S"}
-	long := spkDialogue{Name: "zh4-long", Lang: "zh", Long: true,
-		Voices: map[string]string{"P": "Vivian", "Q": "Serena", "R": "Uncle_Fu", "S": "Eric"}}
-	for cycle := range 5 {
+	// About twelve minutes, five people: the three Chinese dialogues four
+	// times over with their own voices (Vivian and Serena in two of them,
+	// Uncle_Fu, Dylan, Eric), every other time in reverse order: two
+	// windows of the speakers model, and more people than Sortformer's 4.
+	long := spkDialogue{Name: "zh5-long", Lang: "zh", Long: true, Voices: map[string]string{}}
+	for cycle := range 4 {
 		for _, d := range []spkDialogue{zh4, zh3, zh2} {
-			letters := []string{"A", "B", "C", "D"}
-			for _, l := range d.Lines {
-				k := slices.Index(letters, l.Who)
-				long.Lines = append(long.Lines, spkLine{people[(k+cycle)%4], l.Text})
+			lines := slices.Clone(d.Lines)
+			if cycle%2 == 1 {
+				slices.Reverse(lines)
+			}
+			for _, l := range lines {
+				who := d.Voices[l.Who] // a person is a voice
+				long.Voices[who] = who
+				long.Lines = append(long.Lines, spkLine{who, l.Text})
 			}
 		}
 	}

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Transcription with speakers
+- New model "Transcription with speakers" (区分说话人转写; MOSS-Transcribe-Diarize 0.9B, 8-bit, 1.3 GB, Apache-2.0): it transcribes and tells who says what in one pass. Download it from the Models page, Transcribe or the Dub page; nothing downloads by itself.
+- Transcribe: a Speakers option in the toolbar. Transcripts list their speakers (S1, S2…) with their lines; click one to name it. Copy and TXT export put one paragraph per turn after the speaker's name, SRT cues start with it, VTT marks voices, JSON has each segment's speaker. Dictation and plain transcription stay on Qwen3-ASR (MOSS is about 3× slower).
+- Dubbing: with the model downloaded, a source with more than one speaker is transcribed by it and every line gets its speaker from it (in our tests 0.98–1.00 of the lines right on 2–4 speaker dialogues, where Sortformer managed 0.42–0.71, and no limit of 4 speakers); the aligner still times the words, and the glossary's terms are its vocabulary. Without it, the dub works as before (Qwen3-ASR + Sortformer) and suggests the download, then Transcribe again.
+- Long recordings go in 10-minute windows that overlap by a minute, linked by who speaks in the overlap; stretches without speech are skipped, and the model's chat answers to silence ("I'm sorry, I can't assist…") are dropped.
+- Local API and MCP: `speakers=true`, `model=gpt-4o-transcribe-diarize` or `response_format=diarized_json`; segments carry `speaker`. MCP `transcribe` takes `speakers: true`.
+
 ### Fewer transcription and writing models; Qwen3-ASR transcribes everything
 - Speech recognition is Qwen3-ASR 0.6B ("Chinese & English transcription") everywhere: dictation, Transcribe's Fast and Accurate modes, dubbing and its read-back check, workflows, Convert, clone references and calls. It made 0.5–4 % errors on Chinese where Whisper made 8–33 %, punctuates, and is 2–4× faster (thread #44's measurements). Whisper large-v3 turbo ("Multilingual transcription", tagged Fallback) is used on its own for the languages Qwen3-ASR does not know (it knows 30) and for translating speech into English. Fast and Accurate now differ only in the word timings.
 - Long files: the vocabulary is only sent with recordings up to 30 s (Qwen3-ASR copied it into the end of longer transcripts); the " The." (or "嗯。") Qwen3-ASR sometimes invents after the last sentence of a long file is dropped; files longer than about 4½ minutes are timed word by word in windows of at most 4 minutes, cut between sentences (the aligner's times broke down after about 4½ minutes).

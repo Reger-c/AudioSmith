@@ -320,6 +320,10 @@ func (f *fakeBackend) transcribe(ctx context.Context, job jobs.Job, report func(
 	json.Unmarshal(job.Params, &req)
 	t := sampleTranscript(req.ID, req.Model, req.Words || req.Aligner != "")
 	t.Title, t.CreatedAt = req.Title, time.Now()
+	if services.IsSpeakersModel(req.Model) {
+		t.Segments[0].Speaker, t.Segments[1].Speaker = "S1", "S2"
+		t.Speakers = map[string]string{"S1": "Ana"}
+	}
 	f.mu.Lock()
 	f.transcripts[t.ID] = t
 	f.mu.Unlock()

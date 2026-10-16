@@ -170,6 +170,11 @@ func (f *fake) transcribe(ctx context.Context, job jobs.Job, _ func(jobs.Progres
 	json.Unmarshal(job.Params, &req)
 	t := core.Transcript{ID: req.ID, Language: "en", Duration: 1, Segments: []core.TranscriptSegment{{Start: 0, End: 1, Text: "hello world",
 		Words: []core.TranscriptWord{{Text: "hello", Start: 0, End: 0.5}, {Text: "world", Start: 0.5, End: 1}}}}}
+	if services.IsSpeakersModel(req.Model) {
+		t.Segments[0].Speaker = "S1"
+		t.Segments = append(t.Segments, core.TranscriptSegment{Start: 1.2, End: 2, Text: "hi there", Speaker: "S2"})
+		t.Speakers = map[string]string{"S2": "Bo"}
+	}
 	return json.Marshal(services.TranscribeResult{Transcript: t})
 }
 func (f *fake) Transcripts(ctx context.Context, q core.TranscriptQuery) ([]core.Transcript, error) {
@@ -375,6 +380,12 @@ func TestTools(t *testing.T) {
 	res = call(t, cs, "transcribe", map[string]any{"path": ref, "timestamps": true})
 	if res.IsError || !strings.Contains(textOf(res), `"text": "hello world"`) || !strings.Contains(textOf(res), `"words"`) {
 		t.Fatalf("transcribe: %s", textOf(res))
+	}
+	// Who says what (thread #48).
+	res = call(t, cs, "transcribe", map[string]any{"path": ref, "speakers": true})
+	if txt := textOf(res); res.IsError || !strings.Contains(txt, `"speaker": "S2"`) || !strings.Contains(txt, `"speaker_name": "Bo"`) ||
+		!strings.Contains(txt, `S1: hello world\n\nBo: hi there`) {
+		t.Fatalf("transcribe with speakers: %s", txt)
 	}
 	// A removed speech-to-text model (thread #46): Qwen3-ASR answers.
 	res = call(t, cs, "transcribe", map[string]any{"path": ref, "model": "parakeet-tdt-0.6b-v3"})
