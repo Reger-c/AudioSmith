@@ -1,0 +1,8 @@
+# Snapshots allowed to differ a little between two renders of one commit,
+# read by internal/tools/snapcmp (scripts/snapshots.sh): a file name
+# pattern, the largest difference allowed in a color channel (0-255), and
+# why. Every other snapshot must match byte for byte or pixel for pixel.
+# Remove a line once its cause is gone.
+
+# (None: every snapshot is reproducible. MyGo patch 0005 fixed the last
+# ones, the workflow canvas, whose glyph atlas repacked in map order.)

@@ -181,14 +181,18 @@ func (a *Atlas) Grow() bool {
 
 // Repack frees the atlas and allocates rects, lasting rectangles of it,
 // again, tallest first, moving their pixels along. It returns where each
-// went, or false, changing nothing, when they do not fit.
+// went, or false, changing nothing, when they do not fit. Where each goes
+// does not depend on the order of rects (callers collect them from maps):
+// rectangles of one size keep the order of their places in the atlas.
 func (a *Atlas) Repack(rects []image.Rectangle) ([]image.Point, bool) {
 	order := make([]int, len(rects))
 	for i := range order {
 		order[i] = i
 	}
 	slices.SortFunc(order, func(i, j int) int {
-		return cmp.Or(cmp.Compare(rects[j].Dy(), rects[i].Dy()), cmp.Compare(rects[j].Dx(), rects[i].Dx()))
+		ri, rj := rects[i], rects[j]
+		return cmp.Or(cmp.Compare(rj.Dy(), ri.Dy()), cmp.Compare(rj.Dx(), ri.Dx()),
+			cmp.Compare(ri.Min.Y, rj.Min.Y), cmp.Compare(ri.Min.X, rj.Min.X))
 	})
 	plan := Atlas{W: a.W, H: a.H, top: a.H}
 	pos := make([]image.Point, len(rects))

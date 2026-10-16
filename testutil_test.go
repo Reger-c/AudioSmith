@@ -27,7 +27,7 @@ func inline(fn func()) { fn() }
 // temporary directory (dir, when given), closed when the test ends.
 func openTestLibrary(t *testing.T, dir ...string) *library {
 	t.Helper()
-	d := t.TempDir()
+	d := testDir(t)
 	if len(dir) > 0 {
 		d = dir[0]
 	}
@@ -49,7 +49,7 @@ func openTestLibraryWith(t *testing.T, dir string, o libraryOptions) *library {
 // (enginefake_test.go); the test plays the engine.
 func newTestApp(t *testing.T) (*app, *fakeEngine, *ui.Tester) {
 	t.Helper()
-	return newTestAppIn(t, t.TempDir())
+	return newTestAppIn(t, testDir(t))
 }
 
 // newTestAppIn is newTestApp over the library in dir, which may hold one
@@ -66,7 +66,9 @@ func newTestAppIn(t *testing.T, dir string) (*app, *fakeEngine, *ui.Tester) {
 	a.startEngine()
 	eng.ready()
 	t.Cleanup(a.pl.Stop)
-	return a, eng, ui.NewTester(a.view, 1100, 720)
+	tt := ui.NewTester(a.view, 1100, 720)
+	pinTester(tt)
+	return a, eng, tt
 }
 
 // useLocalModels points the library's model folder at a temporary one in
@@ -74,7 +76,7 @@ func newTestAppIn(t *testing.T, dir string) (*app, *fakeEngine, *ui.Tester) {
 // a snapshot at its pinned commit with a config and a weights file.
 func useLocalModels(t *testing.T, lib *library) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testDir(t)
 	put := func(repo, rev string) {
 		snap := filepath.Join(hub.RepoDir(dir, repo), "snapshots", rev)
 		for name, data := range map[string]string{"config.json": "{}", "model.safetensors": "weights"} {

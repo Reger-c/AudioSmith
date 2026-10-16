@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net"
@@ -303,6 +304,17 @@ func useMemKeys(t *testing.T) *memKeys {
 // freePort is a loopback port nobody listens on.
 func freePort(t *testing.T) int {
 	t.Helper()
+	if snap != nil { // a fixed port in snapshots (snapshot_env_test.go)
+		for range 10 {
+			port := snapPortBase + snap.ports
+			snap.ports++
+			if ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port)); err == nil {
+				ln.Close()
+				return port
+			}
+			t.Logf("port %d is in use: the snapshots show another port than other runs", port)
+		}
+	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

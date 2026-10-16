@@ -56,12 +56,9 @@ var b2Configs = []b2Config{
 //
 // AUDIOSMITH_B2_CFG and AUDIOSMITH_B2_PAGES (comma-separated prefixes)
 // narrow the set while iterating.
-func TestSnapshotsB2(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsB2(t *testing.T) { runSnapshots(t, snapshotsB2) }
+
+func snapshotsB2(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	useMemKeys(t)
 	stubMachine(t, 16, true)
@@ -130,7 +127,7 @@ func b2Voices(t *testing.T, setup b2Setup, shoot b2Shoot) {
 	me := addVoice(t, a, core.Voice{Name: "Narrator (me)", Kind: core.VoiceCloned, RefText: "The house at the end of the lane had been empty for years.",
 		Style: "calm and slow", Language: "en", Tags: []string{"narration"}}, 9)
 	a.setVoicePortrait(me.ID, testPNG(t, 320, 240))
-	rec := filepath.Join(t.TempDir(), "consent.wav")
+	rec := filepath.Join(testDir(t), "consent.wav")
 	writeSpeech(rec, 3, []span{{0, 3}})
 	a.lib.svc.Voices.SetConsent(context.Background(), me.ID, core.ConsentRecording{Audio: rec, Statement: consentStatement(), Locale: "en"})
 	addVoice(t, a, core.Voice{Name: "老奶奶讲故事", Kind: core.VoiceDesigned, Language: "zh", Design: "慈祥的老奶奶，语速慢，四川话",
@@ -145,7 +142,7 @@ func b2Voices(t *testing.T, setup b2Setup, shoot b2Shoot) {
 
 	shoot(a, tt, "clone-empty", func() { a.startClone("") })
 	shoot(a, tt, "clone-loaded", func() {
-		clip := filepath.Join(t.TempDir(), "interview.wav")
+		clip := filepath.Join(testDir(t), "interview.wav")
 		writeSpeech(clip, 32, []span{{0.4, 3}, {4, 11}, {11.6, 19}, {20, 27}, {28, 31}})
 		a.cloneLoad(clip, "interview.wav", false)
 		if r := eng.lastOf(t, proto.MethodVADDetect); r.ID != "" {

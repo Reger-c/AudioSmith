@@ -549,14 +549,11 @@ func TestAgentSkillPage(t *testing.T) {
 // writes the review texts (skills and prompts):
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsAgentSkill .
-func TestSnapshotsAgentSkill(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsAgentSkill(t *testing.T) { runSnapshots(t, snapshotsAgentSkill) }
+
+func snapshotsAgentSkill(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
-	home := t.TempDir()
+	home := testDir(t)
 	skillHome = func() (string, error) { return home, nil }
 	t.Cleanup(func() { skillHome = os.UserHomeDir })
 	useMemKeys(t)

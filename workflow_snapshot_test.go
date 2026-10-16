@@ -16,12 +16,9 @@ import (
 // English and Chinese, as TestSnapshots does the others:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .
-func TestSnapshotsM6(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsM6(t *testing.T) { runSnapshots(t, snapshotsM6) }
+
+func snapshotsM6(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	for _, run := range []struct {
 		lang string
@@ -84,7 +81,7 @@ func TestSnapshotsM6(t *testing.T) {
 				ex = n
 			}
 		}
-		clip := filepath.Join(t.TempDir(), "interview.wav")
+		clip := filepath.Join(testDir(t), "interview.wav")
 		dubtest.Speech(clip, 2)
 		a.wfClipFiles(src.ID, []string{clip})
 		a.wfEdit(func(w *workflow.Workflow) {
