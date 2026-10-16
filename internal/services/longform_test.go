@@ -217,6 +217,24 @@ type lfEnv struct {
 	encoded []EncodeParams
 	encMu   sync.Mutex
 	canEnc  bool
+	// beforePublish, when set, sees each scheduler update before the bus
+	// (on the scheduler's publishing goroutine): a test delays one there.
+	beforePublish atomic.Pointer[func(jobs.Updated)]
+	// beforeSave, when set, sees each job the scheduler saves.
+	beforeSave atomic.Pointer[func(jobs.Job)]
+}
+
+// hookedJobs is the job store with lfEnv.beforeSave.
+type hookedJobs struct {
+	jobs.Store
+	e *lfEnv
+}
+
+func (h hookedJobs) SaveJob(ctx context.Context, j jobs.Job) error {
+	if f := h.e.beforeSave.Load(); f != nil {
+		(*f)(j)
+	}
+	return h.Store.SaveJob(ctx, j)
 }
 
 func newLongformEnv(t *testing.T, dir string, canEncode bool) *lfEnv {
@@ -227,7 +245,12 @@ func newLongformEnv(t *testing.T, dir string, canEncode bool) *lfEnv {
 	}
 	e := &lfEnv{dir: dir, st: st, bus: core.NewBus(), synth: &fakeSynth{}, canEnc: canEncode}
 	e.gate = &gateSynth{inner: e.synth, held: make(chan struct{}, 1)}
-	e.sched = jobs.New(jobs.Options{Store: st.Jobs(), Publish: func(u jobs.Updated) { e.bus.Publish(u) },
+	e.sched = jobs.New(jobs.Options{Store: hookedJobs{st.Jobs(), e}, Publish: func(u jobs.Updated) {
+		if f := e.beforePublish.Load(); f != nil {
+			(*f)(u)
+		}
+		e.bus.Publish(u)
+	},
 		RetryDelay: func(int) time.Duration { return time.Millisecond }})
 	e.svc = New(Config{Store: st, Bus: e.bus, Scheduler: e.sched, CacheDir: filepath.Join(dir, "cache"),
 		Synth:     func() jobs.Executor { return e.gate },
@@ -463,6 +486,63 @@ func TestLongformRetriesOnlyFailedChapters(t *testing.T) {
 	}
 	if b.Output.Encoded != "" || !strings.Contains(b.Output.EncodeError, "M4B") {
 		t.Errorf("no encoder: %+v", b.Output)
+	}
+}
+
+// A render resumed before the last update of its failed run arrived (the
+// assembly's dependency failure, published after the chapter's failure
+// that ended the run) while Resume submits the new jobs: that late update
+// must not be taken for the new run's assembly, or the new assembly's
+// updates are ignored and the render runs for ever.
+func TestLongformResumeIgnoresLateUpdatesOfEarlierRun(t *testing.T) {
+	e := newLongformEnv(t, t.TempDir(), false)
+	defer e.close()
+	spec := storySpec()
+	spec.Chapters[1].Lines[0].Spans[0].Text = "Morning came FLAKY over the water."
+	e.gate.flaky.Store(1)
+	var late, resuming atomic.Bool
+	release, applied := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	// The first run's assembly failure waits until Resume submits...
+	publish := func(u jobs.Updated) {
+		if u.Job.Kind == KindAssemble && u.Job.State == jobs.StateFailed && late.CompareAndSwap(false, true) {
+			select {
+			case <-release:
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}
+	e.beforePublish.Store(&publish)
+	// ...and is applied while it does.
+	unsub := core.On(e.bus, func(core.RenderChanged) {
+		select {
+		case <-release:
+			once.Do(func() { close(applied) })
+		default:
+		}
+	})
+	defer unsub()
+	save := func(j jobs.Job) {
+		if resuming.CompareAndSwap(true, false) {
+			close(release)
+			select {
+			case <-applied:
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}
+	e.beforeSave.Store(&save)
+	r, _ := e.svc.Longform.Start(ctx, spec)
+	if r, _ = e.wait(t, r.ID); r.State != core.RenderFailed {
+		t.Fatalf("first run: %s", r.State)
+	}
+	resuming.Store(true)
+	if _, err := e.svc.Longform.Resume(ctx, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	r, b := e.wait(t, r.ID)
+	if !late.Load() || r.State != core.RenderDone || b.Runs != 2 || b.Output == nil {
+		t.Fatalf("resumed: late %v, %s %+v", late.Load(), r.State, b.Chapters)
 	}
 }
 

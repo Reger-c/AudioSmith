@@ -75,6 +75,7 @@ type EncodeResult struct {
 // AssembleParams are a longform.assemble job's params.
 type AssembleParams struct {
 	Render string `json:"render"`
+	Run    int    `json:"run,omitempty"` // RenderBody.Runs when submitted
 }
 
 // AssembleResult is what the book is made of.

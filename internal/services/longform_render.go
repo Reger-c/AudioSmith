@@ -66,6 +66,7 @@ const chapterKeyVersion = "audiosmith.chapter.v1"
 // chapter needs, so it can run again after a restart.
 type ChapterParams struct {
 	Render     string               `json:"render"`
+	Run        int                  `json:"run,omitempty"` // RenderBody.Runs when submitted
 	Index      int                  `json:"index"`
 	Title      string               `json:"title,omitempty"`
 	Model      string               `json:"model"`
