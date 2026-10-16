@@ -44,7 +44,7 @@ func (a *app) callsRoute(c *ui.Context, r *ui.Route) bool {
 }
 
 // callsBadge is the sidebar badge of /calls (the shell places the page,
-// shell.go navGroups): "Live" while a call is in progress.
+// shell_pages.go navGroups): "Live" while a call is in progress.
 func (a *app) callsBadge(path string) (string, bool) {
 	if path != "/calls" {
 		return "", false

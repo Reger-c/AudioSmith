@@ -17,7 +17,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
-// apiSettingsRoute builds Settings → Local API (shell_settings.go asks).
+// apiSettingsRoute builds Settings → Local API (settings_dialog.go asks).
 func (a *app) apiSettingsRoute(c *ui.Context, r *ui.Route) bool {
 	if !r.Match("/api") {
 		return false

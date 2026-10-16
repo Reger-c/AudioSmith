@@ -37,7 +37,7 @@ func (a *app) commands() []command {
 	add := func(id, group, title, en, keys string, enabled bool, run func()) {
 		cmds = append(cmds, command{id: id, group: group, title: title, en: en, keys: keys, run: run, enabled: enabled})
 	}
-	for _, p := range pages { // every sidebar page (shell.go navGroups)
+	for _, p := range pages { // every sidebar page (shell_pages.go navGroups)
 		add("go"+p.path, nav, pageTitle(p.path), p.title, pageKeys(p.path), true, func() { a.navigate(p.path) })
 	}
 	a.longformCommands(nav, add) // M3: the book's commands (longform_pages.go, thread #18)

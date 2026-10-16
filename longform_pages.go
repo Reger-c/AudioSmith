@@ -26,7 +26,7 @@ func longformPageTitle(path string) (string, bool) {
 }
 
 // longformBadge is the sidebar badge of an M3 page (M7a: the shell
-// places the pages, shell.go navGroups): a running render's chapters.
+// places the pages, shell_pages.go navGroups): a running render's chapters.
 func (a *app) longformBadge(path string) (string, bool) {
 	if _, ok := longformPageTitle(path); !ok {
 		return "", false
