@@ -106,7 +106,8 @@ Beta 版（`0.4.0-beta.2`）和正式版（`0.4.0`）步骤完全一样，由版
 
 1. 在 `CHANGELOG.md` 里把 `## Unreleased` 改成版本号和日期，例如 `## 0.4.0 — 2026-10-20` 或 `## 0.4.0-beta.2 — 2026-10-18`（更新窗口显示的就是这一节；缺了这一节构建会直接失败）。标题的第一个词必须**正好**是版本号：`## 0.4.0-beta.1` 不算 0.4.0 的那一节，所以 Beta 之后的正式版要有自己的一节（可以把各个 Beta 的内容汇总进去）。之后可以在上面再新开一个 `## Unreleased`。
 2. 把 `mygo.json` 的 `"version"` 改成同一个版本号。这是唯一的版本号来源：关于页、设置、本地 API 的 `/health`、MCP 和更新器都读它（`mygo.App.Version()`）。
-3. 提交、打标签、推送：
+3. 确认应用里带的第三方许可文本 `THIRD-PARTY-NOTICES.txt` 是最新的：`scripts/third-party-notices.sh --check`。如果不是（写入之后依赖变过；CI 的 `go test` 也会失败），运行 `scripts/third-party-notices.sh`（Swift 依赖的版本变过时加 `--fetch`），把文件和这次发布一起提交。
+4. 提交、打标签、推送：
 
    ```sh
    git commit -am "AudioSmith 0.4.0"
@@ -114,7 +115,7 @@ Beta 版（`0.4.0-beta.2`）和正式版（`0.4.0`）步骤完全一样，由版
    git push origin main v0.4.0
    ```
 
-4. Actions → Release 开始构建（第一次约 30–60 分钟，之后有引擎缓存会快些），完成后上传到草稿 Release `v0.4.0`。检查草稿（说明来自 `CHANGELOG.md`，可以再编辑），然后点 **Publish release**（或者 `gh release edit v0.4.0 --draft=false`）。发布之后，已安装的用户就能收到更新。
+5. Actions → Release 开始构建（第一次约 30–60 分钟，之后有引擎缓存会快些），完成后上传到草稿 Release `v0.4.0`。检查草稿（说明来自 `CHANGELOG.md`，可以再编辑），然后点 **Publish release**（或者 `gh release edit v0.4.0 --draft=false`）。发布之后，已安装的用户就能收到更新。
    - **Beta 版**的草稿已经标成 **pre-release**。发布时保持「Set as a pre-release」勾选（不要勾「Set as the latest release」）：只收正式版的副本读的是 latest release，它仍然是最近一个非 Beta 的版本。
    - **正式版**的草稿发布后会成为 latest release：所有副本（不管收不收 Beta）只要它比自己正在运行的版本新，就会更新到它。
 
@@ -180,7 +181,7 @@ scripts/release-local.sh --dry-run        # ad-hoc，与工作流的试跑一样
 - **构建机器**：`macos-26`（Apple 芯片，Xcode 26）。引擎需要 Xcode 26（`swift-tools-version: 6.2`）；工作流会选最新的 `Xcode_26*.app`，缺 Metal 工具链时自动下载。如果 `macos-26` 不可用，装有 Xcode 26 的 `macos-15` 也一样能用。
 - **Entitlements**：应用只需要 `com.apple.security.device.audio-input`（会申请麦克风）；引擎同样只需要它（listen 进程录音）。其他都不需要：AudioSmith 不是沙盒应用，不需要网络 entitlement；听写自动粘贴用的是 `CGEventPost`，靠「辅助功能」权限而不是 entitlement；MLX 的 Metal 内核是预编译的，不需要 JIT。`scripts/verify-release.sh` 会检查两个二进制的签名、hardened runtime、时间戳和 entitlements。
 - **从 ad-hoc 换到 Developer ID 后的权限**：对 macOS 的隐私设置来说，本地 ad-hoc 构建和 Developer ID 正式版是两个不同的应用。第一次装正式版后，需要重新授予麦克风和辅助功能权限（系统设置 → 隐私与安全性；先删掉旧的 AudioSmith 条目）。之后的正式版更新会保留这些权限。
-- **许可证**：0.4.0-beta.1 之后的版本采用 GNU AGPL-3.0（之前的版本是 Apache-2.0）。应用的 `Contents/Resources` 里带有 `LICENSE` 和 `NOTICE`（mygo.json 的 `resources`），访达里显示的版权信息也写明了许可（`copyright` → `NSHumanReadableCopyright`），设置 → 诊断与关于 里有源代码链接。发布版本从公开仓库的 tag 构建，GitHub 会在 Release 上附上对应的源码包：保留 tag，不要发布源码没有推送的构建。
+- **许可证**：0.4.0-beta.1 之后的版本采用 GNU AGPL-3.0（之前的版本是 Apache-2.0）。应用的 `Contents/Resources` 里带有 `LICENSE`、`NOTICE` 和 `THIRD-PARTY-NOTICES.txt`（所有第三方组件完整的许可和 NOTICE 文本，由 `scripts/third-party-notices.sh` 生成；mygo.json 的 `resources`），访达里显示的版权信息也写明了许可（`copyright` → `NSHumanReadableCopyright`），设置 → 诊断与关于 里有源代码链接，也能打开第三方许可。发布版本从公开仓库的 tag 构建，GitHub 会在 Release 上附上对应的源码包：保留 tag，不要发布源码没有推送的构建。
 - **增量更新**：`mygo build` 会从已发布的 Release 和 prerelease 下载之前版本的更新包（并用公钥校验）来生成增量包。第一个版本没有增量；之后每个版本都有相对最近最多三个已发布版本的增量包。
 - **公证失败**：构建日志里有 submission ID，用 `xcrun notarytool log <ID> --keychain-profile notary` 查看 Apple 拒绝的原因。
 - **报错「the update signing key does not match updates.publicKey」**：secret 里的私钥和变量里的公钥不是同一对，用同一次 `mygo keygen` 的输出重新设置两者。

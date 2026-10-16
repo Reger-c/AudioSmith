@@ -1,0 +1,6 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name swift-argument-parser
+url https://github.com/apple/swift-argument-parser
+revision 6a52f3251125d74daf04fcbd5e6f08a75d074382
+version 1.8.2

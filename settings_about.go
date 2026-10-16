@@ -37,6 +37,22 @@ const issuesURL = api.SourceURL + "/issues/new"
 // licenceURL is AudioSmith's licence, the GNU AGPL version 3 (LICENSE).
 const licenceURL = "https://www.gnu.org/licenses/agpl-3.0.html"
 
+// thirdPartyNotices is the file with the licence texts of every third-party
+// component (scripts/third-party-notices.sh), in the app's resources.
+const thirdPartyNotices = "THIRD-PARTY-NOTICES.txt"
+
+// thirdPartyNoticesURL opens the app's copy of the third-party notices in
+// the default text editor, or, in a build without it (go run, tests), the
+// copy on GitHub.
+func thirdPartyNoticesURL() string {
+	if res, err := mygo.App.Path(mygo.PathResources); err == nil {
+		if path := filepath.Join(res, thirdPartyNotices); fileExists(path) {
+			return (&url.URL{Scheme: "file", Path: path}).String()
+		}
+	}
+	return api.SourceURL + "/blob/main/" + thirdPartyNotices
+}
+
 // aboutState is the Diagnostics page's state (and the machine, which the
 // first-run wizard reads too).
 type aboutState struct {
@@ -49,6 +65,9 @@ type aboutState struct {
 	usage        *sqlitestore.Usage
 	usageLoading bool
 	usageErr     string
+
+	// noticesURL opens the third-party notices (thirdPartyNoticesURL).
+	noticesURL string
 
 	// Software updates (updates.go, thread #50).
 	updates updateService
@@ -373,6 +392,12 @@ func (a *app) aboutSettings(c *ui.Context) {
 		ui.Link(c, "GNU AGPL-3.0", licenceURL)
 		ui.Text(c, i18n.T("Source code")).TextColor(t.TextMuted)
 		ui.Link(c, strings.TrimPrefix(api.SourceURL, "https://"), api.SourceURL)
+		// The libraries' and material's licences (thread #62).
+		if a.noticesURL == "" {
+			a.noticesURL = thirdPartyNoticesURL()
+		}
+		ui.Text(c, i18n.T("Third-party licences")).TextColor(t.TextMuted)
+		ui.Link(c, thirdPartyNotices, a.noticesURL)
 	})
 	ui.Text(c, i18n.T("AudioSmith runs every model on this Mac. Each model keeps its own licence: see Settings → Models and downloads.")).
 		FontSize(px(t, 12)).TextColor(t.TextMuted)

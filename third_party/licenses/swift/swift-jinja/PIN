@@ -1,0 +1,6 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name swift-jinja
+url https://github.com/huggingface/swift-jinja.git
+revision 4588064a20f3fc093c95f2f7d3359999bf30cae5
+version 2.5.1

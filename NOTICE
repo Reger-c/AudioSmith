@@ -66,5 +66,12 @@ Libraries
   EventSource (MIT), yyjson (MIT), and Apple's swift-argument-parser,
   swift-asn1, swift-collections, swift-crypto, swift-numerics and
   swift-syntax (Apache-2.0).
-  Their licences and notices are in their source repositories, at the
-  versions pinned in go.mod and engine/Package.resolved.
+  MyGo's SQLite plugin carries SQLite (public domain), and RapiDoc's
+  bundle the libraries lit, marked, microlighter, github-slugger and
+  @scalar/openapi-parser (BSD-3-Clause, MIT, ISC).
+
+Full licence texts
+  THIRD-PARTY-NOTICES.txt, next to this file (in the app: Settings →
+  Diagnostics and about → Third-party licences), lists every component
+  above with its version, source and licence, and has the full text of
+  each licence and NOTICE file (scripts/third-party-notices.sh writes it).

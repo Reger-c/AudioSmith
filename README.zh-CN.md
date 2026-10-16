@@ -230,7 +230,7 @@ Copyright (C) 2026 hehehai and the AudioSmith contributors.
 
 AudioSmith 是自由软件：你可以按自由软件基金会发布的 [GNU Affero 通用公共许可证](LICENSE)第 3 版（AGPL-3.0）再分发和修改它。我们希望它有用，但不提供任何担保，详见许可证。如果你把修改过的 AudioSmith 通过网络提供给别人使用（比如它的本地 API），AGPL 要求你向这些用户提供你那个版本的源代码。0.4.0-beta.1 及更早的版本以 Apache License 2.0 发布，仍适用该许可。
 
-模型权重各有自己的许可（见[模型](#模型)），其中 OmniVoice 禁止商用。第三方素材和库列在 [NOTICE](NOTICE) 里。
+模型权重各有自己的许可（见[模型](#模型)），其中 OmniVoice 禁止商用。第三方素材和库列在 [NOTICE](NOTICE) 里，完整的许可文本见 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)（应用里都带有这两个文件）。
 
 - 模型来自 Qwen 团队（Qwen3-TTS、Qwen3-ASR、Qwen3 4B）、hexgrad（Kokoro）、Resemble AI（Chatterbox）、k2-fsa（OmniVoice）、OpenMOSS（MOSS-Transcribe-Diarize）、OpenAI（Whisper）、Meta（HTDemucs、AudioSeal）、NVIDIA（Sortformer）、Silero 和 DeepFilterNet；MLX 版本由 mlx-community 等转换。
 - 运行在 [MLX](https://github.com/ml-explore/mlx)、[mlx-swift](https://github.com/ml-explore/mlx-swift) 和 [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) 之上。

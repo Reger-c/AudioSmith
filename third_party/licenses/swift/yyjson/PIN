@@ -1,0 +1,6 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name yyjson
+url https://github.com/ibireme/yyjson.git
+revision 8b4a38dc994a110abaec8a400615567bd996105f
+version 0.12.0

@@ -1,0 +1,5 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name demucs-mlx-swift
+url https://github.com/kylehowells/demucs-mlx-swift.git
+revision c8482739c621b90a64bf1a9f013712f6fea44eda

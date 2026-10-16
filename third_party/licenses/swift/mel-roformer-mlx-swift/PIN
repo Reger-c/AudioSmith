@@ -1,0 +1,5 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name mel-roformer-mlx-swift
+url https://github.com/xocialize/mel-roformer-mlx-swift.git
+revision 22162f8fd5cd8cc09abc47a87c1ecddf3baf5ee3

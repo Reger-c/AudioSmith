@@ -1,0 +1,5 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name mlx-audio-swift
+url https://github.com/Blaizzy/mlx-audio-swift.git
+revision 244458d7b61e54ff135073ddc9ed76782bb20758

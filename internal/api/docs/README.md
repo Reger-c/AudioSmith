@@ -12,4 +12,6 @@ the system's).
 
 To update: download the new tarball, check its integrity against the
 npm registry, replace `rapidoc-min.js` and its licence, and update this
-file.
+file. Then redo the licences of the libraries in its bundle
+(`third_party/licenses/rapidoc`, see `third_party/licenses/README.md`) and
+run `scripts/third-party-notices.sh`.

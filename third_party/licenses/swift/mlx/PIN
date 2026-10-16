@@ -1,0 +1,6 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name mlx
+url https://github.com/ml-explore/mlx
+revision 1f8e74e3f12f31365464a6867c6579f0e9b29d85
+parent mlx-swift 19601207e9a0de51e03ee6ec0c3c5f3784275075 Source/Cmlx/mlx

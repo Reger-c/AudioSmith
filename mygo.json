@@ -6,7 +6,8 @@
   "out": "build",
   "resources": [
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "THIRD-PARTY-NOTICES.txt"
   ],
   "urlSchemes": [
     "audiosmith"
