@@ -271,7 +271,7 @@ func (a *app) view(c *ui.Context) {
 		ui.Divider(c)
 		a.statusBar(c)
 	})
-	a.settingsDialog(c) // shell_settings.go
+	a.settingsDialog(c) // settings_dialog.go
 	a.palette(c)
 	a.shortcutSheet(c)
 	a.onboarding(c) // M7a: the first-run wizard, under the licence dialog

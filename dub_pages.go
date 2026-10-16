@@ -24,7 +24,7 @@ func dubPageTitle(path string) (string, bool) {
 }
 
 // dubBadge is the sidebar badge of an M4 page (M7a: the shell places
-// the pages, shell.go navGroups): a running dub, the batch's videos.
+// the pages, shell_pages.go navGroups): a running dub, the batch's videos.
 func (a *app) dubBadge(path string) (string, bool) {
 	n := 0
 	switch path {

@@ -221,7 +221,7 @@ func voiceKindText(k core.VoiceKind) string {
 	return i18n.T("Built-in voice")
 }
 
-// --- the area's pages in the router (shell.go) ---------------------------
+// --- the area's pages in the router (shell_pages.go) ---------------------
 
 // voicesRoute builds the voice area's page for r and reports whether it
 // was one: /voices, /clone (or /voices/new), /design, /gallery.

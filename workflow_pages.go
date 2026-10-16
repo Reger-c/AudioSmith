@@ -18,7 +18,7 @@ func wfPageTitle(path string) (string, bool) {
 }
 
 // wfBadge is the sidebar badge of /workflows (M7a: the shell places the
-// page, shell.go navGroups): a running workflow's steps.
+// page, shell_pages.go navGroups): a running workflow's steps.
 func (a *app) wfBadge(path string) (string, bool) {
 	if path != "/workflows" {
 		return "", false

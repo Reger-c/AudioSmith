@@ -1,6 +1,6 @@
 package main
 
-// The settings pages M7a adds (thread #22), routed from shell_settings.go.
+// The settings pages M7a adds (thread #22), routed from settings_dialog.go.
 
 import (
 	"github.com/egoist/mygo/ui"
