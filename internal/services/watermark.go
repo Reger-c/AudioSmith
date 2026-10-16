@@ -2,7 +2,7 @@ package services
 
 // The invisible watermark at the end of every render (takes, and so the
 // dub lines, workflow Speak steps and Local API speech that render
-// through the take pipeline; longform chapters in longform_render.go):
+// through the take pipeline; longform chapters in longform_chapter.go):
 // Config.Watermark marks the finished WAV in place. A failure never fails
 // the render: the take keeps a notice and stays unmarked.
 
