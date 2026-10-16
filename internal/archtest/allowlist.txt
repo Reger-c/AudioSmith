@@ -12,8 +12,6 @@ calls.go                                   798  # B3
 calls_view.go                              710  # B3
 clone.go                                   649  # B3
 dictation.go                               733  # B3
-dub.go                                    1282  # B1
-dub_view.go                               1548  # B1
 e2e_smoke_test.go                          873  # B3
 e2e_v02_test.go                           1373  # B3
 enginelink.go                              730  # B3
