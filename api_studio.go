@@ -2,7 +2,7 @@ package main
 
 // The app's modules for agents (thread #35): api.Studio over the same
 // services and helpers the pages use (longform*.go, dub*.go, batch.go,
-// gallery.go, export_dialog.go, workflow*.go, projects.go). Like the rest
+// gallery.go, export*.go, workflow*.go, projects.go). Like the rest
 // of apiBackend it runs on the API's goroutines and reads only what is
 // goroutine-safe (the library, the services, settings), never view state.
 //

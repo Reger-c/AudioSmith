@@ -2,7 +2,7 @@ package main
 
 // Voice discovery, take exports and workflows for agents (thread #35):
 // the gallery's search and "Use voice" (gallery.go), the Export audio
-// dialog's export (export_dialog.go), and running saved workflows
+// dialog's export (export_run.go), and running saved workflows
 // (workflow.go) without editing their steps.
 
 import (

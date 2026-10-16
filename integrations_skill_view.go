@@ -3,7 +3,7 @@ package main
 // The agent skill's card on the agent pages (thread #34), under the
 // setup prompt: what the skill is, Install skill… (Claude Code, Codex,
 // Cursor: writes the user-level SKILL.md after a confirmation), Save
-// skill… and Copy skill. integrations_skill.go makes the text.
+// skill… and Copy skill. integrations_skill*.go make the text.
 
 import (
 	"github.com/egoist/mygo/ui"
