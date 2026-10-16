@@ -85,9 +85,17 @@ func TestSnapshotsSpeakers(t *testing.T) {
 				a.toasts = nil
 				s.save(tt, name)
 			}
+			// Not downloaded (an earlier run of the loop put it there).
+			os.RemoveAll(hub.RepoDir(modelCache(a.prefs), moss.Repo))
+			a.refreshModels()
 			a.updateSettings(func(st *settings.Settings) { st.Transcribe.Speakers = true })
 			a.navigate("/transcripts")
 			save("spk-transcribe-need")
+			a.navigate("/models")
+			a.modelsKind, a.modelsDetail = 2, map[string]bool{moss.ID: true}
+			save("spk-transcribe-models")
+			a.modelsKind, a.modelsDetail = 0, nil
+			a.navigate("/transcripts")
 			fakeOnDisk(t, a, moss)
 			putTranscript(t, a, speakersTranscript(time.Now().Add(-2*time.Hour)))
 			a.selectTranscript("spk1")
@@ -105,6 +113,7 @@ func TestSnapshotsSpeakers(t *testing.T) {
 				a.toasts = nil
 				s.save(tt, name)
 			}
+			os.RemoveAll(hub.RepoDir(modelCache(a.prefs), moss.Repo))
 			a.navigate("/dub")
 			a.dubSourceFile(d.src)
 			a.dubSet(func(p *dub.Project) { p.Targets = []string{"zh"} })

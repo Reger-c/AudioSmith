@@ -285,7 +285,7 @@ func TestSpeakersE2E(t *testing.T) {
 			n := len(a.dubList)
 			a.updateSettings(func(s *settings.Settings) { s.Dubbing.Targets, s.Dubbing.NoReview = []string{"en"}, true })
 			a.newDub(dub.Source{Kind: dub.SourceFile, Path: path, Name: filepath.Base(path)})
-			v.wait(t, "dub created", time.Minute, func() bool { return a.dub != nil && len(a.dubList) > n })
+			v.wait(t, "dub created", time.Minute, func() bool { return a.dub != nil && len(a.dubList) > n && a.dub.Source.Path == path })
 			id := a.dub.ID
 			started := time.Now()
 			ids, err := a.dubSvc.Run(ctx, id, services.RunRequest{Through: dub.StageReferences})
