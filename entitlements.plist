@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Entitlements of AudioSmith.app (mygo.json macos.entitlements). Under the
+     hardened runtime of a Developer ID build, the app asks for the
+     microphone (dictation, recording a voice to clone; AVCaptureDevice in
+     internal/dictation). Nothing else is needed: the app is not sandboxed,
+     so it needs no network entitlements; dictation's auto-paste posts
+     keystrokes with CGEventPost, which Accessibility permits (TCC), not an
+     entitlement; and Go code needs no JIT. audiosmith-engine has its own
+     (engine/Support/engine.entitlements); MLX compiles its Metal kernels
+     ahead of time (default.metallib), so it needs no JIT either. -->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>
