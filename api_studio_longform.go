@@ -3,7 +3,7 @@ package main
 // Stories and Audiobook projects for agents (thread #35): made as the
 // pages make them (import, Auto-cast, Split into lines), saved in the
 // project library, compiled and rendered by the longform service, and
-// exported as Save does (longform_view.go).
+// exported as Save does (longform_view_outputs.go).
 
 import (
 	"context"

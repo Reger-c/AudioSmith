@@ -2,10 +2,14 @@ package main
 
 // The Run panel: what stops the workflow from running, the run's
 // controls (Run, Resume, Start a new run, Cancel), its progress item by
-// item, and the results with Play, Show in Finder and Export all.
+// item, and the results with Play, Show in Finder and Export all. Then
+// the runs themselves (moved from workflow.go): the app's checks of a
+// step, start, cancel, and stale results.
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -13,6 +17,9 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -325,4 +332,189 @@ func (a *app) wfExportInput(o services.WorkflowOutput) string {
 		}
 	}
 	return ""
+}
+
+// --- checks -------------------------------------------------------------------------------
+
+// wfReport is the open workflow's validation, kept until it changes.
+func (a *app) wfReport() *workflow.Report {
+	if a.wf == nil {
+		return &workflow.Report{}
+	}
+	if a.wfRep == nil || a.wfRepVer != a.wfVer {
+		a.wfRep, a.wfRepVer = workflow.Validate(a.wf, a.wfCheck), a.wfVer
+	}
+	return a.wfRep
+}
+
+// App-side diagnostics (workflow.Check).
+const (
+	wfCodeNotDownloaded = "app.not_downloaded"
+	wfCodeVoice         = "app.voice"
+	wfCodeTranslator    = "app.translator"
+	wfCodeSTT           = "app.stt"
+	wfCodeEncode        = "app.encode"
+)
+
+// wfCheck is what only the app knows about a step: its model downloaded,
+// its voice there and usable, a translator and a speech-to-text model
+// set up. It reads memory only (the models' state, the voices).
+func (a *app) wfCheck(n *workflow.Node, _ workflow.Type) []workflow.Diagnostic {
+	var out []workflow.Diagnostic
+	add := func(sev workflow.Severity, code, msg string) {
+		out = append(out, workflow.Diagnostic{Severity: sev, Code: code, Node: n.ID, Arg: msg})
+	}
+	stt := func() {
+		m := dubModels(a.lib)
+		if m.STT == "" {
+			add(workflow.Error, wfCodeSTT, i18n.T("No speech-to-text model is available: download one on the Models page."))
+			return
+		}
+		if e, ok := catalog.Builtin().ByRepo(m.STT); ok {
+			if ready, known := a.modelOnDisk(e); known && !ready {
+				add(workflow.Warning, wfCodeNotDownloaded, i18n.T("%s is not downloaded yet.", modelRef(e)))
+			}
+		}
+	}
+	switch n.Kind {
+	case workflow.KindSpeak, workflow.KindConvert:
+		if n.P.Model == "" {
+			break
+		}
+		e := entryFor(n.P.Model)
+		if ready, known := a.modelOnDisk(e); known && !ready {
+			add(workflow.Warning, wfCodeNotDownloaded, i18n.T("%s is not downloaded yet.", modelRef(e)))
+		}
+		if e.NeedsReference && (n.P.Voice == "" || strings.Contains(n.P.Voice, ":")) {
+			add(workflow.Error, wfCodeVoice, i18n.T("%s only clones voices: choose a saved cloned voice.", modelRef(e)))
+		}
+		if ref := n.P.Voice; ref != "" && !strings.Contains(ref, ":") {
+			v := a.findVoice(ref)
+			switch {
+			case v == nil:
+				add(workflow.Error, wfCodeVoice, i18n.T("Its voice was deleted: choose another."))
+			default:
+				if ok, why := voiceUsable(v, e); !ok {
+					add(workflow.Error, wfCodeVoice, why)
+				}
+			}
+		}
+		if n.Kind == workflow.KindConvert {
+			stt()
+		}
+	case workflow.KindTranscribe:
+		stt()
+	case workflow.KindTranslate:
+		if ok, _ := a.dubTranslatorReady(dub.Settings{Translator: n.P.Translator}); !ok {
+			add(workflow.Error, wfCodeTranslator, i18n.T("Translating needs a translation engine: a local model (Ollama, LM Studio) or a provider in Settings → Writing help."))
+		}
+	case workflow.KindExport:
+		if n.P.Format == workflow.FormatM4A && !a.wfCanEncode() {
+			add(workflow.Warning, wfCodeEncode, i18n.T("M4A needs the speech engine; it is not running."))
+		}
+	}
+	return out
+}
+
+// wfCanEncode reports whether M4A can be written now.
+func (a *app) wfCanEncode() bool {
+	return a.wfEngine != nil || a.eng != nil && a.eng.sup != nil
+}
+
+// --- runs ---------------------------------------------------------------------------------
+
+// wfStart runs the open workflow (again: every result anew).
+func (a *app) wfStart(again bool) {
+	if a.wf == nil || a.wfBusy() {
+		return
+	}
+	rep := a.wfReport()
+	a.wfPanel = wfPanelRun
+	if !rep.OK() {
+		a.wfErr = i18n.T("Fix the steps marked in red first.")
+		return
+	}
+	a.wfErr = ""
+	w := a.wf.Clone()
+	svc, sched := a.wfSvc, a.lib.sched
+	a.background(func() {
+		ctx := context.Background()
+		// The working copy first: the run reads the saved one.
+		_, err := svc.Save(ctx, w)
+		var run *workflow.Run
+		if err == nil {
+			run, err = svc.Run(ctx, w.ID, services.RunOptions{Again: again, Priority: jobs.PriorityNormal})
+		}
+		var active []jobs.Job
+		if err == nil && sched != nil {
+			active, _ = svc.Active(ctx, w.ID)
+		}
+		a.post(func() {
+			if a.wf == nil || a.wf.ID != w.ID {
+				return
+			}
+			if err != nil {
+				var inv *services.WorkflowInvalidError
+				switch {
+				case errors.As(err, &inv):
+					a.wfErr = i18n.T("Fix the steps marked in red first.")
+				case errors.Is(err, core.ErrBusy):
+					a.wfErr = i18n.T("This workflow is running already.")
+				default:
+					a.wfErr = i18n.T("Could not start the run: %v", err)
+				}
+				return
+			}
+			// Events may have brought a later state of this run already.
+			if a.wfRun == nil || a.wfRun.ID != run.ID {
+				a.wfRun = run
+			}
+			for _, j := range active {
+				if !j.State.Terminal() {
+					a.wfJobs[j.ID] = j
+				}
+			}
+			if len(run.Steps) == 0 {
+				a.toast(i18n.T("Nothing changed since the last run: every result is ready."))
+			}
+		})
+	})
+}
+
+// wfCancel stops the open workflow's run (it can resume later).
+func (a *app) wfCancel() {
+	if a.wf == nil {
+		return
+	}
+	svc, id := a.wfSvc, a.wf.ID
+	a.background(func() {
+		if err := svc.Cancel(context.Background(), id); err != nil {
+			a.post(func() { a.toast(i18n.T("Could not stop the run: %v", err)) })
+		}
+	})
+}
+
+// wfStale reports whether the workflow changed since its last run.
+func (a *app) wfStale() bool {
+	if a.wf == nil || a.wfRun == nil || a.wfRun.Signature == "" {
+		return false
+	}
+	rep := a.wfReport()
+	if !rep.OK() {
+		return false
+	}
+	items := a.wf.Items()
+	return workflow.RunSignature(workflow.StepKeys(a.wf, rep, items, a.wfSalt()), items) != a.wfRun.Signature
+}
+
+// wfSalt is the service's salt (the speech-to-text model).
+func (a *app) wfSalt() workflow.Salt {
+	m := dubModels(a.lib)
+	return func(n *workflow.Node) string {
+		switch n.Kind {
+		case workflow.KindTranscribe, workflow.KindConvert:
+			return m.STT + "|" + m.Align
+		}
+		return ""
+	}
 }

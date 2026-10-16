@@ -473,7 +473,7 @@ func (a *app) settingsSection(c *ui.Context, r *ui.Route) {
 }
 
 // settingRow is a setting: its name, a ⓘ telling what it does (desc, ""
-// for none) and its control on the right (formRow in ui_kit.go).
+// for none) and its control on the right (formRow in ui_layout.go).
 func settingRow(c *ui.Context, key, title, desc string, control func()) {
 	formRow(c, key, title, desc, control)
 }
