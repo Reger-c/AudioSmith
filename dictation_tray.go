@@ -1,7 +1,7 @@
 package main
 
 // The menu bar icon: Start/Stop dictation, Open AudioSmith, Transcribe,
-// Settings, Quit; red while dictation listens. With Settings → General →
+// Settings, Quit; a dot marks it while dictation listens. With Settings → General →
 // "Keep running in the menu bar", closing the window hides it, so the
 // shortcut keeps working; the Dock icon or the menu brings it back.
 
@@ -24,16 +24,17 @@ type trayState struct {
 }
 
 // Tray icons: Solar's music library (assets/tray/tray.svg, CC BY 4.0)
-// at 36×36 px (18 pt @2x), black as a template (macOS tints it) and red
-// while dictation listens. Make them again with
+// at 36×36 px (18 pt @2x), both templates (macOS tints them to the menu
+// bar); while dictation listens a dot marks the top right corner
+// (assets/tray/tray-active.svg). Make them again with
 //
 //	sed 's/currentColor/#000000/' assets/tray/tray.svg | rsvg-convert -w 36 -h 36 -o assets/tray/tray.png
-//	sed 's/currentColor/#ff3b30/' assets/tray/tray.svg | rsvg-convert -w 36 -h 36 -o assets/tray/tray-recording.png
+//	sed 's/currentColor/#000000/' assets/tray/tray-active.svg | rsvg-convert -w 36 -h 36 -o assets/tray/tray-active.png
 var (
 	//go:embed assets/tray/tray.png
 	trayIcon []byte
-	//go:embed assets/tray/tray-recording.png
-	trayRecIcon []byte
+	//go:embed assets/tray/tray-active.png
+	trayActiveIcon []byte
 )
 
 // openTray makes the menu bar icon.
@@ -60,7 +61,7 @@ func (a *app) updateTray() {
 	rec := a.dict != nil && (a.dict.phase == dictStarting || a.dict.phase == dictListening)
 	if tr.tray != nil && rec != tr.recording {
 		if rec {
-			tr.tray.SetIcon(trayRecIcon, false)
+			tr.tray.SetIcon(trayActiveIcon, true)
 		} else {
 			tr.tray.SetIcon(trayIcon, true)
 		}
