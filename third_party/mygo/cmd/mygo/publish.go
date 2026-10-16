@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/egoist/mygo/internal/update"
 )
 
 // checkUpload checks, before a build, that -upload has somewhere to upload
@@ -79,23 +81,34 @@ func publishGitHub(c *Config, artifacts []string) error {
 		return err
 	}
 	// With a tag prefix, the repository's latest release is another's, which
-	// the app's releases leave alone.
+	// the app's releases leave alone. A prerelease version, such as
+	// 1.3.0-beta.1, is a prerelease on GitHub, which never becomes the
+	// latest: only apps that take prereleases see it
+	// (mygo.Updater.SetPrereleases).
 	latest := ""
 	if c.Updates.tagged() {
 		latest = " --latest=false"
 	}
+	prerelease := update.IsPrerelease(c.Version)
 	if exec.Command(gh, "release", "view", tag, "--repo", repo).Run() != nil {
 		notes, _ := c.releaseNotes()
-		t := con.start("Creating the draft release " + tag + " of " + repo)
+		kind := "draft release "
+		if prerelease {
+			kind = "draft prerelease "
+		}
+		t := con.start("Creating the " + kind + tag + " of " + repo)
 		args := []string{"release", "create", tag, "--repo", repo, "--draft", "--title", tag, "--notes", notes}
 		if latest != "" {
 			args = append(args, "--latest=false")
+		}
+		if prerelease {
+			args = append(args, "--prerelease")
 		}
 		if out, err := exec.Command(gh, args...).CombinedOutput(); err != nil {
 			t.fail()
 			return fmt.Errorf("gh release create: %v\n%s", err, out)
 		}
-		t.done("Created the draft release " + tag + " of " + repo)
+		t.done("Created the " + kind + tag + " of " + repo)
 	}
 	for _, batch := range [][]string{files, manifests} {
 		if len(batch) == 0 {

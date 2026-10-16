@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/internal/update"
@@ -48,7 +49,9 @@ var startExe, _ = os.Executable()
 //			mygo.App.Relaunch()
 //		}
 //	}
-type UpdaterModule struct{}
+type UpdaterModule struct {
+	prereleases atomic.Bool
+}
 
 // Updater installs new versions of the app.
 var Updater = &UpdaterModule{}
@@ -92,30 +95,40 @@ func (u *UpdaterModule) Enabled() bool {
 }
 
 // Check asks the update feed for a version newer than the running one and
-// returns it, or nil when the app is up to date.
+// returns it, or nil when the app is up to date. With SetPrereleases(true),
+// prereleases count too.
 func (u *UpdaterModule) Check(ctx context.Context) (*Update, error) {
 	if !u.Enabled() {
 		return nil, ErrUpdatesDisabled
 	}
-	return checkUpdate(ctx, packageUpdateFeed, packageUpdateKey, App.Version())
+	return checkUpdate(ctx, packageUpdateFeed, packageUpdateKey, App.Version(), u.Prereleases())
 }
 
-func checkUpdate(ctx context.Context, feed, key, current string) (*Update, error) {
-	feed, err := update.ResolveFeed(ctx, feed, httpGet)
+// SetPrereleases chooses whether Check offers prereleases, such as
+// 1.3.0-beta.1, as well as releases: for a beta channel that users join in
+// the app's settings. It is off until the app turns it on, and the app
+// keeps the user's choice: call it at every launch, before the first
+// check (the updater plugin's first automatic check is 10 seconds after
+// launch).
+//
+// On GitHub, prereleases are the releases marked as such, which never
+// become the latest release; Check then finds the newest version among
+// all releases through the GitHub API, one request a check within its 60
+// requests an hour for each address, and when the API fails it checks the
+// latest release instead. Updates from a URL have a single manifest, which
+// Check reads either way.
+//
+// Turning it off never offers an older version: an app running a
+// prerelease is offered the next release newer than it.
+func (u *UpdaterModule) SetPrereleases(on bool) { u.prereleases.Store(on) }
+
+// Prereleases reports whether Check offers prereleases (SetPrereleases).
+func (u *UpdaterModule) Prereleases() bool { return u.prereleases.Load() }
+
+func checkUpdate(ctx context.Context, feed, key, current string, prereleases bool) (*Update, error) {
+	m, err := fetchManifest(ctx, feed, prereleases)
 	if err != nil {
 		return nil, fmt.Errorf("mygo: checking for updates: %w", err)
-	}
-	body, err := httpGet(ctx, feed)
-	if err != nil {
-		return nil, fmt.Errorf("mygo: checking for updates: %w", err)
-	}
-	defer body.Close()
-	var m update.Manifest
-	if err := json.UnmarshalRead(io.LimitReader(body, update.MaxManifestSize), &m); err != nil {
-		return nil, fmt.Errorf("mygo: checking for updates: %w", err)
-	}
-	if m.Version == "" || m.URL == "" || m.Signature == "" {
-		return nil, errors.New("mygo: checking for updates: incomplete manifest")
 	}
 	if update.Compare(m.Version, current) <= 0 {
 		return nil, nil
@@ -123,6 +136,50 @@ func checkUpdate(ctx context.Context, feed, key, current string) (*Update, error
 	up := &Update{Version: m.Version, Notes: m.Notes, manifest: m, key: key, current: current}
 	up.Date, _ = time.Parse(time.RFC3339, m.Date)
 	return up, nil
+}
+
+// fetchManifest downloads the manifest of feed: of its newest version, or
+// with prereleases of its newest prerelease or release. When prereleases
+// cannot be listed, such as past the GitHub API's limit, it reads the
+// manifest of the newest release.
+func fetchManifest(ctx context.Context, feed string, prereleases bool) (update.Manifest, error) {
+	if prereleases {
+		u, err := update.ResolvePrereleaseFeed(ctx, feed, httpGet)
+		if err == nil {
+			return getManifest(ctx, u)
+		}
+		if ctx.Err() != nil {
+			return update.Manifest{}, err
+		}
+		m, rerr := fetchManifest(ctx, feed, false)
+		if rerr != nil {
+			return update.Manifest{}, err
+		}
+		log.Printf("mygo: checked the newest release for updates, as prereleases could not be listed: %v", err)
+		return m, nil
+	}
+	u, err := update.ResolveFeed(ctx, feed, httpGet)
+	if err != nil {
+		return update.Manifest{}, err
+	}
+	return getManifest(ctx, u)
+}
+
+// getManifest downloads the manifest at url.
+func getManifest(ctx context.Context, url string) (update.Manifest, error) {
+	var m update.Manifest
+	body, err := httpGet(ctx, url)
+	if err != nil {
+		return m, err
+	}
+	defer body.Close()
+	if err := json.UnmarshalRead(io.LimitReader(body, update.MaxManifestSize), &m); err != nil {
+		return m, err
+	}
+	if m.Version == "" || m.URL == "" || m.Signature == "" {
+		return m, errors.New("incomplete manifest")
+	}
+	return m, nil
 }
 
 // Install downloads the update, checks that it is signed with the app's

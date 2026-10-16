@@ -132,6 +132,14 @@ func Compare(a, b string) int {
 	return compareFields(apre, bpre)
 }
 
+// IsPrerelease reports whether a version such as 1.3.0-beta.1 is a
+// prerelease, which Compare orders before its release.
+func IsPrerelease(version string) bool {
+	version, _, _ = strings.Cut(version, "+")
+	_, pre, _ := strings.Cut(version, "-")
+	return pre != ""
+}
+
 func compareFields(a, b string) int {
 	af, bf := strings.Split(a, "."), strings.Split(b, ".")
 	for i := 0; i < len(af) || i < len(bf); i++ {
