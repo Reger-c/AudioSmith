@@ -104,6 +104,7 @@ func newShellState() shellState {
 		lastSettings: "general",
 		logsHeight:   220,
 		prefs:        settings.Defaults(),
+		aboutState:   aboutState{updates: noUpdates{}},
 	}
 }
 
@@ -367,7 +368,7 @@ func section(path string) string {
 // openWindow opens the main window; it runs in App.WhenReady.
 func (a *app) openWindow() {
 	a.version = mygo.App.Version()
-	a.systemLocale = mygo.App.Locale()
+	a.systemLocale = systemLanguage()
 	a.hasMenu = true
 	a.applyLocale() // the system's language, unless the settings name one
 	a.buildMenu()
@@ -383,7 +384,8 @@ func (a *app) openWindow() {
 		Content:        ui.View(a.view),
 	})
 	a.refreshModels()
-	a.maybeOnboard() // M7a: a fresh install opens the setup (onboarding.go)
+	a.connectUpdates() // updates.go (thread #50)
+	a.maybeOnboard()   // M7a: a fresh install opens the setup (onboarding.go)
 }
 
 var (

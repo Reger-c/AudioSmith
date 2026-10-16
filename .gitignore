@@ -11,3 +11,8 @@ mygo_windows_*.syso
 !/engine/.swiftpm/xcode/xcshareddata/
 /resources/darwin-arm64/engine/
 /AudioSmith
+
+# Release keys never belong in the repository (docs/release.md)
+*.p12
+*.p8
+mygo-update.key

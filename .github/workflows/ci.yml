@@ -1,17 +1,24 @@
 # Linux CI: the Go side (views in ui.Tester, services, store, jobs, the
 # supervisor against a scripted engine, the hub against a fake HF, the
-# protocol fixtures, i18n key parity) and MyGo's vet. The Swift engine and
-# the end-to-end tests need a Mac with Apple silicon; they are not run here
-# (README: Tests).
+# protocol fixtures, i18n key parity, mygo.json and CHANGELOG.md for
+# releases), MyGo's vet, gofmt, the vendored MyGo and the workflows. The
+# Swift engine and the end-to-end tests need a Mac with Apple silicon; they
+# are not run here (README: Tests). Releases: release.yml.
 name: CI
 
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "research/**", "plan/**"]
   pull_request:
+    paths-ignore: ["**.md", "research/**", "plan/**"]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   go:
@@ -52,6 +59,20 @@ jobs:
           fi
           echo "${{ steps.sqlite.outputs.sha }}  $lib" | sha256sum -c -
           echo "MYGO_SQLITE_LIBRARY=$lib" >> "$GITHUB_ENV"
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l . | grep -v '^engine/' || true)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::not gofmt'd: $unformatted"
+            exit 1
+          fi
+
+      - name: Vendored MyGo
+        run: scripts/vendor-mygo.sh --check
+
+      - name: Workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck=
 
       - name: Test
         run: CGO_ENABLED=0 go test ./...

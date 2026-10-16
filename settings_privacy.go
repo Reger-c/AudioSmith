@@ -24,7 +24,7 @@ func (a *app) privacySettings(c *ui.Context) {
 	settingRow(c, "priv-analytics", i18n.T("No analytics"), i18n.T("AudioSmith collects no usage data, crash reports or identifiers, and has no setting to turn them on. Settings → Usage shows statistics computed on this Mac only."), func() {})
 
 	sectionTitle(c, i18n.T("What leaves this Mac"))
-	muted(i18n.T("Speech is made and recognised on this Mac. AudioSmith connects to the network only for what you ask:"))
+	muted(i18n.T("Speech is made and recognised on this Mac. AudioSmith connects to the network only for these:"))
 	ui.Column(c.Key("priv-list")).Gap(px(t, 4)).Padding(0, 0, 0, px(t, 8)).Children(func() {
 		for _, s := range []string{
 			i18n.T("Model downloads from Hugging Face or its mirror (Settings → Network)."),
@@ -32,6 +32,7 @@ func (a *app) privacySettings(c *ui.Context) {
 			i18n.T("Videos from links you paste on the Dub page."),
 			i18n.T("Writing help and translation, only with a cloud provider you set up (Settings → Writing help)."),
 			i18n.T("The Local API, which listens on this Mac only unless you share it on your network."),
+			i18n.T("Checking for updates: once a day AudioSmith reads the version file of its latest release on GitHub; nothing about you is sent. Turn it off in Settings → Diagnostics and about."),
 		} {
 			ui.Text(c, "• "+s).FontSize(px(t, 12))
 		}

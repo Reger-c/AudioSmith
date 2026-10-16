@@ -50,7 +50,7 @@ type Settings struct {
 // General: language and app behaviour.
 type General struct {
 	// Language is the UI language as a BCP-47 tag ("en", "zh-Hans"), or ""
-	// to follow the system (mygo.App.Locale()); see i18n.Match.
+	// to follow the system (mygo.App.PreferredLanguages()); see i18n.Match.
 	Language string `json:"language"`
 	// CloseToTray keeps AudioSmith running in the menu bar when its
 	// window closes, so dictation keeps working (M2).

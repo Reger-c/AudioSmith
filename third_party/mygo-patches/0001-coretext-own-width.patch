@@ -1,38 +1,25 @@
-text: lay out a text at its own width on one line on macOS
+text: lay out a long text at its own width on one line on macOS
 
-On macOS, a single-line text that gets exactly its measured width can
-still end in "…" (and a wrapping one drop its last word to a second line),
-as "M4B（含章节）" and "标题(可选)" do. Two causes:
+On macOS, a long single-line text that gets exactly its measured width can
+still end in "…" (and a wrapping one drop its last word to a second line):
+CTTypesetterSuggestLineBreak forgives a width 0.0002 short of the line's at
+most, and a float32 sum of a long line's float32 advances loses more (2e-4
+at 570 DIPs). line() now sums in float64, and coreText.shape breaks at
+width * (1 + 1e-6).
 
-1. Core Text spaces some characters apart by context, as a bracket next to
-   a letter of another script (macOS 26.7: 1/8 to 1/5 em). Within a run it
-   widens a glyph's advance; between runs of two fonts (SF / PingFang) it
-   only moves the glyphs of the next run. Line.Width sums advances, so it
-   came out short of Core Text's typographic width, and
-   CTTypesetterSuggestLineBreak at that width broke the line early.
-   coreText.line now folds such gaps into the advance of the glyph before
-   them (foldRunGaps).
-2. CTTypesetterSuggestLineBreak forgives a width 0.0002 short of the
-   line's at most. A float32 sum of a long line's float32 advances loses
-   more (2e-4 at 570 DIPs), so long lines broke early too. line() now sums
-   in float64, and coreText.shape breaks at width * (1 + 1e-6).
+(0.5.x's penAdvances already counts the room Core Text leaves between runs,
+as a bracket next to a letter of another script, which this patch did
+before too; short texts such as "M4B（含章节）" fit without it.)
 
 TestOwnWidthFits lays out each text at its own width and checks it keeps
-to one line and the glyphs stay within the width.
+to one line and the glyphs stay within the width. On MyGo 0.5.5 without the
+patch it fails for 10 cases on macOS 26.7, all long lines or 20-point text.
 ---
 diff --git a/internal/text/coretext_darwin.go b/internal/text/coretext_darwin.go
-index 7fba55e..6f7adf3 100644
+index a37d0a0..0b0b723 100644
 --- a/internal/text/coretext_darwin.go
 +++ b/internal/text/coretext_darwin.go
-@@ -408,6 +408,7 @@ type coreText struct {
- 	runPoints    []cgPoint
- 	runAdvances  []cgSize
- 	runIndices   []int
-+	extents      []runExtent
- 
- 	registered map[string][]registeredFace // by lowercased family
- }
-@@ -867,12 +868,16 @@ func (e *coreText) shape(text []rune, style Style, spans []Span, width float32,
+@@ -981,12 +981,16 @@ func (e *coreText) shape(text []rune, style Style, spans []Span, width float32,
  		e.breaks = lineBreaks(&e.seg, e.breaks, text)
  		breaks = e.breaks
  	}
@@ -50,79 +37,11 @@ index 7fba55e..6f7adf3 100644
  			// Core Text breaks a word that does not fit a line; carry
  			// on to the next break instead.
  			if breaks != nil {
-@@ -929,9 +934,67 @@ func (e *coreText) line(line uintptr, index []int, n int) shapedLine {
- 		}
- 		sl.runs = e.addRun(mark, sr)
- 	}
-+	e.foldRunGaps(sl.runs)
- 	return sl
- }
- 
-+// foldRunGaps adds the room Core Text leaves between two runs of a line to
-+// the advance of the right-most glyph of the run on the left. Core Text
-+// spaces some characters apart by their context, as a bracket next to a
-+// letter of another script: within a run it widens a glyph's advance,
-+// but between runs, as of two fonts, it only moves the glyphs of the run
-+// after. Lines are as wide as their advances, which are then as wide as
-+// Core Text's own lines, which it breaks paragraphs by: a text laid out at
-+// its own width keeps to one line.
-+func (e *coreText) foldRunGaps(runs []shapedRun) {
-+	if len(runs) < 2 {
-+		return
-+	}
-+	// Where each run starts on the screen, how wide its glyphs are and
-+	// which of them is right-most, leaving out marks, which take no room.
-+	e.extents = slices.Grow(e.extents[:0], len(runs))[:len(runs)]
-+	ext := e.extents
-+	for k, r := range runs {
-+		x := runExtent{last: -1}
-+		for i, g := range r.glyphs {
-+			if g.Advance == 0 {
-+				continue
-+			}
-+			if x.last < 0 || g.X < x.left {
-+				x.left = g.X
-+			}
-+			if x.last < 0 || g.X >= r.glyphs[x.last].X {
-+				x.last = i
-+			}
-+			x.width += g.Advance
-+		}
-+		ext[k] = x
-+	}
-+	for a, x := range ext {
-+		if x.last < 0 {
-+			continue
-+		}
-+		// The run that follows it on the screen.
-+		next, found := float32(0), false
-+		for b, y := range ext {
-+			if b != a && y.last >= 0 && y.left > x.left && (!found || y.left < next) {
-+				next, found = y.left, true
-+			}
-+		}
-+		if gap := next - (x.left + x.width); found && (gap > 1e-4 || gap < -1e-4) {
-+			g := &runs[a].glyphs[x.last]
-+			g.Advance = max(g.Advance+gap, 0)
-+		}
-+	}
-+}
-+
-+// runExtent is where a run of a line starts, how wide it is, and its
-+// right-most glyph, or -1 when it has none that takes room.
-+type runExtent struct {
-+	left, width float32
-+	last        int
-+}
-+
- func (e *coreText) isColor(font uintptr) bool {
- 	c, ok := e.color[font]
- 	if !ok {
 diff --git a/internal/text/layout.go b/internal/text/layout.go
-index eb9a41b..a2a1652 100644
+index a9215bf..846365c 100644
 --- a/internal/text/layout.go
 +++ b/internal/text/layout.go
-@@ -834,6 +834,10 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
+@@ -973,6 +973,10 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
  	size := p.Style.FontSize()
  	x0 := float32(math.MaxFloat32)
  	starts := *buf
@@ -133,7 +52,7 @@ index eb9a41b..a2a1652 100644
  	for _, run := range sl.runs {
  		runSize := size
  		if f := run.font; f != nil {
-@@ -871,14 +875,14 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
+@@ -1016,14 +1020,14 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
  			// Logical width follows the pen, not the glyphs' drawing
  			// offsets. Pango may kern "11" by offsetting its second glyph
  			// while keeping whole-pixel advances for line breaking.
@@ -151,18 +70,17 @@ index eb9a41b..a2a1652 100644
  	line.Y = *y
  	line.Baseline = *y + (line.Height-line.Ascent-line.Descent)/2 + line.Ascent
 diff --git a/internal/text/text_test.go b/internal/text/text_test.go
-index 5bcbff6..c2c1926 100644
+index 7b84ee2..54384fb 100644
 --- a/internal/text/text_test.go
 +++ b/internal/text/text_test.go
-@@ -83,6 +83,43 @@ func TestTruncation(t *testing.T) {
+@@ -85,6 +85,42 @@ func TestTruncation(t *testing.T) {
  	}
  }
  
-+// A text laid out at its own width keeps to one line. Core Text spaces a
-+// bracket apart from a letter of another script, between runs of two fonts
-+// by moving glyphs alone, which the width must count; and it forgives a
-+// width short of its own by 0.0002 at most, less than float32 widths of
-+// long lines can lose.
++// A text laid out at its own width keeps to one line. Core Text forgives
++// a width short of its own by 0.0002 at most, less than float32 widths of
++// long lines can lose; and it spaces a bracket apart from a letter of
++// another script, which the width must count.
 +func TestOwnWidthFits(t *testing.T) {
 +	s := Shared()
 +	for _, size := range []float32{11, 12, 13, 14, 20} {

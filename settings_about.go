@@ -45,6 +45,10 @@ type aboutState struct {
 	usage        *sqlitestore.Usage
 	usageLoading bool
 	usageErr     string
+
+	// Software updates (updates.go, thread #50).
+	updates updateService
+	updInfo updateInfo
 }
 
 // selfCheck is one check's outcome.
@@ -361,6 +365,8 @@ func (a *app) aboutSettings(c *ui.Context) {
 		ui.Link(c, i18n.T("Licence"), "https://creativecommons.org/licenses/by/4.0/").FontSize(px(t, fsCaption))
 	})
 
+	a.softwareUpdateSettings(c) // thread #50
+
 	sectionTitle(c, i18n.T("Self-check"))
 	settingRow(c, "about-check", i18n.T("Check AudioSmith"), i18n.T("The library, the engine, the folders, the network, the Keychain, ffmpeg and the permissions."), func() {
 		if a.selfChecking {
@@ -405,6 +411,48 @@ func (a *app) aboutSettings(c *ui.Context) {
 			} else {
 				go mygo.Shell.OpenExternal(u)
 			}
+		}
+	})
+}
+
+// softwareUpdateSettings is the Software updates section (updates.go): when
+// AudioSmith last checked, Check for Updates…, and the updater's two
+// preferences, which builds that can't update themselves show off and
+// disabled.
+func (a *app) softwareUpdateSettings(c *ui.Context) {
+	if !a.updInfo.read {
+		a.refreshUpdates()
+	}
+	u := a.updInfo
+	sectionTitle(c, i18n.T("Software updates"))
+	note := i18n.T("This copy doesn't update itself: development builds and copies built on this Mac don't. Releases from GitHub do.")
+	switch {
+	case !u.read:
+		note = ""
+	case u.enabled && u.lastCheck.IsZero():
+		note = i18n.T("Not checked yet.")
+	case u.enabled:
+		note = i18n.T("Last checked %s.", i18n.DateTime(u.lastCheck))
+	}
+	settingRowNote(c, "about-update", i18n.T("Check for updates"), note, func() {
+		if ui.Button(c.Key("about-update"), i18n.T("Check for Updates…")).Clicked() {
+			a.checkForUpdates()
+		}
+	})
+	auto := u.enabled && u.auto
+	settingRow(c, "about-update-auto", i18n.T("Automatic checks"), i18n.T("Once a day AudioSmith reads the version file of its latest release on GitHub, and offers a new version with its release notes. Nothing about you is sent."), func() {
+		if ui.Switch(c.Key("about-update-auto"), &auto).Label(i18n.T("Check once a day")).Disabled(!u.enabled).Changed() {
+			on := auto
+			a.updInfo.auto = on
+			a.updates.SetAutomaticChecks(on)
+		}
+	})
+	download := u.enabled && u.auto && u.download
+	settingRow(c, "about-update-download", i18n.T("Automatic installs"), i18n.T("A new version found by the daily check downloads and installs without asking, and runs the next time you open AudioSmith."), func() {
+		if ui.Switch(c.Key("about-update-download"), &download).Label(i18n.T("Install without asking")).Disabled(!u.enabled || !u.auto).Changed() {
+			on := download
+			a.updInfo.download = on
+			a.updates.SetAutomaticDownloads(on)
 		}
 	})
 }

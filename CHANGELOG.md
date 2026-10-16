@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Updates
+- AudioSmith updates itself: once a day it reads the version file of its latest release on GitHub and, when a new version is out, shows its notes (this file's section of the version) and offers to install it, skip it or remind you later. Updates are signed; AudioSmith checks the signature before it installs one, and usually downloads only what changed. AudioSmith → Check for Updates…, the command palette and Settings → Diagnostics and about check at once; that page also turns the daily check and installing without asking on or off. Copies built on your own Mac don't update themselves.
+- Releases are signed with a Developer ID and notarized by Apple, so they open without Gatekeeper's warning (docs/release.md).
+- MyGo 0.5.5: MyGo's own texts (text fields' menus, date pickers, dialogs) follow the app's language, and Chinese text is drawn with the Chinese forms of its characters.
+
 ### Transcription with speakers
 - New model "Transcription with speakers" (区分说话人转写; MOSS-Transcribe-Diarize 0.9B, 8-bit, 1.3 GB, Apache-2.0): it transcribes and tells who says what in one pass. Download it from the Models page, Transcribe or the Dub page; nothing downloads by itself.
 - Transcribe: a Speakers option in the toolbar. Transcripts list their speakers (S1, S2…) with their lines; click one to name it. Copy and TXT export put one paragraph per turn after the speaker's name, SRT cues start with it, VTT marks voices, JSON has each segment's speaker. Dictation and plain transcription stay on Qwen3-ASR (MOSS is about 4× slower: a 10-minute recording takes about 4 minutes on a MacBook Air M4).

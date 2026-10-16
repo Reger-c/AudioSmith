@@ -1,0 +1,221 @@
+# Release: on a tag v<version> (the version of mygo.json), builds
+# AudioSmith for macOS on Apple silicon — the Swift engine, then
+# `go tool mygo build` signed with the Developer ID, notarized, in a disk
+# image, with the signed update files — and uploads them to a draft GitHub
+# release, which you review and publish (installed copies update to it
+# once published). docs/release.md (English) and docs/release.zh-CN.md
+# (中文) list the secrets and walk through a release.
+#
+# Run it by hand (Actions → Release → Run workflow) for a dry run: it
+# builds and uploads the disk image as an artifact of the run, signed ad
+# hoc, or with "sign" signed and notarized with the secrets, and never
+# touches a release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: "Sign and notarize with the secrets (else ad hoc, without secrets)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # the draft release, and the uploads to it
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: macOS (Apple silicon)
+    # The engine needs Xcode 26 (swift-tools-version 6.2) and MLX needs
+    # Apple silicon; macos-26 runners are arm64.
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      RELEASE: ${{ github.event_name == 'push' }}
+      SIGN: ${{ github.event_name == 'push' || inputs.sign }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag, the version and the changelog
+        run: |
+          version="$(jq -r .version mygo.json)"
+          if [ "$RELEASE" = true ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::the tag $GITHUB_REF_NAME is not v$version, the version in mygo.json"
+            exit 1
+          fi
+          if ! grep -Eq "^## \[?$version([^0-9.]|\$)" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no \"## $version\" section, which the update window shows"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Check the secrets
+        if: env.SIGN == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+          MYGO_UPDATER_PUBLIC_KEY: ${{ vars.MYGO_UPDATER_PUBLIC_KEY }}
+        run: |
+          missing=""
+          for name in MACOS_CERTIFICATE MACOS_CERTIFICATE_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -z "$APPLE_API_KEY" ]; then
+            for name in APPLE_ID APPLE_APP_PASSWORD; do
+              [ -n "${!name}" ] || missing="$missing $name"
+            done
+          else
+            for name in APPLE_API_KEY_ID APPLE_API_ISSUER; do
+              [ -n "${!name}" ] || missing="$missing $name"
+            done
+          fi
+          if [ -n "$missing" ]; then
+            echo "::error::missing secrets:$missing (docs/release.md)"
+            exit 1
+          fi
+          if [ -z "$MYGO_UPDATER_PRIVATE_KEY" ] || [ -z "$MYGO_UPDATER_PUBLIC_KEY" ]; then
+            if [ "$RELEASE" = true ]; then
+              echo "::error::a release needs the secret MYGO_UPDATER_PRIVATE_KEY and the variable MYGO_UPDATER_PUBLIC_KEY (docs/release.md, step 3)"
+              exit 1
+            fi
+            echo "::warning::no update keys: this build will not update itself"
+          fi
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Select Xcode 26
+        run: |
+          xcode="$(ls -d /Applications/Xcode_26*.app 2> /dev/null | sort -V | tail -1)"
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+          # Xcode 26 installs the Metal toolchain, which builds MLX's
+          # kernels, as a component of its own.
+          xcrun metal --version > /dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
+          xcrun metal --version
+
+      - name: Cache the engine's build
+        uses: actions/cache@v4
+        with:
+          path: engine/.build
+          key: engine-${{ runner.os }}-${{ hashFiles('engine/Package.swift', 'engine/Package.resolved', 'engine/patches/**', 'scripts/fetch-engine-deps.sh') }}-${{ hashFiles('engine/Sources/**', 'engine/Support/**') }}
+          restore-keys: |
+            engine-${{ runner.os }}-${{ hashFiles('engine/Package.swift', 'engine/Package.resolved', 'engine/patches/**', 'scripts/fetch-engine-deps.sh') }}-
+
+      - name: Build the engine
+        run: |
+          if ! scripts/build-engine.sh Release; then
+            tail -80 engine/.build/xcode/build-Release.log
+            exit 1
+          fi
+
+      - name: Import the certificate and the notary credentials
+        if: env.SIGN == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -base64 24)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain
+          if [ -n "$APPLE_API_KEY" ]; then
+            # An App Store Connect API key: the .p8 file's contents.
+            printf '%s\n' "$APPLE_API_KEY" > "$RUNNER_TEMP/notary-key.p8"
+            xcrun notarytool store-credentials notary --keychain "$keychain" \
+              --key "$RUNNER_TEMP/notary-key.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER"
+            rm "$RUNNER_TEMP/notary-key.p8"
+          else
+            xcrun notarytool store-credentials notary --keychain "$keychain" \
+              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+          fi
+          identity="$(security find-identity -v -p codesigning "$keychain" | grep "Developer ID Application" | grep "($APPLE_TEAM_ID)" | head -1 | awk '{print $2}')"
+          if [ -z "$identity" ]; then
+            echo "::error::the certificate holds no Developer ID Application identity of team $APPLE_TEAM_ID"
+            exit 1
+          fi
+          {
+            echo "NOTARY_KEYCHAIN=$keychain"
+            echo "NOTARY_PROFILE=notary"
+            echo "MACOS_SIGNING_IDENTITY=$identity"
+          } >> "$GITHUB_ENV"
+
+      - name: Configure the release build
+        env:
+          MYGO_UPDATER_PUBLIC_KEY: ${{ env.SIGN == 'true' && vars.MYGO_UPDATER_PUBLIC_KEY || '' }}
+        run: |
+          scripts/release-config.sh
+          jq '{version, updates: (.updates | if . then {github, publicKey: "set"} else null end), macos: {signingIdentity: (.macos.signingIdentity // "-" | if . == "-" then "ad hoc" else "Developer ID" end), notarize: (.macos.notarize != null)}}' mygo.json
+
+      - name: Build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ env.SIGN == 'true' && secrets.MYGO_UPDATER_PRIVATE_KEY || '' }}
+        run: |
+          if [ "$RELEASE" = true ]; then
+            go tool mygo build -platform darwin/arm64 -upload
+          else
+            go tool mygo build -platform darwin/arm64
+          fi
+
+      - name: Verify
+        run: |
+          if [ "$SIGN" = true ] && [ -f build/darwin-arm64/update-darwin-arm64.json ]; then
+            scripts/verify-release.sh --release
+          else
+            scripts/verify-release.sh
+          fi
+
+      - name: Upload the disk image (dry run)
+        if: env.RELEASE != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioSmith-${{ env.VERSION }}-${{ env.SIGN == 'true' && 'signed' || 'adhoc' }}
+          path: |
+            build/darwin-arm64/*.dmg
+            build/darwin-arm64/*.tar.gz
+            build/darwin-arm64/*.delta
+            build/darwin-arm64/update-*.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove the keychain
+        if: always() && env.NOTARY_KEYCHAIN != ''
+        run: security delete-keychain "$NOTARY_KEYCHAIN" || true
+
+      - name: Summary
+        if: env.RELEASE == 'true'
+        run: |
+          {
+            echo "### AudioSmith $VERSION"
+            echo "Uploaded to the draft release [$GITHUB_REF_NAME](https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME)."
+            echo "Review it, then publish it: installed copies update to it once it is the latest release."
+          } >> "$GITHUB_STEP_SUMMARY"
