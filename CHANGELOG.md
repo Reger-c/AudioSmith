@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0-beta.3
+
+### Dubbing
+- Importing a video from a link works again for YouTube videos offered only as separate video and audio streams (most of them now): AudioSmith gives yt-dlp the ffmpeg it uses (or one found on this Mac) to join them. Downloads stop at 1080p. Without any ffmpeg the error says to set it up in Settings → Audio tools, instead of "Requested format is not available".
+- When a step fails, the dub shows why that step failed, not "A job it depends on failed".
+
+### Diagnostics
+- Failed jobs (a dub step, a render, a transcription…) are written to the log, so Settings → Logs shows why.
+
+### Licence
+- The app ships THIRD-PARTY-NOTICES.txt with the full licence texts of the 45 components it includes; Settings → Diagnostics and about → Third-party licences opens it.
+
 ## 0.4.0-beta.2
 
 ### Voices
