@@ -4,10 +4,5 @@
 # why. Every other snapshot must match byte for byte or pixel for pixel.
 # Remove a line once its cause is gone.
 
-# The workflow canvas draws its node labels scaled. When MyGo's glyph atlas
-# fills up it repacks the glyphs it keeps, ordered by size, ties in map
-# order (third_party/mygo/internal/text/raster.go makeRoom,
-# internal/scene/atlas.go Repack); scaled glyphs sampled at other atlas
-# positions round 1-2 pixels of a label by one level. Gone with a
-# tie-break in Repack (refactor B0 handoff: decision for main).
-workflows-*.png  2  MyGo glyph atlas repack order
+# (None: every snapshot is reproducible. MyGo patch 0005 fixed the last
+# ones, the workflow canvas, whose glyph atlas repacked in map order.)
