@@ -49,7 +49,7 @@ type modelPack struct {
 var modelPacks = []modelPack{
 	{"fast", 0, []string{packStudioModel, catalog.DefaultDictation, catalog.DefaultVAD, catalog.DefaultWatermark}},
 	{"balanced", 16, []string{"qwen3-tts-0.6b-base-8bit", catalog.DefaultAlign, catalog.DefaultEnhance}},
-	{"quality", 24, []string{"qwen3-tts-1.7b-base-8bit", "qwen3-tts-1.7b-voicedesign-4bit", catalog.DefaultSeparate, catalog.DefaultDiarize, catalog.DefaultLLM}},
+	{"quality", 24, []string{"qwen3-tts-1.7b-base-8bit", "qwen3-tts-1.7b-voicedesign-4bit", catalog.DefaultSeparate, catalog.DefaultSpeakers, catalog.DefaultLLM}},
 	{"max", 48, []string{"omnivoice-bf16", catalog.FallbackSTT}},
 }
 
