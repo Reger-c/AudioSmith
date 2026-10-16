@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
 // wsClient is a minimal WebSocket client for the tests.
@@ -130,5 +132,45 @@ func TestWebSocketTTS(t *testing.T) {
 	r.Body.Close()
 	if r.StatusCode != 400 {
 		t.Fatal(r.StatusCode)
+	}
+}
+
+// A request sent as soon as the previous one failed is served, not
+// answered busy: the socket stops watching for cancels before it reports
+// the end of a request, an error as well as done.
+func TestWebSocketTTSAfterError(t *testing.T) {
+	f := newFake(t)
+	_, ts := f.server()
+	ws := dialWS(t, strings.TrimPrefix(ts.URL, "http://"), "/ws/tts")
+	ws.c.SetDeadline(time.Now().Add(60 * time.Second))
+	for round := range 40 {
+		fail := round%2 == 0
+		f.mu.Lock()
+		f.failRender = nil
+		if fail {
+			f.failRender = &jobs.Error{Code: "internal", Message: "the engine failed"}
+		}
+		f.mu.Unlock()
+		ws.send(wsText, []byte(`{"text":"Again.","voice":"af_heart"}`))
+		op, data := ws.read(t)
+		var m map[string]any
+		json.Unmarshal(data, &m)
+		if fail {
+			if op != wsText || m["type"] != "error" || strings.Contains(string(data), "busy") {
+				t.Fatalf("round %d: %d %s", round, op, data)
+			}
+			continue
+		}
+		if op != wsText || m["type"] != "start" {
+			t.Fatalf("round %d: start %d %s", round, op, data)
+		}
+		for {
+			if op, data = ws.read(t); op != wsBinary {
+				break
+			}
+		}
+		if json.Unmarshal(data, &m); m["type"] != "done" {
+			t.Fatalf("round %d: done %s", round, data)
+		}
 	}
 }
