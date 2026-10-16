@@ -26,6 +26,8 @@ English: [release.md](release.md)
 
 检查：终端运行 `security find-identity -v -p codesigning`，应能看到 `Developer ID Application: <你的名字> (<TEAMID>)`。括号里的 10 个字符就是你的 **Team ID**（也可在 developer.apple.com → Membership details 里看到）。
 
+钥匙串里如果还有别的团队（旧账号）的 Developer ID 证书：第 2 步导出时认准新团队的那一张（看括号里的 Team ID）；在本机运行 `scripts/release-local.sh` 时设 `APPLE_TEAM_ID=<新 Team ID>`，脚本才知道用哪一张（有多张又没指定时会报错，不会随便挑一张）。
+
 ### 第 2 步：导出 .p12，设置签名相关的 secrets
 
 打开「钥匙串访问」→ 登录（login）→ 我的证书 → 找到 Developer ID Application 证书（展开能看到下面的私钥）→ 右键 → **导出…** → 格式选 `.p12`，设一个强密码。然后：
@@ -90,7 +92,7 @@ gh variable set MYGO_UPDATER_PUBLIC_KEY < "$keys/mygo-update.pub"
 GitHub → Actions → **Release** → Run workflow，勾选 **sign**。它会用你的 secrets 构建、签名、公证，跑校验脚本（`scripts/verify-release.sh`），并把 DMG 和更新文件作为这次运行的附件（artifact）上传，**不会碰任何 Release**。下载 DMG，在 Mac 上检查：
 
 ```sh
-spctl --assess --type open --context context:primary-signature -vv "AudioSmith 0.3.0 arm64.dmg"
+spctl --assess --type open --context context:primary-signature -vv "AudioSmith 0.4.0 arm64.dmg"
 # 应显示 accepted，source=Notarized Developer ID
 ```
 

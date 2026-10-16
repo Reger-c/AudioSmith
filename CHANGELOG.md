@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 ### Updates
 - AudioSmith updates itself: once a day it reads the version file of its latest release on GitHub and, when a new version is out, shows its notes (this file's section of the version) and offers to install it, skip it or remind you later. Updates are signed; AudioSmith checks the signature before it installs one, and usually downloads only what changed. AudioSmith → Check for Updates…, the command palette and Settings → Diagnostics and about check at once; that page also turns the daily check and installing without asking on or off. Copies built on your own Mac don't update themselves.

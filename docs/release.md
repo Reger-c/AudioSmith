@@ -26,6 +26,8 @@ Only the account holder can create one.
 
 Check: `security find-identity -v -p codesigning` lists `Developer ID Application: <Name> (<TEAMID>)`. The 10 characters in brackets are your **team ID** (also on developer.apple.com → Membership details).
 
+If the keychain also holds a Developer ID certificate of another team (an older account), export the new team's one in step 2 (check the team ID in brackets), and run `scripts/release-local.sh` with `APPLE_TEAM_ID=<new team ID>` so it picks that one (with several and no choice it stops rather than guess).
+
 ### 2. Export it as .p12 and add the signing secrets
 
 Keychain Access → login → My Certificates → the Developer ID Application certificate (with its private key under it) → right-click → **Export…** → `.p12`, with a strong password. Then:
@@ -84,7 +86,7 @@ The public key is a repository **variable**, not a secret: `mygo build` links it
 GitHub → Actions → **Release** → Run workflow, with **sign** ticked. It builds, signs and notarizes with your secrets, verifies (`scripts/verify-release.sh`), and attaches the disk image and update files to the run as an artifact, without touching any release. Download the disk image and check on your Mac:
 
 ```sh
-spctl --assess --type open --context context:primary-signature -vv "AudioSmith 0.3.0 arm64.dmg"   # accepted, source=Notarized Developer ID
+spctl --assess --type open --context context:primary-signature -vv "AudioSmith 0.4.0 arm64.dmg"   # accepted, source=Notarized Developer ID
 ```
 
 Without **sign** it builds ad hoc and needs no secrets: that checks that the engine and the app build on GitHub's runner.

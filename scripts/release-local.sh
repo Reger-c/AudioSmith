@@ -11,8 +11,9 @@
 #   add --skip-engine to reuse resources/darwin-arm64/engine
 #
 # From the environment, each with a default:
-#   MACOS_SIGNING_IDENTITY   default: the first "Developer ID Application" identity
-#                            of the keychains (security find-identity)
+#   MACOS_SIGNING_IDENTITY   default: the one "Developer ID Application" identity
+#                            of the keychains (of team APPLE_TEAM_ID when set;
+#                            several without a choice is an error)
 #   NOTARY_PROFILE           default "notary" (xcrun notarytool store-credentials notary)
 #   MYGO_UPDATER_PRIVATE_KEY default: the contents of mygo-update.key in KEYS_DIR
 #   MYGO_UPDATER_PUBLIC_KEY  default: the contents of mygo-update.pub in KEYS_DIR
@@ -51,8 +52,14 @@ if $dry; then
   $upload && fail "--dry-run does not upload"
 else
   if [[ -z "${MACOS_SIGNING_IDENTITY:-}" ]]; then
-    MACOS_SIGNING_IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)"
-    [[ -n "$MACOS_SIGNING_IDENTITY" ]] || fail "no Developer ID Application identity in the keychains (docs/release.md, step 1)"
+    ids="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | sort -u)"
+    if [[ -n "${APPLE_TEAM_ID:-}" ]]; then
+      ids="$(grep -F "($APPLE_TEAM_ID)" <<<"$ids" || true)"
+    fi
+    [[ -n "$ids" ]] || fail "no Developer ID Application identity${APPLE_TEAM_ID:+ of team $APPLE_TEAM_ID} in the keychains (docs/release.md, step 1)"
+    [[ "$(wc -l <<<"$ids")" -eq 1 ]] || fail "several Developer ID Application identities; set APPLE_TEAM_ID or MACOS_SIGNING_IDENTITY:
+$ids"
+    MACOS_SIGNING_IDENTITY="$ids"
   fi
   export MACOS_SIGNING_IDENTITY
   if $notarize; then
