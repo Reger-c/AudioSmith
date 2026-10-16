@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
 var (
@@ -86,6 +87,10 @@ func pinSnapshots(t *testing.T, bubble bool, body func(t *testing.T, out string)
 		t.Fatal(err)
 	}
 	root := lockSnapRoot(t)
+	// Rate calibration is global and learnt by earlier tests (dub renders):
+	// every snapshot test starts from the uncalibrated predictor, so its
+	// pictures do not depend on which tests ran before it.
+	translate.DefaultPredictor.ResetCalibration()
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
 	local := time.Local
 	time.Local = time.UTC
