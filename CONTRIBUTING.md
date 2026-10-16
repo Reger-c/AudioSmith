@@ -30,6 +30,7 @@ Also:
 
 - **Text the user sees** goes through `i18n.T` in English, with its Chinese translation in `internal/i18n/locales/zh-Hans.json` (`TestKeyParity` checks that every key has one).
 - **File sizes:** a Go file stays under 600 lines, a test file under 800 (`internal/archtest`); split a growing file by topic.
+- **Dependencies:** `THIRD-PARTY-NOTICES.txt`, which the app ships, has the licence of every third-party component. After you add, remove or update one (a Go module, a Swift package in `engine/Package.resolved`, the mlx-audio-swift pin, MyGo, RapiDoc, the voice previews), run `scripts/third-party-notices.sh` (with `--fetch` after a Swift pin moved) and commit the result; `TestNoticesCurrent` fails until you do, and the generator asks for the licence of a component it does not know yet. Only add dependencies whose licence is compatible with the AGPL-3.0.
 - **The engine** (Swift, `engine/`) builds and tests on a Mac only: `scripts/build-engine.sh`, `scripts/test-engine.sh`.
 - Don't commit build outputs, downloaded models or secrets.
 
@@ -66,7 +67,7 @@ The bot commits to that branch with the workflow's token: don't require pull req
 - **较大的改动**（新功能、新模型、改引擎协议）请先开 issue 讨论方案。
 - **PR：** 一个 PR 只做一件事，基于 `main`，并附上测试；说明对用户有什么变化、你是怎么验证的；改界面请附前后对比截图。
 
-**提交前运行检查：** 见上面 [Checks](#checks) 的命令（`go test`、`go tool mygo vet .`、macOS 交叉编译、`gofmt`、`scripts/vendor-mygo.sh --check`，改了 workflow 再跑 actionlint，改了界面跑 `scripts/snapshots.sh check`）。界面文字用英文写在 `i18n.T` 里，并在 `internal/i18n/locales/zh-Hans.json` 补上中文。
+**提交前运行检查：** 见上面 [Checks](#checks) 的命令（`go test`、`go tool mygo vet .`、macOS 交叉编译、`gofmt`、`scripts/vendor-mygo.sh --check`，改了 workflow 再跑 actionlint，改了界面跑 `scripts/snapshots.sh check`）。界面文字用英文写在 `i18n.T` 里，并在 `internal/i18n/locales/zh-Hans.json` 补上中文。增删或升级依赖（Go 模块、`engine/Package.resolved` 里的 Swift 包、mlx-audio-swift 的版本、MyGo、RapiDoc、试听音频）后，运行 `scripts/third-party-notices.sh`（Swift 依赖版本变了加 `--fetch`）并提交生成的 `THIRD-PARTY-NOTICES.txt`，否则 `TestNoticesCurrent` 会失败；只引入与 AGPL-3.0 兼容的许可。
 
 **许可证与 CLA：** AudioSmith 采用 [GNU AGPL-3.0](LICENSE) 许可。你的第一个 PR 合并前，需要签署一次[贡献者许可协议（CLA）](CLA.md)：
 

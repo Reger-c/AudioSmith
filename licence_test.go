@@ -13,7 +13,8 @@ import (
 // TestProjectLicence keeps the places that state AudioSmith's own licence,
 // the GNU AGPL version 3, in step (the models' licences are elsewhere and
 // differ): LICENSE, NOTICE, the READMEs, mygo.json (the bundle's copyright
-// and the files it ships), the CLA and its workflow.
+// and the files it ships, with the third-party notices, whose contents
+// internal/tools/thirdparty checks), the CLA and its workflow.
 func TestProjectLicence(t *testing.T) {
 	read := func(name string) string {
 		t.Helper()
@@ -30,14 +31,14 @@ func TestProjectLicence(t *testing.T) {
 		t.Errorf("api: %s %s", api.License, api.SourceURL)
 	}
 	notice := read("NOTICE")
-	for _, s := range []string{"Copyright (C) 2026 hehehai and the AudioSmith contributors", "GNU Affero General Public License", "version 3", api.SourceURL, "CLA.md"} {
+	for _, s := range []string{"Copyright (C) 2026 hehehai and the AudioSmith contributors", "GNU Affero General Public License", "version 3", api.SourceURL, "CLA.md", thirdPartyNotices} {
 		if !strings.Contains(notice, s) {
 			t.Errorf("NOTICE lacks %q", s)
 		}
 	}
 	for _, name := range []string{"README.md", "README.zh-CN.md"} {
 		r := read(name)
-		if !strings.Contains(r, `alt="AGPL-3.0"`) || !strings.Contains(r, "(CLA.md)") || !strings.Contains(r, "(CONTRIBUTING.md)") ||
+		if !strings.Contains(r, `alt="AGPL-3.0"`) || !strings.Contains(r, "(CLA.md)") || !strings.Contains(r, "(CONTRIBUTING.md)") || !strings.Contains(r, "("+thirdPartyNotices+")") ||
 			strings.Contains(r, "Apache-2.0](LICENSE)") || strings.Contains(r, `alt="Apache-2.0"`) {
 			t.Errorf("%s: the badge, the licence section or the contributing links", name)
 		}
@@ -50,7 +51,7 @@ func TestProjectLicence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(cfg.Copyright, "hehehai and the AudioSmith contributors") || !strings.Contains(cfg.Copyright, "AGPL-3.0") ||
-		!slices.Contains(cfg.Resources, "LICENSE") || !slices.Contains(cfg.Resources, "NOTICE") {
+		!slices.Contains(cfg.Resources, "LICENSE") || !slices.Contains(cfg.Resources, "NOTICE") || !slices.Contains(cfg.Resources, thirdPartyNotices) {
 		t.Errorf("mygo.json: copyright %q, resources %v", cfg.Copyright, cfg.Resources)
 	}
 	cla, flow := read("CLA.md"), read(".github/workflows/cla.yml")

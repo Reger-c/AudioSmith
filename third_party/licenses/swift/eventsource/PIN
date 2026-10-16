@@ -1,0 +1,6 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name eventsource
+url https://github.com/mattt/EventSource.git
+revision 86b5096ac59ab46e66bd1f6377c604bc1dab0bc2
+version 1.5.1

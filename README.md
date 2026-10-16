@@ -230,7 +230,7 @@ Copyright (C) 2026 hehehai and the AudioSmith contributors.
 
 AudioSmith is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License](LICENSE) as published by the Free Software Foundation, version 3 (AGPL-3.0). It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; see the licence for details. If you run a modified AudioSmith for others to use over a network (its Local API, for instance), the AGPL requires you to offer those users the source code of your version. Versions up to and including 0.4.0-beta.1 were released under the Apache License 2.0 and stay under it.
 
-Model weights keep their own licences (see [Models](#models)); OmniVoice's is non-commercial. Third-party material and libraries are listed in [NOTICE](NOTICE).
+Model weights keep their own licences (see [Models](#models)); OmniVoice's is non-commercial. Third-party material and libraries are listed in [NOTICE](NOTICE), with their full licence texts in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (the app carries both).
 
 - Models by the Qwen team (Qwen3-TTS, Qwen3-ASR, Qwen3 4B), hexgrad (Kokoro), Resemble AI (Chatterbox), k2-fsa (OmniVoice), OpenMOSS (MOSS-Transcribe-Diarize), OpenAI (Whisper), Meta (HTDemucs, AudioSeal), NVIDIA (Sortformer), Silero and DeepFilterNet. MLX conversions by mlx-community and others.
 - Runs on [MLX](https://github.com/ml-explore/mlx), [mlx-swift](https://github.com/ml-explore/mlx-swift) and [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift).

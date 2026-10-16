@@ -1,0 +1,6 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name swift-asn1
+url https://github.com/apple/swift-asn1.git
+revision 3b6410f7dee09eb33cdd26260c5fd47fda19b0e2
+version 1.7.3

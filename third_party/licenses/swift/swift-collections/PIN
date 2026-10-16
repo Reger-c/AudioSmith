@@ -1,0 +1,6 @@
+# Written by scripts/third-party-notices.sh --fetch: the licence texts in files/ are those of
+# this package at this revision. Do not edit.
+name swift-collections
+url https://github.com/apple/swift-collections.git
+revision 35a1edcb8ebd2bfe251d587f0b69e62af28f508c
+version 1.7.3
