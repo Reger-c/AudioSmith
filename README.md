@@ -49,6 +49,7 @@ AudioSmith turns text into speech, clones and designs voices, gives a story a ca
 - **Discover** about 1,200 ready-made voices, preview them and save the ones you like.
 - **Clone** a voice from a recording or from any audio or video file. AudioSmith picks the best stretch, transcribes it and removes the noise. A recorded consent statement marks a voice as your own.
 - **Design** a voice from a sentence in English or Chinese ("a warm narrator in her thirties, calm and clear").
+- **Hear before you pick:** every voice list (Studio, Stories, Audiobook, Dub) has a ▶ on each voice: built-in speakers play a short bundled sample, even before their model is downloaded; your own voices play their sample.
 - **Portable voices:** a model's built-in speaker or a designed voice can be turned into a clone that every cloning model can speak with. It sounds close to the original, not the same, and says so.
 - Voices are `.asvoice` files you can share. VoiceStudio's `.ovsvoice` files import too.
 
