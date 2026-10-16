@@ -24,7 +24,9 @@ import (
 // settingsForm is the settings pages' view state: the controls bind to
 // these, and their changes go to the service.
 type settingsForm struct {
-	systemLocale string // mygo.App.Locale(), read when the window opens
+	systemLocale string // systemLanguage(), read when the window opens
+	appLocale    string // the language last given to mygo.App.SetLocale ("" follows the system)
+	appLocaleSet bool
 
 	language        string // label
 	theme           int
@@ -133,6 +135,16 @@ func (a *app) applyEngineSettings(old, new settings.Settings) {
 	}
 }
 
+// systemLanguage is the user's first language in System Settings, which
+// the app follows unless Settings names one. (Before MyGo 0.5,
+// App.Locale returned it; now it is the language the app shows.)
+func systemLanguage() string {
+	if langs := mygo.App.PreferredLanguages(); len(langs) > 0 {
+		return langs[0]
+	}
+	return "en"
+}
+
 // applyLocale switches the UI to the settings' language, or the system's,
 // and rebuilds the native menu in it.
 func (a *app) applyLocale() {
@@ -141,6 +153,13 @@ func (a *app) applyLocale() {
 		tag = a.systemLocale
 	}
 	i18n.SetLocale(tag)
+	// MyGo's own strings (controls, dialogs, the update window), the text
+	// engine's glyphs and AppKit's texts follow MyGo's language: give it
+	// the one chosen, or none to follow the system as we do.
+	if want := a.prefs.General.Language; a.hasMenu && (!a.appLocaleSet || want != a.appLocale) {
+		a.appLocale, a.appLocaleSet = want, true
+		mygo.App.SetLocale(want)
+	}
 	if i18n.Locale() != a.menuLocale {
 		a.buildMenu()
 	}

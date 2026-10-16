@@ -12,6 +12,10 @@ import (
 	"log"
 
 	"github.com/egoist/mygo"
+	// MyGo's own strings (its controls, menus, dialogs, the update
+	// window's buttons) in Simplified Chinese; English is always linked.
+	_ "github.com/egoist/mygo/locales/zh-Hans"
+	"github.com/hehehai/AudioSmith/internal/i18n"
 )
 
 func main() {
@@ -21,6 +25,10 @@ func main() {
 	}
 	// Dev builds are "AudioSmith Dev"; share data with the installed app.
 	mygo.App.SetName("AudioSmith")
+	// MyGo 0.5: the app's languages, which App.Locale picks from (else
+	// English alone) and which MyGo's own strings and the text engine
+	// follow (applyLocale sets the one Settings chose).
+	mygo.App.SetLanguages(i18n.Supported()...)
 	// M2 (thread #17): one AudioSmith at a time (one library, one
 	// dictation shortcut); a second launch shows the first one's window.
 	if !mygo.App.RequestSingleInstanceLock() {

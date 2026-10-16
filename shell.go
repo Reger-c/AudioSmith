@@ -367,7 +367,7 @@ func section(path string) string {
 // openWindow opens the main window; it runs in App.WhenReady.
 func (a *app) openWindow() {
 	a.version = mygo.App.Version()
-	a.systemLocale = mygo.App.Locale()
+	a.systemLocale = systemLanguage()
 	a.hasMenu = true
 	a.applyLocale() // the system's language, unless the settings name one
 	a.buildMenu()

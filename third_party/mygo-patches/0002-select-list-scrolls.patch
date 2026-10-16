@@ -1,8 +1,8 @@
 diff --git a/ui/widgets.go b/ui/widgets.go
-index 29ebd0d..4689951 100644
+index d7fd927..8e9c64f 100644
 --- a/ui/widgets.go
 +++ b/ui/widgets.go
-@@ -617,16 +617,27 @@ func coreSelect(c *context, selected *string, options []string) *node {
+@@ -639,16 +639,27 @@ func coreSelect(c *context, selected *string, options []string) *node {
  	})
  	sel.Popup(func(panel *node) {
  		stylePanel(c, panel)
