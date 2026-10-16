@@ -42,7 +42,7 @@ fail() { echo "release-local: $*" >&2; exit 1; }
 export PATH="/opt/homebrew/bin:$PATH" GOTOOLCHAIN="${GOTOOLCHAIN:-auto}"
 command -v jq > /dev/null || fail "needs jq"
 version="$(jq -r .version mygo.json)"
-grep -Eq "^## \[?$version([^0-9.]|$)" CHANGELOG.md || fail "CHANGELOG.md has no \"## $version\" section: the update window shows it"
+scripts/release-check.sh > /dev/null || exit 1 # the version and its CHANGELOG.md section
 if ! git diff --quiet HEAD 2> /dev/null; then
   echo "release-local: note: the working tree has changes; the build includes them" >&2
 fi
@@ -99,5 +99,11 @@ if $dry || ! $notarize; then
 else
   scripts/verify-release.sh --release
 fi
-$upload && echo "Uploaded to the draft release v$version; publish it on GitHub, or: gh release edit v$version --draft=false"
+if $upload; then
+  # mygo build creates a beta's draft as a prerelease (MyGo patch 0003),
+  # which publishing leaves one: only copies that take betas see it.
+  kind="release"
+  [[ "$version" == *-* ]] && kind="prerelease (beta)"
+  echo "Uploaded to the draft $kind v$version; publish it on GitHub, or: gh release edit v$version --draft=false"
+fi
 exit 0
