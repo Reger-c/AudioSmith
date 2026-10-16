@@ -13,7 +13,6 @@ internal/api/native.go                     777  # B4
 internal/api/openai.go                     667  # B4
 internal/catalog/catalog.go                690  # B4
 internal/dub/project.go                    746  # B4
-internal/hub/client_test.go                924  # B4
 internal/mcp/server.go                     722  # B4
 internal/translate/mt.go                   628  # B4
 internal/voicedesign/lower.go              684  # B4
