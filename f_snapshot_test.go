@@ -88,9 +88,9 @@ func snapshotsF(t *testing.T, out string) {
 			a.selectModel(entry(t, "qwen3-tts-0.6b-customvoice-8bit"))
 			a.studioVoice, a.voice = "", "Serena"
 			a.composer.panel, a.composer.panelSet = true, true
-			a.inspectorUI.voiceListOpen = true
+			a.voicePickerOpen(studioVoiceKey, true)
 		})
-		a.inspectorUI.voiceListOpen = false
+		a.voicePickerOpen(studioVoiceKey, false)
 		shoot("f06-studio-make-portable", func() {
 			a.selectModel(entry(t, "qwen3-tts-1.7b-base-8bit"))
 			a.studioVoice = v.ID

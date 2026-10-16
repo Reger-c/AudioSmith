@@ -17,3 +17,10 @@ MyGo
   Licensed under the MIT License (third_party/mygo/LICENSE). AudioSmith
   builds against a copy with its own patches (third_party/mygo-patches),
   made by scripts/vendor-mygo.sh, until upstream releases the fixes.
+
+Voice previews (assets/voice-previews)
+  Short clips of the built-in speakers of Qwen3-TTS 12Hz 0.6B CustomVoice
+  (Apache License 2.0, https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice)
+  and Kokoro 82M (Apache License 2.0, https://huggingface.co/hexgrad/Kokoro-82M),
+  made with AudioSmith's engine by scripts/make-voice-previews.sh (2026-10-16).
+  The voices are the models' own synthetic speakers, not recordings of people.

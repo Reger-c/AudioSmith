@@ -45,9 +45,10 @@ type app struct {
 	watermarkUI // watermark_app.go (thread #14): Settings → Privacy, Tools → Watermark
 	// M6b (thread #23): calls*.go, twilio*.go — AI phone calls.
 	callsState
-	exportState      // export_dialog.go (thread #31): the Export audio dialog
-	modelPickerState // model_picker.go (thread #42): the creation pages' model picker
-	removedState     // models_removed.go (thread #43): removed models, their clean-up
+	exportState                       // export_dialog.go (thread #31): the Export audio dialog
+	modelPickerState                  // model_picker.go (thread #42): the creation pages' model picker
+	removedState                      // models_removed.go (thread #43): removed models, their clean-up
+	voicePickers     voicePickerState // voice_picker.go (thread #60): the voice pickers' previews
 }
 
 func newApp(eng *engineHost, lib *library) *app {

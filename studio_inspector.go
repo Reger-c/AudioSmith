@@ -14,14 +14,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
-	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 )
 
 // studioInspectorState is the inspector's view state.
 type studioInspectorState struct {
-	voiceListOpen   bool
 	refTranscribing string // the reference clip being transcribed ("" = none)
 }
 
@@ -129,25 +127,7 @@ func (a *app) studioVoiceField(c *ui.Context, e catalog.Entry) {
 	k := tok(t)
 	ui.Column(c.Key("voice-field")).Gap(px(t, 6)).Children(func() {
 		ui.Text(c, i18n.T("Voice")).FontWeight(600)
-		label := a.studioVoiceLabel(e)
-		btn := ui.ButtonBase(c.Key("voice")).Padding(px(t, 6), px(t, 10)).Gap(px(t, sp2)).Radius(px(t, radiusControl)).
-			Background(t.Surface).Border(1, t.Border).AlignItems(ui.Center).Label(i18n.T("Voice")).Tooltip(label).MinHeight(px(t, 32))
-		if btn.Hovered() {
-			btn.Background(t.SurfaceHover)
-		}
-		btn.Children(func() {
-			if v := a.findVoice(a.studioVoice); v != nil {
-				ui.Avatar(c, v.Name, a.portrait(v)).Size(px(t, 20), px(t, 20))
-			}
-			ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0).Grow(1)
-			ui.Icon(c, icons.AltArrowDown.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Text2).Shrink(0)
-		})
-		if btn.Clicked() {
-			a.inspectorUI.voiceListOpen = !a.inspectorUI.voiceListOpen
-		}
-		open := a.inspectorUI.voiceListOpen
-		ui.Popover(c, btn, &open, func() { a.studioVoiceList(c, e) })
-		a.inspectorUI.voiceListOpen = a.inspectorUI.voiceListOpen && open
+		a.studioVoicePicker(c, e)
 
 		switch v := a.findVoice(a.studioVoice); {
 		case v != nil:
@@ -180,102 +160,6 @@ func (a *app) studioVoiceField(c *ui.Context, e catalog.Entry) {
 		case e.NeedsReference && !a.studioUsesSavedVoice(e):
 			caption(c.Key("ref-required"), i18n.T("Required: %s only clones voices.", modelRef(e))).TextColor(t.Warning)
 		}
-	})
-}
-
-// studioVoiceList is the voice's popover.
-func (a *app) studioVoiceList(c *ui.Context, e catalog.Entry) {
-	t := c.Theme()
-	k := tok(t)
-	ids := e.VoiceIDs()
-	speaker, style := splitVoice(a.voice, e.AllVoiceIDs())
-	saved := a.findVoice(a.studioVoice)
-	clip := a.studioClip != nil && a.studioVoice == "" && e.Has(catalog.CapClone)
-	ref := !clip && saved == nil && e.Has(catalog.CapClone) && strings.TrimSpace(a.refAudio) != ""
-	done := func() { a.inspectorUI.voiceListOpen = false }
-	row := func(key, label, sub string, chosen bool, pick func()) {
-		b := ui.ButtonBase(c.Key("vl-"+key)).Padding(px(t, 5), px(t, sp2)).Radius(px(t, radiusControl)).Gap(px(t, sp2)).AlignItems(ui.Center).Label(label)
-		switch {
-		case chosen:
-			b.Background(k.Pressed)
-		case b.Hovered():
-			b.Background(k.Hover)
-		}
-		if b.Clicked() {
-			done()
-			pick()
-		}
-		b.Children(func() {
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0)
-				if sub != "" {
-					ui.Text(c, sub).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Ellipsis("…").MinWidth(0)
-				}
-			})
-			if chosen {
-				iconMark(c, icons.CheckCircle, k.AccentInk, i18n.T("Chosen"))
-			}
-		})
-	}
-	section := func(title string) {
-		ui.Text(c, title).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Padding(px(t, 6), px(t, sp2), px(t, 2))
-	}
-	clearOthers := func() { a.studioVoice, a.studioClip, a.refAudio, a.refText = "", nil, "", "" }
-	_, h := c.Size()
-	ui.Scroll(c.Key("voice-list-scroll")).MaxHeight(max(px(t, 220), h*0.6)).Children(func() {
-		ui.Column(c.Key("voice-list")).Width(px(t, 300)).Gap(px(t, 1)).Padding(px(t, 6)).Children(func() {
-			if !e.NeedsReference {
-				section(i18n.T("Model voices"))
-				if len(ids) == 0 {
-					row("default", i18n.T("Model default"), "", saved == nil && !clip && !ref, func() { clearOthers() })
-				}
-				for _, id := range ids {
-					sub := ""
-					if p, ok := catalog.PresetFor(e.ID); ok && p.VoiceFor(i18n.Locale()) == id {
-						sub = i18n.T("Recommended")
-					}
-					row("sp-"+id, id, sub, saved == nil && !clip && !ref && speaker == id, func() {
-						clearOthers()
-						a.voice = joinVoice(id, style)
-					})
-				}
-			}
-			var mine []*core.Voice
-			for i := range a.voices {
-				v := &a.voices[i]
-				if ok, _ := voiceUsable(v, e); ok {
-					mine = append(mine, v)
-				}
-			}
-			if len(mine) > 0 || clip {
-				section(i18n.T("My voices"))
-			}
-			if clip {
-				row("clip", i18n.T("Unsaved clip: %s", a.studioClip.Name), "", true, func() {})
-			}
-			for _, v := range mine {
-				row("v-"+v.ID, v.Name, voiceKindLabel(v), saved != nil && saved.ID == v.ID, func() {
-					a.studioVoice, a.studioClip = v.ID, nil
-				})
-			}
-			ui.Divider(c)
-			if e.Has(catalog.CapClone) {
-				label := i18n.T("Clone a clip…")
-				if ref {
-					label = i18n.T("Clip: %s", filepath.Base(a.refAudio))
-				}
-				row("ref", label, i18n.T("A few seconds of clean speech; not saved to your voices"), ref, func() {
-					a.studioVoice, a.studioClip = "", nil
-					a.chooseRefAudio()
-				})
-			}
-			if speaker != "" && saved == nil && !clip && !ref && !e.Has(catalog.CapClone) {
-				row("portable", i18n.T("Make a portable copy of %s…", speaker), i18n.T("An approximate clone of it, for models that clone"), false, func() {
-					a.makeSpeakerPortable(e, speaker)
-				})
-			}
-			row("manage", i18n.T("Manage voices…"), "", false, func() { a.navigate("/voices") })
-		})
 	})
 }
 

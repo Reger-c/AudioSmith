@@ -804,7 +804,7 @@ func TestStudioSeam(t *testing.T) {
 	if !tt.HasText("Kokoro 82M can't clone voices. Choose a model that clones, such as Qwen3-TTS Base or OmniVoice.") && !strings.Contains(strings.Join(tt.Texts(), "|"), "can't clone voices") {
 		t.Errorf("picker: %q", tt.Texts())
 	}
-	a.inspectorUI.voiceListOpen = true
+	a.voicePickerOpen(studioVoiceKey, true)
 	tt.Frame()
 	tt.Click("Manage voices…")
 	if a.router.Path() != "/voices" {
