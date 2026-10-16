@@ -352,8 +352,16 @@ func (a *app) aboutSettings(c *ui.Context) {
 		rows = append(rows, [2]string{"ffmpeg", tool.Version})
 	}
 	ui.Grid(c.Key("about-grid")).ColumnTracks(ui.Fixed(px(t, 150)), ui.Fr(1)).GapX(px(t, 12)).GapY(px(t, 6)).Children(func() {
-		for _, r := range rows {
+		for i, r := range rows {
 			ui.Text(c, r[0]).TextColor(t.TextMuted)
+			if i == 0 && isPrerelease(a.version) {
+				// A beta (thread #52): the version, then a Beta badge.
+				ui.Row(c.Key("about-version")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, r[1]).Selectable()
+					betaBadge(c)
+				})
+				continue
+			}
 			ui.Text(c, r[1]).Selectable()
 		}
 	})
@@ -455,4 +463,25 @@ func (a *app) softwareUpdateSettings(c *ui.Context) {
 			a.updates.SetAutomaticDownloads(on)
 		}
 	})
+	// The channel (thread #52, updates.go): betas are GitHub prereleases.
+	beta := u.enabled && betaUpdates(a.prefs, a.version)
+	info := i18n.T("Betas get new features sooner but may be less stable. Turned off, AudioSmith only updates to releases.")
+	if isPrerelease(a.version) {
+		info = i18n.T("Betas get new features sooner but may be less stable. This copy is a beta: turned off, AudioSmith never goes back to an older version, and stays on this one until a release newer than it is out.")
+	}
+	// The info shows under the name, not in ⓘ: it says what turning it
+	// off does to a beta copy.
+	settingRowNote(c, "about-update-beta", i18n.T("Receive beta updates"), info, func() {
+		if ui.Switch(c.Key("about-update-beta"), &beta).Label(i18n.T("Beta updates")).Disabled(!u.enabled).Changed() {
+			a.setBetaUpdates(beta)
+		}
+	})
+}
+
+// betaBadge marks a beta version (About, thread #52).
+func betaBadge(c *ui.Context) ui.Element {
+	t := c.Theme()
+	k := tok(t)
+	return ui.Text(c, i18n.T("Beta")).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.AccentInk).SingleLine().
+		Padding(px(t, 1), px(t, 6)).Radius(px(t, 4)).Background(k.AccentSoft).Shrink(0)
 }

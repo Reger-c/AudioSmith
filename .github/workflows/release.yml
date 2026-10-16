@@ -6,6 +6,11 @@
 # once published). docs/release.md (English) and docs/release.zh-CN.md
 # (中文) list the secrets and walk through a release.
 #
+# A tag with a prerelease part, such as v0.4.0-beta.1, makes a beta: its
+# draft is a GitHub prerelease, and stays one when published, so it never
+# becomes the latest release; only copies with Settings → Receive beta
+# updates on update to it. Other tags (v0.4.0) are releases, as before.
+#
 # Run it by hand (Actions → Release → Run workflow) for a dry run: it
 # builds and uploads the disk image as an artifact of the run, signed ad
 # hoc, or with "sign" signed and notarized with the secrets, and never
@@ -44,16 +49,16 @@ jobs:
 
       - name: Check the tag, the version and the changelog
         run: |
-          version="$(jq -r .version mygo.json)"
-          if [ "$RELEASE" = true ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::the tag $GITHUB_REF_NAME is not v$version, the version in mygo.json"
-            exit 1
+          # The tag is v<version of mygo.json>, and CHANGELOG.md has the
+          # version's own section; VERSION and PRERELEASE (a beta) for the
+          # steps below.
+          if [ "$RELEASE" = true ]; then
+            out="$(scripts/release-check.sh "$GITHUB_REF_NAME" 2>&1)" || { echo "::error::$out"; exit 1; }
+          else
+            out="$(scripts/release-check.sh 2>&1)" || { echo "::error::$out"; exit 1; }
           fi
-          if ! grep -Eq "^## \[?$version([^0-9.]|\$)" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no \"## $version\" section, which the update window shows"
-            exit 1
-          fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "$out"
+          echo "$out" >> "$GITHUB_ENV"
 
       - name: Check the secrets
         if: env.SIGN == 'true'
@@ -186,6 +191,18 @@ jobs:
             go tool mygo build -platform darwin/arm64
           fi
 
+      - name: Mark a beta as a prerelease
+        if: env.RELEASE == 'true' && env.PRERELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # mygo build creates the draft of a prerelease version as a
+          # prerelease (MyGo patch 0003); a draft made before, such as by a
+          # first run of this tag, is made one here. --latest=false keeps
+          # GitHub's latest release, which copies on releases read, as it is.
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease
+
       - name: Verify
         run: |
           if [ "$SIGN" = true ] && [ -f build/darwin-arm64/update-darwin-arm64.json ]; then
@@ -216,6 +233,11 @@ jobs:
         run: |
           {
             echo "### AudioSmith $VERSION"
-            echo "Uploaded to the draft release [$GITHUB_REF_NAME](https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME)."
-            echo "Review it, then publish it: installed copies update to it once it is the latest release."
+            if [ "$PRERELEASE" = true ]; then
+              echo "Uploaded to the draft prerelease (beta) [$GITHUB_REF_NAME](https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME)."
+              echo "Review it, then publish it, leaving \"Set as a pre-release\" ticked: copies that receive beta updates update to it; the others stay on releases."
+            else
+              echo "Uploaded to the draft release [$GITHUB_REF_NAME](https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME)."
+              echo "Review it, then publish it as the latest release: installed copies update to it once it is published."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

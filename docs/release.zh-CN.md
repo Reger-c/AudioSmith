@@ -9,6 +9,8 @@ English: [release.md](release.md)
 3. 生成用你的更新密钥签名的**更新文件**：`audiosmith-<版本>-darwin-arm64.tar.gz`、相对最近最多三个版本的增量包（delta），以及 `update-darwin-arm64.json`（更新清单，更新说明取自 `CHANGELOG.md` 里这个版本的那一节）；
 4. 把它们和 DMG 一起上传到一个**草稿 Release**。你检查后点发布，已安装的 AudioSmith 每天检查一次（或通过菜单 AudioSmith → 检查更新…）就会更新到这个版本。
 
+标签带预发布后缀（例如 `v0.4.0-beta.1`）时，做出来的是 **Beta 版**：GitHub 上的 prerelease（预发布），只有打开了「接收 Beta 版更新」的副本才会更新到它（见下文 [Beta 版和正式版](#beta-版和正式版更新通道)）。
+
 做法完全按照 MyGo 官方文档：[自动更新](https://github.com/egoist/mygo/blob/main/docs/updates.md)、[updater 插件](https://github.com/egoist/mygo/blob/main/docs/plugins/updater.md)、[打包分发](https://github.com/egoist/mygo/blob/main/docs/distribution.md)、[GitHub Actions](https://github.com/egoist/mygo/blob/main/docs/github-actions.md)。
 
 仓库里**不保存任何发布相关的配置**：`mygo.json` 没有 `updates` 段，也没有签名身份。工作流在构建前用 `scripts/release-config.sh` 临时加上。所以其他所有构建（`go run`、`mygo dev`、`scripts/mac.sh go tool mygo build`、CI）都是 ad-hoc 签名、不会自动更新（`mygo.Updater.Enabled()` 为 false，设置 → 诊断与关于 里也会这样提示）。
@@ -92,7 +94,7 @@ gh variable set MYGO_UPDATER_PUBLIC_KEY < "$keys/mygo-update.pub"
 GitHub → Actions → **Release** → Run workflow，勾选 **sign**。它会用你的 secrets 构建、签名、公证，跑校验脚本（`scripts/verify-release.sh`），并把 DMG 和更新文件作为这次运行的附件（artifact）上传，**不会碰任何 Release**。下载 DMG，在 Mac 上检查：
 
 ```sh
-spctl --assess --type open --context context:primary-signature -vv "AudioSmith 0.4.0 arm64.dmg"
+spctl --assess --type open --context context:primary-signature -vv "AudioSmith 0.4.0-beta.1 arm64.dmg"
 # 应显示 accepted，source=Notarized Developer ID
 ```
 
@@ -100,7 +102,9 @@ spctl --assess --type open --context context:primary-signature -vv "AudioSmith 0
 
 ## 每次发布
 
-1. 在 `CHANGELOG.md` 里把 `## Unreleased` 改成版本号和日期，例如 `## 0.4.0 — 2026-10-20`（更新窗口显示的就是这一节；缺了这一节构建会直接失败）。之后可以在上面再新开一个 `## Unreleased`。
+Beta 版（`0.4.0-beta.2`）和正式版（`0.4.0`）步骤完全一样，由版本号决定是哪一种。
+
+1. 在 `CHANGELOG.md` 里把 `## Unreleased` 改成版本号和日期，例如 `## 0.4.0 — 2026-10-20` 或 `## 0.4.0-beta.2 — 2026-10-18`（更新窗口显示的就是这一节；缺了这一节构建会直接失败）。标题的第一个词必须**正好**是版本号：`## 0.4.0-beta.1` 不算 0.4.0 的那一节，所以 Beta 之后的正式版要有自己的一节（可以把各个 Beta 的内容汇总进去）。之后可以在上面再新开一个 `## Unreleased`。
 2. 把 `mygo.json` 的 `"version"` 改成同一个版本号。这是唯一的版本号来源：关于页、设置、本地 API 的 `/health`、MCP 和更新器都读它（`mygo.App.Version()`）。
 3. 提交、打标签、推送：
 
@@ -111,15 +115,31 @@ spctl --assess --type open --context context:primary-signature -vv "AudioSmith 0
    ```
 
 4. Actions → Release 开始构建（第一次约 30–60 分钟，之后有引擎缓存会快些），完成后上传到草稿 Release `v0.4.0`。检查草稿（说明来自 `CHANGELOG.md`，可以再编辑），然后点 **Publish release**（或者 `gh release edit v0.4.0 --draft=false`）。发布之后，已安装的用户就能收到更新。
+   - **Beta 版**的草稿已经标成 **pre-release**。发布时保持「Set as a pre-release」勾选（不要勾「Set as the latest release」）：只收正式版的副本读的是 latest release，它仍然是最近一个非 Beta 的版本。
+   - **正式版**的草稿发布后会成为 latest release：所有副本（不管收不收 Beta）只要它比自己正在运行的版本新，就会更新到它。
 
-标签和 `mygo.json` 里的版本不一致时（例如打了 `v0.4.1` 但版本还是 `0.4.0`），工作流第一步就会失败，什么都不构建。对同一个标签重新运行工作流，会替换草稿里的文件。
+标签和 `mygo.json` 里的版本不一致时（例如打了 `v0.4.1` 但版本还是 `0.4.0`；由 `scripts/release-check.sh` 检查），工作流第一步就会失败，什么都不构建。对同一个标签重新运行工作流，会替换草稿里的文件。
+
+## Beta 版和正式版（更新通道）
+
+设置 → 诊断与关于 → 软件更新 → **接收 Beta 版更新** 决定更新通道（MyGo 补丁 `0003-update-prereleases.patch`，`mygo.Updater.SetPrereleases`）：
+
+- **关闭：只收正式版。** 和以前一样读 `releases/latest/download/update-darwin-arm64.json`；GitHub 的 latest release 永远不会是 prerelease。
+- **打开：Beta 版和正式版都收。** 通过 GitHub API 列出所有 Release（每次检查一次请求；没有 token 时每个 IP 每小时限 60 次），跳过草稿，取版本号最高的那个（`0.4.0-beta.1 < 0.4.0-beta.2 < 0.4.0 < 0.4.1-beta.1`），读它的 `update-darwin-arm64.json`。比 Beta 更新的正式版也会推送。GitHub API 出错（超出频率限制、离线）时，这次检查改读 latest release。
+- **默认值：** Beta 版副本默认打开（装了 Beta 的人想要下一个 Beta），正式版默认关闭，直到用户自己选（存在 `settings.Updates.Beta`）。
+- **不会降级。** 在 Beta 版里关掉它，会一直停留在这个 Beta，直到有比它新的正式版：0.4.0-beta.2 关掉 Beta 后会更新到 0.4.0，绝不会退回 0.3.x。
+- **增量包**两个通道都有：在 GitHub 上，`mygo build` 会同时参考 latest release 和最新 prerelease 的清单，取最新的最多三个版本做增量，所以 0.4.0-beta.2 有相对 0.4.0-beta.1 的增量，0.4.0 有相对各个 Beta 和上一个正式版的增量。第一个 Beta 没有增量。
+- **Mac 上的版本号。** MyGo 把完整版本号（`0.4.0-beta.1`）写进 `CFBundleShortVersionString` 和 `CFBundleVersion`，`mygo.App.Version()` 再从那里读回来；更新器拿它来比较版本，所以必须保留预发布后缀。只有 App Store 要求纯数字版本号，Developer ID 公证和 Gatekeeper 不检查（VS Code Insiders 也是这样发 `1.x.0-insider` 的）。万一公证拒绝，构建日志里 `notarytool log` 会写明原因。
+- 「关于」里 Beta 版的版本号旁边有一个 **Beta** 标记。
+
+手动检查 Beta 通道：`curl -s https://api.github.com/repos/hehehai/AudioSmith/releases | jq '[.[] | {tag_name, draft, prerelease}]'`，再 `curl -sL https://github.com/hehehai/AudioSmith/releases/download/v0.4.0-beta.1/update-darwin-arm64.json | jq '{version, deltas: [.deltas[]?.from]}'`。
 
 ## 端到端验证一次更新
 
 验证更新需要两个签名过的版本：一个装着，一个更新的。
 
 1. 从旧版本的 DMG 把 AudioSmith 拖到 `/Applications` 并打开（用管理员账户，这样它才能替换自己）。
-2. 发布新版本。检查更新源：`curl -sL https://github.com/hehehai/AudioSmith/releases/latest/download/update-darwin-arm64.json | jq '{version, size, deltas: [.deltas[]?.from]}'`。
+2. 发布新版本。检查更新源：`curl -sL https://github.com/hehehai/AudioSmith/releases/latest/download/update-darwin-arm64.json | jq '{version, size, deltas: [.deltas[]?.from]}'`（Beta 版见上文 [Beta 版和正式版](#beta-版和正式版更新通道)；只发过 Beta 时 `releases/latest` 是 404）。
 3. 在旧版本里：菜单 AudioSmith → **检查更新…** → 窗口显示新版本和更新说明 → **安装更新** → 下载（有增量包时只下增量）→ **立即重新启动**。
 4. 设置 → 诊断与关于：「关于」里显示新版本号，「软件更新」里显示「上次检查：…」。麦克风和辅助功能权限保持不变（两个版本都是你的 Developer ID 签名）。
 
@@ -160,6 +180,6 @@ scripts/release-local.sh --dry-run        # ad-hoc，与工作流的试跑一样
 - **构建机器**：`macos-26`（Apple 芯片，Xcode 26）。引擎需要 Xcode 26（`swift-tools-version: 6.2`）；工作流会选最新的 `Xcode_26*.app`，缺 Metal 工具链时自动下载。如果 `macos-26` 不可用，装有 Xcode 26 的 `macos-15` 也一样能用。
 - **Entitlements**：应用只需要 `com.apple.security.device.audio-input`（会申请麦克风）；引擎同样只需要它（listen 进程录音）。其他都不需要：AudioSmith 不是沙盒应用，不需要网络 entitlement；听写自动粘贴用的是 `CGEventPost`，靠「辅助功能」权限而不是 entitlement；MLX 的 Metal 内核是预编译的，不需要 JIT。`scripts/verify-release.sh` 会检查两个二进制的签名、hardened runtime、时间戳和 entitlements。
 - **从 ad-hoc 换到 Developer ID 后的权限**：对 macOS 的隐私设置来说，本地 ad-hoc 构建和 Developer ID 正式版是两个不同的应用。第一次装正式版后，需要重新授予麦克风和辅助功能权限（系统设置 → 隐私与安全性；先删掉旧的 AudioSmith 条目）。之后的正式版更新会保留这些权限。
-- **增量更新**：`mygo build` 会从已发布的 Release 下载之前版本的更新包（并用公钥校验）来生成增量包。第一个版本没有增量；之后每个版本都有相对最近最多三个已发布版本的增量包。
+- **增量更新**：`mygo build` 会从已发布的 Release 和 prerelease 下载之前版本的更新包（并用公钥校验）来生成增量包。第一个版本没有增量；之后每个版本都有相对最近最多三个已发布版本的增量包。
 - **公证失败**：构建日志里有 submission ID，用 `xcrun notarytool log <ID> --keychain-profile notary` 查看 Apple 拒绝的原因。
 - **报错「the update signing key does not match updates.publicKey」**：secret 里的私钥和变量里的公钥不是同一对，用同一次 `mygo keygen` 的输出重新设置两者。

@@ -108,6 +108,9 @@ func (a *app) settingsChanged(old, new settings.Settings) {
 	if old.Studio.Autoplay != new.Studio.Autoplay {
 		a.autoplay = new.Studio.Autoplay
 	}
+	if beta := betaUpdates(new, a.version); beta != betaUpdates(old, a.version) {
+		a.updates.SetPrereleases(beta) // updates.go (thread #52)
+	}
 	a.loadSettingsForm()
 }
 

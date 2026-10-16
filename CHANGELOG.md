@@ -1,10 +1,13 @@
 # Changelog
 
-## 0.4.0
+## 0.4.0-beta.1
+
+The first signed release is a beta (a GitHub prerelease): copies that receive beta updates get the next beta, and 0.4.0 once it is out.
 
 ### Updates
 - AudioSmith updates itself: once a day it reads the version file of its latest release on GitHub and, when a new version is out, shows its notes (this file's section of the version) and offers to install it, skip it or remind you later. Updates are signed; AudioSmith checks the signature before it installs one, and usually downloads only what changed. AudioSmith → Check for Updates…, the command palette and Settings → Diagnostics and about check at once; that page also turns the daily check and installing without asking on or off. Copies built on your own Mac don't update themselves.
 - Releases are signed with a Developer ID and notarized by Apple, so they open without Gatekeeper's warning (docs/release.md).
+- Beta updates: Settings → Diagnostics and about → Receive beta updates. Betas get new features sooner but may be less stable; turned off, AudioSmith only updates to releases. It is on in a beta copy (such as this one) and off in a release until you choose. Turning it off never goes back to an older version: a beta stays until a release newer than it is out. About shows a Beta badge next to a beta's version.
 - MyGo 0.5.5: MyGo's own texts (text fields' menus, date pickers, dialogs) follow the app's language, and Chinese text is drawn with the Chinese forms of its characters.
 
 ### Transcription with speakers

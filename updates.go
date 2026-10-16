@@ -14,14 +14,26 @@ package main
 //
 // The app menu has "Check for Updates…" (shell_commands.go) and Settings →
 // Diagnostics and about a Software updates section (settings_about.go).
+//
+// Beta channel (thread #52): betas are GitHub prereleases (0.4.0-beta.1),
+// which never become the latest release. With Settings → Receive beta
+// updates on, MyGo's updater (patch 0003, mygo.Updater.SetPrereleases)
+// finds the newest version among releases and prereleases through the
+// GitHub API instead; the window and the daily check follow it. The
+// setting (settings.Updates.Beta) defaults to on in a beta copy, off in a
+// release. Turning it off never goes back to an older version: a beta
+// stays until a release newer than it is out.
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/plugins/updater/native"
+
+	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
 // updateService is what AudioSmith uses of the updater plugin; tests use
@@ -43,6 +55,10 @@ type updateService interface {
 	// OnChange calls fn on the main thread when a preference or the time
 	// of the last check changed.
 	OnChange(fn func())
+	// SetPrereleases chooses the channel: betas and releases, or releases
+	// only (mygo.Updater.SetPrereleases). AudioSmith keeps the choice
+	// (settings.Updates.Beta) and sets it at every launch.
+	SetPrereleases(on bool)
 }
 
 // updateInfo is what Settings shows of the updater, read off the main
@@ -78,6 +94,7 @@ func (pluginUpdates) AutomaticDownloads() bool      { return updater.AutomaticDo
 func (pluginUpdates) SetAutomaticDownloads(on bool) { updater.SetAutomaticDownloads(on) }
 func (pluginUpdates) LastCheck() time.Time          { return updater.LastCheck() }
 func (pluginUpdates) OnChange(fn func())            { updater.OnChange(fn) }
+func (pluginUpdates) SetPrereleases(on bool)        { mygo.Updater.SetPrereleases(on) }
 
 // noUpdates is a build without the plugin: tests, and the MCP relay.
 type noUpdates struct{}
@@ -90,12 +107,42 @@ func (noUpdates) AutomaticDownloads() bool   { return false }
 func (noUpdates) SetAutomaticDownloads(bool) {}
 func (noUpdates) LastCheck() time.Time       { return time.Time{} }
 func (noUpdates) OnChange(func())            {}
+func (noUpdates) SetPrereleases(bool)        {}
 
-// connectUpdates hears the updater's changes; it runs once the window is
-// open.
+// connectUpdates sets the channel and hears the updater's changes; it
+// runs once the window is open (a.version is known), before the plugin's
+// first check (10 s after launch at the soonest).
 func (a *app) connectUpdates() {
+	a.updates.SetPrereleases(betaUpdates(a.prefs, a.version))
 	a.updates.OnChange(func() { a.post(a.refreshUpdates) })
 	a.refreshUpdates()
+}
+
+// betaUpdates reports whether AudioSmith takes beta versions: as the user
+// chose, else when this copy is a beta itself (someone who installed a
+// beta wants the next one).
+func betaUpdates(s settings.Settings, version string) bool {
+	if b := s.Updates.Beta; b != nil {
+		return *b
+	}
+	return isPrerelease(version)
+}
+
+// setBetaUpdates keeps the user's choice of channel and tells the updater.
+func (a *app) setBetaUpdates(on bool) {
+	a.updateSettings(func(s *settings.Settings) {
+		v := on
+		s.Updates.Beta = &v
+	})
+	a.updates.SetPrereleases(on)
+}
+
+// isPrerelease reports whether a version such as 0.4.0-beta.1 is a
+// prerelease (semantic versioning, as MyGo's updater compares them).
+func isPrerelease(version string) bool {
+	version, _, _ = strings.Cut(version, "+")
+	_, pre, _ := strings.Cut(version, "-")
+	return pre != ""
 }
 
 // refreshUpdates reads the updater's state in the background.

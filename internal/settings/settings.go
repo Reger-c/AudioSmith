@@ -45,6 +45,19 @@ type Settings struct {
 	Calls Calls `json:"calls"` // M6b (thread #23, calls.go)
 	// The Export audio dialog's last choices, per kind (export.go).
 	Export Export `json:"export"`
+	// Software updates (thread #52, updates.go of the app).
+	Updates Updates `json:"updates"`
+}
+
+// Updates: the update channel. The updater's other preferences (the
+// daily check, installing without asking) are MyGo's updater plugin's
+// own, in its updater.json.
+type Updates struct {
+	// Beta takes beta versions (GitHub prereleases such as 0.4.0-beta.1)
+	// as well as releases. Nil until the user chooses: then a beta copy
+	// takes betas and a release copy releases only (the app's
+	// betaUpdates).
+	Beta *bool `json:"beta,omitempty"`
 }
 
 // General: language and app behaviour.

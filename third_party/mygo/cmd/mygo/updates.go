@@ -123,9 +123,9 @@ func (c *Config) updateFile(name string, latest bool) string {
 		return update.TaggedFeed(u.GitHub, u.TagPrefix, name)
 	}
 	if latest {
-		return "https://github.com/" + u.GitHub + "/releases/latest/download/" + url.PathEscape(name)
+		return update.GitHub + "/" + u.GitHub + "/releases/latest/download/" + url.PathEscape(name)
 	}
-	return "https://github.com/" + u.GitHub + "/releases/download/" + url.PathEscape(u.TagPrefix+c.Version) + "/" + url.PathEscape(name)
+	return update.GitHub + "/" + u.GitHub + "/releases/download/" + url.PathEscape(u.TagPrefix+c.Version) + "/" + url.PathEscape(name)
 }
 
 // updateFlags are the -ldflags that point the build for target at its
@@ -274,13 +274,13 @@ func writeSigned(path string, key ed25519.PrivateKey, write func(io.Writer) erro
 }
 
 // writeDeltas makes delta updates to the app of target in stage from the
-// n versions before it, as Sparkle does: the version of the published
-// manifest of target and those it lists as previous, whose archives it
-// downloads. It adds them to m, with the archives the next version makes
-// deltas from, and returns the files written. Deltas only save downloads,
-// so a version without one is skipped with a message.
+// n versions before it, as Sparkle does: the newest of the published
+// versions (publishedArchives), whose archives it downloads. It adds them
+// to m, with the archives the next version makes deltas from, and returns
+// the files written. Deltas only save downloads, so a version without one
+// is skipped with a message.
 func writeDeltas(c *Config, key ed25519.PrivateKey, stage, target string, entries []string, m *update.Manifest, n int) ([]string, error) {
-	published, err := fetchManifest(c.updateFeed(target))
+	published, err := publishedArchives(c, target)
 	if err != nil {
 		if errors.Is(err, errNotPublished) {
 			logf("No delta updates for %s: no version is published yet", target)
@@ -290,13 +290,13 @@ func writeDeltas(c *Config, key ed25519.PrivateKey, stage, target string, entrie
 		return nil, nil
 	}
 	var bases []update.Archive
-	for _, a := range append([]update.Archive{{Version: published.Version, URL: published.URL, Size: published.Size, Signature: published.Signature}}, published.Previous...) {
-		if update.Compare(a.Version, c.Version) < 0 && !slices.ContainsFunc(bases, func(b update.Archive) bool { return b.Version == a.Version }) {
+	for _, a := range published {
+		if update.Compare(a.Version, c.Version) < 0 {
 			bases = append(bases, a)
 		}
 	}
 	if len(bases) == 0 {
-		logf("No delta updates for %s: the published version is %s", target, published.Version)
+		logf("No delta updates for %s: the published version is %s", target, published[0].Version)
 		return nil, nil
 	}
 	bases = bases[:min(len(bases), n)]
@@ -372,11 +372,58 @@ func writeDelta(key ed25519.PrivateKey, base update.Archive, work, path, version
 	return update.Delta{From: base.Version, Size: size, Signature: sig}, nil
 }
 
+// publishedArchives returns the archives of the published versions of
+// target, newest first: the version of its published manifest, the one
+// apps check, and those the manifest lists as previous. On GitHub, the
+// newest version may be a prerelease, which apps that take prereleases
+// check (mygo.Updater.SetPrereleases): its manifest and those it lists
+// count too, so that the next prerelease, or the release that follows
+// them, has deltas from the versions both kinds of app run.
+func publishedArchives(c *Config, target string) ([]update.Archive, error) {
+	feed := c.updateFeed(target)
+	var manifests []*update.Manifest
+	m, err := fetchManifest(feed, false)
+	switch {
+	case err == nil:
+		manifests = append(manifests, m)
+	case !errors.Is(err, errNotPublished):
+		return nil, err
+	}
+	if c.Updates.GitHub != "" {
+		pre, perr := fetchManifest(feed, true)
+		switch {
+		case perr == nil:
+			manifests = append(manifests, pre)
+		case len(manifests) > 0 && !errors.Is(perr, errNotPublished):
+			warnf("No delta updates from prereleases for %s: %v", target, perr)
+		}
+	}
+	if len(manifests) == 0 {
+		return nil, err
+	}
+	var archives []update.Archive
+	for _, m := range manifests {
+		for _, a := range append([]update.Archive{{Version: m.Version, URL: m.URL, Size: m.Size, Signature: m.Signature}}, m.Previous...) {
+			if !slices.ContainsFunc(archives, func(b update.Archive) bool { return b.Version == a.Version }) {
+				archives = append(archives, a)
+			}
+		}
+	}
+	slices.SortStableFunc(archives, func(a, b update.Archive) int { return update.Compare(b.Version, a.Version) })
+	return archives, nil
+}
+
 var errNotPublished = errors.New("not published")
 
-// fetchManifest downloads a published manifest, from its feed.
-func fetchManifest(feed string) (*update.Manifest, error) {
-	u, err := update.ResolveFeed(context.Background(), feed, func(_ context.Context, u string) (io.ReadCloser, error) {
+// fetchManifest downloads a published manifest, from its feed: that of the
+// newest version, or with prereleases the newest prerelease or release on
+// GitHub (update.ResolvePrereleaseFeed).
+func fetchManifest(feed string, prereleases bool) (*update.Manifest, error) {
+	resolve := update.ResolveFeed
+	if prereleases {
+		resolve = update.ResolvePrereleaseFeed
+	}
+	u, err := resolve(context.Background(), feed, func(_ context.Context, u string) (io.ReadCloser, error) {
 		resp, err := updateGet(u, 30*time.Second)
 		if err != nil {
 			return nil, err
