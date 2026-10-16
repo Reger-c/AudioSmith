@@ -191,7 +191,7 @@ Takes `{job}` and returns `{cancelled:bool}`. See §4.6.
 
 ## 5.2 Methods added in M1
 
-Types: [`m1.go`](../internal/engine/proto/m1.go) (Go), [`WireM1.swift`](../engine/Sources/AudioSmithProtocol/WireM1.swift). Fixtures: `stt.jsonl`, `analysis.jsonl`, `media.jsonl`, `capture.jsonl`, `voice.jsonl`.
+Types: [`media.go`](../internal/engine/proto/media.go) (Go), [`WireM1.swift`](../engine/Sources/AudioSmithProtocol/WireM1.swift). Fixtures: `stt.jsonl`, `analysis.jsonl`, `media.jsonl`, `capture.jsonl`, `voice.jsonl`.
 
 Shared rules:
 - **Inputs** (`audio`, `input`, `refAudio`) are absolute paths to anything AVFoundation reads: WAV, AIFF, CAF, MP3, M4A/AAC, ALAC, FLAC, and the audio of MOV/MP4/M4V. The engine converts to what the model needs. A missing file fails with `file_not_found` (`data.path`), an unreadable one with `unsupported_media` (`data.path`).
@@ -316,7 +316,7 @@ Returns `{devices:[{id, name, channels, sampleRate, default?, transport?}]}`, th
 
 ## 5.3 Methods added in M4 (dubbing)
 
-Types: [`m4.go`](../internal/engine/proto/m4.go) (Go; `internal/dub/engineapi.go` aliases them), [`WireM4.swift`](../engine/Sources/AudioSmithProtocol/WireM4.swift). Fixtures: `separate.jsonl`, `diarize.jsonl`, `mux.jsonl`, `thumbnail.jsonl`, `transcode.jsonl`. The §5.2 shared rules apply (absolute paths, `file_not_found` / `unsupported_media`, temporary name + rename, BCP-47, model jobs). New progress stages: `separating`, `diarizing`, `muxing`, `transcoding`.
+Types: [`dub.go`](../internal/engine/proto/dub.go) (Go; `internal/dub/engineapi.go` aliases them), [`WireM4.swift`](../engine/Sources/AudioSmithProtocol/WireM4.swift). Fixtures: `separate.jsonl`, `diarize.jsonl`, `mux.jsonl`, `thumbnail.jsonl`, `transcode.jsonl`. The §5.2 shared rules apply (absolute paths, `file_not_found` / `unsupported_media`, temporary name + rename, BCP-47, model jobs). New progress stages: `separating`, `diarizing`, `muxing`, `transcoding`.
 
 ### `separate.run` (job, gpu)
 
@@ -374,7 +374,7 @@ Types: [`m4.go`](../internal/engine/proto/m4.go) (Go; `internal/dub/engineapi.go
 
 ### `media.timePitch` (not implemented)
 
-Stays reserved: the app stretches with WSOLA in Go (`internal/dsp/stretch`). `TimePitchParams` (`input`, `output`, `rate`, `pitch?`) is kept in `m4.go` should a listening test prefer AVAudioUnitTimePitch.
+Stays reserved: the app stretches with WSOLA in Go (`internal/dsp/stretch`). `TimePitchParams` (`input`, `output`, `rate`, `pitch?`) is kept in `proto/dub.go` should a listening test prefer AVAudioUnitTimePitch.
 
 ## 5.4 The local language model
 
@@ -555,7 +555,7 @@ M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `
 
 `TestFixturesCoverMethods` fails when a method has no fixture.
 
-**Fake engine for app tests:** besides replaying, [`enginetest`](../internal/engine/enginetest) serves every method in the role it is started with, reading and writing real WAV files, so the app's code can be tested end to end on Linux (`TestM1Executors`, `TestCapture`). [`fake_m1.go`](../internal/engine/enginetest/fake_m1.go) says what each method does with its inputs (e.g. a transcript comes from `<audio>.txt`). View tests use the lighter fakes in `enginefake_test.go`, where the test finishes jobs itself.
+**Fake engine for app tests:** besides replaying, [`enginetest`](../internal/engine/enginetest) serves every method in the role it is started with, reading and writing real WAV files, so the app's code can be tested end to end on Linux (`TestM1Executors`, `TestCapture`). [`fake_media.go`](../internal/engine/enginetest/fake_media.go) says what each method does with its inputs (e.g. a transcript comes from `<audio>.txt`). View tests use the lighter fakes in `enginefake_test.go`, where the test finishes jobs itself.
 
 Every engine change that touches the wire adds or updates a fixture in the same commit.
 

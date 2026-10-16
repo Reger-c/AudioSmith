@@ -2,7 +2,7 @@ package dub
 
 // Engine methods the dubbing pipeline uses. They were proposed here and
 // are protocol 2 since M4 (docs/protocol-v2.md §5.3; internal/engine/proto
-// m4.go): the names and types below are aliases of proto's. Only
+// dub.go): the names and types below are aliases of proto's. Only
 // media.timePitch stays a proposal (reserved): the pipeline stretches in
 // Go (internal/dsp/stretch).
 
@@ -31,7 +31,7 @@ func RoleOf(method string) proto.Role {
 // Progress stages (besides loading/decoding/encoding/writing):
 // "separating", "diarizing", "muxing", "transcoding".
 
-// The methods' params and results: see internal/engine/proto/m4.go.
+// The methods' params and results: see internal/engine/proto/dub.go.
 type (
 	SeparateParams  = proto.SeparateParams
 	SeparateResult  = proto.SeparateResult

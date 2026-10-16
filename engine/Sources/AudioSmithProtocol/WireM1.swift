@@ -1,7 +1,7 @@
 import Foundation
 
 // The methods M1 adds (docs/protocol-v2.md §5.2): the Swift mirror of
-// internal/engine/proto/m1.go. Optional here = omitempty there; the
+// internal/engine/proto/media.go. Optional here = omitempty there; the
 // fixtures (engine/Fixtures/{stt,analysis,media,capture,voice}.jsonl)
 // round-trip through both.
 
