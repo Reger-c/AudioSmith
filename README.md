@@ -10,11 +10,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hehehai/AudioSmith/releases"><img alt="Download" src="https://img.shields.io/github/v/release/hehehai/AudioSmith?include_prereleases&label=download&color=0d9384"></a>
+  <a href="https://actnow.dev/download/audiosmith"><img alt="Download" src="https://img.shields.io/badge/download-actnow.dev-0d9384"></a>
   <img alt="macOS 15 or later" src="https://img.shields.io/badge/macOS-15%2B-0d9384">
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-M1%20or%20later-0d9384">
   <a href="LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-0d9384"></a>
 </p>
+
+<p align="center"><a href="https://actnow.dev/audiosmith">Website</a> · <a href="https://actnow.dev/download/audiosmith">Download</a> · <a href="https://actnow.dev/audiosmith/changelog">Changelog</a></p>
 
 <p align="center"><b>English</b> · <a href="README.zh-CN.md">简体中文</a></p>
 
@@ -134,7 +136,7 @@ The full reference is [docs/local-api.md](docs/local-api.md), and `/docs` in the
 - Disk: 1.3–17 GB for models, depending on the pack.
 
 **Steps**
-1. Download the DMG from [Releases](https://github.com/hehehai/AudioSmith/releases). The first release, 0.4.0-beta.1, is marked Pre-release.
+1. Download the DMG from [actnow.dev/download/audiosmith](https://actnow.dev/download/audiosmith), AudioSmith's page on our website. AudioSmith is free; the download needs a free account. Rather not sign up? [Build it from source](#build-from-source). The current version is a beta; [the changelog](https://actnow.dev/audiosmith/changelog) lists every version.
 2. Drag **AudioSmith** to Applications and open it. Releases are signed and notarized, so Gatekeeper lets them open; macOS only asks once to confirm an app from the internet.
 3. The setup wizard checks your Mac (macOS, chip, memory, disk, network), suggests a model pack, and asks about privacy and dictation. You can skip the pack and download models later on the Models page.
 
@@ -145,7 +147,7 @@ The full reference is [docs/local-api.md](docs/local-api.md), and `/docs` in the
 | **Quality** | + high-fidelity cloning, voice design, dubbing, speakers, writing assistant; 24 GB | 13.4 / 14.9 GB |
 | **Max** | + Multilingual all-rounder (non-commercial) and Whisper; 48 GB | 15.5 / 17.0 GB |
 
-**Updates.** Once a day AudioSmith checks GitHub for a new version, shows its notes, and installs it when you say so. Updates are signed and checked before they install, and usually download only what changed. **AudioSmith → Check for Updates…** checks at once.
+**Updates.** Once a day AudioSmith checks actnow.dev for a new version, shows its notes, and installs it when you say so (no account needed). Updates are signed and checked before they install, and usually download only what changed. **AudioSmith → Check for Updates…** checks at once.
 
 **Beta updates.** Settings → Diagnostics and about → **Receive beta updates**. It is on in a beta (such as 0.4.0-beta.1) and off in a release until you choose. Turning it off never goes back to an older version: a beta stays until a newer release is out.
 

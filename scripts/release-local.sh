@@ -5,7 +5,10 @@
 # scripts/verify-release.sh. The keys come from this Mac (docs/release.md).
 #
 #   scripts/release-local.sh                 # signed + notarized + updates, in build/darwin-arm64
-#   scripts/release-local.sh --upload        # and upload to the draft GitHub release v<version> (gh)
+#   scripts/release-local.sh --upload        # and publish it: actnow.dev + a draft GitHub release
+#                                            # (scripts/release-publish.sh: needs R2_ACCESS_KEY_ID,
+#                                            # R2_SECRET_ACCESS_KEY, ACTNOW_INGEST_TOKEN and gh;
+#                                            # GITHUB_FEED=true for the transition release)
 #   scripts/release-local.sh --skip-notarize # signed, not notarized (quicker, for checking the signing)
 #   scripts/release-local.sh --dry-run       # ad hoc, no notarization, no updates: what CI's dry run makes
 #   add --skip-engine to reuse resources/darwin-arm64/engine
@@ -75,8 +78,13 @@ $ids"
     MYGO_UPDATER_PUBLIC_KEY="$(cat "$keys/mygo-update.pub")"
   fi
   [[ -n "${MYGO_UPDATER_PRIVATE_KEY:-}" && -n "${MYGO_UPDATER_PUBLIC_KEY:-}" ]] ||
-    fail "no update keys: run go tool mygo keygen (docs/release.md, step 3), or set MYGO_UPDATER_PRIVATE_KEY and MYGO_UPDATER_PUBLIC_KEY"
+    fail "no update keys: run go tool mygo keygen (docs/release.md, step 4), or set MYGO_UPDATER_PRIVATE_KEY and MYGO_UPDATER_PUBLIC_KEY"
   export MYGO_UPDATER_PRIVATE_KEY MYGO_UPDATER_PUBLIC_KEY
+  if $upload; then
+    # Before the long build: publishing needs the website's keys.
+    [[ -n "${R2_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}" && -n "${R2_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY:-}}" && -n "${ACTNOW_INGEST_TOKEN:-}" ]] ||
+      fail "--upload needs R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and ACTNOW_INGEST_TOKEN (docs/release.md, step 5)"
+  fi
 fi
 
 if $engine || [[ ! -x resources/darwin-arm64/engine/audiosmith-engine ]]; then
@@ -89,7 +97,6 @@ trap 'cp "$backup" mygo.json; rm -f "$backup"' EXIT
 scripts/release-config.sh
 
 flags=()
-$upload && flags+=(-upload)
 $notarize || flags+=(-skip-notarize)
 rm -rf build/darwin-arm64
 go tool mygo build -platform darwin/arm64 ${flags[@]+"${flags[@]}"}
@@ -100,10 +107,7 @@ else
   scripts/verify-release.sh --release
 fi
 if $upload; then
-  # mygo build creates a beta's draft as a prerelease (MyGo patch 0003),
-  # which publishing leaves one: only copies that take betas see it.
-  kind="release"
-  [[ "$version" == *-* ]] && kind="prerelease (beta)"
-  echo "Uploaded to the draft $kind v$version; publish it on GitHub, or: gh release edit v$version --draft=false"
+  # The website (R2 + registration), then the draft GitHub release.
+  scripts/release-publish.sh
 fi
 exit 0

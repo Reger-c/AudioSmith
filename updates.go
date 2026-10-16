@@ -2,10 +2,12 @@ package main
 
 // Software updates (thread #50): MyGo's updater plugin, with its window
 // drawn in native UI (plugins/updater/native), as MyGo's docs recommend
-// for apps without web pages. It checks GitHub's latest release of
-// hehehai/AudioSmith once a day, shows the version's CHANGELOG.md section
-// and installs the signed archive (or a delta), checked against the public
-// key `mygo build` links in from mygo.json's updates.publicKey.
+// for apps without web pages. It checks AudioSmith's update feed on the
+// family website once a day, https://actnow.dev/updates/audiosmith (thread
+// #69; up to 0.4.0-beta.4 it read GitHub's releases), shows the version's
+// CHANGELOG.md section and installs the signed archive (or a delta),
+// checked against the public key `mygo build` links in from mygo.json's
+// updates.publicKey (scripts/release-config.sh).
 //
 // Builds without updates (no updates section: development builds, the
 // ad-hoc builds of scripts/mac.sh, `go test`) never check, and
@@ -15,14 +17,15 @@ package main
 // The app menu has "Check for Updates…" (shell_commands.go) and Settings →
 // Diagnostics and about a Software updates section (settings_about.go).
 //
-// Beta channel (thread #52): betas are GitHub prereleases (0.4.0-beta.1),
-// which never become the latest release. With Settings → Receive beta
-// updates on, MyGo's updater (patch 0003, mygo.Updater.SetPrereleases)
-// finds the newest version among releases and prereleases through the
-// GitHub API instead; the window and the daily check follow it. The
-// setting (settings.Updates.Beta) defaults to on in a beta copy, off in a
-// release. Turning it off never goes back to an older version: a beta
-// stays until a release newer than it is out.
+// Beta channel (thread #52): betas are prereleases (0.4.0-beta.5). Their
+// files are in the feed's beta directory, …/updates/audiosmith/beta/,
+// whose manifest names the newest beta or release. With Settings → Receive
+// beta updates on, MyGo's updater (patches 0003 and 0008,
+// mygo.Updater.SetPrereleases) reads it as well as the releases' and offers
+// the newer; the window and the daily check follow it. The setting
+// (settings.Updates.Beta) defaults to on in a beta copy, off in a release.
+// Turning it off never goes back to an older version: a beta stays until a
+// release newer than it is out.
 
 import (
 	"log"

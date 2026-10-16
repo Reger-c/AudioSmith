@@ -53,7 +53,7 @@ type Settings struct {
 // daily check, installing without asking) are MyGo's updater plugin's
 // own, in its updater.json.
 type Updates struct {
-	// Beta takes beta versions (GitHub prereleases such as 0.4.0-beta.1)
+	// Beta takes beta versions (prereleases such as 0.4.0-beta.1)
 	// as well as releases. Nil until the user chooses: then a beta copy
 	// takes betas and a release copy releases only (the app's
 	// betaUpdates).

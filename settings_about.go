@@ -34,6 +34,16 @@ import (
 // issuesURL is where bugs are reported.
 const issuesURL = api.SourceURL + "/issues/new"
 
+// AudioSmith's pages on actnow.dev, the family website that serves its
+// downloads, updates and release notes (thread #69): the product page, the
+// download page (a free account) and the release notes. The source code
+// stays on GitHub (api.SourceURL, AGPL-3.0).
+const (
+	websiteURL      = "https://actnow.dev/audiosmith"
+	downloadURL     = "https://actnow.dev/download/audiosmith"
+	releaseNotesURL = "https://actnow.dev/audiosmith/changelog"
+)
+
 // licenceURL is AudioSmith's licence, the GNU AGPL version 3 (LICENSE).
 const licenceURL = "https://www.gnu.org/licenses/agpl-3.0.html"
 
@@ -392,6 +402,11 @@ func (a *app) aboutSettings(c *ui.Context) {
 		ui.Link(c, "GNU AGPL-3.0", licenceURL)
 		ui.Text(c, i18n.T("Source code")).TextColor(t.TextMuted)
 		ui.Link(c, strings.TrimPrefix(api.SourceURL, "https://"), api.SourceURL)
+		// The website (thread #69): downloads and release notes.
+		for _, l := range [][2]string{{i18n.T("Website"), websiteURL}, {i18n.T("Download"), downloadURL}, {i18n.T("Release notes"), releaseNotesURL}} {
+			ui.Text(c, l[0]).TextColor(t.TextMuted)
+			ui.Link(c, strings.TrimPrefix(l[1], "https://"), l[1])
+		}
 		// The libraries' and material's licences (thread #62).
 		if a.noticesURL == "" {
 			a.noticesURL = thirdPartyNoticesURL()
@@ -467,7 +482,7 @@ func (a *app) softwareUpdateSettings(c *ui.Context) {
 	}
 	u := a.updInfo
 	sectionTitle(c, i18n.T("Software updates"))
-	note := i18n.T("This copy doesn't update itself: development builds and copies built on this Mac don't. Releases from GitHub do.")
+	note := i18n.T("Development builds and copies built on this Mac don't update themselves; copies from actnow.dev do.")
 	switch {
 	case !u.read:
 		note = ""
@@ -482,7 +497,7 @@ func (a *app) softwareUpdateSettings(c *ui.Context) {
 		}
 	})
 	auto := u.enabled && u.auto
-	settingRow(c, "about-update-auto", i18n.T("Automatic checks"), i18n.T("Once a day AudioSmith reads the version file of its latest release on GitHub, and offers a new version with its release notes. Nothing about you is sent."), func() {
+	settingRow(c, "about-update-auto", i18n.T("Automatic checks"), i18n.T("Once a day AudioSmith reads the version file of its newest version on actnow.dev, and offers a new version with its release notes. Nothing about you is sent."), func() {
 		if ui.Switch(c.Key("about-update-auto"), &auto).Label(i18n.T("Check once a day")).Disabled(!u.enabled).Changed() {
 			on := auto
 			a.updInfo.auto = on
@@ -497,7 +512,8 @@ func (a *app) softwareUpdateSettings(c *ui.Context) {
 			a.updates.SetAutomaticDownloads(on)
 		}
 	})
-	// The channel (thread #52, updates.go): betas are GitHub prereleases.
+	// The channel (thread #52, updates.go): betas are prereleases, in the
+	// website's beta feed.
 	beta := u.enabled && betaUpdates(a.prefs, a.version)
 	info := i18n.T("Betas get new features sooner but may be less stable. Turned off, AudioSmith only updates to releases.")
 	if isPrerelease(a.version) {

@@ -254,6 +254,12 @@ func TestAboutPage(t *testing.T) {
 	if !tt.HasText("GNU AGPL-3.0") || !tt.HasText("Source code") || !tt.HasText("github.com/hehehai/AudioSmith") {
 		t.Fatalf("about %q", tt.Texts())
 	}
+	// The website's pages (thread #69): the source stays on GitHub.
+	for _, link := range []string{"actnow.dev/audiosmith", "actnow.dev/download/audiosmith", "actnow.dev/audiosmith/changelog"} {
+		if !tt.HasText(link) {
+			t.Fatalf("about: no %s in %q", link, tt.Texts())
+		}
+	}
 	if err := tt.Click("Run the check"); err != nil {
 		t.Fatal(err)
 	}
