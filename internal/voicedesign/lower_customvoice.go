@@ -1,0 +1,172 @@
+package voicedesign
+
+// Lowering a recipe for Qwen3-TTS CustomVoice: a named speaker plus an
+// instruction; split from lower.go.
+
+import (
+	"slices"
+	"strings"
+)
+
+// Speaker is one of Qwen3-TTS CustomVoice's named speakers, described by
+// the attributes it is closest to (from the public model card).
+type Speaker struct {
+	ID    string
+	Lang  string // native language
+	Attrs Attributes
+	About Text
+}
+
+// CustomVoiceSpeakers lists the Qwen3-TTS CustomVoice speakers. The 0.6B
+// and 1.7B models share them; some quantised builds ship fewer (see
+// Options.Speakers).
+var CustomVoiceSpeakers = []Speaker{
+	{"Vivian", "zh", Attributes{Gender: "female", Age: "young_adult", Styles: []string{"bright"}}, Text{"Bright young female voice", "明亮的年轻女声"}},
+	{"Serena", "zh", Attributes{Gender: "female", Age: "young_adult", Styles: []string{"warm", "soft"}}, Text{"Warm, gentle young female voice", "温暖柔和的年轻女声"}},
+	{"Uncle_Fu", "zh", Attributes{Gender: "male", Age: "middle_aged", Pitch: "low", Styles: []string{"smooth"}}, Text{"Seasoned male voice with a low, mellow timbre", "低沉醇厚的成熟男声"}},
+	{"Dylan", "zh", Attributes{Gender: "male", Age: "young_adult", Dialect: "beijing"}, Text{"Young Beijing male voice", "北京口音的年轻男声"}},
+	{"Eric", "zh", Attributes{Gender: "male", Age: "young_adult", Dialect: "sichuan", Styles: []string{"energetic"}}, Text{"Lively Chengdu (Sichuan) male voice", "活泼的成都男声"}},
+	{"Ryan", "en", Attributes{Gender: "male", Age: "young_adult", Styles: []string{"energetic"}}, Text{"Dynamic English male voice", "富有活力的英语男声"}},
+	{"Aiden", "en", Attributes{Gender: "male", Age: "young_adult", Accent: "american", Styles: []string{"bright"}}, Text{"Sunny American male voice", "阳光的美式英语男声"}},
+	{"Ono_Anna", "ja", Attributes{Gender: "female", Age: "young_adult", Styles: []string{"playful"}}, Text{"Playful Japanese female voice", "俏皮的日语女声"}},
+	{"Sohee", "ko", Attributes{Gender: "female", Age: "young_adult", Styles: []string{"warm"}}, Text{"Warm Korean female voice", "温暖的韩语女声"}},
+}
+
+// BestSpeaker picks the CustomVoice speaker closest to the attributes for
+// speech in lang ("" = any), among allowed (empty = all).
+func BestSpeaker(a Attributes, lang string, allowed []string) Speaker {
+	best, bestScore := Speaker{}, -1<<30
+	for _, s := range CustomVoiceSpeakers {
+		if len(allowed) > 0 && !slices.Contains(allowed, s.ID) {
+			continue
+		}
+		score := 0
+		switch {
+		case a.Gender == "":
+		case a.Gender == s.Attrs.Gender:
+			score += 8
+		default:
+			score -= 8
+		}
+		if a.Dialect != "" && a.Dialect == s.Attrs.Dialect {
+			score += 6
+		} else if s.Attrs.Dialect != "" {
+			score -= 2 // a dialect speaker only when asked for
+		}
+		if a.Accent != "" && a.Accent == s.Attrs.Accent {
+			score += 3
+		}
+		want := lang
+		if want == "" {
+			want = a.Language()
+		}
+		if want != "" && want == s.Lang {
+			score += 4
+		}
+		if a.Age != "" {
+			if a.Age == s.Attrs.Age {
+				score += 2
+			} else if (a.Age == "elderly" || a.Age == "middle_aged") && s.Attrs.Age == "middle_aged" {
+				score += 2
+			}
+		}
+		if a.Pitch != "" && a.Pitch == s.Attrs.Pitch {
+			score++
+		}
+		for _, st := range a.Styles {
+			if s.Attrs.HasStyle(st) {
+				score++
+			}
+		}
+		if score > bestScore {
+			best, bestScore = s, score
+		}
+	}
+	return best
+}
+
+func lowerCustomVoice(r Recipe, o Options) Lowered {
+	a := r.Attrs
+	lang := pickLang(r, o)
+	var sp Speaker
+	if o.Speaker != "" {
+		sp = Speaker{ID: o.Speaker}
+		for _, s := range CustomVoiceSpeakers {
+			if strings.EqualFold(s.ID, o.Speaker) {
+				sp = s
+			}
+		}
+	} else {
+		sp = BestSpeaker(a, "", o.Speakers)
+	}
+	l := Lowered{Speaker: sp.ID, Lang: lang, DescriptionDropped: r.Description != ""}
+	// Identity comes from the speaker: report what it doesn't match.
+	for _, c := range []Category{Gender, Age, Pitch, Accent, Dialect} {
+		if v := a.Value(c); v != "" {
+			if sp.Attrs.Value(c) == v {
+				l.Used = append(l.Used, Value{c, v})
+			} else {
+				l.Dropped = append(l.Dropped, Dropped{Value{c, v}, "fixed by the speaker " + sp.ID})
+			}
+		}
+	}
+	// Delivery goes into the instruction.
+	var styles []string
+	whisper := false
+	for _, s := range a.Styles {
+		l.Used = append(l.Used, Value{Style, s})
+		if s == "whisper" {
+			whisper = true
+			continue
+		}
+		styles = append(styles, phrase(Style, s, lang))
+	}
+	if a.Pace != "" {
+		l.Used = append(l.Used, Value{Pace, a.Pace})
+	}
+	if a.Emotion != "" {
+		l.Used = append(l.Used, Value{Emotion, a.Emotion})
+	}
+	var instr string
+	if lang == "zh" {
+		var parts []string
+		if len(styles) > 0 {
+			parts = append(parts, "用"+strings.Join(styles, "、")+"的声音说话")
+		}
+		if whisper {
+			parts = append(parts, "轻声耳语")
+		}
+		if a.Emotion != "" {
+			parts = append(parts, "语气"+phrase(Emotion, a.Emotion, "zh"))
+		}
+		if a.Pace != "" {
+			parts = append(parts, phrase(Pace, a.Pace, "zh"))
+		}
+		if len(parts) > 0 {
+			instr = strings.Join(parts, "，") + "。"
+		}
+	} else {
+		var how []string
+		if a.Pace != "" {
+			how = append(how, phrase(Pace, a.Pace, "en"))
+		}
+		if whisper {
+			how = append(how, "in a whisper")
+		}
+		if len(styles) > 0 {
+			j := joinEN(styles)
+			how = append(how, "in "+strings.ToLower(article(j))+" "+j+" voice")
+		}
+		if a.Emotion != "" {
+			how = append(how, "sounding "+phrase(Emotion, a.Emotion, "en"))
+		}
+		if len(how) > 0 {
+			instr = "Speak " + strings.Join(how, ", ") + "."
+		}
+	}
+	l.Voice = sp.ID
+	if instr != "" {
+		l.Voice += ", " + instr
+	}
+	return l
+}
