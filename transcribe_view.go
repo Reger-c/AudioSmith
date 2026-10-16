@@ -658,8 +658,14 @@ func (a *app) transcriptSegments(c *ui.Context, tr *core.Transcript) {
 					a.playTranscriptAt(s.Start)
 				}
 				tb.Children(func() { ui.Text(c, clock(s.Start)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.AccentInk) })
-				if s.Speaker != "" {
-					tagChip(c, speakerLabel(*tr, s.Speaker)).Margin(px(t, 2), 0, 0, 0)
+				if len(labels) > 0 {
+					// One column for the speakers, so the text lines up.
+					ui.Row(c).Width(px(t, 72)).Shrink(0).AlignItems(ui.Start).Children(func() {
+						if s.Speaker != "" {
+							name := speakerLabel(*tr, s.Speaker)
+							tagChip(c, name).Margin(px(t, 2), 0, 0, 0).MaxWidth(px(t, 72)).Ellipsis("…").Tooltip(name)
+						}
+					})
 				}
 				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 6)).Children(func() {
 					if a.trEdit == i {
@@ -745,8 +751,8 @@ func (a *app) trSpeakersBar(c *ui.Context, tr *core.Transcript, labels []string)
 				}
 			}
 			name := speakerLabel(*tr, l)
-			b := chip(c.Key("tr-spk-"+l), name, strconv.Itoa(n), a.trRename == l && a.trRenOpen).
-				Tooltip(i18n.T("Rename %s", name))
+			rename := i18n.T("Rename %s", name)
+			b := chip(c.Key("tr-spk-"+l), name, strconv.Itoa(n), a.trRename == l && a.trRenOpen).Label(rename).Tooltip(rename)
 			if b.Clicked() {
 				a.trRename, a.trRenBuf, a.trRenOpen = l, tr.Speakers[l], true
 			}
