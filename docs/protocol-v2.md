@@ -69,6 +69,7 @@ Unknown members must be ignored by both sides, so optional fields can be added w
 3. **Concurrency.** The engine runs at most `hello.result.concurrency` jobs at once (`gpu` 1, `listen` 2, `media` 2). Another job request gets `busy`, which is retryable.
    - The Go scheduler is the only queue: it never sends more jobs than the engine can run.
    - The engine does not queue jobs.
+   - A job's slot is free **before** its response (result or error) is written, so a job sent once the app has read the previous response is never answered `busy`. (A slot freed after the response would race with the scheduler starting the next job at once.)
 4. **Ordering.**
    - All of a job's notifications are written **before** its response.
    - Nothing about a job is written after its response.
