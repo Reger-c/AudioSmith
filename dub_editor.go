@@ -414,16 +414,13 @@ func (a *app) dubLineOptions(c *ui.Context, s dub.Segment, locked bool, after *f
 	ui.Column(c.Key("opts")).Gap(px(t, sp2)).Padding(px(t, sp3)).Radius(px(t, radiusControl)).Background(tok(t).Bg).Children(func() {
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Wrap().Children(func() {
 			choices := a.dubVoiceChoices()
-			labels := []string{i18n.T("The speaker's (%s)", a.dubVoiceLabel(p.Cast[s.Speaker]))}
-			refs := []string{""}
-			for _, v := range choices[1:] {
-				labels = append(labels, v.label)
-				refs = append(refs, v.ref)
+			choices[0] = dubVoiceChoice{"", i18n.T("The speaker's (%s)", a.dubVoiceLabel(p.Cast[s.Speaker])), ""}
+			cur := s.Voice
+			if !slices.ContainsFunc(choices, func(ch dubVoiceChoice) bool { return ch.ref == cur }) {
+				cur = ""
 			}
-			cur := labels[max(slices.Index(refs, s.Voice), 0)]
 			ui.Field(c, i18n.T("Voice"), func() {
-				if ui.Select(c.Key("voice"), &cur, labels).Label(i18n.T("Voice")).Disabled(locked).Changed() {
-					ref := refs[slices.Index(labels, cur)]
+				if ref, ok := a.voicePicker(c, "dub-line-voice-"+id, cur, a.dubVoiceOptions(choices), voicePickerOpts{label: i18n.T("Voice"), locked: locked}); ok {
 					a.dubSetLine(id, "voice", func(s *dub.Segment) { s.Voice = ref })
 				}
 			})

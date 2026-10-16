@@ -314,7 +314,7 @@ func (a *app) lineOptions(c *ui.Context, p *lfPage, l *services.StoryLine, locke
 		}
 		formRow(c, "opt-voice", i18n.T("Voice of this line"), "", func() {
 			ui.Box(c).Width(px(t, 220)).Shrink(1).MinWidth(0).Children(func() {
-				a.lfVoiceSelect(c, "line-voice", &l.Voice, e, i18n.T("The character's voice"), locked)
+				a.lfVoiceSelect(c, "line-voice-"+l.ID, &l.Voice, e, i18n.T("The character's voice"), locked)
 			})
 		})
 		sp := l.Speed
@@ -380,7 +380,7 @@ func (a *app) storyCast(c *ui.Context, p *lfPage, locked bool) {
 					remove = m.ID
 				}
 			})
-			a.lfVoiceSelect(c, "voice", &m.Voice, e, i18n.T("Default voice"), locked)
+			a.lfVoiceSelect(c, "cast-voice-"+m.ID, &m.Voice, e, i18n.T("Default voice"), locked)
 			if storyContinuity(p.doc.Model) != services.ContinuityInstruct {
 				return // a persona is an instruction: only models that take one hear it
 			}

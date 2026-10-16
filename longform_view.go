@@ -103,7 +103,7 @@ func (a *app) lfSetup(c *ui.Context, p *lfPage, locked bool) {
 	}
 	ui.Field(c, label, func() {
 		before := d.Voice
-		a.lfVoiceSelect(c, "lf-voice", &d.Voice, e, i18n.T("None"), locked)
+		a.lfVoiceSelect(c, "lf-voice-"+string(p.kind), &d.Voice, e, i18n.T("None"), locked)
 		if d.Voice != before {
 			p.auto = false
 		}
@@ -170,31 +170,31 @@ func (a *app) lfFormat(c *ui.Context, p *lfPage, locked bool) {
 	}
 }
 
-// lfVoiceSelect picks a voice reference for model e; none is the label of
-// "" (the default voice).
+// lfVoiceSelect picks a voice reference for model e in the shared voice
+// picker (voice_picker.go): none is the label of "" (the default voice);
+// key must be unique in the app (the picker's state is kept by it).
 func (a *app) lfVoiceSelect(c *ui.Context, key string, ref *string, e catalog.Entry, none string, locked bool) {
-	vs := a.lfVoices(e)
-	labels, refs := []string{none}, []string{""}
+	opts := []voiceOption{{value: "", label: none}}
 	seen := map[string]int{}
-	for _, v := range vs {
+	for _, v := range a.lfVoices(e) {
 		l := v.label
 		if n := seen[l]; n > 0 {
 			l += " (" + strconv.Itoa(n+1) + ")"
 		}
 		seen[v.label]++
-		labels, refs = append(labels, l), append(refs, v.ref)
-	}
-	cur := labels[0]
-	if i := slices.Index(refs, *ref); i >= 0 {
-		cur = labels[i]
-	} else if *ref != "" {
-		cur = a.lfVoiceLabel(*ref) + " ⚠"
-		labels, refs = append(labels, cur), append(refs, *ref)
-	}
-	if ui.Select(c.Key(key), &cur, labels).Label(none).Disabled(locked).Changed() {
-		if i := slices.Index(labels, cur); i >= 0 {
-			*ref = refs[i]
+		op := voiceOption{value: v.ref, label: l}
+		if id, ok := strings.CutPrefix(v.ref, services.SpeakerRef); ok {
+			op.group, op.preview = i18n.T("Model voices"), speakerPreview(e, id)
+		} else if sv := a.findVoice(v.ref); sv != nil {
+			op.group, op.voice, op.sub, op.preview = i18n.T("My voices"), sv, voiceKindLabel(sv), a.savedVoicePreview(sv)
 		}
+		opts = append(opts, op)
+	}
+	if *ref != "" && !slices.ContainsFunc(opts, func(o voiceOption) bool { return o.value == *ref }) {
+		opts = append(opts, voiceOption{value: *ref, label: a.lfVoiceLabel(*ref) + " ⚠", warn: true})
+	}
+	if v, ok := a.voicePicker(c, key, *ref, opts, voicePickerOpts{label: none, locked: locked}); ok {
+		*ref = v
 	}
 }
 

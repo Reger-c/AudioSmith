@@ -80,7 +80,7 @@ func snapshotsStudioC(t *testing.T, out string) {
 			a.composer.panel, a.composer.panelSet = false, false
 		}
 		shoot("c01-studio", func() {})
-		shoot("c02-voice-list", func() { a.inspectorUI.voiceListOpen = true })
+		shoot("c02-voice-list", func() { a.voicePickerOpen(studioVoiceKey, true) })
 		reset()
 		shoot("c03-advanced", func() {
 			a.seedPinned, a.seed = true, 81723

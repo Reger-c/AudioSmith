@@ -3250,5 +3250,7 @@
   "−18 LUFS (speech)": "−18 LUFS（人声）",
   "−23 LUFS (broadcast)": "−23 LUFS（广播）",
   "≈ %s": "约 %s",
-  "≈ %s of audio": "约 %s 音频"
+  "≈ %s of audio": "约 %s 音频",
+  "Hear %s": "试听 %s",
+  "Stop the preview": "停止试听"
 }

@@ -269,7 +269,7 @@ func (a *app) bookCastCard(c *ui.Context, p *lfPage, locked bool) {
 	for _, n := range names {
 		ref := p.doc.VoiceCast[n]
 		ui.Field(c, n, func() {
-			a.lfVoiceSelect(c, "cast-"+n, &ref, e, i18n.T("Narrator voice"), locked)
+			a.lfVoiceSelect(c, "ab-cast-"+n, &ref, e, i18n.T("Narrator voice"), locked)
 		})
 		if ref != p.doc.VoiceCast[n] {
 			p.doc.VoiceCast[n] = ref

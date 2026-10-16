@@ -38,14 +38,7 @@ func (a *app) dubCastPanel(c *ui.Context) {
 	if len(p.SpeakerLabels()) == 0 {
 		caption(c, i18n.T("Speakers appear once the source is transcribed."))
 	}
-	refs := make([]string, len(choices))
-	labels := make([]string, len(choices))
-	for i, v := range choices {
-		refs[i], labels[i] = v.ref, v.label
-		if v.group != "" {
-			labels[i] = v.group + " · " + v.label
-		}
-	}
+	opts := a.dubVoiceOptions(choices)
 	for _, sp := range p.SpeakerLabels() {
 		card := fillCard(c.Key("cast-" + sp)).Gap(px(t, 6)).Padding(px(t, sp3))
 		if _, over := ui.DragOver[dubVoiceChip](card); over {
@@ -80,9 +73,9 @@ func (a *app) dubCastPanel(c *ui.Context) {
 				})
 			}
 			cur := p.Cast[sp]
-			v := labels[max(slices.Index(refs, cur), 0)]
-			if ui.Select(c.Key("voice"), &v, labels).Label(i18n.T("Voice of %s", p.SpeakerName(sp))).Disabled(locked).Changed() {
-				a.dubCast(sp, refs[slices.Index(labels, v)])
+			o := voicePickerOpts{label: i18n.T("Voice of %s", p.SpeakerName(sp)), text: a.dubVoiceLabel(cur), locked: locked}
+			if v, ok := a.voicePicker(c, "dub-cast-"+sp, cur, opts, o); ok {
+				a.dubCast(sp, v)
 			}
 		})
 	}
