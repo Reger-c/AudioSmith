@@ -377,7 +377,7 @@ func (s *Longform) submit(ctx context.Context, id string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("render %s: %w", id, core.ErrNotFound)
 	}
-	spec, dir, title := lr.body.Spec, lr.body.Dir, lr.rec.Title
+	spec, dir, title, run := lr.body.Spec, lr.body.Dir, lr.rec.Title, lr.body.Runs
 	s.mu.Unlock()
 	priority := jobs.PriorityNormal
 	loud := spec.Book.Loudness
@@ -387,7 +387,7 @@ func (s *Longform) submit(ctx context.Context, id string) error {
 	var nodes []jobs.Node
 	var keys []string
 	for i, ch := range spec.Chapters {
-		p := ChapterParams{Render: id, Index: i, Title: ch.Title, Model: spec.Model, Lang: spec.Lang, Seed: spec.Seed,
+		p := ChapterParams{Render: id, Run: run, Index: i, Title: ch.Title, Model: spec.Model, Lang: spec.Lang, Seed: spec.Seed,
 			Voices: map[string]core.Take{}, Lines: ch.Lines, Production: spec.Production, Lexicon: spec.Lexicon,
 			Loudness: loud, Output: chapterPath(dir, i), Scene: spec.Scene, Workflow: string(spec.Kind)}
 		for _, l := range ch.Lines {
@@ -413,7 +413,7 @@ func (s *Longform) submit(ctx context.Context, id string) error {
 			Params: params, Title: jt, Owner: OwnerLongform + id, MaxAttempts: 2, Idempotent: true}})
 	}
 	if !spec.Audition {
-		params, _ := json.Marshal(AssembleParams{Render: id})
+		params, _ := json.Marshal(AssembleParams{Render: id, Run: run})
 		nodes = append(nodes, jobs.Node{Key: "book", Spec: jobs.Spec{Kind: KindAssemble, Lane: jobs.LaneCPU, Priority: priority,
 			Params: params, Title: i18n.T("Assemble · %s", title), Owner: OwnerLongform + id, After: keys, Idempotent: true}})
 	}
@@ -795,6 +795,13 @@ func (s *Longform) apply(j jobs.Job) {
 
 	s.mu.Lock()
 	b := &lr.body
+	if run := runOf(j); run != 0 && run != b.Runs {
+		// A late update of an earlier run (Resume came before it): taken
+		// for the new run's, it would claim a chapter or the assembly
+		// and hide the new job's updates.
+		s.mu.Unlock()
+		return
+	}
 	before := lr.rec.State
 	durable := false
 	revive := func() {
@@ -855,6 +862,16 @@ func (s *Longform) apply(j jobs.Job) {
 		s.save(ctx, id)
 	}
 	s.publish(id)
+}
+
+// runOf is the run a longform job was submitted for (0: unknown, a job
+// of an older version).
+func runOf(j jobs.Job) int {
+	var p struct {
+		Run int `json:"run"`
+	}
+	json.Unmarshal(j.Params, &p)
+	return p.Run
 }
 
 // chapterOf finds the chapter a job renders: by its id, else by its
