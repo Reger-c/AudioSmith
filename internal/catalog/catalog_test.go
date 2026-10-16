@@ -363,7 +363,7 @@ func TestRemoved(t *testing.T) {
 		t.Error("shared aux repos")
 	}
 	k, _ := c.ByID("kokoro-82m-bf16")
-	if slices.ContainsFunc(k.VoiceIDs(), func(v string) bool { return strings.HasPrefix(v, "z") }) || !slices.Contains(k.AllVoiceIDs(), "zf_xiaobei") || len(k.VoiceIDs()) != 19 {
+	if slices.ContainsFunc(k.VoiceIDs(), func(v string) bool { return strings.HasPrefix(v, "z") }) || !slices.Contains(k.AllVoiceIDs(), "zf_xiaobei") || slices.Contains(k.VoiceIDs(), "jf_alpha") || !slices.Contains(k.AllVoiceIDs(), "jf_alpha") || len(k.VoiceIDs()) != 17 {
 		t.Errorf("kokoro voices %v", k.VoiceIDs())
 	}
 	for name, edit := range map[string]func(*Catalog){

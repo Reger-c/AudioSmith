@@ -1054,7 +1054,7 @@
   "Fast English voice cloning.": "快速的英文声音克隆。",
   "Fast gives the text without word timings. Accurate also times every word, for subtitles and editing.": "快速：只出文字，不含词级时间。精确：还为每个词标注时间，便于做字幕和编辑。",
   "Fast is one literal pass; Autofit rewrites lines that would not fit their time; Cinematic drafts, critiques and adapts for natural phrasing.": "“快速”直译一遍；“自动贴合”会改写放不进时长的行；“影视级”先起草、再点评、再润色，措辞更自然。",
-  "Fast and light. Best for English (af_/am_ = US, bf_/bm_ = UK); other languages untested, Chinese voices hidden.": "快速轻量，适合英文（af_/am_ = 美式，bf_/bm_ = 英式）；其他语种未经测试，中文音色已隐藏。",
+  "Fast and light. Best for English (af_/am_ = US, bf_/bm_ = UK); other languages untested, Chinese and Japanese voices hidden.": "快速轻量，适合英文（af_/am_ = 美式，bf_/bm_ = 英式）；其他语种未经测试，中文和日语音色已隐藏。",
   "Fast, accurate transcription of Chinese (with dialects), English and 28 other languages, with punctuation. AudioSmith's default speech recognition.": "又快又准地转写中文（含方言）、英文和另外 28 种语言，带标点。AudioSmith 默认的语音识别。",
   "Faster": "加快",
   "Favorites": "收藏",
