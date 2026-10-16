@@ -226,6 +226,27 @@ func (s *System) makeRoom(color bool, want int, size image.Point, grow bool) {
 	}
 }
 
+// ForgetGlyphs forgets every glyph and mask drawn and empties the atlases
+// to the size a new System starts with: where the next glyphs go no
+// longer depends on what was drawn before, which can round glyphs drawn
+// scaled (sampled between pixels) by a level. For tests that compare
+// pictures; nothing may be painting.
+func (s *System) ForgetGlyphs() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clear(s.glyphs)
+	clear(s.places)
+	clear(s.runs)
+	clear(s.masks)
+	clear(s.transient)
+	clear(s.recent)
+	s.MaskAtlas.ResetSize(256, 256) // as newSystem
+	s.ColorAtlas.ResetSize(1, 1)
+	s.full, s.want = [2]bool{}, [2]int{}
+	s.wantSize = [2]image.Point{}
+	s.rooms = 0
+}
+
 // Glyph rasterizes glyph id of a font at scale pixels per DIP whose pen
 // is x device pixels from the left, for text of a shade, placed as the
 // system's text stack places glyphs: at one of the positions within a
