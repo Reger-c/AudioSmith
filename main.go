@@ -57,6 +57,7 @@ func main() {
 	}
 	eng := newEngineProcess(resources, logDir) // enginelink.go
 	a := newApp(eng, lib)                      // app.go
+	a.updates = useUpdates()                   // updates.go: the updater plugin (thread #50)
 	a.dataHome = home                          // M7a: settings_storage.go
 	a.connectShell(logDir)                     // shell.go
 	a.connectEngine(eng)                       // enginelink.go

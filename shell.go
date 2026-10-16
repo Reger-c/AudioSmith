@@ -104,6 +104,7 @@ func newShellState() shellState {
 		lastSettings: "general",
 		logsHeight:   220,
 		prefs:        settings.Defaults(),
+		aboutState:   aboutState{updates: noUpdates{}},
 	}
 }
 
@@ -383,7 +384,8 @@ func (a *app) openWindow() {
 		Content:        ui.View(a.view),
 	})
 	a.refreshModels()
-	a.maybeOnboard() // M7a: a fresh install opens the setup (onboarding.go)
+	a.connectUpdates() // updates.go (thread #50)
+	a.maybeOnboard()   // M7a: a fresh install opens the setup (onboarding.go)
 }
 
 var (
