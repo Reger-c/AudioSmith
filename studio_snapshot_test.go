@@ -22,12 +22,9 @@ import (
 // Chinese, like TestSnapshots:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsStudio .
-func TestSnapshotsStudio(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsStudio(t *testing.T) { runSnapshotsPlaying(t, snapshotsStudio) }
+
+func snapshotsStudio(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 
 	script := "Welcome back to the show. Today we talk about 3 things, and it takes 25 minutes.[pause 500ms]\n" +

@@ -90,7 +90,7 @@ func newFakeHF(t *testing.T) *fakeHF {
 func useFakeHub(t *testing.T, a *app) *fakeHF {
 	t.Helper()
 	f := newFakeHF(t)
-	dir := t.TempDir()
+	dir := testDir(t)
 	a.updateSettings(func(s *settings.Settings) {
 		s.Models.CacheDir = dir
 		s.Models.Endpoints = []string{f.URL}

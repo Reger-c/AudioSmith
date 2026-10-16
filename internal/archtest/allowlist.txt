@@ -1,0 +1,63 @@
+# Files over the line limit today (TestFileSizes: 600 lines of code, 800 of
+# tests), each with the most lines it may have: its size when the list was
+# made (refactor batch B0). A file here may shrink but not grow; once it is
+# within the limit, its line goes. New files may not be added here except
+# for a fix that cannot wait, said why in the commit.
+#
+# path                                  lines  # the refactor batch that splits it
+api_studio_dub.go                          632  # B3
+api_studio_longform.go                     842  # B3
+api_studio_test.go                         832  # B3
+calls.go                                   798  # B3
+calls_view.go                              710  # B3
+clone.go                                   649  # B3
+dictation.go                               733  # B3
+dub.go                                    1282  # B1
+dub_view.go                               1548  # B1
+e2e_smoke_test.go                          873  # B3
+e2e_v02_test.go                           1373  # B3
+enginelink.go                              730  # B3
+export_dialog.go                           804  # B3
+integrations_skill.go                      799  # B3
+internal/api/native.go                     811  # B4
+internal/api/openai.go                     667  # B4
+internal/catalog/catalog.go                690  # B4
+internal/dub/project.go                    746  # B4
+internal/engine/enginetest/fake.go         670  # B4
+internal/engine/supervise.go               984  # B4
+internal/hub/client.go                     927  # B4
+internal/hub/client_test.go                924  # B4
+internal/jobs/scheduler.go                1034  # B4
+internal/mcp/server.go                     722  # B4
+internal/services/calls.go                1125  # B4
+internal/services/dub.go                   848  # B4
+internal/services/dub_render.go            767  # B4
+internal/services/dub_stages.go            617  # B4
+internal/services/longform.go             1007  # B4
+internal/services/longform_doc.go          722  # B4
+internal/services/longform_render.go       863  # B4
+internal/services/render.go               1119  # B4
+internal/services/story_pacing.go          735  # B4
+internal/services/voices.go                632  # B4
+internal/services/workflow.go              630  # B4
+internal/services/workflow_steps.go        886  # B4
+internal/telephony/agent.go               1074  # B4
+internal/translate/mt.go                   628  # B4
+internal/voicedesign/lower.go              684  # B4
+internal/voicedesign/parse.go              622  # B4
+internal/workflow/model.go                 614  # B4
+longform.go                               1052  # B2
+longform_view.go                           986  # B2
+onboarding.go                              703  # B3
+shell.go                                   663  # B3
+shell_models.go                            688  # B3
+shell_settings.go                          716  # B3
+tools.go                                   668  # B3
+transcribe.go                              930  # B2
+transcribe_llm.go                          792  # B3
+transcribe_view.go                         846  # B2
+ui_kit.go                                  909  # B2
+voices.go                                  810  # B3
+voices_test.go                             823  # B3
+workflow.go                                902  # B2
+workflow_canvas.go                         760  # B3

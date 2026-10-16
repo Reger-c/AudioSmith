@@ -19,12 +19,9 @@ import (
 // voices; Chinese at 1100×720 and 820×520 @125 %, English at 1100×720:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsF .
-func TestSnapshotsF(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsF(t *testing.T) { runSnapshots(t, snapshotsF) }
+
+func snapshotsF(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	useMemKeys(t)
 	stubMachine(t, 16, true)
@@ -64,7 +61,7 @@ func TestSnapshotsF(t *testing.T) {
 			a.design.seed = 1234567
 		})
 		shoot("f02-clone", func() {
-			clip := filepath.Join(t.TempDir(), "interview.wav")
+			clip := filepath.Join(testDir(t), "interview.wav")
 			writeSpeech(clip, 32, []span{{0.4, 3}, {4, 11}, {11.6, 19}, {20, 27}, {28, 31}})
 			a.startClone("")
 			a.cloneLoad(clip, "interview.wav", false)

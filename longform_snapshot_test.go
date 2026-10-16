@@ -19,12 +19,9 @@ import (
 // like TestSnapshots:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsLongform .
-func TestSnapshotsLongform(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsLongform(t *testing.T) { runSnapshots(t, snapshotsLongform) }
+
+func snapshotsLongform(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	for _, run := range []struct {
 		lang string

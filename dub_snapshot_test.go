@@ -18,12 +18,9 @@ import (
 // in English and Chinese, as TestSnapshots does the others:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .
-func TestSnapshotsM4(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsM4(t *testing.T) { runSnapshots(t, snapshotsM4) }
+
+func snapshotsM4(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	for _, run := range []struct {
 		lang string

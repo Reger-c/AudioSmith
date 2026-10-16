@@ -1,0 +1,186 @@
+# The imports of an internal package by another (paths under internal/),
+# a line each: "from to". TestImports fails on an import missing here, so
+# that a new dependency shows in review, and on a line no import needs.
+# Add a line only for a dependency that fits the layering
+# (docs/architecture.md, "Code structure rules"; the rules TestImports
+# enforces whatever this file says are in imports_test.go).
+#
+# Made from the import graph at refactor batch B0.
+
+api                      catalog
+api                      core
+api                      dsp
+api                      dsp/resample
+api                      dsp/wav
+api                      engine/proto
+api                      jobs
+api                      lang
+api                      services
+api                      settings
+api                      translate
+api                      voicedesign
+api                      watermark
+
+catalog                  i18n
+catalog                  lang
+
+doc                      doc/subtitle
+doc                      doc/textenc
+doc                      text
+
+doc/subtitle             text
+
+dsp/analysis             dsp
+dsp/analysis             dsp/filter
+dsp/analysis             dsp/loudness
+dsp/analysis             dsp/resample
+
+dsp/dsptest              dsp
+
+dsp/dynamics             dsp/filter
+
+dsp/edit                 dsp
+
+dsp/loudness             dsp
+dsp/loudness             dsp/dynamics
+dsp/loudness             dsp/filter
+
+dsp/master               dsp
+dsp/master               dsp/dynamics
+dsp/master               dsp/filter
+dsp/master               dsp/loudness
+
+dsp/mix                  dsp
+dsp/mix                  dsp/resample
+
+dsp/qc                   dsp
+dsp/qc                   dsp/loudness
+
+dsp/resample             dsp
+dsp/resample             dsp/filter
+
+dsp/stretch              dsp
+
+dsp/wav                  dsp
+
+dub                      doc/subtitle
+dub                      dsp
+dub                      dsp/analysis
+dub                      dsp/mix
+dub                      dsp/resample
+dub                      dsp/wav
+dub                      engine/proto
+dub                      lang
+dub                      text
+dub                      translate
+
+dub/dubtest              dsp
+dub/dubtest              dsp/analysis
+dub/dubtest              dsp/resample
+dub/dubtest              dsp/wav
+dub/dubtest              dub
+dub/dubtest              engine/proto
+dub/dubtest              jobs
+
+engine                   core
+engine                   engine/proto
+engine                   jobs
+
+engine/enginetest        engine/proto
+
+gallery                  engine/proto
+gallery                  jobs
+gallery                  text
+gallery                  voicedesign
+
+gallery/persona          lang
+gallery/persona          voicedesign
+
+hub                      catalog
+hub                      jobs
+
+licence                  catalog
+licence                  core
+
+llm                      core
+llm                      engine/proto
+
+logs                     core
+
+mcp                      api
+mcp                      catalog
+mcp                      core
+mcp                      services
+mcp                      voicedesign
+
+notify                   core
+
+services                 core
+services                 doc
+services                 doc/subtitle
+services                 dsp
+services                 dsp/analysis
+services                 dsp/dynamics
+services                 dsp/edit
+services                 dsp/loudness
+services                 dsp/master
+services                 dsp/qc
+services                 dsp/resample
+services                 dsp/stretch
+services                 dsp/wav
+services                 dub
+services                 engine/proto
+services                 gallery/persona
+services                 i18n
+services                 jobs
+services                 lang
+services                 store
+services                 telephony
+services                 text
+services                 text/lexicon
+services                 text/markup
+services                 text/plan
+services                 translate
+services                 voicedesign
+services                 workflow
+
+store                    core
+store                    jobs
+
+store/historyjson        core
+store/historyjson        store
+
+store/sqlitestore        core
+store/sqlitestore        jobs
+store/sqlitestore        store
+store/sqlitestore        store/historyjson
+
+telephony                dsp
+telephony                dsp/resample
+
+telephony/telephonytest  telephony
+
+text/autocast            text
+
+text/lexicon             text
+
+text/markup              text
+
+text/normalize           text
+
+text/plan                text
+text/plan                text/lexicon
+text/plan                text/markup
+text/plan                text/normalize
+
+translate                core
+translate                lang
+translate                llm
+translate                text
+translate                text/markup
+
+voicedesign              text
+
+watermark                torchpt
+
+workflow                 i18n

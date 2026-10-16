@@ -18,12 +18,9 @@ import (
 // 1100×720:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsRemoved .
-func TestSnapshotsRemoved(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsRemoved(t *testing.T) { runSnapshots(t, snapshotsRemoved) }
+
+func snapshotsRemoved(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	useMemKeys(t)
 	stubMachine(t, 16, true)

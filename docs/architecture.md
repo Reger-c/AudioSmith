@@ -44,8 +44,10 @@ github.com/hehehai/AudioSmith
 │   ├── telephony/       AI phone calls (M6b): Twilio REST, signed webhooks, TwiML, gateway, Media Streams WebSocket, μ-law, endpointer, agent loop
 │   ├── watermark/       AudioSeal message and weight conversion for the engine (over torchpt)
 │   ├── torchpt/         a reader of PyTorch .pt/.pth checkpoints (pure Go)                (leaf)
-│   └── gallery/         the Voice Gallery: ~1,100 archetypes, facets, presets, preview planner (M1; not wired yet)
-│       └── persona/     the .asvoice voice file (and VoiceStudio .ovsvoice import)
+│   ├── gallery/         the Voice Gallery: ~1,100 archetypes, facets, presets, preview planner (M1; not wired yet)
+│   │   └── persona/     the .asvoice voice file (and VoiceStudio .ovsvoice import)
+│   ├── archtest/        tests of the code's structure: file sizes, import layering ("Code structure rules")
+│   └── tools/           developer commands (standard library only): snapcmp (snapshot comparison), declhash (pure-move check)
 └── engine/              the Swift helper (audiosmith-engine), Fixtures/, Tests/
 ```
 
@@ -94,6 +96,15 @@ Event types live next to their publisher, and their topic starts with the publis
 | `engine.StatusChanged` | `engine.status` | the supervisor |
 | `settings.Changed` | `settings.changed` | the settings store |
 | `hub.DownloadProgress` | `model.download` | the download executor (≤4×/s) |
+
+### Code structure rules
+
+`internal/archtest` checks these with every `go test ./...`; each failure says how to fix it.
+
+- **File size.** A Go file has at most 600 lines, a test file 800 (generated files, `third_party/`, `testdata/` and the Swift engine are not counted). The files over it today are listed in `internal/archtest/allowlist.txt` with their size as a ceiling: they may shrink, not grow, and leave the list once split (refactor batches B1–B4). Functions over 150 lines are reported, not failed (`go test -v -run TestLongFuncs ./internal/archtest`).
+- **Layering.** Leaves (above) import nothing internal; `dsp/*` and `text/*` import only their own family; only `icons`, `widgets` and `pages/*` use `mygo/ui`, and `audio`, `dictation`, `store/sqlitestore` one other MyGo package each; `services` never imports `catalog`, `hub`, `settings` or `engine` (they come as functions in `services.Config`), nor `api`/`mcp`; the API, MCP and services never import widgets or pages; a page never imports another; fakes (`*test` packages) are for tests; `internal/tools` is standard library only. The rules and their reasons are in `internal/archtest/imports_test.go`.
+- **Every internal → internal import is listed** in `internal/archtest/imports.txt` (`from to`, paths under `internal/`). A new dependency adds a line there, so review sees it; a line no import needs fails until removed.
+- **Refactors that only move code** prove it: `go run ./internal/tools/declhash DIR...` on the base and on the branch print the same lines (a hash per top-level declaration, comments and build constraints included), and `scripts/snapshots.sh check` renders the UI snapshots of both and compares them pixel for pixel (§7).
 
 ### Why the UI stays in package main
 
@@ -278,7 +289,10 @@ The engine builds on upstream Blaizzy/mlx-audio-swift (pinned commit, see README
 | All Go tests | `CGO_ENABLED=0 go test ./...` | Views in `ui.Tester` with fake engines; the real scheduler and supervisor against a scripted engine; the hub against a fake HF; protocol fixtures; i18n key parity. The SQLite library is downloaded and cached on first run (`MYGO_SQLITE_LIBRARY` overrides it; see `.github/workflows/ci.yml`). |
 | MyGo vet | `go tool mygo vet .` | `go vet ./...` and the UI-lifetime checks |
 | Race | `go test -race ./...` | needs cgo |
-| Snapshots | `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .` | every page, light/dark, en/zh-Hans |
+| Snapshots | `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .` or `scripts/snapshots.sh render /tmp/shots` | every page, light/dark, en/zh-Hans. Reproducible: two runs of one commit write the same bytes (`snapshot_env_test.go` runs each test in a `testing/synctest` bubble from a fixed time, on fixed data directories, free space and ports). A new snapshot test calls `runSnapshots` and makes its folders with `testDir` |
+| Snapshots before/after | `scripts/snapshots.sh check [BASE]` | renders BASE (default: the merge base with main) and the working tree and compares them with `internal/tools/snapcmp` (pixel for pixel; `scripts/snapshots-volatile.txt` lists the few allowed to differ a little, and why). `scripts/snapshots.sh twice` checks reproducibility |
+| Pure moves | `go run ./internal/tools/declhash . > before.txt` (base) / `> after.txt` (branch), `diff` | empty for a refactor that only moves code; `DIR/...` for a tree |
+| Structure | `go test ./internal/archtest` | file sizes, import layering (part of `go test ./...`) |
 | Swift fixtures | `scripts/test-engine.sh` | Mac: the Swift wire types against `engine/Fixtures` |
 | Engine smoke | `scripts/smoke-engine.sh` | Mac: the engine binary alone |
 | Real engine | `AUDIOSMITH_E2E=1 go test -run 'TestEndToEnd' -v .` and `… -run TestRealEngineConformance ./internal/engine` | Mac, built engine, Kokoro in the HF cache |

@@ -108,12 +108,9 @@ func (s *b1Shooter) setup(a *app, tt *ui.Tester) {
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/b1 go test -run TestSnapshotsB1 .
 //	AUDIOSMITH_B1_ONLY=stories,dub-generate AUDIOSMITH_B1_SIZES=1100,min125 …
-func TestSnapshotsB1(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsB1(t *testing.T) { runSnapshots(t, snapshotsB1) }
+
+func snapshotsB1(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	var only, sizes []string
 	if v := os.Getenv("AUDIOSMITH_B1_ONLY"); v != "" {
@@ -313,7 +310,7 @@ func b1Transcribe(t *testing.T, s *b1Shooter) {
 	a.trOrig = false
 
 	a.selectTranscript("")
-	src := filepath.Join(t.TempDir(), "keynote.mov")
+	src := filepath.Join(testDir(t), "keynote.mov")
 	os.WriteFile(src, []byte("mov"), 0o644)
 	a.transcribeFile(src)
 	r, _ := transcribeReq(t, eng)

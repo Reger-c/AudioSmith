@@ -17,12 +17,9 @@ import (
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/c go test -run TestSnapshotsC .
 //	AUDIOSMITH_B1_SIZES=1100 …
-func TestSnapshotsC(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsC(t *testing.T) { runSnapshots(t, snapshotsC) }
+
+func snapshotsC(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	var sizes []string
 	if v := os.Getenv("AUDIOSMITH_B1_SIZES"); v != "" {

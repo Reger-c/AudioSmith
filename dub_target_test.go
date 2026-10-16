@@ -94,12 +94,9 @@ func TestDubDefaultTargetPage(t *testing.T) {
 // Chinese:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsDubTarget .
-func TestSnapshotsDubTarget(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsDubTarget(t *testing.T) { runSnapshots(t, snapshotsDubTarget) }
+
+func snapshotsDubTarget(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	for _, l := range []string{"en", "zh-Hans"} {
 		i18n.SetLocale("en")

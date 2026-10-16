@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"testing"
 
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -14,12 +13,9 @@ import (
 // the whole section:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/beta go test -run TestSnapshotsBeta .
-func TestSnapshotsBeta(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsBeta(t *testing.T) { runSnapshots(t, snapshotsBeta) }
+
+func snapshotsBeta(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 	for _, run := range b1Runs {
 		if run.size != "1100" {

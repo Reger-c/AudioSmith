@@ -21,12 +21,9 @@ import (
 // dark, English and Chinese: the design review's before/after set.
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsReview .
-func TestSnapshotsReview(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsReview(t *testing.T) { runSnapshots(t, snapshotsReview) }
+
+func snapshotsReview(t *testing.T, out string) {
 	t.Cleanup(func() { i18n.SetLocale("en") })
 
 	script := "Welcome back to the show. Today we talk about 3 things, and it takes 25 minutes.[pause 500ms]\n" +
@@ -126,12 +123,9 @@ func TestSnapshotsReview(t *testing.T) {
 // TestSnapshotsAccents renders the Studio while it renders (progress, the
 // playing take, a switch on, the focus) with each candidate accent, light
 // and dark, for the design review to pick one.
-func TestSnapshotsAccents(t *testing.T) {
-	out := os.Getenv("AUDIOSMITH_SNAPSHOTS")
-	if out == "" {
-		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
-	}
-	os.MkdirAll(out, 0o755)
+func TestSnapshotsAccents(t *testing.T) { runSnapshots(t, snapshotsAccents) }
+
+func snapshotsAccents(t *testing.T, out string) {
 	t.Cleanup(func() { setAccent("teal") })
 	for _, name := range []string{"blue", "indigo", "teal"} {
 		for _, dark := range []bool{false, true} {
