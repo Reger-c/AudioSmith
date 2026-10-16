@@ -92,7 +92,8 @@ func Speakers(t core.Transcript) []string {
 
 // PlainText is the transcript as text to copy or save: the preferred
 // text, or, when two or more speakers say it and there is no clean-up,
-// one paragraph per turn after its speaker's name ("Ana: …").
+// one paragraph per turn after its speaker's name ("Ana: …"); labels
+// given the same name are one speaker.
 func PlainText(t core.Transcript) string {
 	if t.Clean != "" || len(Speakers(t)) < 2 {
 		return t.Preferred()
@@ -108,7 +109,7 @@ func PlainText(t core.Transcript) string {
 			b.WriteString("\n\n")
 		}
 		if last != "" {
-			b.WriteString(speakerName(t, last) + ": ")
+			b.WriteString(last + ": ")
 		}
 		b.WriteString(core.Transcript{Segments: turn}.Text())
 		turn = nil
@@ -117,9 +118,10 @@ func PlainText(t core.Transcript) string {
 		if strings.TrimSpace(s.Text) == "" {
 			continue
 		}
-		if s.Speaker != last {
+		// By name: labels the user gave one name are one person.
+		if name := speakerName(t, s.Speaker); name != last {
 			flush()
-			last = s.Speaker
+			last = name
 		}
 		turn = append(turn, s)
 	}

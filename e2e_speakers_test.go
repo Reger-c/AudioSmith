@@ -437,8 +437,35 @@ func scoreSpeakers(d spkDialogue, truth []spkTurn, segs []spkSeg) spkRow {
 			}
 		}
 	}
-	if len(labels) <= 8 {
+	if len(labels) <= 7 {
 		try(0, map[string]bool{}, map[string]string{})
+	} else {
+		// Many labels: the pairs that share the most lines first.
+		n := map[[2]string]int{}
+		for k, x := range truth {
+			if got[k] != "" {
+				n[[2]string{got[k], x.Who}]++
+			}
+		}
+		m, usedL, usedP := map[string]string{}, map[string]bool{}, map[string]bool{}
+		for {
+			var best [2]string
+			bn := 0
+			for k, c := range n {
+				if !usedL[k[0]] && !usedP[k[1]] && (c > bn || c == bn && k[0]+k[1] < best[0]+best[1]) {
+					best, bn = k, c
+				}
+			}
+			if bn == 0 {
+				break
+			}
+			m[best[0]], usedL[best[0]], usedP[best[1]] = best[1], true, true
+		}
+		for k, x := range truth {
+			if got[k] != "" && m[got[k]] == x.Who {
+				bestRight++
+			}
+		}
 	}
 	r.Right = bestRight
 	r.Attribution = float64(bestRight) / float64(max(len(truth), 1))

@@ -97,6 +97,9 @@ func TranscribeSpeakers(ctx context.Context, call func(k, n int, p *proto.Transc
 	var prev *linkedWindow
 	next := 1
 	langs := map[string]int{}
+	// Per window: the file ids it gave new labels (no one in the overlap
+	// matched them), and every id it heard; for the probes below.
+	var fresh, heard [][]string
 	for k, w := range wins {
 		if err := ctx.Err(); err != nil {
 			return res, err
@@ -107,6 +110,7 @@ func TranscribeSpeakers(ctx context.Context, call func(k, n int, p *proto.Transc
 			piece := audio.Slice(int(math.Round(w.start*float64(audio.Rate))), int(math.Round(w.end*float64(audio.Rate))))
 			if !audibleSpeech(piece) {
 				prev = &linkedWindow{end: w.end, labels: prevLabels(prev)}
+				fresh, heard = append(fresh, nil), append(heard, nil)
 				continue
 			}
 			if len(wins) > 1 {
@@ -143,12 +147,20 @@ func TranscribeSpeakers(ctx context.Context, call func(k, n int, p *proto.Transc
 		}
 		// This window's labels → the file's, through the overlap.
 		labels := linkLabels(prev, own, w.start)
+		var newIDs, ids []string
 		for _, s := range own {
 			if s.Speaker != "" && labels[s.Speaker] == "" {
 				labels[s.Speaker] = strconv.Itoa(next)
 				next++
+				if k > 0 {
+					newIDs = append(newIDs, labels[s.Speaker])
+				}
+			}
+			if s.Speaker != "" && !slices.Contains(ids, labels[s.Speaker]) {
+				ids = append(ids, labels[s.Speaker])
 			}
 		}
+		fresh, heard = append(fresh, newIDs), append(heard, ids)
 		// Each stretch from one window: the overlap is split in the middle.
 		from, to := math.Inf(-1), math.Inf(1)
 		if k > 0 {
@@ -169,6 +181,11 @@ func TranscribeSpeakers(ctx context.Context, call func(k, n int, p *proto.Transc
 		}
 		prev = &linkedWindow{end: w.end, segments: own, labels: labels}
 	}
+	if rerr == nil && len(wins) > 1 {
+		if err := probeSpeakers(ctx, call, base, audio, res.Segments, fresh, heard, len(wins)); err != nil {
+			return res, err
+		}
+	}
 	relabelSpeakers(res.Segments)
 	texts := make([]string, len(res.Segments))
 	for i, s := range res.Segments {
@@ -188,6 +205,144 @@ func TranscribeSpeakers(ctx context.Context, call func(k, n int, p *proto.Transc
 		res.RTF = seconds / res.Seconds
 	}
 	return res, nil
+}
+
+// probeSpeakers links the speakers a window heard for the first time
+// (no one matched them in the overlap: they were silent there) to people
+// of earlier windows that this window did not hear: a short recording of
+// a few seconds of each, the earlier people first, goes through the
+// model once; a new label it names like exactly one earlier person is
+// that person. segs (file ids) are renamed in place.
+func probeSpeakers(ctx context.Context, call func(k, n int, p *proto.TranscribeParams, out *proto.TranscribeResult) error,
+	base proto.TranscribeParams, audio dsp.Buffer, segs []proto.Segment, fresh, heard [][]string, n int) error {
+	rename := map[string]string{}
+	id := func(x string) string {
+		for rename[x] != "" {
+			x = rename[x]
+		}
+		return x
+	}
+	var earlier []string // ids heard before this window, in order
+	for k := range fresh {
+		var cands []string
+		for _, e := range earlier {
+			if e = id(e); !slices.Contains(cands, e) && !slices.ContainsFunc(heard[k], func(h string) bool { return id(h) == e }) {
+				cands = append(cands, e)
+			}
+		}
+		if len(fresh[k]) > 0 && len(cands) > 0 {
+			links, err := probeOnce(ctx, call, base, audio, segs, cands, fresh[k], k, n)
+			if err != nil {
+				return err
+			}
+			for f, c := range links {
+				rename[f] = c
+			}
+		}
+		for _, h := range heard[k] {
+			if !slices.Contains(earlier, h) {
+				earlier = append(earlier, h)
+			}
+		}
+	}
+	for i := range segs {
+		if segs[i].Speaker != "" {
+			segs[i].Speaker = id(segs[i].Speaker)
+		}
+	}
+	return nil
+}
+
+// probeOnce makes and transcribes one probe: a clip of each of cands,
+// then of each of fresh (ids of segs), 0.8 s apart, and returns the fresh
+// ids the model labels like exactly one candidate, mapped to it.
+func probeOnce(ctx context.Context, call func(k, n int, p *proto.TranscribeParams, out *proto.TranscribeResult) error,
+	base proto.TranscribeParams, audio dsp.Buffer, segs []proto.Segment, cands, fresh []string, k, n int) (map[string]string, error) {
+	const maxClip, gap = 8.0, 0.8
+	type part struct {
+		who        string
+		start, end float64 // in the probe
+	}
+	var parts []part
+	probe := dsp.Buffer{Rate: audio.Rate, Channels: audio.Channels}
+	silence := make([]float32, int(gap*float64(audio.Rate))*audio.Channels)
+	for _, who := range append(slices.Clone(cands), fresh...) {
+		// Its longest segment, at most maxClip of the middle of it.
+		best := -1
+		for i, s := range segs {
+			if s.Speaker == who && (best < 0 || s.End-s.Start > segs[best].End-segs[best].Start) {
+				best = i
+			}
+		}
+		if best < 0 || segs[best].End-segs[best].Start < 1 {
+			continue
+		}
+		s := segs[best]
+		mid, half := (s.Start+s.End)/2, min(s.End-s.Start, maxClip)/2
+		clip := audio.Slice(int((mid-half)*float64(audio.Rate)), int((mid+half)*float64(audio.Rate)))
+		probe.Samples = append(probe.Samples, silence...)
+		start := probe.Seconds()
+		probe.Samples = append(probe.Samples, clip.Samples...)
+		parts = append(parts, part{who, start, probe.Seconds()})
+	}
+	probe.Samples = append(probe.Samples, silence...)
+	nc := 0
+	for _, p := range parts {
+		if slices.Contains(cands, p.who) {
+			nc++
+		}
+	}
+	if nc == 0 || nc == len(parts) {
+		return nil, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	p := base
+	p.Audio = fmt.Sprintf("%s.probe%d.wav", strings.TrimSuffix(base.Audio, ".wav"), k)
+	if err := wav.WriteFile(p.Audio, probe, wav.PCM16, wav.Options{}); err != nil {
+		return nil, err
+	}
+	var tr proto.TranscribeResult
+	err := call(n-1, n, &p, &tr)
+	os.Remove(p.Audio)
+	if err != nil {
+		return nil, err
+	}
+	// Each part's label: the one heard longest in it.
+	label := map[string]string{}
+	for _, pt := range parts {
+		ov := map[string]float64{}
+		bestL, bo := "", 0.0
+		for _, s := range tr.Segments {
+			if o := min(pt.end, s.End) - max(pt.start, s.Start); o > 0 && s.Speaker != "" && !isAssistantReply(s.Text) {
+				ov[s.Speaker] += o
+				if ov[s.Speaker] > bo {
+					bestL, bo = s.Speaker, ov[s.Speaker]
+				}
+			}
+		}
+		if bo >= 0.5*(pt.end-pt.start) {
+			label[pt.who] = bestL
+		}
+	}
+	links := map[string]string{}
+	used := map[string]bool{}
+	for _, f := range fresh {
+		if label[f] == "" {
+			continue
+		}
+		var match []string
+		for _, c := range cands {
+			if label[c] == label[f] {
+				match = append(match, c)
+			}
+		}
+		if len(match) == 1 && !used[match[0]] {
+			links[f], used[match[0]] = match[0], true
+		}
+	}
+	return links, nil
 }
 
 // linkedWindow is a window done: where it ends, its segments (file time,

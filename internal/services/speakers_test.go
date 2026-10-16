@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dsp"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
@@ -50,8 +51,11 @@ type turn struct {
 	text       string
 }
 
+// voiceHz is each test person's tone: the fake model tells them apart by it.
+var voiceHz = map[string]float64{"ana": 150, "bo": 230, "cy": 330, "a": 150, "b": 230}
+
 // speakersAudio writes a 16 kHz WAV of seconds with a tone in every turn
-// (speech-level), silence elsewhere.
+// (speech-level, its person's pitch), silence elsewhere.
 func speakersAudio(t *testing.T, seconds float64, turns []turn) string {
 	t.Helper()
 	b := dsp.New(16000, 1, int(seconds*16000))
@@ -60,7 +64,7 @@ func speakersAudio(t *testing.T, seconds float64, turns []turn) string {
 		v := 0.0005 * math.Sin(2*math.Pi*50*x)
 		for _, tu := range turns {
 			if x >= tu.start && x < tu.end {
-				v = 0.3 * math.Sin(2*math.Pi*180*x)
+				v = 0.3 * math.Sin(2*math.Pi*max(voiceHz[tu.who], 180)*x)
 			}
 		}
 		b.Samples[i] = float32(v)
@@ -78,6 +82,10 @@ func speakersAudio(t *testing.T, seconds float64, turns []turn) string {
 // numbers them per pass), plus extra segments.
 func fakeMoss(seconds float64, turns []turn, extra func(k int) []proto.Segment, calls *[]int) func(k, n int, p *proto.TranscribeParams, out *proto.TranscribeResult) error {
 	return func(k, n int, p *proto.TranscribeParams, out *proto.TranscribeResult) error {
+		if strings.Contains(p.Audio, ".probe") {
+			*calls = append(*calls, -1)
+			return fakeProbe(p.Audio, out)
+		}
 		*calls = append(*calls, k)
 		w := speakerWindows(seconds, speakersWindow, speakersOverlap)[k]
 		labels := map[string]string{}
@@ -98,6 +106,41 @@ func fakeMoss(seconds float64, turns []turn, extra func(k int) []proto.Segment, 
 		out.Model, out.Language, out.Text, out.Seconds = p.Model, "en", strings.Join(texts, " "), 1
 		return nil
 	}
+}
+
+// fakeProbe answers a probe as the model would: its loud stretches,
+// labelled S01, S02… by pitch, in order of appearance.
+func fakeProbe(path string, out *proto.TranscribeResult) error {
+	b, _, err := wav.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	labels := map[int]string{}
+	in, start, cross := false, 0, 0
+	flush := func(end int) {
+		hz := int(math.Round(float64(cross) / 2 / (float64(end-start) / 16000) / 10)) // tens of Hz
+		if labels[hz] == "" {
+			labels[hz] = fmt.Sprintf("S%02d", len(labels)+1)
+		}
+		out.Segments = append(out.Segments, proto.Segment{Start: float64(start) / 16000, End: float64(end) / 16000, Text: "x", Speaker: labels[hz]})
+	}
+	for i, v := range b.Samples {
+		loud := math.Abs(float64(v)) > 0.01
+		switch {
+		case loud && !in:
+			in, start, cross = true, i, 0
+		case in && i-start > 400 && !loud && math.Abs(float64(b.Samples[max(i-8, 0)])) < 0.01:
+			in = false
+			flush(i)
+		}
+		if in && i > 0 && (b.Samples[i-1] < 0) != (v < 0) {
+			cross++
+		}
+	}
+	if in {
+		flush(len(b.Samples))
+	}
+	return nil
 }
 
 // TestTranscribeSpeakersLinksWindows: three people over a long recording
@@ -177,7 +220,9 @@ func TestTranscribeSpeakersSilenceAndReplies(t *testing.T) {
 		t.Fatal(err)
 	}
 	wins := speakerWindows(seconds, 20, 6)
-	if len(wins) != 4 || !slices.Equal(calls, []int{0, 3}) { // windows 1 and 2 are silent
+	// Windows 1 and 2 are silent; window 3's two people were not in an
+	// overlap: a probe (-1) with ana and bo from window 0 links them.
+	if len(wins) != 4 || !slices.Equal(calls, []int{0, 3, -1}) {
 		t.Errorf("windows %v, called %v", wins, calls)
 	}
 	var texts, who []string
@@ -187,10 +232,7 @@ func TestTranscribeSpeakersSilenceAndReplies(t *testing.T) {
 	if !slices.Equal(texts, []string{"Hello there.", "Hi.", "Back again.", "Welcome back."}) {
 		t.Errorf("texts %q", texts)
 	}
-	// Across the silence nothing links the windows: by elimination only
-	// when one speaker is left on each side, so here they may get new
-	// labels, but never a wrong one within a window.
-	if who[0] != "S1" || who[1] != "S2" || who[2] == who[3] {
+	if !slices.Equal(who, []string{"S1", "S2", "S2", "S1"}) {
 		t.Errorf("speakers %v", who)
 	}
 }
@@ -343,5 +385,54 @@ func TestTranscribeJobSpeakers(t *testing.T) {
 	res, err = runJob(t, svc, sched, id)
 	if err != nil || len(res.Transcript.Segments) != 0 || len(eng.calls) != 0 {
 		t.Errorf("silence: %+v, calls %v, %v", res.Transcript, eng.calls, err)
+	}
+}
+
+// TestTranscribeSpeakersProbe: a window whose people were silent in the
+// overlap is linked by a probe — the person heard before keeps her label,
+// a new person gets a new one (not a wrong match).
+func TestTranscribeSpeakersProbe(t *testing.T) {
+	speakersWindow, speakersOverlap = 20, 6
+	defer func() { speakersWindow, speakersOverlap = SpeakersWindowSeconds, SpeakersOverlapSeconds }()
+	turns := []turn{{1, 4, "ana", "one"}, {5, 8, "bo", "two"}, {30, 33, "cy", "three"}, {34, 37, "ana", "four"}}
+	path := speakersAudio(t, 40, turns)
+	var calls []int
+	res, err := TranscribeSpeakers(context.Background(), fakeMoss(40, turns, nil, &calls), proto.TranscribeParams{Model: "m", Audio: path}, 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var who []string
+	for _, s := range res.Segments {
+		who = append(who, s.Speaker)
+	}
+	if !slices.Equal(calls, []int{0, 2, -1}) || !slices.Equal(who, []string{"S1", "S2", "S3", "S1"}) {
+		t.Errorf("calls %v, speakers %v", calls, who)
+	}
+	if m, _ := filepath.Glob(strings.TrimSuffix(path, ".wav") + ".probe*"); len(m) != 0 {
+		t.Errorf("left %v", m)
+	}
+}
+
+// TestPlainTextSpeakers: one paragraph per turn after the speaker's name;
+// two labels named alike are one speaker (the model split a person);
+// one speaker, or a clean-up, reads as plain text.
+func TestPlainTextSpeakers(t *testing.T) {
+	tr := core.Transcript{Segments: []core.TranscriptSegment{
+		{Speaker: "S1", Text: "你好。"}, {Speaker: "S1", Text: "开始吧。"}, {Speaker: "S2", Text: "好的。"}, {Speaker: "S3", Text: "我补充一点。"}, {Speaker: "S1", Text: "Thanks."},
+	}, Speakers: map[string]string{"S1": "Ana", "S3": "S2"}}
+	if got := PlainText(tr); got != "Ana: 你好。开始吧。\n\nS2: 好的。我补充一点。\n\nAna: Thanks." {
+		t.Errorf("%q", got)
+	}
+	data, _ := Export(tr, ExportSRT)
+	if !strings.Contains(string(data), "Ana: 你好。") || !strings.Contains(string(data), "S2: 我补充一点。") {
+		t.Errorf("srt %q", data)
+	}
+	one := core.Transcript{Segments: []core.TranscriptSegment{{Speaker: "S1", Text: "Hello."}, {Speaker: "S1", Text: "Bye."}}}
+	if got := PlainText(one); got != "Hello. Bye." {
+		t.Errorf("one speaker %q", got)
+	}
+	tr.Clean = "Cleaned."
+	if got := PlainText(tr); got != "Cleaned." {
+		t.Errorf("clean %q", got)
 	}
 }
