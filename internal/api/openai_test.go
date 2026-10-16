@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
@@ -133,6 +134,22 @@ func TestSpeechOpenAISDK(t *testing.T) {
 	}
 }
 
+// waitEmpty waits for a handler to remove its temporary files from dir:
+// it does so as it returns, so the client may have the whole response a
+// moment before.
+func waitEmpty(t *testing.T, dir string) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		entries, _ := os.ReadDir(dir)
+		if len(entries) == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("files left in %s: %v", filepath.Base(dir), entries)
+		}
+	}
+}
+
 func TestSpeechFormats(t *testing.T) {
 	f := newFake(t)
 	f.renderRate = 48000
@@ -169,10 +186,7 @@ func TestSpeechFormats(t *testing.T) {
 	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "audio/mp4" || !bytes.HasPrefix(body, []byte("M4A:RIFF")) {
 		t.Fatalf("aac %d %s %q", resp.StatusCode, resp.Header.Get("Content-Type"), body[:min(len(body), 8)])
 	}
-	entries, _ := os.ReadDir(filepath.Join(f.TempDir(), "encoded"))
-	if len(entries) != 0 {
-		t.Fatalf("encoded files left: %v", entries)
-	}
+	waitEmpty(t, filepath.Join(f.TempDir(), "encoded"))
 	f.update(func(f *fakeBackend) { f.canEncode = false })
 	resp = sdkSpeech(t, ts, `{"model":"tts-1","input":"x","voice":"alloy","response_format":"aac"}`)
 	var e apiErr
@@ -404,10 +418,7 @@ func TestTranscriptionsOpenAISDK(t *testing.T) {
 		t.Fatalf("mini: %+v", last)
 	}
 	// Uploads are removed.
-	entries, _ := os.ReadDir(filepath.Join(f.TempDir(), "uploads"))
-	if len(entries) != 0 {
-		t.Fatalf("uploads left: %v", entries)
-	}
+	waitEmpty(t, filepath.Join(f.TempDir(), "uploads"))
 	// Errors.
 	resp = sdkTranscribe(t, ts, "/v1/audio/transcriptions", "model", "kokoro-82m-bf16")
 	var e apiErr
