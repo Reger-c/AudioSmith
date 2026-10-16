@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.4.0-beta.2
+
+### Voices
+- Hear a voice before you pick it: every voice list (Studio, Stories, Audiobook, Dub) has a ▶ on each voice, ■ to stop. Built-in speakers play a short sample that ships with the app, so they play before their model is downloaded; your own voices play the first seconds of their sample. One preview at a time; closing the list stops it. Keyboard: P plays the highlighted voice.
+- Stories, Audiobook and Dub use the same voice picker as the Studio.
+- Kokoro's Japanese voices are hidden, like its Chinese ones: our engine does not speak them intelligibly yet.
 
 ### Licence
 - AudioSmith is now licensed under the GNU Affero General Public License, version 3 (AGPL-3.0); earlier releases, up to and including 0.4.0-beta.1, remain under the Apache License 2.0. Settings → Diagnostics and about shows the licence and links to the source code; the Local API's `/`, `/health` and capabilities document carry `source_url` and `license`. The app ships LICENSE and NOTICE.
