@@ -7,8 +7,10 @@ package main
 // goroutine-safe (the library, the services, settings), never view state.
 //
 // Files: api_studio.go (the library, jobs, deleting, voices),
-// api_studio_longform.go (Stories, Audiobook), api_studio_dub.go (dubs,
-// batch), api_studio_more.go (gallery, take exports, workflows).
+// api_studio_longform*.go (Stories, Audiobook: create and read, _edit,
+// _render), api_studio_dub*.go (dubs: create, read and run, _edit),
+// api_studio_batch.go (the batch queue), api_studio_more.go (gallery,
+// take exports, workflows).
 
 import (
 	"context"

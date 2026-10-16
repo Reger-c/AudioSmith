@@ -2,7 +2,9 @@ package main
 
 // The sidebar's layouts (M7a): the full sidebar, resizable, whose width
 // and closed sections the settings remember, and the icon rail
-// (Settings → Appearance, or the ‹ button) that keeps only the icons.
+// (Settings → Appearance, or the ‹ button) that keeps only the icons;
+// then the full sidebar itself (sections, badges, the search field that
+// opens the palette, Settings). Its pages are in shell_pages.go.
 
 import (
 	"slices"
@@ -184,4 +186,94 @@ func (a *app) railButton(c *ui.Context, key string, ic icons.Icon, label, tip st
 	if b.Clicked() {
 		click()
 	}
+}
+
+// syncNav makes the sidebar follow the router (Back, deep links, ⌘1…),
+// but not undo a choice in the sidebar the router has not seen yet.
+func (a *app) syncNav() {
+	if p := section(a.router.Path()); p != a.navShown {
+		a.nav, a.navShown = p, p
+	}
+}
+
+func (a *app) sidebar(c *ui.Context) {
+	t := c.Theme()
+	k := tok(t)
+	ui.Row(c).Height(titleBarHeight).Shrink(0).DragWindow().AlignItems(ui.Center).Justify(ui.End).Padding(0, px(t, sp2), 0, 0).Children(func() {
+		if iconButton(c.Key("rail-on"), icons.SidebarMinimalistic, i18n.T("Show icons only")).Clicked() {
+			a.setRail(true)
+		}
+	})
+	a.sidebarSearch(c)
+	// The sidebar's own theme: icons in the secondary grey, the chosen
+	// page's in the text colour (MyGo draws a sidebar item's icon in the
+	// accent, and the chosen one's in the accent's text colour).
+	side := *t
+	side.Accent, side.AccentText = k.Text2, k.Text
+	side.SurfaceHover, side.SurfacePressed = k.G[2], k.G[3]
+	chosen := side
+	chosen.Accent = k.Text
+	// The list scrolls: a fade at its foot says there is more below.
+	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Sidebar(c, &a.nav, func() {
+			for _, g := range navGroups {
+				open := a.sectionOpen(g.id)
+				ui.SidebarSection(c.Key("nav-"+g.id), groupTitle(g.id), open, func() {
+					for _, p := range g.pages {
+						sel := p.path == a.nav
+						if sel {
+							c.SetTheme(&chosen)
+						} else {
+							c.SetTheme(&side)
+						}
+						item := ui.SidebarItem(c, p.path, p.icon.Get(sel), pageTitle(p.path)).Padding(px(t, 5), px(t, sp2))
+						c.SetTheme(t)
+						if sel {
+							item.Background(k.Pressed).FontWeight(600)
+						} else {
+							item.TextColor(k.G[8])
+						}
+						if b := a.navBadge(p.path); b != "" {
+							item.Children(func() { ui.Badge(c, b) })
+						}
+					}
+				}).Margin(px(t, 6), 0, 0, 0)
+			}
+		}).Grow(1).MinHeight(0).Background(ui.Transparent).Padding(0, px(t, 10), px(t, sp4)).Label(i18n.T("Sections")).OnChange(func() {
+			a.navigate(a.nav)
+		})
+		ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(px(t, 20)).Gradient(k.Sidebar.Alpha(0), k.Sidebar, 180).PassThrough()
+	})
+	a.saveClosedSections()
+	ui.Column(c).Shrink(0).Padding(px(t, 6), px(t, 10), px(t, 8)).BorderWidth(1, 0, 0, 0).BorderColor(k.Line).Children(func() {
+		b := ghostBase(c.Key("nav-settings")).Padding(px(t, 6), px(t, sp2)).Gap(px(t, sp2)).Justify(ui.Start).Label(i18n.T("Settings")).Tooltip(i18n.T("Settings") + " (⌘,)")
+		b.Children(func() {
+			ui.Icon(c, icons.Settings.Get(a.settingsOpen)).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)
+			ui.Text(c, i18n.T("Settings")).TextColor(k.G[8]).SingleLine().Grow(1)
+		})
+		if b.Clicked() {
+			a.navigate("/settings")
+		}
+	})
+}
+
+// sidebarSearch is the sidebar's search field: it opens the palette.
+func (a *app) sidebarSearch(c *ui.Context) {
+	t := c.Theme()
+	k := tok(t)
+	ui.Column(c).Shrink(0).Padding(0, px(t, 10), px(t, sp2)).Children(func() {
+		b := ui.ButtonBase(c.Key("nav-search")).Padding(px(t, 6), px(t, sp2)).Gap(px(t, sp2)).Radius(px(t, radiusControl)).
+			Background(k.Bg).Border(1, k.Line).Justify(ui.Start).Label(i18n.T("Command palette")).Tooltip(i18n.T("Command palette") + " (⌘K)")
+		if b.Hovered() {
+			b.Border(1, k.G[4])
+		}
+		b.Children(func() {
+			ui.Icon(c, icons.Magnifer.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Text3)
+			ui.Text(c, i18n.T("Search")).FontSize(px(t, fsCaption)).TextColor(k.Text3).SingleLine().Grow(1).MinWidth(0)
+			ui.Text(c, "⌘K").FontSize(px(t, fsMicro)).TextColor(k.Text3)
+		})
+		if b.Clicked() {
+			a.openPalette()
+		}
+	})
 }
