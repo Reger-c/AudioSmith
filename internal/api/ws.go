@@ -300,7 +300,9 @@ func (s *Server) wsSpeak(ctx context.Context, c *wsConn, req wsRequest, client s
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
 	var gone atomic.Bool
+	watching := make(chan struct{})
 	go func() { // a cancel, or the socket closing, while the take is made
+		defer close(watching)
 		for {
 			select {
 			case d, ok := <-msgs:
@@ -376,6 +378,11 @@ func (s *Server) wsSpeak(ctx context.Context, c *wsConn, req wsRequest, client s
 			return false
 		}
 	}
+	// Stop reading for cancels before done: the client sends its next
+	// request once it has done, and that request must reach the loop, not
+	// the watcher (which would answer busy).
+	stop()
+	<-watching
 	wall := time.Since(t0).Seconds()
 	rtf := 0.0
 	if wall > 0 {
