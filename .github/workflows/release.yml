@@ -2,23 +2,25 @@
 # AudioSmith for macOS on Apple silicon — the Swift engine, then
 # `go tool mygo build` signed with the Developer ID, notarized, in a disk
 # image, with the signed update files — checks it, then publishes it
-# (scripts/release-publish.sh, thread #69): to actnow.dev's R2 bucket (the
-# disk image, then the update files, the manifest last: copies that read
-# the website see the update at once), registered on the site's download
-# and changelog pages, and a draft GitHub release with the notes, which you
-# review and publish. docs/release.md (English) and docs/release.zh-CN.md
-# (中文) list the secrets and walk through a release.
+# (scripts/release-publish.sh, threads #69 and #71): to actnow.dev through
+# the site's own script, scripts/actnow-publish.sh (vendored), which sends
+# every file to the site's release API with the one secret
+# ACTNOW_INGEST_TOKEN; the site checks them, stores them, lists the version
+# on its download and changelog pages and publishes it (copies that read
+# the website see the update at once). Then a draft GitHub release with the
+# notes, which you review and publish. docs/release.md (English) and
+# docs/release.zh-CN.md (中文) list the secrets and walk through a release.
 #
 # A tag with a prerelease part, such as v0.4.0-beta.5, makes a beta: on the
-# website under audiosmith/beta/ (copies with Settings → Receive beta
-# updates on read it), on GitHub a prerelease. Other tags (v0.4.0) are
-# releases.
+# website the beta channel, /updates/audiosmith/beta/ (copies with
+# Settings → Receive beta updates on read it), on GitHub a prerelease.
+# Other tags (v0.4.0) are releases.
 #
 # Run it by hand (Actions → Release → Run workflow) for a dry run: it
 # builds and uploads the disk image as an artifact of the run, signed ad
-# hoc, or with "sign" signed and notarized with the secrets, and never
-# touches the website or a release; it needs neither the R2 keys nor the
-# ingest token.
+# hoc, or with "sign" signed and notarized with the secrets, checks the
+# build with actnow-publish.sh --dry-run, and never touches the website or
+# a release; it needs no website token.
 name: Release
 
 on:
@@ -43,6 +45,9 @@ env:
   # is published: later GitHub releases then carry the notes and the
   # website's manifest only (scripts/release-publish.sh).
   GITHUB_FEED: "true"
+  # "false" stops a release at "verified" on actnow.dev (actnow-publish.sh
+  # --no-publish): publish it by hand in https://actnow.dev/panel/releases.
+  WEBSITE_PUBLISH: "true"
 
 concurrency:
   group: release-${{ github.ref }}
@@ -113,22 +118,27 @@ jobs:
             echo "::warning::no update keys: this build will not update itself"
           fi
 
-      - name: Check the website's secrets
+      - name: Check the website's token
         # Before the long build and notarization: a release publishes to
-        # actnow.dev, which needs both. Dry runs need neither.
+        # actnow.dev. Dry runs need no token.
         if: env.RELEASE == 'true'
         env:
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           ACTNOW_INGEST_TOKEN: ${{ secrets.ACTNOW_INGEST_TOKEN }}
         run: |
-          missing=""
-          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY ACTNOW_INGEST_TOKEN; do
-            [ -n "${!name}" ] || missing="$missing $name"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::a release publishes to actnow.dev and needs the secrets:$missing (R2_*: an R2 API token with Object Read & Write on actnow-releases; ACTNOW_INGEST_TOKEN: the site's release-ingest token for audiosmith; docs/release.md, step 5)"
+          if [ -z "$ACTNOW_INGEST_TOKEN" ]; then
+            echo "::error::a release publishes to actnow.dev and needs the secret ACTNOW_INGEST_TOKEN (the site's release-ingest token for audiosmith; docs/release.md, step 5)"
             exit 1
+          fi
+
+      - name: Compare the website's publish script
+        # scripts/actnow-publish.sh is a reviewed copy of the site's; a newer
+        # one on the site is worth a look, not a reason to stop.
+        run: |
+          if ! out="$(scripts/vendor-actnow-publish.sh --check 2>&1)"; then
+            echo "$out"
+            echo "::warning::scripts/actnow-publish.sh differs from https://actnow.dev/actnow-publish.sh (or the site was unreachable): this run uses the committed copy; refresh it with scripts/vendor-actnow-publish.sh"
+          else
+            echo "$out"
           fi
 
       - uses: actions/setup-go@v5
@@ -210,14 +220,15 @@ jobs:
           MYGO_UPDATER_PUBLIC_KEY: ${{ env.SIGN == 'true' && vars.MYGO_UPDATER_PUBLIC_KEY || '' }}
         run: |
           scripts/release-config.sh
-          jq '{version, updates: (.updates | if . then {url, s3: (.s3 | if . then "\(.bucket)/\(.prefix)" else null end), github, publicKey: "set"} else null end), macos: {signingIdentity: (.macos.signingIdentity // "-" | if . == "-" then "ad hoc" else "Developer ID" end), notarize: (.macos.notarize != null)}}' mygo.json
+          jq '{version, updates: (.updates | if . then {url, s3, github, publicKey: "set"} else null end), macos: {signingIdentity: (.macos.signingIdentity // "-" | if . == "-" then "ad hoc" else "Developer ID" end), notarize: (.macos.notarize != null)}}' mygo.json
 
       - name: Build
         env:
           MYGO_UPDATER_PRIVATE_KEY: ${{ env.SIGN == 'true' && secrets.MYGO_UPDATER_PRIVATE_KEY || '' }}
         run: |
-          # Delta updates are made from the versions the website's manifests
-          # (releases and beta/) name; none before the first is there.
+          # No -upload: actnow-publish.sh sends the files below. Delta
+          # updates are made from the versions the website's manifests
+          # (releases and beta/) name; the first version there has none.
           go tool mygo build -platform darwin/arm64
 
       - name: Verify
@@ -228,14 +239,39 @@ jobs:
             scripts/verify-release.sh
           fi
 
-      - name: Publish to actnow.dev and GitHub
+      - name: Publish to actnow.dev
+        if: env.RELEASE == 'true'
+        env:
+          ACTNOW_INGEST_TOKEN: ${{ secrets.ACTNOW_INGEST_TOKEN }}
+        run: |
+          if [ "$WEBSITE_PUBLISH" = true ]; then
+            scripts/release-publish.sh --skip-github
+          else
+            scripts/release-publish.sh --skip-github --no-publish
+          fi
+
+      - name: Draft the GitHub release
         if: env.RELEASE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          ACTNOW_INGEST_TOKEN: ${{ secrets.ACTNOW_INGEST_TOKEN }}
-        run: scripts/release-publish.sh
+        run: scripts/release-publish.sh --skip-website
+
+      - name: Keep the update files (release)
+        # For finishing the GitHub release by hand when its step failed
+        # after the website took the version (which refuses it again):
+        # unpack into build/darwin-arm64, then
+        # scripts/release-publish.sh --skip-website. No disk image: the
+        # website's download page is its only place.
+        if: env.RELEASE == 'true' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioSmith-${{ env.VERSION }}-update
+          path: |
+            build/darwin-arm64/*.tar.gz
+            build/darwin-arm64/*.delta
+            build/darwin-arm64/update-*.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: What a release would publish (dry run)
         if: env.RELEASE != 'true'
@@ -266,11 +302,16 @@ jobs:
           {
             echo "### AudioSmith $VERSION"
             if [ "$PRERELEASE" = true ]; then
-              echo "Published on actnow.dev as a beta: copies that receive beta updates see it now; download at https://actnow.dev/download/audiosmith."
+              channel="the beta channel: copies that receive beta updates see it"
               kind="draft prerelease"
             else
-              echo "Published on actnow.dev as a release: installed copies see it now; download at https://actnow.dev/download/audiosmith."
+              channel="the stable channel: installed copies see it"
               kind="draft release"
+            fi
+            if [ "$WEBSITE_PUBLISH" = true ]; then
+              echo "Sent to actnow.dev on $channel once published (the site's status is above); download at https://actnow.dev/download/audiosmith. Yank or roll back in https://actnow.dev/panel/releases."
+            else
+              echo "Verified on actnow.dev, not published (WEBSITE_PUBLISH=false): publish it in https://actnow.dev/panel/releases; then it is on $channel."
             fi
             echo "GitHub: the $kind [$GITHUB_REF_NAME](https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME) has the notes$([ "$GITHUB_FEED" = true ] && echo ", the update archive and a manifest for copies that still read GitHub (GITHUB_FEED=true: set it to false after this transition release)" || echo " and the website's manifest")."
             echo "Review it, then publish it$([ "$PRERELEASE" = true ] && echo ', leaving "Set as a pre-release" ticked')."

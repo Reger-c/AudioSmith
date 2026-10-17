@@ -1,86 +1,103 @@
 #!/usr/bin/env bash
 # Publishes the release that `go tool mygo build` made in build/darwin-arm64
-# and scripts/verify-release.sh checked (thread #69): .github/workflows/
-# release.yml runs it after both, and scripts/release-local.sh --upload.
+# and scripts/verify-release.sh checked (threads #69, #71):
+# .github/workflows/release.yml runs it after both, and
+# scripts/release-local.sh --upload.
 #
-#   1. Renames the disk image to AudioSmith-<version>.dmg, its name on the
-#      website (scripts/actnow.sh).
-#   2. Uploads to actnow.dev's R2 bucket with `go tool mygo publish` (MyGo
-#      patch 0009): the disk image, the update archive and deltas, then the
-#      manifest, which publishes the update. A beta goes under
-#      audiosmith/beta/, a release under audiosmith/ and also writes
-#      beta/'s manifest unless a newer beta is there (patch 0008).
-#   3. Registers the version on the site (scripts/actnow-register.sh), which
-#      lists it on its download and changelog pages.
-#   4. GitHub: a draft release v<version> (a prerelease for a beta) with
+#   1. actnow.dev: scripts/actnow-publish.sh, the site's own script
+#      (vendored; scripts/vendor-actnow-publish.sh), sends the disk image,
+#      the update archive and deltas and the manifest through the site's
+#      release API with ACTNOW_INGEST_TOKEN. The site checks them (sizes,
+#      sha256, the manifest's URLs and signatures, the CHANGELOG section),
+#      stores them, lists the version on its download and changelog pages
+#      and publishes it: a beta (a version with a "-") on the beta channel,
+#      /updates/audiosmith/beta/, a release on /updates/audiosmith/. With
+#      --no-publish it stops at "verified": publish it in the site's panel
+#      (https://actnow.dev/panel/releases), where yanks and rollbacks are too.
+#   2. GitHub: a draft release v<version> (a prerelease for a beta) with
 #      the notes and links to the download page, plus update-darwin-arm64.json
 #      for copies that still read GitHub (0.4.0-beta.1 … beta.4):
 #      - GITHUB_FEED=true (the transition): the update archive and deltas
 #        too, and the manifest points at them on GitHub;
 #      - otherwise the website's manifest as it is, pointing at actnow.dev,
 #        so a copy that missed the transition still finds the newest version.
-#      Publish the draft on GitHub after checking it (copies that read
-#      GitHub see it then; the website has it at once).
+#      Publish the draft on GitHub after checking it.
 #
-# Each step can run again: uploads replace, the registration updates.
+# The website first: once it has published the version, the site refuses
+# it again (409 version_exists), so when step 2 fails, run step 2 alone
+# (--skip-website) with the same build, such as the run's artifact.
 #
-#   scripts/release-publish.sh                # all four
-#   scripts/release-publish.sh --dry-run      # 1, the GitHub files in build/github and the
-#                                             # registration's body; uploads nothing
-#   scripts/release-publish.sh --skip-github  # 1–3
+#   scripts/release-publish.sh                # both
+#   scripts/release-publish.sh --dry-run      # checks the build with actnow-publish.sh --dry-run
+#                                             # and makes the GitHub files in build/github;
+#                                             # sends nothing anywhere
+#   scripts/release-publish.sh --no-publish   # the website stops at "verified"
+#   scripts/release-publish.sh --skip-github  # 1 only
+#   scripts/release-publish.sh --skip-website # 2 only
 #
 # Environment:
-#   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY  the R2 API token (read/write on actnow-releases),
-#                                           or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
-#   ACTNOW_INGEST_TOKEN                     the site's release-ingest token for audiosmith
-#   GITHUB_FEED                             true during the transition (release.yml)
-#   GITHUB_REPOSITORY                       default hehehai/AudioSmith; gh needs GH_TOKEN or gh auth
-#   MYGO                                    default "go tool mygo" (tests replace it)
+#   ACTNOW_INGEST_TOKEN  the site's release-ingest token for audiosmith (not for --dry-run)
+#   ACTNOW_URL           default https://actnow.dev (tests point it at a fake)
+#   GITHUB_FEED          true during the transition (release.yml)
+#   GITHUB_REPOSITORY    default hehehai/AudioSmith; gh needs GH_TOKEN or gh auth
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-# shellcheck source=actnow.sh
+# shellcheck source=SCRIPTDIR/actnow.sh
 source "$ROOT/scripts/actnow.sh"
 fail() { echo "release-publish: $*" >&2; exit 1; }
 command -v jq > /dev/null || fail "needs jq"
 
-dry=false github=true
+dry=false website=true github=true website_args=()
 for arg in "$@"; do
   case "$arg" in
-    --dry-run) dry=true ;;
+    --dry-run) dry=true; website_args+=(--dry-run) ;;
+    --no-publish) website_args+=(--no-publish) ;;
     --skip-github) github=false ;;
+    --skip-website) website=false ;;
     *) fail "unknown option $arg (see the header of $0)" ;;
   esac
 done
 github_feed="${GITHUB_FEED:-false}"
 [[ "$github_feed" == true || "$github_feed" == false ]] || fail "GITHUB_FEED is \"$github_feed\", not true or false"
 repo="${GITHUB_REPOSITORY:-hehehai/AudioSmith}"
-read -r -a mygo <<< "${MYGO:-go tool mygo}"
 
 OUT="build/darwin-arm64"
 version="$(jq -r .version mygo.json)"
+min_macos="$(jq -r '.macos.minimumSystemVersion // empty' mygo.json)"
 tag="v$version"
 manifest="$OUT/update-darwin-arm64.json"
+dmg="$OUT/AudioSmith $version arm64.dmg"
 
-# 1. The disk image's name on the website.
-dmg="$OUT/$(actnow_dmg_name "$version")"
-if [[ -f "$OUT/AudioSmith $version arm64.dmg" ]]; then
-  mv "$OUT/AudioSmith $version arm64.dmg" "$dmg"
+# Everything that can be checked before anything is sent.
+# The disk image goes to the website only (not to GitHub).
+if $website && [[ ! -f "$dmg" ]]; then
+  fail "no disk image $dmg (build first: go tool mygo build -platform darwin/arm64)"
 fi
-[[ -f "$dmg" ]] || fail "no disk image $OUT/AudioSmith $version arm64.dmg (build first: go tool mygo build -platform darwin/arm64)"
-echo "release-publish: $dmg → R2 $(actnow_dmg_key "$version")"
-
+feed="$ACTNOW_UPDATES_URL"
+actnow_is_prerelease "$version" && feed="$feed/beta"
 if [[ -f "$manifest" ]]; then
   jq -e --arg v "$version" '.version == $v' "$manifest" > /dev/null || fail "$manifest is not of $version: build again"
-  url="$(jq -r .url "$manifest")"
-  [[ "$url" == "$ACTNOW_UPDATES_URL/"* ]] ||
-    fail "$manifest points at $url, not at $ACTNOW_UPDATES_URL: build with scripts/release-config.sh (UPDATES_FEED=website)"
+  # The site takes the archive and deltas at exactly $feed/<file> (a beta's
+  # in beta/, as MyGo patch 0008 names them from updates.url).
+  for url in $(jq -r '.url, .deltas[]?.url' "$manifest"); do
+    [[ "$url" == "$feed/"* && "${url#"$feed/"}" != */* ]] ||
+      fail "$manifest points at $url, not into $feed/: build with scripts/release-config.sh (updates.url $ACTNOW_UPDATES_URL)"
+  done
 elif ! $dry; then
   fail "no $manifest: a release needs the update keys (MYGO_UPDATER_PRIVATE_KEY, MYGO_UPDATER_PUBLIC_KEY)"
 fi
+if ! $dry; then
+  if $website && [[ -z "${ACTNOW_INGEST_TOKEN:-}" ]]; then
+    fail "ACTNOW_INGEST_TOKEN is not set (the site's release-ingest token for audiosmith)"
+  fi
+  if $github; then
+    command -v gh > /dev/null || fail "needs the GitHub CLI (gh) for the GitHub release; or --skip-github"
+  fi
+fi
 
-# 4's files, made first so that a dry run shows them: build/github.
+# 2's files, made first so that a dry run shows them: build/github.
 notes_file="build/github-notes.md"
 gh_dir="build/github"
 rm -rf "$gh_dir"
@@ -119,16 +136,15 @@ if $github; then
   fi
 fi
 
+# 1. The website.
+if $website; then
+  bash scripts/actnow-publish.sh --app "$ACTNOW_APP" --dir "$OUT" --changelog CHANGELOG.md \
+    --version "$version" ${min_macos:+--min-macos "$min_macos"} ${website_args[@]+"${website_args[@]}"}
+fi
+
 if $dry; then
-  echo "release-publish: dry run; would upload to s3://$ACTNOW_R2_BUCKET/$ACTNOW_R2_PREFIX$(actnow_is_prerelease "$version" && echo /beta)/:"
-  for f in "$OUT"/*; do
-    case "${f##*/}" in
-      *.dmg | *.tar.gz | *.delta | update-*.json) echo "  ${f##*/}" ;;
-    esac
-  done
-  scripts/actnow-register.sh --dmg "$dmg" --version "$version" --dry-run
   if $github; then
-    echo "release-publish: would create the draft GitHub release $tag of $repo (GITHUB_FEED=$github_feed) with:"
+    echo "release-publish: dry run; would create the draft GitHub release $tag of $repo (GITHUB_FEED=$github_feed) with:"
     for f in "$gh_dir"/*; do
       if [[ -e "$f" ]]; then echo "  ${f##*/}"; fi
     done
@@ -141,22 +157,12 @@ if $dry; then
   exit 0
 fi
 
-# 2. The website's bucket. MyGo reads the AWS names.
-export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}"
-export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY:-}}"
-[[ -n "$AWS_ACCESS_KEY_ID" && -n "$AWS_SECRET_ACCESS_KEY" ]] ||
-  fail "no R2 credentials: set R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY (an R2 API token with Object Read & Write on $ACTNOW_R2_BUCKET)"
-[[ -n "${ACTNOW_INGEST_TOKEN:-}" ]] || fail "ACTNOW_INGEST_TOKEN is not set (the site's release-ingest token for audiosmith)"
-jq -e --arg url "$ACTNOW_UPDATES_URL" '.updates.url == $url and .updates.s3.bucket != null' mygo.json > /dev/null ||
-  fail "mygo.json has no website updates section: run scripts/release-config.sh first"
-"${mygo[@]}" publish -platform darwin/arm64
-
-# 3. The site's pages.
-scripts/actnow-register.sh --dmg "$dmg" --version "$version"
-
-# 4. GitHub.
+# 2. GitHub.
 if $github; then
-  command -v gh > /dev/null || fail "needs the GitHub CLI (gh) for the GitHub release; or --skip-github"
+  gh_failed() {
+    echo "release-publish: the GitHub release failed$($website && echo ", after actnow.dev took $version"): run scripts/release-publish.sh --skip-website with this build to finish it" >&2
+  }
+  trap gh_failed ERR
   beta=()
   actnow_is_prerelease "$version" && beta=(--prerelease)
   if ! gh release view "$tag" --repo "$repo" > /dev/null 2>&1; then
@@ -173,6 +179,9 @@ if $github; then
   if [[ -f "$gh_dir/update-darwin-arm64.json" ]]; then
     gh release upload "$tag" --repo "$repo" --clobber "$gh_dir/update-darwin-arm64.json"
   fi
+  trap - ERR
   echo "release-publish: the draft GitHub release $tag of $repo is ready: check it and publish it (GITHUB_FEED=$github_feed)"
 fi
-echo "release-publish: AudioSmith $version is on actnow.dev ($(actnow_channel "$version"))"
+if $website; then
+  echo "release-publish: AudioSmith $version went to actnow.dev ($(actnow_channel "$version"); its status is above)"
+fi

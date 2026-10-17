@@ -1,14 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 
@@ -35,75 +33,6 @@ func publish(c *Config, artifacts []string) error {
 		return publishS3(c, artifacts)
 	}
 	return publishGitHub(c, artifacts)
-}
-
-func runPublish(args []string) error {
-	flags := newFlags("publish", "[flags] [dir]", `Uploads what mygo build made for each platform, in <out>/<goos>-<goarch>,
-where updates point to, as mygo build -upload does: to the GitHub release of
-this version (updates.github), as a draft, or to the bucket of updates.s3,
-the manifests last. Build first, check the build, then publish it: with
-updates.s3, apps see the update once its manifest is uploaded.
-
-The installers, archives, deltas and manifests of the directory are
-uploaded, under the names they have there, so a disk image renamed after
-the build is uploaded under its new name. The manifests must be of the
-version in mygo.json.`)
-	platforms := flags.String("platform", runtime.GOOS+"/"+runtime.GOARCH, "comma separated GOOS/GOARCH targets that were built, e.g. darwin/universal,linux/amd64")
-	out := flags.String("o", "", "output directory of the build (default: out from mygo.json or dist)")
-	if err := flags.Parse(args); err != nil {
-		return err
-	}
-	c, err := loadConfig(dirArg(flags.Args()))
-	if err != nil {
-		return err
-	}
-	if *out != "" {
-		c.Out = *out
-	}
-	if err := checkUpload(c); err != nil {
-		return err
-	}
-	artifacts, err := builtArtifacts(c, splitList(*platforms))
-	if err != nil {
-		return err
-	}
-	return publish(c, artifacts)
-}
-
-// builtArtifacts returns the files that mygo build left for platforms, in
-// <out>/<goos>-<goarch>, after checking that their update manifests are of
-// this version.
-func builtArtifacts(c *Config, platforms []string) ([]string, error) {
-	var artifacts []string
-	for _, p := range platforms {
-		goos, goarch, ok := strings.Cut(p, "/")
-		if !ok || isWebPlatform(p) {
-			return nil, fmt.Errorf("cannot publish the platform %q: want GOOS/GOARCH of an app", p)
-		}
-		dir := filepath.Join(c.path(c.Out), goos+"-"+goarch)
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return nil, fmt.Errorf("no build of %s: %w", p, err)
-		}
-		for _, e := range entries {
-			path := filepath.Join(dir, e.Name())
-			if name := e.Name(); strings.HasPrefix(name, "update-") && strings.HasSuffix(name, ".json") {
-				var m update.Manifest
-				data, err := os.ReadFile(path)
-				if err == nil {
-					err = json.Unmarshal(data, &m)
-				}
-				switch {
-				case err != nil:
-					return nil, fmt.Errorf("%s: %w", relPathTo(c.root, path), err)
-				case m.Version != c.Version:
-					return nil, fmt.Errorf("%s is of version %s, not %s: build again", relPathTo(c.root, path), m.Version, c.Version)
-				}
-			}
-			artifacts = append(artifacts, path)
-		}
-	}
-	return artifacts, nil
 }
 
 // uploads returns the artifacts of a build to publish: the installers and

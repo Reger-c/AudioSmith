@@ -1,33 +1,116 @@
 package scripts
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
+const testToken = "test-ingest-token-5f2a"
+
+// site is a fake of actnow.dev's release API (the session flow that
+// scripts/actnow-publish.sh speaks: docs/release-pipeline.md of
+// actnow-www): it keeps the session request and the uploaded files, and
+// logs each call in the same log as the fake gh, so the order of the two
+// shows.
+type site struct {
+	srv     *httptest.Server
+	log     string
+	mu      sync.Mutex
+	auth    []string
+	session map[string]any
+	files   map[string]string
+	refuse  int // the session's answer, when not 0
+	calls   int
+}
+
+func newSite(t *testing.T, log string) *site {
+	s := &site{log: log, files: map[string]string{}}
+	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.calls++
+		s.auth = append(s.auth, r.Header.Get("Authorization"))
+		appendLog(log, "site "+r.Method+" "+r.URL.Path)
+		const prefix = "/api/releases/r1"
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/releases/sessions":
+			if s.refuse != 0 {
+				w.WriteHeader(s.refuse)
+				io.WriteString(w, `{"error":"version_exists","message":"0.4.0-beta.5 is already published"}`)
+				return
+			}
+			if err := json.Unmarshal(data, &s.session); err != nil {
+				t.Errorf("session: %v: %s", err, data)
+			}
+			var artifacts []map[string]any
+			for _, a := range s.session["artifacts"].([]any) {
+				name := a.(map[string]any)["filename"].(string)
+				artifacts = append(artifacts, map[string]any{"filename": name, "upload": map[string]any{"method": "PUT", "url": s.srv.URL + prefix + "/artifacts/" + name}})
+			}
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]any{"release": map[string]any{"id": "r1", "status": "uploading"}, "artifacts": artifacts})
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, prefix+"/artifacts/"):
+			s.files[strings.TrimPrefix(r.URL.Path, prefix+"/artifacts/")] = string(data)
+			json.NewEncoder(w).Encode(map[string]any{"size": len(data), "verified": true})
+		case r.Method == http.MethodPost && r.URL.Path == prefix+"/complete":
+			json.NewEncoder(w).Encode(map[string]any{
+				"release":   map[string]any{"id": "r1", "app": "audiosmith", "version": "0.4.0-beta.5", "channel": "beta", "status": "published"},
+				"published": true, "warnings": []string{},
+				"feeds": []map[string]any{{"channel": "beta", "key": "audiosmith/beta/update-darwin-arm64.json", "version": "0.4.0-beta.5", "changed": true}},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, `{"error":"not_found"}`)
+		}
+	}))
+	t.Cleanup(s.srv.Close)
+	return s
+}
+
+func appendLog(path, line string) {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	io.WriteString(f, line+"\n")
+}
+
+func (s *site) reset() {
+	s.mu.Lock()
+	s.auth, s.session, s.files, s.refuse, s.calls = nil, nil, map[string]string{}, 0, 0
+	s.mu.Unlock()
+}
+
 // publishRoot is a checkout with a verified build of 0.4.0-beta.5 in
-// build/darwin-arm64, configured for the website (release-config.sh), and
-// fakes of gh and mygo that log their calls (and mygo the credentials it
-// got) in log.
-func publishRoot(t *testing.T, manifestURL string) (root, log string) {
+// build/darwin-arm64 (the manifest's URLs as MyGo makes them with
+// updates.url https://actnow.dev/updates/audiosmith, patch 0008), the
+// vendored actnow-publish.sh, and a fake gh that logs its calls in log
+// (fails "release upload" when $GH_FAIL is set).
+func publishRoot(t *testing.T, siteURL, manifestURL string) (root, log string) {
 	t.Helper()
-	const base = "https://actnow.dev/updates/audiosmith/beta/"
+	base := siteURL + "/updates/audiosmith/beta/"
 	if manifestURL == "" {
 		manifestURL = base + "audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz"
 	}
 	manifest, _ := json.Marshal(map[string]any{
 		"version": "0.4.0-beta.5", "notes": "- Five.", "url": manifestURL, "size": 7, "signature": "sig",
-		"deltas":   []map[string]any{{"from": "0.4.0-beta.4", "url": base + "audiosmith-0.4.0-beta.4-to-0.4.0-beta.5-darwin-arm64.delta", "size": 5, "signature": "dsig"}},
-		"previous": []map[string]any{{"version": "0.4.0-beta.4", "url": "https://github.com/hehehai/AudioSmith/releases/download/v0.4.0-beta.4/a.tar.gz"}},
+		"deltas": []map[string]any{{"from": "0.4.0-beta.4", "url": base + "audiosmith-0.4.0-beta.4-to-0.4.0-beta.5-darwin-arm64.delta", "size": 5, "signature": "dsig"}},
 	})
 	config := `{"name": "AudioSmith", "version": "0.4.0-beta.5", "macos": {"minimumSystemVersion": "15.0"},
-		"updates": {"publicKey": "k", "url": "https://actnow.dev/updates/audiosmith", "s3": {"bucket": "actnow-releases", "prefix": "audiosmith"}}}`
-	root = fakeRoot(t, []string{"actnow.sh", "actnow-register.sh", "release-publish.sh"}, map[string]string{
+		"updates": {"publicKey": "k", "url": "` + siteURL + `/updates/audiosmith"}}`
+	root = fakeRoot(t, []string{"actnow.sh", "actnow-publish.sh", "release-publish.sh"}, map[string]string{
 		"mygo.json":    config,
 		"CHANGELOG.md": "# Changelog\n\n## 0.4.0-beta.5\n\n- Five.\n\n## 0.4.0-beta.4\n\n- Four.\n",
 		"build/darwin-arm64/AudioSmith 0.4.0-beta.5 arm64.dmg":                          "disk image",
@@ -40,10 +123,8 @@ echo "gh $*" >> "$LOG"
 # A release exists once created.
 if [ "$1 $2" = "release view" ]; then [ -f "$LOG.created" ]; exit; fi
 if [ "$1 $2" = "release create" ]; then touch "$LOG.created"; fi
+if [ "$1 $2" = "release upload" ] && [ -n "$GH_FAIL" ]; then echo "HTTP 502" >&2; exit 1; fi
 exit 0
-`,
-		"bin/mygo": `#!/bin/bash
-echo "mygo $* key=$AWS_ACCESS_KEY_ID secret=$AWS_SECRET_ACCESS_KEY" >> "$LOG"
 `,
 	})
 	return root, filepath.Join(root, "log")
@@ -57,17 +138,24 @@ func readLog(path string) []string {
 	return strings.Split(strings.TrimSpace(string(b)), "\n")
 }
 
+func sum(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
+}
+
 func TestReleasePublish(t *testing.T) {
 	needTools(t)
-	in := newIngest(t)
+	dir := t.TempDir()
+	s := newSite(t, filepath.Join(dir, "log"))
+	root, _ := publishRoot(t, s.srv.URL, "")
+	log := s.log
 	publish := func(root, log string, env []string, args ...string) (string, string, error) {
 		env = append([]string{
-			"PATH=" + filepath.Join(root, "bin") + ":" + os.Getenv("PATH"), "LOG=" + log,
-			"MYGO=" + filepath.Join(root, "bin", "mygo"), "ACTNOW_API=" + in.srv.URL + "/api/releases",
+			"PATH=" + filepath.Join(root, "bin") + ":" + os.Getenv("PATH"), "LOG=" + log, "ACTNOW_URL=" + s.srv.URL,
 		}, env...)
 		return run(t, root, env, "bash", append([]string{"scripts/release-publish.sh"}, args...)...)
 	}
-	secrets := []string{"R2_ACCESS_KEY_ID=r2-id", "R2_SECRET_ACCESS_KEY=r2-secret", "ACTNOW_INGEST_TOKEN=" + testToken}
+	token := []string{"ACTNOW_INGEST_TOKEN=" + testToken}
 	ghManifest := func(root string) map[string]any {
 		t.Helper()
 		var m map[string]any
@@ -77,17 +165,31 @@ func TestReleasePublish(t *testing.T) {
 		}
 		return m
 	}
-	dmg := "build/darwin-arm64/AudioSmith-0.4.0-beta.5.dmg"
 
-	// A dry run of the transition: the disk image renamed, the GitHub files
-	// made, nothing uploaded or registered.
-	root, log := publishRoot(t, "")
+	// A dry run of the transition: actnow-publish.sh --dry-run checks the
+	// build and prints the session request; the GitHub files are made;
+	// nothing is sent, and no token is needed.
 	out, stderr, err := publish(root, log, []string{"GITHUB_FEED=true"}, "--dry-run")
 	if err != nil {
 		t.Fatalf("dry run: %v\n%s%s", err, out, stderr)
 	}
-	if _, err := os.Stat(filepath.Join(root, dmg)); err != nil {
-		t.Errorf("the disk image was not renamed: %v", err)
+	jsonStart := strings.Index(out, "{")
+	var request map[string]any
+	if err := json.NewDecoder(strings.NewReader(out[jsonStart:])).Decode(&request); err != nil {
+		t.Fatalf("dry run printed no request: %v\n%s", err, out)
+	}
+	var names []string
+	for _, a := range request["artifacts"].([]any) {
+		names = append(names, a.(map[string]any)["filename"].(string))
+	}
+	if want := []string{"AudioSmith-0.4.0-beta.5-arm64.dmg", "audiosmith-0.4.0-beta.4-to-0.4.0-beta.5-darwin-arm64.delta", "audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz", "update-darwin-arm64.json"}; !slices.Equal(names, want) {
+		t.Errorf("dry run: files %v", names)
+	}
+	if request["app"] != "audiosmith" || request["version"] != "0.4.0-beta.5" || request["channel"] != "beta" || request["minMacOS"] != "15.0" || request["notes"] != "- Five." || request["publish"] != nil {
+		t.Errorf("dry run: request %v", request)
+	}
+	if !strings.Contains(stderr, "dry run: nothing sent") {
+		t.Errorf("dry run says:\n%s", stderr)
 	}
 	gh := "https://github.com/hehehai/AudioSmith/releases/download/v0.4.0-beta.5/"
 	m := ghManifest(root)
@@ -97,7 +199,7 @@ func TestReleasePublish(t *testing.T) {
 		t.Errorf("the transition manifest: %v", m)
 	}
 	entries, _ := os.ReadDir(filepath.Join(root, "build/github"))
-	var names []string
+	names = nil
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
@@ -108,23 +210,25 @@ func TestReleasePublish(t *testing.T) {
 	if !strings.HasPrefix(string(notes), "- Five.\n\n---\n") || !strings.Contains(string(notes), "https://actnow.dev/download/audiosmith") || strings.Contains(string(notes), "Four") {
 		t.Errorf("notes:\n%s", notes)
 	}
-	if !strings.Contains(out, `"dmgKey": "audiosmith/beta/AudioSmith-0.4.0-beta.5.dmg"`) || !strings.Contains(out, "s3://actnow-releases/audiosmith/beta/") {
-		t.Errorf("dry run says:\n%s", out)
-	}
-	if calls := readLog(log); calls != nil || len(in.requests()) != 0 {
-		t.Errorf("a dry run called %v and registered %d times", calls, len(in.requests()))
+	if calls := readLog(log); calls != nil || s.calls != 0 {
+		t.Errorf("a dry run called %v", calls)
 	}
 
-	// The transition for real: the website (credentials mapped to AWS's
-	// names), the registration, then the GitHub draft prerelease with the
-	// archive and delta, then its manifest.
-	out, stderr, err = publish(root, log, append([]string{"GITHUB_FEED=true"}, secrets...))
+	// The transition for real: the website (session, the four files, complete),
+	// then the GitHub draft prerelease with the archive and delta, then its
+	// manifest.
+	out, stderr, err = publish(root, log, append([]string{"GITHUB_FEED=true"}, token...))
 	if err != nil {
 		t.Fatalf("publish: %v\n%s%s", err, out, stderr)
 	}
 	calls := readLog(log)
 	want := []string{
-		"mygo publish -platform darwin/arm64 key=r2-id secret=r2-secret",
+		"site POST /api/releases/sessions",
+		"site PUT /api/releases/r1/artifacts/AudioSmith-0.4.0-beta.5-arm64.dmg",
+		"site PUT /api/releases/r1/artifacts/audiosmith-0.4.0-beta.4-to-0.4.0-beta.5-darwin-arm64.delta",
+		"site PUT /api/releases/r1/artifacts/audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz",
+		"site PUT /api/releases/r1/artifacts/update-darwin-arm64.json",
+		"site POST /api/releases/r1/complete",
 		"gh release view v0.4.0-beta.5 --repo hehehai/AudioSmith",
 		"gh release create v0.4.0-beta.5 --repo hehehai/AudioSmith --draft --title v0.4.0-beta.5 --notes-file build/github-notes.md --prerelease",
 		"gh release edit v0.4.0-beta.5 --repo hehehai/AudioSmith --prerelease --latest=false",
@@ -134,54 +238,117 @@ func TestReleasePublish(t *testing.T) {
 	if !slices.Equal(calls, want) {
 		t.Errorf("calls\n%s\nwant\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
 	}
-	if r := in.requests(); len(r) != 1 || r[0].payload["dmgKey"] != "audiosmith/beta/AudioSmith-0.4.0-beta.5.dmg" || r[0].payload["dmgSize"] != float64(10) || r[0].payload["notes"] != "- Five." {
-		t.Errorf("registered %v", r)
+	for _, a := range s.auth {
+		if a != "Bearer "+testToken {
+			t.Errorf("Authorization %q", a)
+		}
 	}
-	if strings.Contains(out+stderr, testToken) || strings.Contains(out+stderr, "r2-secret") {
-		t.Error("printed a secret")
+	manifestBytes, _ := os.ReadFile(filepath.Join(root, "build/darwin-arm64/update-darwin-arm64.json"))
+	if s.files["AudioSmith-0.4.0-beta.5-arm64.dmg"] != "disk image" || s.files["audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz"] != "archive" || s.files["update-darwin-arm64.json"] != string(manifestBytes) {
+		t.Errorf("uploaded %v", s.files)
+	}
+	for _, a := range s.session["artifacts"].([]any) {
+		a := a.(map[string]any)
+		if name := a["filename"].(string); a["sha256"] != sum(s.files[name]) {
+			t.Errorf("%s: sha256 %v", name, a["sha256"])
+		}
+	}
+	if strings.Contains(out+stderr, testToken) {
+		t.Error("printed the token")
+	}
+	if !strings.Contains(out, `"status": "published"`) {
+		t.Errorf("publish says:\n%s", out)
 	}
 
-	// After the transition: the GitHub release (already there) gets the
-	// website's manifest only, pointing at actnow.dev.
+	// After the transition, stopping at "verified": the GitHub release
+	// (already there) gets the website's manifest only, pointing at
+	// actnow.dev.
 	os.Remove(log)
-	in.answer(http.StatusOK, "")
-	if out, stderr, err := publish(root, log, append([]string{"GITHUB_FEED=false"}, secrets...)); err != nil {
+	s.reset()
+	if out, stderr, err := publish(root, log, append([]string{"GITHUB_FEED=false"}, token...), "--no-publish"); err != nil {
 		t.Fatalf("publish: %v\n%s%s", err, out, stderr)
 	}
 	calls = readLog(log)
-	want = []string{
-		"mygo publish -platform darwin/arm64 key=r2-id secret=r2-secret",
+	if want := []string{
 		"gh release view v0.4.0-beta.5 --repo hehehai/AudioSmith",
 		"gh release edit v0.4.0-beta.5 --repo hehehai/AudioSmith --prerelease --latest=false",
 		"gh release upload v0.4.0-beta.5 --repo hehehai/AudioSmith --clobber build/github/update-darwin-arm64.json",
+	}; len(calls) != 6+len(want) || !slices.Equal(calls[6:], want) {
+		t.Errorf("after the transition, calls\n%s", strings.Join(calls, "\n"))
 	}
-	if !slices.Equal(calls, want) {
-		t.Errorf("after the transition, calls\n%s\nwant\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
+	if s.session["publish"] != false {
+		t.Errorf("--no-publish: session %v", s.session)
 	}
-	if m := ghManifest(root); m["url"] != "https://actnow.dev/updates/audiosmith/beta/audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz" {
+	if m := ghManifest(root); m["url"] != s.srv.URL+"/updates/audiosmith/beta/audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz" {
 		t.Errorf("after the transition, the GitHub manifest: %v", m)
 	}
-	// --skip-github: the website only.
+
+	// --skip-github: the website only; --skip-website: GitHub only, no token.
 	os.Remove(log)
-	if _, _, err := publish(root, log, secrets, "--skip-github"); err != nil || len(readLog(log)) != 1 {
+	s.reset()
+	if _, _, err := publish(root, log, token, "--skip-github"); err != nil || len(readLog(log)) != 6 || strings.HasPrefix(readLog(log)[5], "gh") {
 		t.Errorf("--skip-github: %v, %v", err, readLog(log))
 	}
+	os.Remove(log)
+	s.reset()
+	// (from the run's artifact, which has no disk image)
+	dmg := filepath.Join(root, "build/darwin-arm64/AudioSmith 0.4.0-beta.5 arm64.dmg")
+	os.Rename(dmg, dmg+".away")
+	if _, stderr, err := publish(root, log, []string{"GITHUB_FEED=true"}, "--skip-website"); err != nil || s.calls != 0 || len(readLog(log)) != 4 {
+		t.Errorf("--skip-website: %v, %v\n%s", err, readLog(log), stderr)
+	}
+	os.Rename(dmg+".away", dmg)
 
-	// Refused before any upload.
+	// The site refuses: no GitHub release, the site's reason shown.
+	os.Remove(log)
+	s.reset()
+	s.refuse = http.StatusConflict
+	_, stderr, err = publish(root, log, token)
+	if calls := readLog(log); err == nil || !strings.Contains(stderr, "0.4.0-beta.5 is already published") || len(calls) != 1 {
+		t.Errorf("refused: %v, %s, calls %v", err, stderr, calls)
+	}
+	// GitHub fails after the website took the version: says how to finish.
+	os.Remove(log)
+	s.reset()
+	_, stderr, err = publish(root, log, append([]string{"GH_FAIL=1"}, token...))
+	if err == nil || !strings.Contains(stderr, "after actnow.dev took 0.4.0-beta.5") || !strings.Contains(stderr, "--skip-website") {
+		t.Errorf("GitHub failed: %v, %s", err, stderr)
+	}
+
+	// Refused before anything is sent.
 	for _, c := range []struct {
 		name, url string
 		env       []string
 		says      string
 	}{
-		{"no R2 keys", "", []string{"ACTNOW_INGEST_TOKEN=x"}, "no R2 credentials"},
-		{"no token", "", []string{"R2_ACCESS_KEY_ID=a", "R2_SECRET_ACCESS_KEY=b"}, "ACTNOW_INGEST_TOKEN is not set"},
-		{"a GitHub build", "https://github.com/hehehai/AudioSmith/releases/download/v0.4.0-beta.5/a.tar.gz", secrets, "not at https://actnow.dev/updates/audiosmith"},
-		{"bad toggle", "", append([]string{"GITHUB_FEED=yes"}, secrets...), "not true or false"},
+		{"no token", "", nil, "ACTNOW_INGEST_TOKEN is not set"},
+		// A beta built with the stable feed's files, or with the site's
+		// suggested updates.url …/audiosmith/beta (beta/beta/).
+		{"stable dir", s.srv.URL + "/updates/audiosmith/audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz", token, "/updates/audiosmith/beta/: build with"},
+		{"site's beta url", s.srv.URL + "/updates/audiosmith/beta/beta/audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz", token, "/updates/audiosmith/beta/: build with"},
+		{"a GitHub build", "https://github.com/hehehai/AudioSmith/releases/download/v0.4.0-beta.5/a.tar.gz", token, "/updates/audiosmith/beta/: build with"},
+		{"bad toggle", "", append([]string{"GITHUB_FEED=yes"}, token...), "not true or false"},
 	} {
-		root, log := publishRoot(t, c.url)
+		root, _ := publishRoot(t, s.srv.URL, c.url)
+		os.Remove(log)
+		s.reset()
 		_, stderr, err := publish(root, log, c.env)
-		if err == nil || !strings.Contains(stderr, c.says) || readLog(log) != nil {
+		if err == nil || !strings.Contains(stderr, c.says) || readLog(log) != nil || s.calls != 0 {
 			t.Errorf("%s: %v, %s, calls %v", c.name, err, stderr, readLog(log))
 		}
+	}
+}
+
+// TestActnowPublishVendored checks that scripts/actnow-publish.sh is the
+// site's script, untouched (refresh it with scripts/vendor-actnow-publish.sh,
+// never by hand): the sha256 below changes only with such a refresh.
+func TestActnowPublishVendored(t *testing.T) {
+	data, err := os.ReadFile("actnow-publish.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "927302126c06d90c06681387d469be43145fc6f5a1fd1acce6635c92575cc47a"
+	if got := sum(string(data)); got != want {
+		t.Errorf("scripts/actnow-publish.sh has sha256 %s, not %s: if scripts/vendor-actnow-publish.sh refreshed it, review the diff and update this test", got, want)
 	}
 }
