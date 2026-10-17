@@ -205,6 +205,9 @@ func (a *app) modelInfo(c *ui.Context, e catalog.Entry, m *modelState, loaded bo
 		facts = append(facts, i18n.T("needs %g GB of memory", e.MinMemoryGB))
 	}
 	truncText(c, strings.Join(facts, " · ")).FontSize(px(t, fsMicro)).TextColor(k.Text3)
+	if line := a.familyLine(e, m); line != "" {
+		truncText(c, line).FontSize(px(t, fsMicro)).TextColor(k.Text2) // family_reuse.go
+	}
 
 	// The licence.
 	ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
@@ -299,6 +302,11 @@ func (a *app) modelActions(c *ui.Context, e catalog.Entry, m *modelState, loaded
 		if secondaryIconButton(c.Key("download"), icons.DownloadMinimalistic, i18n.T("Download")).Label(i18n.T("Download")).Disabled(!m.known).Clicked() {
 			a.download(e)
 		}
+	case a.installedBy(e, m) != "":
+		// Another app installed it: AudioSmith claims it to use it.
+		if ui.Button(c.Key("use"), i18n.T("Use")).Tooltip(i18n.T("Use it in AudioSmith too: nothing to download")).Clicked() {
+			a.useModel(e)
+		}
 	}
 	if (st == hub.Downloaded || st == hub.Partial) && !m.downloading {
 		snapshot := m.local.Snapshot
@@ -338,6 +346,9 @@ func (a *app) modelStateText(e catalog.Entry, m *modelState) string {
 	case !m.known:
 		return i18n.T("Checking…")
 	case m.local.State == hub.Downloaded:
+		if by := a.installedBy(e, m); by != "" {
+			return i18n.T("Installed · from %s", by) // family_reuse.go
+		}
 		return i18n.T("Downloaded · %s", mb(m.local.Bytes))
 	case m.local.State == hub.Partial:
 		return i18n.T("Incomplete · %s on disk", mb(m.local.Bytes))

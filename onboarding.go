@@ -225,14 +225,25 @@ func (a *app) finishOnboarding() {
 		s.Studio.KeepTakes = keep
 	})
 	a.obOpen = false
+	choose := a.obReuse == reuseChoose
 	if pack != "" {
-		a.startPack(pack)
+		if choose {
+			a.startPack(pack)
+		} else {
+			// The pack's models already on this Mac are AudioSmith's too
+			// ("Use them", the reuse card's default; family_reuse.go).
+			a.reusePack(pack, func() { a.startPack(pack) })
+		}
 	}
-	if !a.prefs.Setup.FirstSound {
+	if !a.prefs.Setup.FirstSound && !choose { // the welcome line would leave Models for the Studio
 		a.firstSound, a.fsRefreshed = true, false
 		if a.demoResource != "" {
 			a.pl.Toggle("demo:welcome", a.demoResource)
 		}
+	}
+	if choose {
+		a.navigate("/models") // "Choose models…": the installed ones say who installed them
+		return
 	}
 	a.navigate("/studio")
 }

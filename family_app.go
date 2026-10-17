@@ -45,24 +45,32 @@ type familyState struct {
 type familyView struct {
 	others  []string
 	deleted map[string]string
+	shares  map[string]family.Share // family_reuse.go
+	loaded  map[string][]string
 }
 
-func readFamilyView(fam *family.Family) familyView {
+// readFamilyView reads it for the model folder hub; rt (the runtime
+// files, "Also loaded in") may be nil.
+func readFamilyView(fam *family.Family, rt *family.Runtime, hub string) familyView {
 	v := familyView{others: fam.OthersForUI(), deleted: map[string]string{}}
 	for _, e := range catalog.Builtin().Entries {
 		if name := fam.DeletedIn(e.Repo); name != "" {
 			v.deleted[strings.ToLower(e.Repo)] = name
 		}
 	}
+	if len(v.others) > 0 {
+		readShares(&v, fam, rt, hub) // family_reuse.go
+	}
 	return v
 }
 
 // showFamily takes v on the main thread.
 func (a *app) showFamily(v familyView) {
-	a.famOthers, a.famDeleted = v.others, v.deleted
+	a.famOthers, a.famDeleted, a.famShares, a.famLoaded = v.others, v.deleted, v.shares, v.loaded
 	if len(a.famOthers) == 0 {
-		a.famDeleted = nil
+		a.famDeleted, a.famShares, a.famLoaded = nil, nil, nil
 	}
+	a.familyShown() // family_reuse.go
 }
 
 // connectFamily makes AudioSmith's Family (no file touched yet) and has
@@ -84,9 +92,10 @@ func (a *app) startFamily(dataDir string) {
 		return
 	}
 	inputs := func() family.Inputs { return familyInputs(lib.settings.Get(), version, dataDir) }
+	rt := a.famRT
 	fam.OnChange(func(topics []string) {
 		a.familyChanged(topics) // family_coord.go: memory requests, shortcut conflicts
-		v := readFamilyView(fam)
+		v := readFamilyView(fam, rt, modelCache(lib.settings.Get()))
 		a.post(func() {
 			a.showFamily(v)
 			if slices.Contains(topics, actnow.TopicModels) {
@@ -110,7 +119,7 @@ func (a *app) startFamily(dataDir string) {
 		if err != nil {
 			log.Printf("family: %v (no manifest this time; deletes write no claims)", err)
 		}
-		v := readFamilyView(fam)
+		v := readFamilyView(fam, rt, modelCache(lib.settings.Get()))
 		a.post(func() { a.showFamily(v) })
 		a.familyStarted() // family_coord.go
 		for range dirty {
@@ -166,7 +175,16 @@ func (l *library) familyOptions(o *hub.Options) {
 // model folder hub (family.Migrate): the catalogue's, and the custom
 // repos it knows of — the Studio's and those of the downloads it still
 // remembers (finished model.download jobs).
+//
+// None on a first run (the setup never done): the models on disk then
+// are other apps' (or a Python tool's), not AudioSmith's — the migration
+// of spec §15.2 step 3 is for an app that has models of its own. Their
+// reuse is the user's choice (the reuse card, [Use] on the Models page)
+// or follows from using one (family_reuse.go).
 func (l *library) familyWanted(cacheDir string) []models.Claim {
+	if !l.settings.Get().Setup.Done {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var custom []string

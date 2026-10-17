@@ -51,6 +51,7 @@ type app struct {
 	voicePickers     voicePickerState // voice_picker.go (thread #60): the voice pickers' previews
 	familyState                       // family_app.go (thread #72): the ActNow family directory
 	familyCoord                       // family_coord.go (thread #73): shortcuts and memory with the family
+	familyReuse                       // family_reuse.go (thread #75): reusing other apps' models, licences
 }
 
 func newApp(eng *engineHost, lib *library) *app {

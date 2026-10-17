@@ -31,6 +31,10 @@ type RuntimeOptions struct {
 	Fresh time.Duration
 	// IdleAfter is UnloadIdleAfter (0 = a minute, the spec's).
 	IdleAfter time.Duration
+	// Loaded, when set, is told the repos the engine holds whenever they
+	// change (on the supervisor's goroutine: it must not block), so that
+	// AudioSmith claims a model it loads without claiming it (Reuse).
+	Loaded func(repos []string)
 }
 
 // Runtime is AudioSmith's runtime file and its share of the family's
@@ -132,9 +136,17 @@ func (r *Runtime) Publish(loaded map[proto.Role][]proto.LoadedModel, budget int6
 		r.mu.Unlock()
 		return
 	}
+	changed := !slices.EqualFunc(r.file.Loaded, list, func(a, b famruntime.Loaded) bool { return a.Repo == b.Repo })
 	r.file.Loaded, r.file.BudgetBytes, r.dirty = list, budget, true
 	r.mu.Unlock()
 	r.flush()
+	if changed && r.o.Loaded != nil && len(list) > 0 {
+		repos := make([]string, len(list))
+		for i, l := range list {
+			repos[i] = l.Repo
+		}
+		r.o.Loaded(repos)
+	}
 }
 
 // sameLoaded: the same model, as busy as before (idleSince moves on
@@ -250,17 +262,16 @@ func (r *Runtime) WaitPasting(ctx context.Context) bool {
 	return famruntime.WaitPasting(ctx, r.f.Dir, r.f.BundleID)
 }
 
-// LoadedIn names the other running family apps that hold repo loaded
-// (for "Also loaded in Dicta", P3; any revision when revision is "").
+// LoadedIn names the other running family apps the UI may name
+// (installed release builds, spec §7.10) that hold repo loaded, for "Also
+// loaded in Dicta" (any revision when revision is "").
 func (r *Runtime) LoadedIn(repo, revision string) []string {
 	files := famruntime.LoadedBy(r.f.Dir, r.f.BundleID, repo, revision)
-	found := r.f.Found()
+	visible := visibleApps(r.f.Found())
 	var out []string
 	for _, file := range files {
-		for _, a := range found {
-			if a.BundleID == file.BundleID && !slices.Contains(out, a.Name) {
-				out = append(out, a.Name)
-			}
+		if name, ok := visible[file.BundleID]; ok && !slices.Contains(out, name) {
+			out = append(out, name)
 		}
 	}
 	slices.Sort(out)
