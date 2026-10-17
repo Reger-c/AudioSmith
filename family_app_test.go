@@ -23,16 +23,16 @@ import (
 
 const dictaID = "dev.hehehai.dicta"
 
-// testFamily is a family directory (conformance) for the test app: the
+// sharedFamily is a family directory (conformance) for the test app: the
 // apps of register installed (registered release or dev builds),
 // AudioSmith started there (its models migrated, claimed).
-type testFamily struct {
+type sharedFamily struct {
 	*conformance.Fixture
 	a   *app
 	fam *family.Family
 }
 
-func useFamily(t *testing.T, a *app, register ...string) *testFamily {
+func useFamily(t *testing.T, a *app, register ...string) *sharedFamily {
 	t.Helper()
 	fx := conformance.New(t)
 	for _, bid := range register {
@@ -48,12 +48,12 @@ func useFamily(t *testing.T, a *app, register ...string) *testFamily {
 		t.Fatal(err)
 	}
 	a.showFamily(readFamilyView(fam))
-	return &testFamily{fx, a, fam}
+	return &sharedFamily{fx, a, fam}
 }
 
 // claim has app bid claim e's repo (and its aux repos) in the app's
 // model folder.
-func (tf *testFamily) claim(t *testing.T, bid string, e catalog.Entry) {
+func (tf *sharedFamily) claim(t *testing.T, bid string, e catalog.Entry) {
 	t.Helper()
 	s := &models.Store{Family: tf.Family, Hub: modelCache(tf.a.prefs), BundleID: bid}
 	refs := []models.Ref{{Repo: e.Repo, Revision: e.Revision}}

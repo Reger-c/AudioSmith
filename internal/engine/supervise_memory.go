@@ -1,7 +1,8 @@
 package engine
 
 // Memory: polling engine.stats, the memory budget, the cache directory,
-// idle unloading and evicting resident models over the budget.
+// idle unloading and evicting resident models over the budget. The ActNow
+// family's share of it is in supervise_family.go.
 
 import (
 	"context"
@@ -49,11 +50,15 @@ func (s *supervisor) pollStats(w *worker, p *proc) {
 			return
 		}
 		changed := w.status.Stats == nil || !sameModels(w.status.Stats.Models, stats.Models)
+		busyChanged := w.status.Stats == nil || !sameBusy(w.status.Stats.Models, stats.Models)
 		w.status.Stats = &stats
 		st := s.statusLocked(w)
 		s.mu.Unlock()
 		if changed {
 			s.publish(st)
+		}
+		if changed || busyChanged {
+			s.publishFamily() // the family's runtime file (spec §11.1)
 		}
 		s.evict()
 	}
@@ -99,75 +104,120 @@ func sameModels(a, b []proto.LoadedModel) bool {
 	return slices.EqualFunc(a, b, func(x, y proto.LoadedModel) bool { return x.Model == y.Model })
 }
 
-// budget is the bytes resident models may take together.
-func (s *supervisor) budgetLocked() int64 {
-	if s.cfg.MemoryBudget > 0 {
-		return s.cfg.MemoryBudget
-	}
-	for _, w := range s.workers {
-		if w.status.Hello != nil && w.status.Hello.Device.Memory > 0 {
-			return w.status.Hello.Device.Memory * 6 / 10
-		}
-	}
-	return 0
+// sameBusy: the same models, each as busy (or idle) as before.
+func sameBusy(a, b []proto.LoadedModel) bool {
+	return slices.EqualFunc(a, b, func(x, y proto.LoadedModel) bool {
+		return x.Model == y.Model && (x.IdleSeconds > 0) == (y.IdleSeconds > 0)
+	})
 }
 
-// evict unloads the least recently used idle models while the resident
-// models of all workers are over the budget, and every model idle for
-// longer than IdleUnload.
-func (s *supervisor) evict() {
-	type candidate struct {
-		role proto.Role
-		m    proto.LoadedModel
-	}
+// budget is the bytes resident models may take together: the setting
+// (Config.MemoryBudget), else 60 % of physical memory; with the ActNow
+// family (Config.Family) also no more than the family's share less what
+// the other family apps hold. 0 = no limit known. Called without s.mu
+// (the family reads its runtime files).
+func (s *supervisor) budget() int64 {
 	s.mu.Lock()
-	budget := s.budgetLocked()
-	idle := s.cfg.IdleUnload.Seconds()
-	var total int64
-	var cands []candidate
-	for _, w := range s.workers {
+	own := s.cfg.MemoryBudget
+	var physical int64
+	for _, r := range s.roles {
+		if w := s.workers[r]; w.status.Hello != nil && w.status.Hello.Device.Memory > 0 {
+			physical = w.status.Hello.Device.Memory
+			break
+		}
+	}
+	fam := s.cfg.Family
+	s.mu.Unlock()
+	if fam != nil {
+		return fam.Budget(own, physical)
+	}
+	if own > 0 {
+		return own
+	}
+	return physical * 6 / 10
+}
+
+// candidate is a resident model that may be unloaded.
+type candidate struct {
+	role proto.Role
+	m    proto.LoadedModel
+}
+
+// resident sums the resident models of the ready workers (as their last
+// engine.stats said) and lists the idle ones, the longest idle first.
+func (s *supervisor) resident() (total int64, idle []candidate) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, r := range s.roles {
+		w := s.workers[r]
 		if w.status.State != WorkerReady || w.status.Stats == nil {
 			continue
 		}
 		for _, m := range w.status.Stats.Models {
 			total += m.Bytes
 			if m.IdleSeconds > 0 {
-				cands = append(cands, candidate{w.role, m})
+				idle = append(idle, candidate{w.role, m})
 			}
 		}
 	}
+	sort.SliceStable(idle, func(i, j int) bool { return idle[i].m.IdleSeconds > idle[j].m.IdleSeconds })
+	return total, idle
+}
+
+// evict unloads the least recently used idle models while the resident
+// models of all workers are over the budget, and every model idle for
+// longer than IdleUnload.
+func (s *supervisor) evict() {
+	budget := s.budget()
+	s.mu.Lock()
+	idle := s.cfg.IdleUnload.Seconds()
 	s.mu.Unlock()
+	total, cands := s.resident()
 	overBudget := budget > 0 && total > budget
 	if !overBudget && idle <= 0 {
 		return
 	}
-	sort.Slice(cands, func(i, j int) bool { return cands[i].m.IdleSeconds > cands[j].m.IdleSeconds })
+	unloaded := false
 	for _, c := range cands {
 		tooIdle := idle > 0 && c.m.IdleSeconds >= idle
 		if !tooIdle && (budget <= 0 || total <= budget) {
-			continue
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := s.Call(ctx, c.role, "", proto.MethodModelsUnload, proto.UnloadParams{Model: c.m.Model}, nil)
-		cancel()
-		if err != nil {
-			s.cfg.Logf("engine %s: unloading %s: %v", c.role, c.m.Model, err)
 			continue
 		}
 		why := "to stay within the memory budget"
 		if tooIdle {
 			why = "after the idle limit"
 		}
-		s.cfg.Logf("engine %s: unloaded %s (idle %.0f s) %s", c.role, c.m.Model, c.m.IdleSeconds, why)
-		total -= c.m.Bytes
-		s.mu.Lock()
-		if w := s.workers[c.role]; w.status.Stats != nil {
-			st := *w.status.Stats
-			st.Models = slices.DeleteFunc(slices.Clone(st.Models), func(m proto.LoadedModel) bool { return m.Model == c.m.Model })
-			w.status.Stats = &st
+		if s.unload(c, why) {
+			total -= c.m.Bytes
+			unloaded = true
 		}
-		st := s.statusLocked(s.workers[c.role])
-		s.mu.Unlock()
-		s.publish(st)
 	}
+	if unloaded {
+		s.publishFamily()
+	}
+}
+
+// unload asks c's worker to drop its model (a model a job is using stays
+// alive until the job ends: nothing is interrupted) and takes it off the
+// worker's stats. It reports whether the engine did.
+func (s *supervisor) unload(c candidate, why string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_, err := s.Call(ctx, c.role, "", proto.MethodModelsUnload, proto.UnloadParams{Model: c.m.Model}, nil)
+	cancel()
+	if err != nil {
+		s.cfg.Logf("engine %s: unloading %s: %v", c.role, c.m.Model, err)
+		return false
+	}
+	s.cfg.Logf("engine %s: unloaded %s (idle %.0f s) %s", c.role, c.m.Model, c.m.IdleSeconds, why)
+	s.mu.Lock()
+	w := s.workers[c.role]
+	if w.status.Stats != nil {
+		st := *w.status.Stats
+		st.Models = slices.DeleteFunc(slices.Clone(st.Models), func(m proto.LoadedModel) bool { return m.Model == c.m.Model })
+		w.status.Stats = &st
+	}
+	st := s.statusLocked(w)
+	s.mu.Unlock()
+	s.publish(st)
+	return true
 }

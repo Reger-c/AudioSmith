@@ -50,6 +50,7 @@ type app struct {
 	removedState                      // models_removed.go (thread #43): removed models, their clean-up
 	voicePickers     voicePickerState // voice_picker.go (thread #60): the voice pickers' previews
 	familyState                       // family_app.go (thread #72): the ActNow family directory
+	familyCoord                       // family_coord.go (thread #73): shortcuts and memory with the family
 }
 
 func newApp(eng *engineHost, lib *library) *app {
@@ -110,6 +111,8 @@ func (a *app) quit() {
 	a.closeDubs()      // M4: dub.go
 	a.closeCalls()     // M6b: calls.go (thread #23)
 	a.closeFamily()    // family_app.go (thread #72)
+	// family_coord.go: OnWillQuit did it already; for quits without it.
+	a.quitFamilyRuntime()
 	a.eng.Stop()
 	a.closeShell()
 }

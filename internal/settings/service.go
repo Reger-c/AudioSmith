@@ -86,6 +86,7 @@ func (s *Store) Update(ctx context.Context, fn func(*Settings)) error {
 	next := clone(old)
 	fn(&next)
 	next = normalize(next)
+	stampDictation(old, &next) // family.go
 	if reflect.DeepEqual(old, next) {
 		s.update.Unlock()
 		return nil
@@ -113,6 +114,7 @@ func clone(s Settings) Settings {
 	cloneM2(&s)
 	cloneM7(&s)
 	cloneExport(&s)
+	cloneFamily(&s)
 	return s
 }
 

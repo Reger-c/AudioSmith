@@ -141,6 +141,11 @@ type Inserter struct {
 	ActivateWait, PasteDelay time.Duration
 	// Sleep waits (tests); nil sleeps, or stops early when ctx ends.
 	Sleep func(ctx context.Context, d time.Duration)
+	// Pasting, when set, is told when the paste starts (on: before the
+	// clipboard is written; it may wait for another app's paste first)
+	// and ends (after the clipboard was restored, or the paste gave up),
+	// for the ActNow family's runtime file (spec §11.1 "pasting").
+	Pasting func(ctx context.Context, on bool)
 }
 
 func (in Inserter) sleep(ctx context.Context, d time.Duration) {
@@ -177,6 +182,10 @@ func (in Inserter) Insert(ctx context.Context, target Target, text string) Resul
 	}
 	if !target.Valid() || target.PID == in.Sys.Self() {
 		return copyOnly(ReasonNoTarget)
+	}
+	if in.Pasting != nil {
+		in.Pasting(ctx, true)
+		defer in.Pasting(context.WithoutCancel(ctx), false)
 	}
 	prev, readErr := in.Clip.Read()
 	if err := in.Clip.Write(transfer.TextData(text)); err != nil {

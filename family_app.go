@@ -71,6 +71,7 @@ func (a *app) showFamily(v familyView) {
 func (a *app) connectFamily() {
 	a.fam = family.New(family.Options{})
 	a.lib.setFamily(a.fam)
+	a.connectFamilyRuntime() // family_coord.go (thread #73)
 }
 
 // startFamily sets AudioSmith up in the family directory in the
@@ -84,6 +85,7 @@ func (a *app) startFamily(dataDir string) {
 	}
 	inputs := func() family.Inputs { return familyInputs(lib.settings.Get(), version, dataDir) }
 	fam.OnChange(func(topics []string) {
+		a.familyChanged(topics) // family_coord.go: memory requests, shortcut conflicts
 		v := readFamilyView(fam)
 		a.post(func() {
 			a.showFamily(v)
@@ -110,6 +112,7 @@ func (a *app) startFamily(dataDir string) {
 		}
 		v := readFamilyView(fam)
 		a.post(func() { a.showFamily(v) })
+		a.familyStarted() // family_coord.go
 		for range dirty {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			if err := fam.Update(ctx, inputs(), lib.familyWanted); err != nil {
@@ -132,7 +135,7 @@ func familyInputs(s settings.Settings, version, dataDir string) family.Inputs {
 	return family.Inputs{
 		Version: version, Beta: betaUpdates(s, version), Hub: modelCache(s), DataDir: dataDir,
 		Shortcut: s.Dictation.Shortcut, ShortcutHold: s.Dictation.Mode == settings.DictationHold, ShortcutEnabled: s.Dictation.Enabled,
-		APIEnabled: s.API.Enabled, APIPort: s.API.LoopbackPort(), APIKey: s.API.RequireKey,
+		ShortcutSince: s.Dictation.EnabledAt.UTC(), APIEnabled: s.API.Enabled, APIPort: s.API.LoopbackPort(), APIKey: s.API.RequireKey,
 	}
 }
 

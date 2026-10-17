@@ -24,7 +24,7 @@ type trayState struct {
 }
 
 // Tray icons: AudioSmith's anvil and spark (assets/tray/tray.svg, the
-// ActNow brand kit's menu bar version) at 36×36 px (18 pt @2x), both
+// ActNow flat brand kit's menu bar version) at 36×36 px (18 pt @2x), both
 // templates (macOS tints them to the menu bar); while dictation listens
 // a larger dot takes the spark's place (assets/tray/tray-active.svg).
 // The PNGs come from the kit; the SVGs render the same shapes.

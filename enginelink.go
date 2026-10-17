@@ -168,6 +168,7 @@ func (a *app) connectEngine(h *engineHost) {
 			CacheDir: modelCache(a.prefs), Offline: true, LogDir: h.logDir, Bus: a.bus,
 			Log:          func(e core.LogEntry) { ring.Append(e) },
 			MemoryBudget: gb(a.prefs.Engine.MemoryBudgetGB),
+			Family:       a.engineFamily(), // family_coord.go: the ActNow family's share
 			IdleUnload:   time.Duration(a.prefs.Models.AutoUnload) * time.Minute,
 			// A failed load leaves an empty mlx-audio/<repo> dir behind,
 			// and the next load would then wipe the repo's cache.
@@ -188,7 +189,9 @@ func (a *app) connectEngine(h *engineHost) {
 		})
 		// Before OnQuit, where the library closes the database the
 		// scheduler records the interrupted jobs in.
-		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { h.Stop() })
+		// The family's runtime file goes first: the engines' last updates
+		// are not written after it (family_coord.go).
+		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.quitFamilyRuntime(); h.Stop() })
 	}
 	h.sup = withMediaTools(h.sup, a.mediaTool) // M7a: ffmpeg behind the media methods (ffmpeg_engine.go)
 	engine.RegisterExecutors(h.sched, h.sup, engine.ExecutorOptions{
