@@ -57,6 +57,8 @@ type library struct {
 	hubCli *hub.Client    // for the current settings; nil until needed
 	fam    *family.Family // claims what downloads finish (family_app.go); nil in tests
 	keys   *family.Keys   // own and shared API keys, HF token (family_keys.go); nil in tests
+	// keyGone ends a key whose shared copy was deleted (family_keys_gone.go).
+	keyGone func(keySlot)
 
 	synthMu sync.Mutex
 	synth   func() jobs.Executor // the engine's tts.synthesize, for renders (useEngine)

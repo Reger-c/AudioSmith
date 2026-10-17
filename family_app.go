@@ -87,6 +87,9 @@ func (a *app) startFamily(dataDir string) {
 	inputs := func() family.Inputs { return familyInputs(lib.settings.Get(), version, dataDir) }
 	fam.OnChange(func(topics []string) {
 		a.familyChanged(topics) // family_coord.go: memory requests, shortcut conflicts
+		if slices.Contains(topics, actnow.TopicCredentials) {
+			a.checkSharedKeys() // family_keys_gone.go: a shared key deleted or changed
+		}
 		v := readFamilyView(fam)
 		a.post(func() {
 			a.showFamily(v)
@@ -116,7 +119,8 @@ func (a *app) startFamily(dataDir string) {
 		}
 		v := readFamilyView(fam)
 		a.post(func() { a.showFamily(v) })
-		a.familyStarted() // family_coord.go
+		a.familyStarted()   // family_coord.go
+		a.checkSharedKeys() // family_keys_gone.go: keys deleted while AudioSmith was not running
 		for range dirty {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			if err := fam.Update(ctx, inputs(), lib.familyWanted); err != nil {

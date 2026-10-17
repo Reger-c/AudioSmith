@@ -3292,5 +3292,6 @@
   "Stop using it here keeps the key for %s.": "仅在此处停用时，%s 仍可继续使用此密钥。",
   "Stop using it here": "仅在此处停用",
   "Use the %s key from %s (%s)": "使用 %[2]s 中的 %[1]s 密钥（%[3]s）",
-  "Use this key": "使用此密钥"
+  "Use this key": "使用此密钥",
+  "The shared %s key was deleted. Enter a key again.": "共享的 %s 密钥已被删除，请重新输入密钥。"
 }

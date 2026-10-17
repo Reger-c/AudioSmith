@@ -308,3 +308,76 @@ func TestReadOnlyCredentials(t *testing.T) {
 		t.Errorf("info %+v", info)
 	}
 }
+
+// Another app deleted the shared key for all apps (or the user did in
+// Keychain Access): the key is missing (ErrSharedGone), and AudioSmith's
+// own copy goes only when it is the same key. Finding out reads no
+// shared secret.
+func TestSharedKeyGone(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		own      string // AudioSmith's own item after sharing ("" = none)
+		fp       func(shared string) string
+		ownLeft  bool
+		keychain bool // deleted in Keychain Access rather than by Auralink
+	}{
+		{name: "same key", own: "sk-shared-000001", fp: credentials.Fingerprint, ownLeft: false},
+		{name: "different own key", own: "sk-only-for-as01", fp: credentials.Fingerprint, ownLeft: true},
+		{name: "fingerprint not known", own: "sk-shared-000001", fp: func(string) string { return "" }, ownLeft: true},
+		{name: "no own key", own: "", fp: credentials.Fingerprint, ownLeft: false},
+		{name: "keychain access", own: "sk-shared-000001", fp: credentials.Fingerprint, keychain: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			k, kc, fx := keysWith(t, true)
+			au := peer(fx, kc, auralinkID)
+			au.Save(ctx, "deepseek", "sk-shared-000001", credentials.SaveOptions{})
+			ref, err := k.Use(ctx, deepseek(""))
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := deepseek(ref)
+			fp := k.Fingerprint(s)
+			if c.own != "" {
+				kc.Put("AudioSmith", "llm.deepseek", c.own)
+			}
+			kc.Forget()
+			if k.Gone(s) || fp != credentials.Fingerprint("sk-shared-000001") {
+				t.Fatalf("gone before the delete, fp %q", fp)
+			}
+			if kc.Read(credentials.Service, "vendor.deepseek") {
+				t.Fatal("Gone or Fingerprint read the shared key")
+			}
+			if c.keychain {
+				kc.Run("", "delete-generic-password", "-s", credentials.Service, "-a", "vendor.deepseek")
+			} else if err := au.DeleteForAll(ctx, "deepseek"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := k.Secret(ctx, s); !errors.Is(err, ErrSharedGone) {
+				t.Fatalf("secret after the delete: %v", err)
+			}
+			if !k.Gone(s) {
+				t.Error("not gone")
+			}
+			left, err := k.DropShared(s, c.fp("sk-shared-000001"))
+			want := c.ownLeft && c.own != ""
+			if err != nil || left != want {
+				t.Errorf("own left %v (want %v), %v", left, want, err)
+			}
+			if _, ok := kc.Item("AudioSmith", "llm.deepseek"); ok != want {
+				t.Errorf("own item there: %v", ok)
+			}
+			// Without the ref, the slot reads what is left of its own.
+			if v, _ := k.Secret(ctx, deepseek("")); (v != "") != want {
+				t.Errorf("after the drop: %q", v)
+			}
+		})
+	}
+	// The HF token: SharedSecret says so too.
+	k, kc, fx := keysWith(t, true)
+	peer(fx, kc, auralinkID).Save(ctx, "huggingface", "hf_shared_token_01", credentials.SaveOptions{})
+	ref, _ := k.Use(ctx, hf(""))
+	peer(fx, kc, auralinkID).DeleteForAll(ctx, "huggingface")
+	if _, err := k.SharedSecret(ctx, hf(ref)); !errors.Is(err, ErrSharedGone) {
+		t.Errorf("HF: %v", err)
+	}
+}

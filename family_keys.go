@@ -117,6 +117,8 @@ type familySecrets struct {
 	keys   *family.Keys
 	prefs  func() settings.Settings
 	legacy llm.Secrets
+	// gone ends a slot whose shared key was deleted (dropSharedKey).
+	gone func(keySlot)
 }
 
 func (f familySecrets) Secret(ctx context.Context, name string) (string, error) {
@@ -129,6 +131,15 @@ func (f familySecrets) ProviderSecret(ctx context.Context, provider, name string
 		return f.legacy.Secret(ctx, name)
 	}
 	v, err := f.keys.Secret(ctx, ks.slot)
+	if errors.Is(err, family.ErrSharedGone) {
+		// Deleted for all apps: a missing key, unless AudioSmith has a
+		// different one of its own (family_keys_gone.go).
+		if f.gone != nil {
+			f.gone(ks)
+		}
+		ks.slot.Ref = ""
+		v, err = f.keys.Secret(ctx, ks.slot)
+	}
 	if err == nil && v == "" {
 		err = llm.ErrNoSecret
 	}
@@ -142,7 +153,8 @@ func (a *app) connectKeys() {
 		return
 	}
 	a.lib.keys = a.fam.Keys(credentials.Keychain{})
-	llmSecrets = familySecrets{keys: a.lib.keys, prefs: a.lib.settings.Get, legacy: llmSecrets}
+	a.lib.keyGone = a.dropSharedKey // family_keys_gone.go
+	llmSecrets = familySecrets{keys: a.lib.keys, prefs: a.lib.settings.Get, legacy: llmSecrets, gone: a.dropSharedKey}
 }
 
 // sharedHFToken reads the family's shared HF token for downloads (spec
@@ -157,10 +169,15 @@ func (l *library) sharedHFToken() func() (string, error) {
 	if ks.slot.Ref == "" {
 		return nil
 	}
+	gone := l.keyGone
 	return func() (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return k.SharedSecret(ctx, ks.slot)
+		t, err := k.SharedSecret(ctx, ks.slot)
+		if errors.Is(err, family.ErrSharedGone) && gone != nil {
+			gone(ks) // then the own token, when one is left
+		}
+		return t, err
 	}
 }
 
@@ -275,11 +292,12 @@ func (a *app) keyLoaded(ks keySlot) func(family.KeyInfo) {
 
 // keyDone sets the slot's new ref, reads the key again and says how it
 // went: msg (already translated; "" = nothing to say).
-func (a *app) keyDone(ks keySlot, ref, msg string) {
+// fp is the shared key's fingerprint (keyRef), kept with the ref.
+func (a *app) keyDone(ks keySlot, ref, fp, msg string) {
 	v := a.keyView(ks.id)
 	v.busy = false
-	if ref != ks.slot.Ref {
-		a.updateSettings(func(s *settings.Settings) { ks.set(s, ref) })
+	if ref != ks.slot.Ref || keyFingerprint(a.prefs, ks) != fp {
+		a.updateSettings(func(s *settings.Settings) { setKeyRef(s, ks, ref, fp) })
 		ks.slot.Ref = ref
 		if strings.HasPrefix(ks.id, "llm:") {
 			a.applyLLM()
@@ -305,11 +323,12 @@ func (a *app) saveFamilyKey(ks keySlot, secret string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		ref, err := keys.Save(ctx, ks.slot, secret, share)
+		fp := keyRef(keys, ks, ref)
 		msg := savedText(ks)
 		if err != nil {
 			msg = i18n.T("Could not save the key: %v", err)
 		}
-		a.post(func() { a.keyDone(ks, ref, msg) })
+		a.post(func() { a.keyDone(ks, ref, fp, msg) })
 	})
 }
 
@@ -328,11 +347,12 @@ func (a *app) useFamilyKey(ks keySlot) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		ref, err := keys.Use(ctx, ks.slot)
+		fp := keyRef(keys, ks, ref)
 		msg := ""
 		if err != nil {
 			msg = i18n.T("Could not use the shared key: %v", err)
 		}
-		a.post(func() { a.keyDone(ks, ref, msg) })
+		a.post(func() { a.keyDone(ks, ref, fp, msg) })
 	})
 }
 
@@ -345,12 +365,13 @@ func (a *app) shareFamilyKey(ks keySlot) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		ref, err := keys.Share(ctx, ks.slot)
+		fp := keyRef(keys, ks, ref)
 		a.post(func() {
 			msg := ""
 			if err != nil {
 				v.share, msg = false, i18n.T("Could not share the key: %v", err)
 			}
-			a.keyDone(ks, ref, msg)
+			a.keyDone(ks, ref, fp, msg)
 		})
 	})
 }
@@ -373,9 +394,9 @@ func (a *app) removeFamilyKeyNow(ks keySlot, forAll bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		err := keys.Remove(ctx, ks.slot, forAll)
-		ref := ks.slot.Ref
+		ref, fp := ks.slot.Ref, keyRef(keys, ks, ks.slot.Ref)
 		if err == nil {
-			ref = ""
+			ref, fp = "", ""
 		}
 		a.post(func() {
 			v.share, v.shareSet = true, true // a new key is shared by default again
@@ -386,7 +407,7 @@ func (a *app) removeFamilyKeyNow(ks keySlot, forAll bool) {
 			case ks.id == "hf":
 				msg = i18n.T("Token removed")
 			}
-			a.keyDone(ks, ref, msg)
+			a.keyDone(ks, ref, fp, msg)
 		})
 	})
 }

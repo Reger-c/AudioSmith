@@ -16,6 +16,12 @@ package family
 //   - AudioSmith's own item is written too, and kept when a key is shared
 //     (MigrateLegacy), so an older AudioSmith still finds it; it goes when
 //     the user removes the key;
+//   - a shared key deleted elsewhere ("Delete for all apps" in another
+//     app, or in Keychain Access) is a missing key (spec §8.3): Secret
+//     says ErrSharedGone, and DropShared deletes AudioSmith's own copy
+//     when it is the same key (by fingerprint), so that a key deleted for
+//     all apps — a leaked one — is gone here too; an own key that differs
+//     (typed for AudioSmith alone) stays;
 //   - "Stop using it here" and Erase everything only take AudioSmith off
 //     the users: another app's key is deleted only by "Delete for all
 //     apps", or when AudioSmith is its only user;
@@ -106,29 +112,102 @@ func sharedVendor(s Slot) string {
 	return v
 }
 
+// ErrSharedGone: the shared key the slot's ref names was deleted
+// (another app's "Delete for all apps", or Keychain Access). The key is
+// missing: the app drops the ref (DropShared) and asks for a key again.
+var ErrSharedGone = errors.New("the shared key was deleted")
+
 // Secret is the slot's key as requests use it: the shared one when the
-// slot's ref names it (and AudioSmith agreed to use it), else — or when
-// that one is gone — AudioSmith's own item. "" when there is none.
+// slot's ref names it (and AudioSmith agreed to use it), else AudioSmith's
+// own item; "" when there is none. ErrSharedGone when the shared key the
+// ref names was deleted.
 func (k *Keys) Secret(ctx context.Context, s Slot) (string, error) {
 	if v := sharedVendor(s); v != "" {
-		if secret, err := k.Shared.Secret(ctx, v); err == nil && strings.TrimSpace(secret) != "" {
+		secret, err := k.shared(ctx, v)
+		switch {
+		case err == nil && strings.TrimSpace(secret) != "":
 			return strings.TrimSpace(secret), nil
-		} else if err != nil && !errors.Is(err, credentials.ErrNotConsented) && !errors.Is(err, credentials.ErrMissing) {
+		case errors.Is(err, ErrSharedGone):
+			return "", err
+		case err != nil && !errors.Is(err, credentials.ErrNotConsented):
 			k.fam.logf("family: shared %s key: %v", v, err)
 		}
 	}
 	return k.own(s.Account)
 }
 
+// shared reads the vendor's shared key: ErrSharedGone when it was
+// deleted (its metadata, or its Keychain item, is gone).
+func (k *Keys) shared(ctx context.Context, v string) (string, error) {
+	secret, err := k.Shared.Secret(ctx, v)
+	switch {
+	case errors.Is(err, credentials.ErrMissing):
+		return "", ErrSharedGone
+	case errors.Is(err, credentials.ErrNotConsented):
+		if _, ok := k.Shared.Offer(v); !ok {
+			return "", ErrSharedGone
+		}
+	}
+	return secret, err
+}
+
 // SharedSecret is only the shared key the slot's ref names, for the
 // Hugging Face token's order (spec §8.4: $HF_TOKEN, this, the own item,
-// the token file). ErrNotConsented when the ref names none.
+// the token file). ErrNotConsented when the ref names none, ErrSharedGone
+// when it was deleted.
 func (k *Keys) SharedSecret(ctx context.Context, s Slot) (string, error) {
 	v := sharedVendor(s)
 	if v == "" {
 		return "", credentials.ErrNotConsented
 	}
-	return k.Shared.Secret(ctx, v)
+	return k.shared(ctx, v)
+}
+
+// Gone reports whether the shared key the slot's ref names was deleted
+// for all apps (its metadata is gone); it reads no secret.
+func (k *Keys) Gone(s Slot) bool {
+	v := sharedVendor(s)
+	if v == "" {
+		return false
+	}
+	f, ro, err := credentials.Read(k.Shared.Family)
+	if err != nil || ro {
+		return false // unreadable: not known to be gone
+	}
+	_, ok := f.Vendors[v]
+	return !ok
+}
+
+// Fingerprint is the fingerprint of the shared key the slot's ref names
+// (credentials.json; no secret is read); "" when there is none. The app
+// keeps it, to know its own copy of a key deleted later (DropShared).
+func (k *Keys) Fingerprint(s Slot) string {
+	v := sharedVendor(s)
+	if v == "" {
+		return ""
+	}
+	e, _ := k.Shared.Offer(v)
+	return e.Fingerprint
+}
+
+// DropShared is a deleted shared key's end in AudioSmith (the app clears
+// the slot's ref): AudioSmith's own item goes too when it is that key —
+// its fingerprint is fingerprint, the shared key's as AudioSmith last saw
+// it; one that differs, or a fingerprint not known, stays. It reports
+// whether an own key is left.
+func (k *Keys) DropShared(s Slot, fingerprint string) (ownLeft bool, err error) {
+	own, err := k.own(s.Account)
+	if err != nil || own == "" {
+		return false, err
+	}
+	if fingerprint == "" || credentials.Fingerprint(own) != fingerprint {
+		return true, nil
+	}
+	if err := k.Own.Delete(s.Account); err != nil && !errors.Is(err, credentials.ErrNoKeychain) {
+		return true, err
+	}
+	k.fam.logf("family: the shared %s key was deleted; AudioSmith's copy of it too", s.Vendor())
+	return false, nil
 }
 
 // KeyInfo is what Settings shows of a slot. Finding it reads

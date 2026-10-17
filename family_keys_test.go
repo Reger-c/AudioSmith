@@ -347,3 +347,95 @@ func TestEraseStopsUsingSharedKeys(t *testing.T) {
 		t.Errorf("users %v", e.Users)
 	}
 }
+
+// Auralink deleted the shared DeepSeek key for all apps (a leaked key):
+// a request finds the key missing — AudioSmith's own copy of the same key
+// is deleted too, the ref and its fingerprint go — and a toast asks for a
+// key again.
+func TestSharedKeyDeletedForAllOnUse(t *testing.T) {
+	a, _, kc, fx := keysApp(t, true)
+	a.addProvider("DeepSeek")
+	a.saveKey("deepseek", "sk-leaked-000001")
+	auralinkKeys(fx, kc).Use(context.Background(), "deepseek")
+	fp := credentials.Fingerprint("sk-leaked-000001")
+	if got := a.settings.Get().Family.KeyFingerprints["deepseek"]; got != fp {
+		t.Fatalf("fingerprint kept %q", got)
+	}
+	if err := auralinkKeys(fx, kc).DeleteForAll(context.Background(), "deepseek"); err != nil {
+		t.Fatal(err)
+	}
+	a.toasts = nil
+	fs := familySecrets{keys: a.lib.keys, prefs: a.lib.settings.Get, legacy: llm.StaticSecrets{}, gone: a.dropSharedKey}
+	if v, err := fs.ProviderSecret(context.Background(), "deepseek", "llm.deepseek"); err != llm.ErrNoSecret {
+		t.Errorf("after the delete: %q %v", v, err)
+	}
+	if _, ok := kc.Item("AudioSmith", "llm.deepseek"); ok {
+		t.Error("AudioSmith's copy of the deleted key stayed")
+	}
+	if ref := providerRef(a, "deepseek"); ref != "" {
+		t.Errorf("ref %q", ref)
+	}
+	if len(a.settings.Get().Family.KeyFingerprints) != 0 {
+		t.Errorf("fingerprints %v", a.settings.Get().Family.KeyFingerprints)
+	}
+	if !slices.Contains(a.toasts, "The shared DeepSeek key was deleted. Enter a key again.") {
+		t.Errorf("toasts %q", a.toasts)
+	}
+	if a.llmForm.hasKey["deepseek"] {
+		t.Error("the card still shows a key")
+	}
+}
+
+// The notification path (credentials.json changed): an own key that
+// differs, typed for AudioSmith alone, stays and is used; the HF token's
+// own copy goes when it is the same token.
+func TestSharedKeyDeletedForAllOnNotice(t *testing.T) {
+	a, _, kc, fx := keysApp(t, true)
+	ctx := context.Background()
+	au := auralinkKeys(fx, kc)
+	au.Save(ctx, "deepseek", "sk-auralink-0001", credentials.SaveOptions{})
+	au.Save(ctx, "huggingface", "hf_auralink_tok_01", credentials.SaveOptions{})
+	kc.Put("AudioSmith", "llm.deepseek", "sk-audiosmith-01")
+	a.addProvider("DeepSeek")
+	ks, _ := llmKeySlot(a.prefs, "deepseek")
+	a.useFamilyKey(ks) // "Auralink has a different DeepSeek key." → Use this key
+	a.useFamilyKey(hfKeySlot(a.prefs))
+	if providerRef(a, "deepseek") == "" || a.settings.Get().Models.HFCredentialRef == "" {
+		t.Fatal("not using the shared keys")
+	}
+	// AudioSmith's own copy of the HF token, as an older version left it.
+	kc.Put("AudioSmith", "huggingface-token", "hf_auralink_tok_01")
+	au.DeleteForAll(ctx, "deepseek")
+	au.DeleteForAll(ctx, "huggingface")
+	kc.Forget()
+	a.checkSharedKeys()
+	if providerRef(a, "deepseek") != "" || a.settings.Get().Models.HFCredentialRef != "" {
+		t.Errorf("refs kept: %q %q", providerRef(a, "deepseek"), a.settings.Get().Models.HFCredentialRef)
+	}
+	if v, _ := kc.Item("AudioSmith", "llm.deepseek"); v != "sk-audiosmith-01" {
+		t.Errorf("the different own key went: %q", v)
+	}
+	if _, ok := kc.Item("AudioSmith", "huggingface-token"); ok {
+		t.Error("the own copy of the deleted HF token stayed")
+	}
+	if kc.Read(credentials.Service, "vendor.deepseek") || kc.Read(credentials.Service, "vendor.huggingface") {
+		t.Error("read a shared item")
+	}
+	own := llm.SecretsFunc(func(_ context.Context, name string) (string, error) { return a.lib.keys.Own.Get(name) })
+	fs := familySecrets{keys: a.lib.keys, prefs: a.lib.settings.Get, legacy: own, gone: a.dropSharedKey}
+	if v, err := fs.ProviderSecret(ctx, "deepseek", "llm.deepseek"); v != "sk-audiosmith-01" || err != nil {
+		t.Errorf("the own key is used: %q %v", v, err)
+	}
+}
+
+// Another app changed the shared key: the fingerprint kept follows it.
+func TestSharedKeyFingerprintFollows(t *testing.T) {
+	a, _, kc, fx := keysApp(t, true)
+	a.addProvider("DeepSeek")
+	a.saveKey("deepseek", "sk-first-0000001")
+	auralinkKeys(fx, kc).Save(context.Background(), "deepseek", "sk-second-000001", credentials.SaveOptions{})
+	a.checkSharedKeys()
+	if got := a.settings.Get().Family.KeyFingerprints["deepseek"]; got != credentials.Fingerprint("sk-second-000001") {
+		t.Errorf("fingerprint %q", got)
+	}
+}
