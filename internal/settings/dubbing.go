@@ -16,6 +16,10 @@ type Dubbing struct {
 	Model      string   `json:"model,omitempty"`
 	Targets    []string `json:"targets,omitempty"`
 	Translator string   `json:"translator,omitempty"`
+	// CredentialRefs name the ActNow family's shared keys the online
+	// translators use, by service ("deepl" → "actnow:vendor.deepl",
+	// family spec §8.3); none = AudioSmith's own Keychain items only.
+	CredentialRefs map[string]string `json:"credentialRefs,omitempty"`
 	// Open is the dub open when the app quit (reopened at the next start).
 	Open string `json:"open,omitempty"`
 }

@@ -127,6 +127,7 @@ func (a *app) dubTranslatePanel(c *ui.Context) {
 			caption(c, i18n.T("Uses %s", name))
 		}
 		if p.Settings.Translator != "llm" && p.Settings.Translator != "" {
+			a.mtKeyRow(c, p.Settings.Translator) // family_keys_view.go
 			caption(c, i18n.T("The service's API key is kept in the Keychain as “mt.%s”.", p.Settings.Translator)).TextColor(tok(t).Text3)
 		}
 		if p.Settings.Translator == "llm" || p.Settings.Translator == "" {

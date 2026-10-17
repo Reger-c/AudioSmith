@@ -3296,5 +3296,19 @@
   "Remove from AudioSmith": "从 AudioSmith 移除",
   "Remove %s from AudioSmith?": "从 AudioSmith 移除%s？",
   "Removed %s": "已移除%s",
-  "These models are also used by %s and will be kept: %s (%s)": "以下模型也被 %s 使用，将被保留：%s（%s）"
+  "These models are also used by %s and will be kept: %s (%s)": "以下模型也被 %s 使用，将被保留：%s（%s）",
+  "%s also uses this key.": "%s 也在使用此密钥。",
+  "%s has a different %s key.": "%s 中的 %s 密钥与此不同。",
+  "Also updates it in %s.": "%s 中也会一并更新。",
+  "Could not share the key: %v": "无法共享密钥：%v",
+  "Could not use the shared key: %v": "无法使用共享密钥：%v",
+  "Delete for all apps": "为所有 app 删除",
+  "Enter another key": "输入其他密钥",
+  "Let other ActNow apps on this Mac use this key": "允许这台 Mac 上的其他 ActNow app 使用此密钥",
+  "Shared keys are stored in your login keychain. Like each app's own keys, other programs you run can read them with the security tool.": "共享密钥保存在登录钥匙串中。与各 app 自己保存的密钥一样，你运行的其他程序可以通过 security 工具读取它们。",
+  "Stop using it here keeps the key for %s.": "仅在此处停用时，%s 仍可继续使用此密钥。",
+  "Stop using it here": "仅在此处停用",
+  "Use the %s key from %s (%s)": "使用 %[2]s 中的 %[1]s 密钥（%[3]s）",
+  "Use this key": "使用此密钥",
+  "The shared %s key was deleted. Enter a key again.": "共享的 %s 密钥已被删除，请重新输入密钥。"
 }

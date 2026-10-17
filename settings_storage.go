@@ -379,6 +379,7 @@ func (a *app) eraseAll() {
 			for _, acc := range accounts {
 				hub.Secret(acc, "").Set("")
 			}
+			a.forgetFamilyKeys() // family_keys.go: shared keys stay for the other apps
 		}
 		err := writeJSON(filepath.Join(home, resetFile), pendingReset{Everything: true, Also: []string{a.cacheDir(), logs}})
 		a.post(func() {

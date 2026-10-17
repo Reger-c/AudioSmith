@@ -79,7 +79,11 @@ func (a *app) modelSettings(c *ui.Context) {
 	})
 
 	sectionTitle(c, i18n.T("Hugging Face token"))
+	hf := hfKeySlot(a.prefs)
 	settingRowNote(c, "token", i18n.T("Access token"), orDash(a.tokenInfo), func() {
+		if a.keyOffer(c, hf, true) { // family_keys_view.go: another ActNow app's token
+			return
+		}
 		ui.TextInput(c.Key("token-input"), &a.token).Password().Placeholder("hf_…").Width(px(t, 200)).Label(i18n.T("Access token"))
 		if ui.Button(c.Key("token-save"), i18n.T("Save")).Disabled(strings.TrimSpace(a.token) == "").Clicked() {
 			a.saveToken(a.token)
@@ -88,6 +92,8 @@ func (a *app) modelSettings(c *ui.Context) {
 			a.saveToken("")
 		}
 	})
+	a.keyNotes(c, hf, a.token)
+	a.keySecurityHelp(c)
 
 	sectionTitle(c, i18n.T("Licences"))
 	if len(a.accepted) == 0 {

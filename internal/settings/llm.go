@@ -42,6 +42,10 @@ type LLMProvider struct {
 	Model    string            `json:"model,omitempty"`
 	Headers  map[string]string `json:"headers,omitempty"`
 	JSONMode string            `json:"jsonMode,omitempty"`
+	// CredentialRef names the ActNow family's shared key the provider
+	// uses ("actnow:vendor.deepseek", family spec §8.3); "" = AudioSmith's
+	// own Keychain item only.
+	CredentialRef string `json:"credentialRef,omitempty"`
 }
 
 // LLMRoute mirrors llm.Route.

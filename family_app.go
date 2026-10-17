@@ -80,6 +80,7 @@ func (a *app) connectFamily() {
 	a.fam = family.New(family.Options{})
 	a.lib.setFamily(a.fam)
 	a.connectFamilyRuntime() // family_coord.go (thread #73)
+	a.connectKeys()          // family_keys.go (thread #74)
 }
 
 // startFamily sets AudioSmith up in the family directory in the
@@ -95,11 +96,17 @@ func (a *app) startFamily(dataDir string) {
 	rt := a.famRT
 	fam.OnChange(func(topics []string) {
 		a.familyChanged(topics) // family_coord.go: memory requests, shortcut conflicts
+		if slices.Contains(topics, actnow.TopicCredentials) {
+			a.checkSharedKeys() // family_keys_gone.go: a shared key deleted or changed
+		}
 		v := readFamilyView(fam, rt, modelCache(lib.settings.Get()))
 		a.post(func() {
 			a.showFamily(v)
 			if slices.Contains(topics, actnow.TopicModels) {
 				a.refreshModels() // another app downloaded or deleted a model
+			}
+			if slices.Contains(topics, actnow.TopicCredentials) || slices.Contains(topics, actnow.TopicApps) {
+				a.reloadKeys() // family_keys.go: a key shared, changed or removed
 			}
 		})
 	})
@@ -121,7 +128,8 @@ func (a *app) startFamily(dataDir string) {
 		}
 		v := readFamilyView(fam, rt, modelCache(lib.settings.Get()))
 		a.post(func() { a.showFamily(v) })
-		a.familyStarted() // family_coord.go
+		a.familyStarted()   // family_coord.go
+		a.checkSharedKeys() // family_keys_gone.go: keys deleted while AudioSmith was not running
 		for range dirty {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			if err := fam.Update(ctx, inputs(), lib.familyWanted); err != nil {
