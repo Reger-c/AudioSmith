@@ -283,6 +283,9 @@ func (a *app) deleteModel(e catalog.Entry) {
 	m := a.model(e)
 	a.async(func() {
 		r, err := client.Remove(context.Background(), e)
+		if err == nil && len(r.Kept) == 0 {
+			a.familyRelease(client.Options().CacheDir, e) // family_app.go
+		}
 		l, _ := client.Status(context.Background(), e)
 		a.post(func() {
 			m.local, m.known = l, true

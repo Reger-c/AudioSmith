@@ -49,6 +49,7 @@ type app struct {
 	modelPickerState                  // model_picker.go (thread #42): the creation pages' model picker
 	removedState                      // models_removed.go (thread #43): removed models, their clean-up
 	voicePickers     voicePickerState // voice_picker.go (thread #60): the voice pickers' previews
+	familyState                       // family_app.go (thread #72): the ActNow family directory
 }
 
 func newApp(eng *engineHost, lib *library) *app {
@@ -108,6 +109,7 @@ func (a *app) quit() {
 	a.closeDictation() // M2: dictation.go
 	a.closeDubs()      // M4: dub.go
 	a.closeCalls()     // M6b: calls.go (thread #23)
+	a.closeFamily()    // family_app.go (thread #72)
 	a.eng.Stop()
 	a.closeShell()
 }

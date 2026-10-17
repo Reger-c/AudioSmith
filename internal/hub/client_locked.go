@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -132,6 +133,14 @@ func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)
 	}
 	if err := writeRef(repoDir, p); err != nil {
 		return err
+	}
+	// Still holding the repo exclusively: claim it before anyone may
+	// delete it (spec §7.3).
+	if claimed := c.opts.Claimed; claimed != nil {
+		d := Finished{Entry: p.owner, Repo: p.repo, Commit: p.commit, Files: p.only, Aux: p.aux}
+		if err := claimed(ctx, c.opts.CacheDir, d); err != nil {
+			log.Printf("hub: claim %s@%s: %v", p.repo, p.commit, err)
+		}
 	}
 	r.report(true)
 	return nil

@@ -364,6 +364,7 @@ func (a *app) eraseAll() {
 		if models {
 			// Not what other ActNow apps may use (spec §7.6 step 3).
 			freed, kept, err := hub.RemoveLeftovers(cache, catalogRepos(), fam)
+			a.familyForget(cache, catalogRepos()) // family_app.go
 			log.Printf("erase: models freed %s, kept %d, err %v", humanBytes(freed), len(kept), err)
 		}
 		if keys {

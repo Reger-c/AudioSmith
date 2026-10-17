@@ -128,6 +128,25 @@ type Options struct {
 	// (family.go): deleting keeps their models, and the lock owner files
 	// name this app. The zero value asks LaunchServices.
 	Family Family
+	// Claimed, when set, is called for each repo a download finished
+	// (the entry's auxiliary repos, then its own), holding the repo's
+	// lock exclusively, right after its ref is written: the app claims it
+	// for the ActNow family (spec §7.3, models.Store.ClaimLocked). Its
+	// error is logged; the download stands.
+	Claimed func(ctx context.Context, cacheDir string, d Finished) error
+}
+
+// Finished is a repo a download finished, for Options.Claimed.
+type Finished struct {
+	// Entry is the entry downloaded (for an auxiliary repo, the entry
+	// it belongs to: Aux).
+	Entry  catalog.Entry
+	Repo   string
+	Commit string
+	// Files are the files the entry lists for the repo; nil = the whole
+	// snapshot.
+	Files []string
+	Aux   bool
 }
 
 // Downloader manages model files. Goroutine-safe; methods may block on I/O.

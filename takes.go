@@ -23,6 +23,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/family"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -53,7 +54,8 @@ type library struct {
 	peakSlots chan struct{}
 
 	hubMu  sync.Mutex
-	hubCli *hub.Client // for the current settings; nil until needed
+	hubCli *hub.Client    // for the current settings; nil until needed
+	fam    *family.Family // claims what downloads finish (family_app.go); nil in tests
 
 	synthMu sync.Mutex
 	synth   func() jobs.Executor // the engine's tts.synthesize, for renders (useEngine)
@@ -250,7 +252,9 @@ func (l *library) hub() *hub.Client {
 	if l.hubCli == nil {
 		s := l.settings.Get()
 		m := s.Models
-		l.hubCli = hub.New(hub.Options{CacheDir: modelCache(s), Endpoints: m.Endpoints, Proxy: m.Proxy, Token: hubToken})
+		o := hub.Options{CacheDir: modelCache(s), Endpoints: m.Endpoints, Proxy: m.Proxy, Token: hubToken}
+		l.familyOptions(&o)
+		l.hubCli = hub.New(o)
 	}
 	return l.hubCli
 }

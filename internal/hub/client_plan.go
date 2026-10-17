@@ -29,6 +29,12 @@ type plan struct {
 	commit string
 	ep     string
 	files  []remoteFile
+	// For the claim once it is downloaded (Options.Claimed): the entry
+	// downloaded, whether this is one of its auxiliary repos, and the
+	// files it lists (nil: the whole snapshot).
+	owner catalog.Entry
+	aux   bool
+	only  []string
 }
 
 // Plan lists the files of e at its revision and checks the disk. Files
@@ -100,6 +106,7 @@ func (c *Client) planAll(ctx context.Context, e catalog.Entry) ([]*plan, Plan, e
 		if err != nil {
 			return nil, Plan{}, err
 		}
+		p.owner, p.aux, p.only = e, true, filePaths(a.Files)
 		plans = append(plans, p)
 		sum.TotalBytes += p.TotalBytes
 		sum.Bytes += p.Bytes
@@ -108,6 +115,7 @@ func (c *Client) planAll(ctx context.Context, e catalog.Entry) ([]*plan, Plan, e
 	if err != nil {
 		return nil, Plan{}, err
 	}
+	p.owner, p.only = e, filePaths(e.Files)
 	plans = append(plans, p)
 	sum.Revision, sum.Files, sum.Endpoint, sum.Gated = p.Revision, p.Files, p.Endpoint, p.Gated
 	sum.TotalBytes += p.TotalBytes
@@ -118,6 +126,15 @@ func (c *Client) planAll(ctx context.Context, e catalog.Entry) ([]*plan, Plan, e
 			e.Repo, catalog.HumanSize(sum.Bytes), catalog.HumanSize(c.opts.ReserveBytes), catalog.HumanSize(sum.FreeBytes), ErrDiskSpace)
 	}
 	return plans, sum, nil
+}
+
+// filePaths are the paths of files; nil for none.
+func filePaths(files []catalog.File) []string {
+	var out []string
+	for _, f := range files {
+		out = append(out, f.Path)
+	}
+	return out
 }
 
 // safeRel reports whether a repo path stays inside the snapshot.
