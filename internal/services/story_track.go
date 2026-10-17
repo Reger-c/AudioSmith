@@ -1,20 +1,34 @@
 package services
 
-// Character tracks (experimental, Production.Tracks;
+// Character tracks (story lines with emotions, unless Production.NoTracks;
 // plan/story-emotion-context-plan.md §6 F): within a chapter, a
-// character's lines are said in one synthesis per stretch, as one person
-// reading their part, so the voice and the mood carry on from one line to
-// the next; the forced aligner then cuts the stretch into its lines,
-// which go back into the dialogue with the pacing's gaps. A stretch
-// breaks at the character's turns (where the feeling may change) and at
-// a length limit; it is said in the character's baseline feeling, or in
-// the turn's that opens it, so a line's own feeling comes from its words
-// (and its punctuation, story_steer.go).
+// character's lines are said in one synthesis per stretch of one
+// feeling, as one person reading their part, so the voice and the mood
+// carry on from one line to the next (round 2 of thread #78: pitch jumps
+// at a character's line starts 4.7 → 3.4 semitones, the spread of a
+// character's pitch 6.1 → 4.0); the forced aligner then cuts the
+// stretch into its lines, which go back into the dialogue with the
+// pacing's gaps. A stretch breaks at the character's turns, where the
+// feeling changes (a line of intensity 2 or more of another kind of
+// feeling than the stretch's), and at a length limit (about 35 s); a
+// calm stretch is said in the character's baseline, a strong one in its
+// strongest line's emotion.
 //
-// Each cut is checked as a lead-in's is (story_leadin.go): the aligner's
-// words, each line's length at the stretch's pace, and the recognizer
-// hearing each line. A stretch that fails is made line by line. The cut
-// lines (and failures) are cached next to the chunks.
+// Each cut is checked: the aligner's words must be the text's, each line
+// must last about its share of the stretch, and the recognizer must hear
+// it. A stretch that fails is made line by line with each line's own
+// instruction, as are lines without a stretch (narration, a character's
+// only line of a feeling) and stories directed before emotions existed
+// (no Emotion: rendered exactly as before). The cut lines (and failures)
+// are cached next to the chunks, by the stretch's text and recipe: editing
+// a line makes its stretch again, and only it.
+//
+// The models: tracks need nothing of a model but speech the aligner can
+// time, so they apply to every model; one that reads a stretch badly
+// (skips or garbles a line, as diffusion models such as OmniVoice may
+// over long text) fails the checks and falls back to line by line,
+// stretch by stretch. Kokoro's chunk limit (100 Chinese characters) makes
+// its stretches shorter.
 
 import (
 	"context"
@@ -69,18 +83,39 @@ type trackStep struct {
 	fallback []chapterStep
 }
 
+// trackFamilies group the emotions a stretch may mix: a line of
+// intensity 2 or more of another family breaks the stretch.
+var trackFamilies = map[string]string{
+	EmotionHappy: "bright", EmotionExcited: "bright", EmotionHurt: "low", EmotionSad: "low", EmotionApologetic: "low",
+	EmotionScared: "fear", EmotionWorried: "fear",
+}
+
+// trackKey is the kind of feeling a line has in a stretch: "" when calm
+// (intensity 0 or 1: the character's baseline goes on), else its
+// emotion's family.
+func trackKey(l LineSpec) string {
+	if l.Intensity < 2 || l.Emotion == EmotionSteady {
+		return ""
+	}
+	if f, ok := trackFamilies[l.Emotion]; ok {
+		return f
+	}
+	return l.Emotion
+}
+
 // trackGroups are the stretches of a chapter's lines: per character (and
-// voice), their plain lines in order, a new stretch at each turn, at a
-// change of speed and at the limits. Only stretches of two or more lines.
+// voice), their plain lines with emotions in order, a new stretch at each
+// turn, at a change of feeling (trackKey) or speed, and at the limits.
+// Only stretches of two or more lines.
 func trackGroups(lines []LineSpec, info ModelInfo) [][]int {
 	maxCJK := min(trackMaxCJK, max(info.MaxCharsCJK*8/10, 1))
 	maxChars := min(trackMaxChars, max(info.MaxChars*8/10, 1))
 	type open struct {
 		lines     []int
+		key       string
 		cjk, rest int
 	}
 	cur := map[string]*open{}
-	var order []string
 	var out [][]int
 	flush := func(k string) {
 		if o := cur[k]; o != nil && len(o.lines) > 1 {
@@ -88,19 +123,22 @@ func trackGroups(lines []LineSpec, info ModelInfo) [][]int {
 		}
 		delete(cur, k)
 	}
+	var order []string
 	for i, l := range lines {
-		if len(l.Spans) != 1 || l.Character == "" || strings.Contains(strings.ToLower(l.Spans[0].Text), "[pause") || !hasSpeech(l.Spans[0].Text) {
+		if len(l.Spans) != 1 || l.Character == "" || l.Emotion == "" || strings.Contains(strings.ToLower(l.Spans[0].Text), "[pause") ||
+			!hasSpeech(l.Spans[0].Text) {
 			continue
 		}
 		k := l.Character + "\x00" + l.Spans[0].Voice
 		w, c := text.Count(l.Spans[0].Text)
 		o := cur[k]
-		if o != nil && (l.Turn || len(o.lines) >= trackMaxLines || o.cjk+c > maxCJK || o.rest+w*6 > maxChars || lines[o.lines[0]].Speed != l.Speed) {
+		if o != nil && (l.Turn || trackKey(l) != o.key || len(o.lines) >= trackMaxLines || o.cjk+c > maxCJK || o.rest+w*6 > maxChars ||
+			lines[o.lines[0]].Speed != l.Speed) {
 			flush(k)
 			o = nil
 		}
 		if o == nil {
-			o = &open{}
+			o = &open{key: trackKey(l)}
 			cur[k] = o
 			order = append(order, k)
 		}
@@ -114,16 +152,23 @@ func trackGroups(lines []LineSpec, info ModelInfo) [][]int {
 	return out
 }
 
-// trackFeeling is how a stretch is said: the turn's feeling that opens
-// it, else the character's baseline, faintly (steady when none).
-func trackFeeling(first LineSpec) (string, int) {
-	switch {
-	case first.Turn && first.Emotion != "":
-		return first.Emotion, first.Intensity
-	case first.Baseline != "":
-		return first.Baseline, IntensityLight
+// trackFeeling is how a stretch of lines is said: a calm stretch in the
+// character's baseline, faintly (steady when none); a strong one in its
+// strongest line's emotion.
+func trackFeeling(lines []LineSpec) (string, int) {
+	if trackKey(lines[0]) == "" {
+		if b := lines[0].Baseline; b != "" && b != EmotionSteady {
+			return b, IntensityLight
+		}
+		return EmotionSteady, 0
 	}
-	return EmotionSteady, 0
+	best := lines[0]
+	for _, l := range lines[1:] {
+		if l.Intensity > best.Intensity {
+			best = l
+		}
+	}
+	return best.Emotion, best.Intensity
 }
 
 // trackEnd ends a line of a stretch with a full stop when it ends no
@@ -146,7 +191,11 @@ func (cr chapterRenderer) tracks(p *ChapterParams,
 	for _, g := range trackGroups(p.Lines, info) {
 		first := g[0]
 		saved := p.Lines[first]
-		e, in := trackFeeling(saved)
+		var group []LineSpec
+		for _, li := range g {
+			group = append(group, p.Lines[li])
+		}
+		e, in := trackFeeling(group)
 		// The stretch speaks as its first line, in the stretch's feeling.
 		p.Lines[first].Emotion, p.Lines[first].Intensity, p.Lines[first].Direction, p.Lines[first].Turn = e, in, "", true
 		var parts []string
@@ -172,9 +221,9 @@ func (cr chapterRenderer) tracks(p *ChapterParams,
 				break
 			}
 			seg.texts = append(seg.texts, lp.Segments[0].Text)
-			units += leadUnits(lp.Segments[0].Text)
+			units += alignUnits(lp.Segments[0].Text)
 		}
-		if seg == nil || units != leadUnits(seg.whole) {
+		if seg == nil || units != alignUnits(seg.whole) {
 			continue // said differently together than apart
 		}
 		chunks, err := cr.r.chunks(&RenderParams{Take: t, Workflow: p.Workflow}, &wp, info, modelPath, seed, cr.r.longformChunkDir(), extra)
@@ -207,23 +256,24 @@ func (cr chapterRenderer) tracks(p *ChapterParams,
 
 // trackRanges are where each part (a line, as said) of a stretch lies
 // in its synthesis by the aligner's words, checked: the words are the
-// text's, and each line lasts within leadMinRatio–leadMaxRatio of its
-// share at the stretch's pace, with few words the aligner lost.
+// text's, and each line's speech lasts within cutMinRatio–cutMaxRatio of
+// its share at the stretch's pace, with few words the aligner lost.
 func trackRanges(words []proto.Word, parts []string) ([][2]float64, error) {
 	var want strings.Builder
 	ends := make([]int, len(parts)) // cumulative units at each part's end
 	for i, s := range parts {
-		want.WriteString(leadUnits(s))
+		want.WriteString(alignUnits(s))
 		ends[i] = want.Len()
 	}
 	var got strings.Builder
 	out := make([][2]float64, len(parts))
+	speech := make([]float64, len(parts))
 	k, first := 0, 0
 	for i, w := range words {
-		got.WriteString(leadUnits(w.Text))
+		got.WriteString(alignUnits(w.Text))
 		if k < len(parts) && got.Len() >= ends[k] {
 			if got.Len() != ends[k] || i < first {
-				return nil, errLeadWords // a word across two lines
+				return nil, errCutWords // a word across two lines
 			}
 			lw := words[first : i+1]
 			empty := 0
@@ -231,30 +281,33 @@ func trackRanges(words []proto.Word, parts []string) ([][2]float64, error) {
 				if x.End-x.Start < 0.01 {
 					empty++
 				}
+				speech[k] += max(x.End-x.Start, 0)
 			}
 			if float64(empty) > 0.25*float64(len(lw)) {
-				return nil, errLeadLength
+				return nil, errCutLength
 			}
 			out[k] = [2]float64{lw[0].Start, lw[len(lw)-1].End}
 			k, first = k+1, i+1
 		}
 	}
 	if got.String() != want.String() || k != len(parts) {
-		return nil, errLeadWords
+		return nil, errCutWords
 	}
-	total := 0.0 // the voiced time, without the pauses between lines
-	for _, r := range out {
-		total += r[1] - r[0]
+	// Each line's speech (its words' time, without its own pauses: a
+	// "……" may hold a second) against its share at the stretch's pace.
+	total := 0.0
+	for _, s := range speech {
+		total += s
 	}
 	units := float64(len([]rune(want.String())))
 	for i, r := range out {
-		u := float64(len([]rune(leadUnits(parts[i]))))
-		ratio := (r[1] - r[0]) / (u * total / units)
-		if r[1] <= r[0] || ratio < leadMinRatio || ratio > leadMaxRatio {
-			return nil, errLeadLength
+		u := float64(len([]rune(alignUnits(parts[i]))))
+		ratio := speech[i] / (u * total / units)
+		if r[1] <= r[0] || ratio < cutMinRatio || ratio > cutMaxRatio {
+			return nil, errCutLength
 		}
 		if i > 0 && r[0] < out[i-1][1]-0.1 {
-			return nil, errLeadOrder
+			return nil, errCutOrder
 		}
 	}
 	return out, nil
@@ -296,7 +349,7 @@ func (cr chapterRenderer) trackCut(ctx context.Context, st *renderState, i, n in
 	}
 	cuts := []int{0}
 	for k := 1; k < len(rg); k++ {
-		cuts = append(cuts, leadSplit(buf, rg[k-1][1], rg[k][0]))
+		cuts = append(cuts, quietSplit(buf, rg[k-1][1], rg[k][0]))
 	}
 	cuts = append(cuts, buf.Frames())
 	tmps := make([]string, len(seg.paths))
@@ -307,8 +360,8 @@ func (cr chapterRenderer) trackCut(ctx context.Context, st *renderState, i, n in
 	}()
 	for k := range seg.paths {
 		clip := buf.Slice(cuts[k], cuts[k+1]).Clone()
-		leadFade(clip)
-		trackFadeOut(clip)
+		fadeIn(clip)
+		fadeOut(clip)
 		tmps[k] = seg.paths[k] + ".tmp.wav"
 		if err := wav.WriteFile(tmps[k], clip, wav.Float32, wav.Options{}); err != nil {
 			return err
@@ -318,8 +371,8 @@ func (cr chapterRenderer) trackCut(ctx context.Context, st *renderState, i, n in
 			if err := r.call(ctx, st.job, proto.MethodSTTTranscribe, r.recognizer, &proto.TranscribeParams{Audio: tmps[k], Language: seg.lang}, &tr); err != nil {
 				return err
 			}
-			if dub.Drift(leadFold(seg.texts[k]), leadFold(tr.Text)) > leadMaxCER {
-				return fail(fmt.Errorf("line %d: %w", k+1, errLeadHeard))
+			if dub.Drift(foldPronouns(seg.texts[k]), foldPronouns(tr.Text)) > cutMaxCER {
+				return fail(fmt.Errorf("line %d: %w", k+1, errCutHeard))
 			}
 		}
 	}
@@ -331,8 +384,8 @@ func (cr chapterRenderer) trackCut(ctx context.Context, st *renderState, i, n in
 	return nil
 }
 
-// trackFadeOut fades a cut line out over its last 10 ms (in place).
-func trackFadeOut(b dsp.Buffer) {
+// fadeOut fades a cut line out over its last 10 ms (in place).
+func fadeOut(b dsp.Buffer) {
 	n := min(max(b.Rate/100, 1), b.Frames())
 	for f := range n {
 		g := float32(f+1) / float32(n+1)
@@ -341,14 +394,4 @@ func trackFadeOut(b dsp.Buffer) {
 			b.Samples[at*b.Channels+c] *= g
 		}
 	}
-}
-
-// characterSeed is a character's own seed in a story whose seed is seed
-// (Production.CharacterSeeds): the same for every line and every render.
-func characterSeed(seed int64, character string) int64 {
-	h := uint64(14695981039346656037)
-	for _, b := range []byte(character) {
-		h = (h ^ uint64(b)) * 1099511628211
-	}
-	return seed ^ int64(h>>34) // within the engine's positive seeds
 }

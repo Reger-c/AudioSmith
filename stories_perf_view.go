@@ -162,7 +162,8 @@ func intensityLabels() []string {
 func emotionLabels() []string {
 	return []string{i18n.X("emotion", "Steady"), i18n.X("emotion", "Happy"), i18n.X("emotion", "Excited"), i18n.X("emotion", "Tender"),
 		i18n.X("emotion", "Pleading"), i18n.X("emotion", "Hesitant"), i18n.X("emotion", "Worried"), i18n.X("emotion", "Hurt"),
-		i18n.X("emotion", "Sad"), i18n.X("emotion", "Angry"), i18n.X("emotion", "Scared"), i18n.X("emotion", "Surprised")}
+		i18n.X("emotion", "Sad"), i18n.X("emotion", "Angry"), i18n.X("emotion", "Scared"), i18n.X("emotion", "Surprised"),
+		i18n.X("emotion", "Apologetic")}
 }
 
 // emotionLabel names an emotion ("" for none).
@@ -288,17 +289,21 @@ func (a *app) lineEmotion(c *ui.Context, l *services.StoryLine, locked bool) {
 // baselineSelect picks a character's baseline emotion.
 func baselineSelect(c *ui.Context, m *services.CastMember, locked bool) {
 	t := c.Theme()
-	labels := append([]string{i18n.T("Baseline: —")}, emotionLabels()...)
+	k := tok(t)
+	labels := append([]string{"—"}, emotionLabels()...)
 	cur := labels[0]
 	if i := slices.Index(services.Emotions, m.Baseline); i >= 0 {
 		cur = labels[i+1]
 	}
-	if ui.Select(c.Key("baseline"), &cur, labels).Label(i18n.T("Baseline mood of %s", m.Name)).
-		Tooltip(i18n.T("The character's usual feeling in this story: their steady lines are said in it, faintly.")).
-		Width(px(t, 150)).Shrink(1).MinWidth(px(t, 90)).Disabled(locked).Changed() {
-		m.Baseline = ""
-		if i := slices.Index(labels, cur); i > 0 {
-			m.Baseline = services.Emotions[i-1]
+	ui.Row(c.Key("baseline-row")).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+		caption(c, i18n.T("Usual mood")).TextColor(k.Text2).Shrink(0)
+		if ui.Select(c.Key("baseline"), &cur, labels).Label(i18n.T("Baseline mood of %s", m.Name)).
+			Tooltip(i18n.T("The character's usual feeling in this story: their steady lines are said in it, faintly.")).
+			Grow(1).Shrink(1).MinWidth(px(t, 90)).Disabled(locked).Changed() {
+			m.Baseline = ""
+			if i := slices.Index(labels, cur); i > 0 {
+				m.Baseline = services.Emotions[i-1]
+			}
 		}
-	}
+	})
 }

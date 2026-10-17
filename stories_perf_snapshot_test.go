@@ -15,8 +15,10 @@ import (
 // TestSnapshotsStoryPerformance renders the Stories page's dialogue
 // continuity (thread #39): the Performance section (continuity level,
 // pacing, scene, AI director), personas on the cast, direction chips on
-// the lines and a line's direction editor; on CustomVoice (directed
-// delivery) and Kokoro (line by line); at 1100×720 and at the minimum
+// the lines and a line's direction editor; then directed by emotion
+// (thread #78: emotion chips, a line's emotion row, the cast's
+// baselines); on CustomVoice (directed delivery) and Kokoro (line by
+// line); at 1100×720 and at the minimum
 // with 125 % text, light and dark, English and Chinese.
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsStoryPerformance .
@@ -90,6 +92,26 @@ func snapshotsStoryPerformance(t *testing.T, out string) {
 			p.sel = -1
 			p.open["scene"], p.open["cast"] = false, true
 			save("story-cast-persona")
+			// Directed by emotion (the director v2, thread #78): chips, a line's
+			// emotion row, and the cast's baselines.
+			for i, em := range []struct {
+				e    string
+				n    int
+				turn bool
+			}{{"steady", 1, false}, {"pleading", 2, false}, {"worried", 1, false}, {"excited", 2, false}, {"worried", 2, false}, {"tender", 2, true}} {
+				d.Lines[i].Direction, d.Lines[i].Emotion, d.Lines[i].Intensity, d.Lines[i].Turn = "", em.e, em.n, em.turn
+				d.Lines[i].Note = "接着上一句的期待"
+			}
+			d.Cast[0].Baseline, d.Cast[1].Baseline = "excited", "tender"
+			p.open["scene"], p.open["cast"] = true, false
+			save("story-emotions")
+			p.sel = 1
+			p.panel.open = false
+			save("story-line-emotion")
+			p.panel.open = true
+			p.sel = -1
+			p.open["scene"], p.open["cast"] = false, true
+			save("story-cast-baseline")
 			d.Model, d.Voice = kokoro, "speaker:af_heart"
 			d.Cast[0].Voice, d.Cast[1].Voice = "speaker:af_bella", "speaker:af_heart"
 			p.open["scene"], p.open["cast"] = true, false

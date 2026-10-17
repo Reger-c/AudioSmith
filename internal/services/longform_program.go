@@ -36,11 +36,6 @@ func gapsOf(p Production) edit.GapPolicy {
 // lines carry their delivery, and turns of one character are merged.
 func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info ModelInfo, modelPath string) ([]chapterStep, string, []core.TakeNotice, error) {
 	r := cr.r
-	if _, paced := GapsOf(p.Production.Pacing); paced && p.Production.Steer {
-		q := *p // the synthesis text follows the emotions; the sidecar keeps the lines
-		q.Lines, _ = steerLines(p.Lines)
-		p = &q
-	}
 	dict := cr.dictionary(ctx, p)
 	gaps := gapsOf(p.Production)
 	turns, paced := GapsOf(p.Production.Pacing)
@@ -71,14 +66,6 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 		if p.Production.Guidance > 0 {
 			t.Guidance = p.Production.Guidance
 		}
-		if info.samples(p.Workflow) {
-			if p.Production.Temperature > 0 {
-				t.Temperature = p.Production.Temperature
-			}
-			if p.Production.TopP > 0 {
-				t.TopP = p.Production.TopP
-			}
-		}
 		switch {
 		case l.Emotion != "":
 			// Directed by emotion: a short phrase, no persona or scene.
@@ -94,11 +81,8 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 			withDelivery(&t, info, StoryInstruct(say, p.Scene, l.Persona, l.Direction, l.Intensity, prev))
 		}
 		seed := p.Seed
-		switch {
-		case v.Seed != 0:
+		if v.Seed != 0 {
 			seed = v.Seed // a designed or locked voice's identity
-		case p.Production.CharacterSeeds && l.Character != "":
-			seed = characterSeed(p.Seed, l.Character)
 		}
 		var extra map[string]string
 		if p.Production.VaryRepeats && l.Repeat > 0 {
@@ -184,14 +168,14 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 	}
 	// The merged turns, by their first line.
 	merged := map[int][]int{}
-	if paced && !p.Production.NoMerge && !p.Production.Tracks {
+	if paced && !p.Production.NoMerge {
 		for _, g := range mergeGroups(p.Lines, info, p.Production.VaryRepeats) {
 			merged[g[0]] = g
 		}
 	}
 	// The tracks: each character's lines in stretches, by line.
 	tracked := map[int]*trackStep{}
-	if paced && p.Production.Tracks && r.engine != nil && r.aligner != "" {
+	if paced && !p.Production.NoTracks && r.engine != nil && r.aligner != "" {
 		t, err := cr.tracks(p, take, planOf, lineSteps, info, modelPath)
 		if err != nil {
 			return nil, "", nil, err
@@ -219,19 +203,6 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 				fmt.Fprintf(h, "turn %s %d\x00", st.chunk.key, len(g))
 				li = g[len(g)-1]
 				continue
-			}
-		}
-		if paced && p.Production.LeadIn && cr.r.engine != nil && cr.r.aligner != "" {
-			if prefix := leadPrefix(p.Lines, li); prefix != "" {
-				st, err := cr.lead(p, li, prefix, take, planOf, lineSteps, info, modelPath)
-				if err != nil {
-					return nil, "", nil, err
-				}
-				if st != nil {
-					steps = append(steps, *st)
-					fmt.Fprintf(h, "lead %s %s\x00", leadVersion, st.chunk.key)
-					continue
-				}
 			}
 		}
 		ls, err := lineSteps(li, h)

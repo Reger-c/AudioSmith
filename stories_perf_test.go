@@ -216,6 +216,13 @@ func TestStoryPerformanceAPI(t *testing.T) {
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "directions": map[string]string{"nope": "x"}}, api.CodeInvalid)
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "intensities": map[string]int{id: 4}}, api.CodeInvalid)
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "personas": map[string]string{"Ghost": "x"}}, api.CodeInvalid)
+	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "emotions": map[string]string{id: "melancholic-ish"}}, api.CodeInvalid)
+	// Emotions per line: the user's, kept by the director.
+	id3 := p.Lines[2].ID
+	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "emotions": map[string]string{id3: "委屈"}, "intensities": map[string]int{id3: 0}}, &p)
+	if p.Lines[2].Emotion != services.EmotionHurt || p.Lines[2].Intensity != 0 {
+		t.Fatalf("emotion %+v", p.Lines[2])
+	}
 	e.onMain(func() { e.a.llmReg.Register(localProvider, nil) })
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "all"}, api.CodeLLMUnavailable)
 
@@ -228,11 +235,11 @@ func TestStoryPerformanceAPI(t *testing.T) {
 	})
 	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "fill"}, &p)
 	if p.Scene != scene || persona("Kid") != "seven, lively" || p.Lines[1].Direction != "pleading" || p.Lines[1].Emotion != "" ||
-		p.Lines[0].Emotion != "excited" || p.Lines[0].Intensity != 2 || p.Lines[2].Emotion != "worried" {
+		p.Lines[0].Emotion != "excited" || p.Lines[0].Intensity != 2 || p.Lines[2].Emotion != services.EmotionHurt {
 		t.Fatalf("filled %+v", p)
 	}
 	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "all"}, &p)
-	if p.Scene != "Kitchen, after school" || p.Lines[1].Direction != "pleading" || p.Lines[2].Intensity != 1 {
+	if p.Scene != "Kitchen, after school" || p.Lines[1].Direction != "pleading" || p.Lines[2].Emotion != services.EmotionHurt || p.Lines[2].Intensity != 0 {
 		t.Fatalf("replaced %+v", p)
 	}
 	e.onMain(func() {

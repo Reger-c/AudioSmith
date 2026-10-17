@@ -95,20 +95,12 @@ type ChapterResult struct {
 	// be, made line by line instead.
 	Turns        int `json:"turns,omitempty"`
 	TurnsUnsplit int `json:"turnsUnsplit,omitempty"`
-	// LeadIns are the lines said after a lead-in and cut from it
-	// (story_leadin.go); LeadInsFailed the ones that could not be cut,
-	// made as usual instead.
-	LeadIns       int `json:"leadIns,omitempty"`
-	LeadInsFailed int `json:"leadInsFailed,omitempty"`
 	// Tracks are the stretches of a character's lines said in one
 	// synthesis and cut apart (story_track.go), TrackLines their lines;
 	// TracksFailed the ones that could not be cut, made line by line.
 	Tracks       int `json:"tracks,omitempty"`
 	TrackLines   int `json:"trackLines,omitempty"`
 	TracksFailed int `json:"tracksFailed,omitempty"`
-	// Steered counts the lines synthesized with punctuation that follows
-	// their emotion (story_steer.go).
-	Steered int `json:"steered,omitempty"`
 	// Levelled counts the lines brought toward their character's loudness.
 	Levelled int               `json:"levelled,omitempty"`
 	Report   LoudnessReport    `json:"report"`
@@ -155,7 +147,6 @@ type chapterStep struct {
 	line    int
 	span    int
 	turn    *turnStep
-	lead    *leadStep  // a line said after a lead-in (story_leadin.go)
 	track   *trackStep // a line of a character's track (story_track.go)
 }
 

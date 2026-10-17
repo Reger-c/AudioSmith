@@ -166,16 +166,6 @@ func (m ModelInfo) FillDefaults(t *core.Take, workflow string) {
 	}
 }
 
-// samples says whether the model samples (it has a temperature by
-// default for workflow): stories' sampling settings apply to it.
-func (m ModelInfo) samples(workflow string) bool {
-	d, ok := m.Defaults[workflow]
-	if !ok {
-		d = m.Defaults[""]
-	}
-	return d.Temperature > 0
-}
-
 // Lang is the BCP-47 tag of a recipe's language for the text pipeline:
 // its language parameter, else its voice's language, else "" (guess).
 func (m ModelInfo) Lang(language, voice string) string {
@@ -206,7 +196,7 @@ type renderer struct {
 	cacheMax int64
 	// watermark marks finished renders (watermark.go).
 	watermark WatermarkFunc
-	// engine runs the other engine requests of renders (story lead-ins:
+	// engine runs the other engine requests of renders (story tracks:
 	// stt.align, stt.transcribe) with the aligner and recognizer repos;
 	// nil: none.
 	engine              func(method string) jobs.Executor

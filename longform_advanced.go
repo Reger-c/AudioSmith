@@ -48,10 +48,7 @@ func (a *app) lfChanges(p *lfPage) []string {
 	add(p.kind == core.ProjectStory && pr.NoMerge, i18n.T("Merge a character's lines"))
 	add(p.kind == core.ProjectStory && pr.NoLevel, i18n.T("Even out each voice"))
 	add(p.kind == core.ProjectStory && pr.NoEmotionGaps, i18n.T("Pauses follow the emotion"))
-	add(p.kind == core.ProjectStory && pr.LeadIn, i18n.T("Lead-in from the last line"))
-	add(p.kind == core.ProjectStory && pr.Tracks, i18n.T("Each part in one go"))
-	add(p.kind == core.ProjectStory && pr.Steer, i18n.T("Punctuation follows the emotion"))
-	add(p.kind == core.ProjectStory && (pr.Temperature != 0 || pr.TopP != 0 || pr.CharacterSeeds), i18n.T("Steadier delivery"))
+	add(p.kind == core.ProjectStory && pr.NoTracks, i18n.T("Each character's part in one go"))
 	return out
 }
 
@@ -96,10 +93,12 @@ func (a *app) lfAdvanced(c *ui.Context, p *lfPage, locked bool) {
 						d.Production.NoEmotionGaps = !emoGaps
 					}
 				})
-				formRow(c, "perf-lead-in-row", i18n.T("Lead-in from the last line"), i18n.T("Experimental. A character's line is said with the end of their previous line before it, and that part is cut off again with the forced aligner (%s), so the line starts in the mood the last one left. About twice the synthesis; a line that cannot be cut cleanly is made as usual.", modelRefID(catalog.DefaultAlign)), func() {
-					ui.Switch(c.Key("perf-lead-in"), &d.Production.LeadIn).Label(i18n.T("Lead-in from the last line")).Disabled(locked)
+				tracks := !d.Production.NoTracks
+				formRow(c, "perf-tracks-row", i18n.T("Each character's part in one go"), i18n.T("A character's lines with emotions are said in one synthesis per stretch of one feeling, so the voice carries on from line to line, and cut apart again with the forced aligner (%s). Narration, and a stretch that cannot be cut cleanly, are made line by line. Off: every line on its own.", modelRefID(catalog.DefaultAlign)), func() {
+					if ui.Switch(c.Key("perf-tracks"), &tracks).Label(i18n.T("Each character's part in one go")).Disabled(locked).Changed() {
+						d.Production.NoTracks = !tracks
+					}
 				})
-				a.storyExperiments(c, d, locked) // stories_experiments.go
 			}
 			a.lfProduction(c, p, locked)
 			formRow(c, "book-stems-row", i18n.T("A stem per character"), i18n.T("Each character's lines on the book's timeline, silent elsewhere, for mixing. As large as the book per character."), func() {

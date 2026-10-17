@@ -21,7 +21,7 @@ import (
 // and the AI director of an update.
 func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *services.LongformDoc, req api.LongformUpdate, voices []core.Voice) error {
 	story := p.Kind == core.ProjectStory
-	if !story && (req.Scene != nil || len(req.Personas) > 0 || len(req.Directions) > 0 || len(req.Intensities) > 0 || req.Pacing != "" ||
+	if !story && (req.Scene != nil || len(req.Personas) > 0 || len(req.Directions) > 0 || len(req.Emotions) > 0 || len(req.Intensities) > 0 || req.Pacing != "" ||
 		req.Merge != nil || req.Level != nil || req.Direct != "") {
 		return errBadRequest("scene", "scene, personas, directions, pacing and direct are for stories.")
 	}
@@ -59,13 +59,27 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 			l.Intensity = 0
 		}
 	}
+	for id, e := range req.Emotions {
+		l, err := line(id, "emotions")
+		if err != nil {
+			return err
+		}
+		k := services.NormEmotion(e)
+		if k == "" && strings.TrimSpace(e) != "" {
+			return errBadRequest("emotions", "%q is not an emotion; the emotions are: %s.", e, strings.Join(services.Emotions, ", "))
+		}
+		l.Emotion, l.EmotionByUser = k, true // the director keeps it
+		if k == "" {
+			l.Turn = false
+		}
+	}
 	for id, n := range req.Intensities {
 		l, err := line(id, "intensities")
 		if err != nil {
 			return err
 		}
 		if n < 0 || n > services.IntensityStrong {
-			return errBadRequest("intensities", "An intensity is 1 (restrained), 2 (clear) or 3 (strong); 0 clears it.")
+			return errBadRequest("intensities", "An intensity is 0 (barely, with an emotion), 1 (restrained), 2 (clear) or 3 (strong); 0 clears a direction's.")
 		}
 		l.Intensity, l.EmotionByUser = n, true
 	}

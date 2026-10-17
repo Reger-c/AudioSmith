@@ -38,6 +38,10 @@ const (
 	EmotionAngry     = "angry"
 	EmotionScared    = "scared"
 	EmotionSurprised = "surprised"
+	// EmotionApologetic: sorry, guilty, delivering bad news (added after
+	// round 1: without it the director called a father announcing a
+	// trip "very scared").
+	EmotionApologetic = "apologetic"
 )
 
 // emotionInfo is how an emotion is said: its word (Chinese, English),
@@ -52,24 +56,25 @@ type emotionInfo struct {
 }
 
 var emotions = map[string]emotionInfo{
-	EmotionSteady:    {"平稳", "even", "", "", 0, 1},
-	EmotionHappy:     {"开心", "happy", "带着笑", "laughing", 1, 0.9},
-	EmotionExcited:   {"兴奋", "excited", "语速快", "fast", 1, 0.7},
-	EmotionTender:    {"温柔", "tender", "轻声", "softly", 1, 1.15},
-	EmotionPleading:  {"央求", "pleading", "急切", "urgent", 0, 0.9},
-	EmotionHesitant:  {"犹豫", "hesitant", "支支吾吾", "faltering", 0, 1.45},
-	EmotionWorried:   {"担心", "worried", "焦急", "anxious", -1, 1.15},
-	EmotionHurt:      {"委屈", "hurt", "带哭腔", "tearful", -1, 1.2},
-	EmotionSad:       {"难过", "sad", "带哭腔", "tearful", -1, 1.35},
-	EmotionAngry:     {"生气", "angry", "大声", "loud", -1, 0.75},
-	EmotionScared:    {"害怕", "scared", "声音发抖", "trembling", -1, 0.85},
-	EmotionSurprised: {"惊讶", "surprised", "声调上扬", "rising", 0, 0.75},
+	EmotionSteady:     {"平稳", "even", "", "", 0, 1},
+	EmotionHappy:      {"开心", "happy", "带着笑", "laughing", 1, 0.9},
+	EmotionExcited:    {"兴奋", "excited", "语速快", "fast", 1, 0.7},
+	EmotionTender:     {"温柔", "tender", "轻声", "softly", 1, 1.15},
+	EmotionPleading:   {"央求", "pleading", "急切", "urgent", 0, 0.9},
+	EmotionHesitant:   {"犹豫", "hesitant", "支支吾吾", "faltering", 0, 1.45},
+	EmotionWorried:    {"担心", "worried", "焦急", "anxious", -1, 1.15},
+	EmotionHurt:       {"委屈", "hurt", "带哭腔", "tearful", -1, 1.2},
+	EmotionSad:        {"难过", "sad", "带哭腔", "tearful", -1, 1.35},
+	EmotionAngry:      {"生气", "angry", "大声", "loud", -1, 0.75},
+	EmotionScared:     {"害怕", "scared", "声音发抖", "trembling", -1, 0.85},
+	EmotionSurprised:  {"惊讶", "surprised", "声调上扬", "rising", 0, 0.75},
+	EmotionApologetic: {"愧疚", "apologetic", "声音低沉", "low-voiced", -1, 1.2},
 }
 
 // Emotions lists the vocabulary in the order the UI and the director
 // show it.
 var Emotions = []string{EmotionSteady, EmotionHappy, EmotionExcited, EmotionTender, EmotionPleading, EmotionHesitant,
-	EmotionWorried, EmotionHurt, EmotionSad, EmotionAngry, EmotionScared, EmotionSurprised}
+	EmotionWorried, EmotionHurt, EmotionSad, EmotionAngry, EmotionScared, EmotionSurprised, EmotionApologetic}
 
 // emotionAliases are words a language model (or a user) may write for an
 // emotion of the vocabulary.
@@ -85,7 +90,8 @@ var emotionAliases = map[string]string{
 	"sorrowful": EmotionSad, "伤心": EmotionSad, "悲伤": EmotionSad, "失落": EmotionSad,
 	"mad": EmotionAngry, "annoyed": EmotionAngry, "愤怒": EmotionAngry, "恼火": EmotionAngry,
 	"afraid": EmotionScared, "fearful": EmotionScared, "frightened": EmotionScared, "恐惧": EmotionScared,
-	"shocked": EmotionSurprised, "amazed": EmotionSurprised, "吃惊": EmotionSurprised, "震惊": EmotionSurprised,
+	"sorry": EmotionApologetic, "guilty": EmotionApologetic, "regretful": EmotionApologetic, "抱歉": EmotionApologetic, "内疚": EmotionApologetic,
+	"歉意": EmotionApologetic, "shocked": EmotionSurprised, "amazed": EmotionSurprised, "吃惊": EmotionSurprised, "震惊": EmotionSurprised,
 }
 
 // NormEmotion is the vocabulary's key for an emotion a model or user
@@ -193,15 +199,19 @@ func EmotionInstruct(emotion string, intensity int, own string, cont, zh bool) s
 	return s
 }
 
+// emotionBack is how far back (lines) a character's previous line still
+// counts for carrying on.
+const emotionBack = 4
+
 // emotionCont says whether line li carries on its character's feeling:
-// their previous line (within leadBack lines, in the same voice) has the
+// their previous line (within emotionBack lines, in the same voice) has the
 // same emotion, and li is no turn.
 func emotionCont(lines []LineSpec, li int) bool {
 	l := lines[li]
 	if l.Emotion == "" || l.Turn || l.Character == "" {
 		return false
 	}
-	for j := li - 1; j >= max(li-leadBack, 0); j-- {
+	for j := li - 1; j >= max(li-emotionBack, 0); j-- {
 		if p := lines[j]; p.Character == l.Character {
 			return p.Emotion == l.Emotion && len(p.Spans) > 0 && len(l.Spans) > 0 && p.Spans[len(p.Spans)-1].Voice == l.Spans[0].Voice
 		}
@@ -318,13 +328,13 @@ type EmotionBeat struct {
 }
 
 // Sparse emotion: at most this share of a scene's lines are strong
-// (intensity 2 or more), at most strongMax of them 3; at most turnShare
+// (intensity 2 or more), at most peakShare of them 3; at most turnShare
 // are turns. A scene where every line is emotional sounds like a list of
 // examples; the plan's "情绪要省着用".
 const (
 	strongShare = 0.4
 	peakShare   = 1.0 / 8
-	turnShare   = 1.0 / 6
+	turnShare   = 1.0 / 10
 )
 
 // SmoothEmotions applies the continuity rules to a scene's beats, in

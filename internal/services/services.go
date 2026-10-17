@@ -87,7 +87,7 @@ type Config struct {
 
 	// Engine returns the engine's executor of a method other than
 	// tts.synthesize, for renders that align or check what they made
-	// (story lead-ins: Aligner, Recognizer are the forced aligner's and
+	// (story tracks: Aligner, Recognizer are the forced aligner's and
 	// the speech recognizer's repos); nil: renders do neither.
 	Engine              func(method string) jobs.Executor
 	Aligner, Recognizer string

@@ -1,8 +1,10 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"math"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -224,5 +226,48 @@ func TestTurnEmotion(t *testing.T) {
 	}
 	if e, _, _ := turnEmotion([]LineSpec{l("", 0, "a"), l("", 0, "b")}); e != "" {
 		t.Error("none")
+	}
+}
+
+// v1DirectedChapter is a paced story directed by the first AI director
+// (directions and personas, no emotions) on Qwen3-TTS CustomVoice.
+func v1DirectedChapter() ChapterParams {
+	return ChapterParams{Render: "r", Model: "m/cv", Lang: "zh", Seed: 7, Scene: "傍晚，客厅",
+		Voices: map[string]core.Take{"k": {Voice: "Vivian"}, "m": {Voice: "Serena"}},
+		Lines: []LineSpec{
+			{ID: "1", Character: "kid", Persona: "七岁女孩", Direction: "撒娇央求", Intensity: 2, Spans: []SpanSpec{{Voice: "k", Character: "kid", Text: "妈妈，我想养猫。"}}},
+			{ID: "2", Character: "kid", Spans: []SpanSpec{{Voice: "k", Character: "kid", Text: "可以吗？"}}},
+			{ID: "3", Character: "mom", Persona: "温柔的妈妈", Direction: "犹豫", Intensity: 1, Spans: []SpanSpec{{Voice: "m", Character: "mom", Text: "你能照顾它吗？"}}},
+			{ID: "4", Character: "kid", Persona: "七岁女孩", Direction: "急切保证", Intensity: 3, Spans: []SpanSpec{{Voice: "k", Character: "kid", Text: "我能！"}}},
+		},
+		Production: DefaultStoryProduction(), Output: "/tmp/x.wav"}
+}
+
+func cvInfo(string) ModelInfo {
+	return ModelInfo{Traits: TraitsFor("qwen3_tts", []string{"sampling", "voiceStyle", "instruct", "language"}), Revision: "r",
+		Defaults: map[string]ParamDefaults{"": {Temperature: 0.7, TopP: 0.8}}}
+}
+
+// v1Key is v1DirectedChapter's chapter key as main made it before
+// emotions and tracks existed (c433681): a story directed by the first
+// director renders exactly as before, its chunks from the cache, even
+// with the aligner present (tracks need emotions).
+const v1Key = "a740aae26eb0fc81e66bdd74b8fe9e6d26db0d3f241c1f45c36805b0844dd2a3"
+
+func TestV1DirectedStoriesRenderAsBefore(t *testing.T) {
+	p := v1DirectedChapter()
+	r := &renderer{cacheDir: filepath.Join(t.TempDir(), "cache"), models: cvInfo, logf: t.Logf,
+		engine: (&fakeAnalysis{}).executor, aligner: "m/aligner", recognizer: "m/asr"}
+	steps, key, _, err := chapterRenderer{r}.program(context.Background(), &p, r.model(p.Model), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key != v1Key {
+		t.Errorf("a story of the first director has key %s, want %s (as before)", key, v1Key)
+	}
+	for _, s := range steps {
+		if s.track != nil {
+			t.Error("tracked without emotions")
+		}
 	}
 }

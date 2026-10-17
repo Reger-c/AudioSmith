@@ -178,27 +178,11 @@ type Production struct {
 	// NoEmotionGaps keeps the pacing's gaps for lines with an emotion,
 	// which otherwise follow it (story_emotion.go).
 	NoEmotionGaps bool `json:"noEmotionGaps,omitempty"`
-	// LeadIn (experimental): a character's line is said with the end of
-	// their previous line before it, in one synthesis, and that lead-in
-	// is cut off with the forced aligner (story_leadin.go), so the line
-	// starts in the mood the last one left.
-	LeadIn bool `json:"leadIn,omitempty"`
-	// Tracks (experimental): within a chapter, a character's lines are
-	// said in one synthesis per stretch between their turns (in their
-	// baseline feeling), cut apart with the forced aligner and put back in
-	// the dialogue (story_track.go).
-	Tracks bool `json:"tracks,omitempty"`
-	// Steer (experimental): a line is synthesized with punctuation (and
-	// at most a sentence-final particle) that follows its emotion; the
-	// words never change (story_steer.go).
-	Steer bool `json:"steer,omitempty"`
-	// Temperature and TopP replace the model's sampling defaults (0: the
-	// model's); CharacterSeeds gives each character a seed of its own,
-	// from the story's and the character's (the "steadier delivery"
-	// preset: StoryTemperature, StoryTopP).
-	Temperature    float64 `json:"temperature,omitempty"`
-	TopP           float64 `json:"topP,omitempty"`
-	CharacterSeeds bool    `json:"characterSeeds,omitempty"`
+	// NoTracks makes a directed story line by line: by default, within a
+	// chapter, the lines of a character that have emotions are said in
+	// one synthesis per stretch of one feeling, cut apart with the forced
+	// aligner and put back in the dialogue (story_track.go).
+	NoTracks bool `json:"noTracks,omitempty"`
 }
 
 // DefaultProduction are the production settings of a new project.

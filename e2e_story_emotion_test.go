@@ -3,9 +3,9 @@ package main
 // TestStoryEmotionExp renders stories in the variants of the emotion
 // experiment (plan/story-emotion-context-plan.md, thread #78) on the real
 // engine, for listening and measuring: v1 (pacing, merged turns and the
-// first AI director's scene, personas and directions: today's main), A
-// (the emotion director v2: short emotion instructions), AE (A with
-// emotion-paced gaps) and AEB (AE with lead-ins from the last line). It
+// first AI director's scene, personas and directions), A (the emotion
+// director v2: short emotion instructions, line by line), AE (A with
+// emotion-paced gaps) and AEF (AE with character tracks: the defaults). It
 // writes, per story, the directors' answers (step "direct"), then per
 // model and variant (step "render") the chapter, its sidecar, each line's
 // clip and a manifest (lines, instructions, timings, the recognizer's
@@ -16,7 +16,7 @@ package main
 //
 // A story file: {"name", "title", "cast": [{"name", "voice"}], "lines": [{"speaker", "text"}]}
 // (voice: a CustomVoice speaker). AUDIOSMITH_EMO_MODELS picks models
-// (cv06, vd17), AUDIOSMITH_EMO_VARIANTS variants.
+// (cv06, vd17), AUDIOSMITH_EMO_VARIANTS variants (default v1,A,AE,AEF).
 
 import (
 	"context"
@@ -73,7 +73,6 @@ type expLine struct {
 	Turn      bool    `json:"turn,omitempty"`
 	Direction string  `json:"direction,omitempty"`
 	Instruct  string  `json:"instruct"`
-	Said      string  `json:"said,omitempty"` // the synthesis text, when steered
 	Start     float64 `json:"start"`
 	End       float64 `json:"end"`
 	Gap       float64 `json:"gapBefore"`
@@ -89,9 +88,8 @@ type expManifest struct {
 	Cached                int
 	Chunks                int
 	Turns, TurnsUnsplit   int
-	LeadIns, LeadFailed   int
 	Tracks, TrackLines    int
-	TracksFailed, Steered int
+	TracksFailed          int
 	Lines                 []expLine
 }
 
@@ -214,12 +212,14 @@ func expDirect(t *testing.T, ctx context.Context, a *app, h *engineHost, doc *se
 		t.Logf("%s (%.1f s):\n%s", name, took.Seconds(), b)
 	}
 	started := time.Now()
-	v1, err := director.Direct(ctx, storyScript(doc, nil))
-	if err != nil {
-		t.Fatalf("director v1: %v", err)
+	if os.Getenv("AUDIOSMITH_EMO_ONLY_V2") == "" {
+		v1, err := director.Direct(ctx, storyScript(doc, nil))
+		if err != nil {
+			t.Fatalf("director v1: %v", err)
+		}
+		save("director-v1.json", v1, time.Since(started))
+		started = time.Now()
 	}
-	save("director-v1.json", v1, time.Since(started))
-	started = time.Now()
 	v2, err := director.DirectEmotions(ctx, storyScript(doc, nil), emotionVocab(storyZh(doc)))
 	if err != nil {
 		t.Fatalf("director v2: %v", err)
@@ -251,23 +251,11 @@ func expDirected(t *testing.T, doc services.LongformDoc, dir, v string) services
 	var em translate.StoryEmotions
 	read("director-v2.json", &em)
 	applyEmotions(&d, em, false)
-	// "A" then the parts on top: E (gaps), B (lead-ins), F (tracks), G
-	// (punctuation), H (steadier sampling); "@t/p" sets the sampling,
-	// "#n" adds n to the seed (the sweep).
-	flags, rest, _ := strings.Cut(v, "@")
-	flags, seed, _ := strings.Cut(flags, "#")
-	if _, s, ok := strings.Cut(rest, "#"); ok {
-		rest, seed = rest[:len(rest)-len(s)-1], s
-	}
-	pr := &d.Production
-	pr.NoEmotionGaps = !strings.Contains(flags, "E")
-	pr.LeadIn, pr.Tracks, pr.Steer = strings.Contains(flags, "B"), strings.Contains(flags, "F"), strings.Contains(flags, "G")
-	if strings.Contains(flags, "H") {
-		pr.SetSteadier(true)
-	}
-	if rest != "" {
-		fmt.Sscanf(rest, "%g/%g", &pr.Temperature, &pr.TopP)
-	}
+	// "A" then the parts on top: E (emotion gaps), F (character tracks);
+	// "#n" adds n to the seed.
+	flags, seed, _ := strings.Cut(v, "#")
+	d.Production.NoEmotionGaps = !strings.Contains(flags, "E")
+	d.Production.NoTracks = !strings.Contains(flags, "F")
 	if seed != "" {
 		var n int64
 		fmt.Sscanf(seed, "%d", &n)
@@ -297,10 +285,20 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 				d, ok := expDesigns[id]
 				return "design:" + id, core.Take{Voice: d, Seed: int64(len(id)) * 7919}, ok
 			}
+		case "kokoro":
+			// Kokoro (English stories): Kokoro voices for the speakers.
+			e, _ := catalog.Builtin().ByID("kokoro-82m-bf16")
+			repo = e.Repo
+			kv := map[string]string{"Vivian": "af_heart", "Serena": "af_bella", "Aiden": "am_adam", "Uncle_Fu": "am_michael"}
+			resolve = func(ref string) (string, core.Take, bool) {
+				id, _ := strings.CutPrefix(ref, services.SpeakerRef)
+				v, ok := kv[id]
+				return "kokoro:" + v, core.Take{Voice: v}, ok
+			}
 		default:
 			t.Fatalf("model %s", m)
 		}
-		for _, v := range envList("AUDIOSMITH_EMO_VARIANTS", "v1,A,AE,AEB") {
+		for _, v := range envList("AUDIOSMITH_EMO_VARIANTS", "v1,A,AE,AEF") {
 			d := expDirected(t, doc, dir, v)
 			d.Model = repo
 			spec, probs := services.Compile(&d, resolve)
@@ -325,7 +323,7 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 				t.Fatalf("%s-%s: %+v %+v", m, v, body.Chapters, body.Error)
 			}
 			took := time.Since(started).Seconds()
-			name := m + "-" + strings.NewReplacer("/", "_", "@", "_t", "#", "_s").Replace(v)
+			name := m + "-" + strings.ReplaceAll(v, "#", "_s")
 			vdir := filepath.Join(dir, name)
 			os.MkdirAll(vdir, 0o755)
 			wavPath := filepath.Join(dir, name+".wav")
@@ -339,8 +337,7 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 			b, _ := json.MarshalIndent(res, "", " ")
 			os.WriteFile(wavPath+".json", b, 0o644)
 			man := expManifest{Story: filepath.Base(dir), Model: m, Variant: v, Seconds: math.Round(took*10) / 10, AudioSeconds: res.AudioSeconds,
-				Cached: res.Cached, Chunks: res.Chunks, Turns: res.Turns, TurnsUnsplit: res.TurnsUnsplit, LeadIns: res.LeadIns, LeadFailed: res.LeadInsFailed,
-				Tracks: res.Tracks, TrackLines: res.TrackLines, TracksFailed: res.TracksFailed, Steered: res.Steered}
+				Cached: res.Cached, Chunks: res.Chunks, Turns: res.Turns, TurnsUnsplit: res.TurnsUnsplit, Tracks: res.Tracks, TrackLines: res.TrackLines, TracksFailed: res.TracksFailed}
 			man.Lines = expLines(t, ctx, h.sup, a.lib, wavPath, vdir, res, spec)
 			b, _ = json.MarshalIndent(man, "", " ")
 			os.WriteFile(filepath.Join(dir, name+".manifest.json"), b, 0o644)
@@ -348,9 +345,9 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 			for _, l := range man.Lines {
 				cer += l.CER
 			}
-			t.Logf("%s/%s: %.1f s audio in %.0f s; turns %d (unsplit %d); lead-ins %d (failed %d); tracks %d/%d lines (failed %d); steered %d; mean CER %.3f",
-				filepath.Base(dir), name, res.AudioSeconds, took, res.Turns, res.TurnsUnsplit, res.LeadIns, res.LeadInsFailed,
-				res.Tracks, res.TrackLines, res.TracksFailed, res.Steered, cer/float64(len(man.Lines)))
+			t.Logf("%s/%s: %.1f s audio in %.0f s; turns %d (unsplit %d); tracks %d of %d lines (failed %d); mean CER %.3f",
+				filepath.Base(dir), name, res.AudioSeconds, took, res.Turns, res.TurnsUnsplit, res.Tracks, res.TrackLines, res.TracksFailed,
+				cer/float64(len(man.Lines)))
 		}
 	}
 }
@@ -394,11 +391,6 @@ func expLines(t *testing.T, ctx context.Context, sup engine.Supervisor, lib *lib
 		out = append(out, expLine{N: i + 1, Who: l.Character, Text: text, Emotion: l.Emotion, Intensity: l.Intensity, Turn: l.Turn, Direction: l.Direction,
 			Instruct: services.LineInstruct(lines, i, spec.Scene), Start: lp.Start, End: lp.End, Gap: gap, File: filepath.Base(f),
 			Heard: tr.Text, CER: dub.Drift(fold.Replace(text), fold.Replace(tr.Text))})
-		if spec.Production.Steer {
-			if said := services.SteerText(text, l.Emotion, l.Intensity); said != text {
-				out[len(out)-1].Said = said
-			}
-		}
 	}
 	return out
 }

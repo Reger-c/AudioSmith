@@ -230,11 +230,12 @@ type LongformUpdate struct {
 	Scene       *string           `json:"scene,omitempty" jsonschema:"Stories: where and when, who the characters are to each other, the mood (\"\" clears). Models that take instructions hear it with every line; never spoken."`
 	Personas    map[string]string `json:"personas,omitempty" jsonschema:"Stories: character name → persona, its performance baseline (\"seven, lively, coaxing\"; \"\" clears)."`
 	Directions  map[string]string `json:"directions,omitempty" jsonschema:"Stories: line id → direction, how that line is said (\"pleading\", \"softly, holding back tears\"; \"\" clears). Never spoken."`
-	Intensities map[string]int    `json:"intensities,omitempty" jsonschema:"Stories: line id → the direction's intensity: 1 restrained, 2 clear, 3 strong (0 clears)."`
+	Emotions    map[string]string `json:"emotions,omitempty" jsonschema:"Stories: line id → its emotion, as the AI director writes it: steady, happy, excited, tender, pleading, hesitant, worried, hurt, sad, angry, scared, surprised or apologetic (\"\" clears). Models that take instructions hear a short instruction made from it and its intensity. Never spoken."`
+	Intensities map[string]int    `json:"intensities,omitempty" jsonschema:"Stories: line id → intensity: of an emotion 0 barely, 1 restrained, 2 clear, 3 strong; of a direction 1–3 (0 clears it)."`
 	Pacing      string            `json:"pacing,omitempty" jsonschema:"Stories: gaps between lines: dialogue (tight turns), reading, relaxed, or fixed (one gap for every line)."`
 	Merge       *bool             `json:"merge_turns,omitempty" jsonschema:"Stories, with a pacing: say consecutive lines of one character in one go (default true)."`
 	Level       *bool             `json:"even_out_voices,omitempty" jsonschema:"Stories, with a pacing: bring each character's lines toward one loudness (default true)."`
-	Direct      string            `json:"direct,omitempty" jsonschema:"Stories: run the AI director (the writing-help language model reads the story and writes the scene, personas and directions) after the other changes: fill (only what is empty) or all (replace). Takes up to a minute or two."`
+	Direct      string            `json:"direct,omitempty" jsonschema:"Stories: run the AI director (the writing-help language model reads the story and plans its emotions: a baseline per character, an emotion, intensity and turn per line) after the other changes: fill (only what is empty) or all (replace what you did not set). Takes up to a minute or two."`
 }
 
 // LongformRender starts a render.

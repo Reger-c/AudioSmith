@@ -12,10 +12,11 @@ Read the whole scene first: who these people are, what each wants, and where the
 {{- range .Vocab}}
     - {{.Key}}{{if .Word}} ({{.Word}}){{end}}
 {{- end}}
+  - The emotion is what the speaker feels, not what the news is. A parent who must bring bad news is "apologetic" or "hesitant", not "scared"; "scared" is for real danger or fear. A child protesting is "hurt" before "angry"; "angry" is for real anger.
   - "steady" means: the character's baseline goes on, nothing new. **Most lines are steady**, with intensity 0 or 1. Give a stronger emotion only on the few key beats where something happens to the character: a plea, a refusal, a reveal, a decision.
   - "intensity": 0 barely, 1 restrained, 2 clear, 3 strong. Use 3 for at most one or two peaks of the whole scene.
   - Continuity: a character's feeling carries over from their own previous line. It moves gradually: the next line of the same character is at most one intensity step away, and does not swing from a pleasant feeling to an unpleasant one, unless that line is a turn.
-  - "turn": true only where the scene really turns for that character (bad news lands, they give in, they break down, they make up). At most one or two turns in a scene; most scenes have one. Only a turn may change feeling at once.
+  - "turn": true only on the line where the speaker's own feeling changes sharply, because something happens to them: bad news lands, they break down, they give in, they make up. A line that simply answers, explains or reacts is not a turn, even when it is emotional. A short scene (under 10 lines) has at most one turn; a longer one one or two. Only a turn may change feeling at once.
   - "note": a few words on how the line connects to what came before ({{if .Zh}}at most 12 Chinese characters{{else}}at most 8 words{{end}}), e.g. {{if .Zh}}"接着上一句的委屈，稍缓和", "回应妈妈的担心", "终于松口"{{else}}"still hurt, a little calmer", "answers her worry", "finally gives in"{{end}}.
   - A line marked [fixed: …] was set by the user: answer it with exactly that emotion and intensity, and let the lines around it follow from it.
   - Narration (speaker "Narrator") is steady, intensity 0 or 1, unless the story's narration itself is emotional.
@@ -26,12 +27,14 @@ An example from another story:
 3. 小明: 你看嘛，老师还表扬我了。 → excited 1, turn false, "接着得意"
 4. 妈妈: 可是你昨天说的作业呢？ → worried 1, turn false, "想起作业"
 5. 小明: 我……我还没写。 → hesitant 2, turn true, "心虚，情绪落下来"
-6. 妈妈: 那先去写吧，写完给你做红烧肉。 → tender 1, turn false, "宽容地安排"{{else}}1. Sam: Mum, I got full marks! → excited 2, turn false, "bursting with the news"
+6. 妈妈: 那先去写吧，写完给你做红烧肉。 → tender 1, turn false, "宽容地安排"
+(Mum's line 4 is not a turn: she only reacts. Had Mum said "对不起，今晚妈妈要加班，不能陪你了", that is apologetic, not scared.){{else}}1. Sam: Mum, I got full marks! → excited 2, turn false, "bursting with the news"
 2. Mum: Really? Let me see. → surprised 1, turn false, "pleasantly surprised"
 3. Sam: Look, the teacher even praised me. → excited 1, turn false, "still proud"
 4. Mum: But what about yesterday's homework? → worried 1, turn false, "remembers the homework"
 5. Sam: I... I haven't done it. → hesitant 2, turn true, "caught out, mood drops"
-6. Mum: Go and do it, then it's your favourite for dinner. → tender 1, turn false, "kind, sets it straight"{{end}}
+6. Mum: Go and do it, then it's your favourite for dinner. → tender 1, turn false, "kind, sets it straight"
+(Mum's line 4 is not a turn: she only reacts. Had Mum said "Sorry, love, I have to work late tonight", that is apologetic, not scared.){{end}}
 
 Write the scene and notes in {{if .Zh}}Chinese{{else}}the language of the script{{end}}. Never repeat or rewrite the lines themselves. Answer with JSON only.
 {{- end}}
