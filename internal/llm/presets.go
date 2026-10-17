@@ -173,6 +173,15 @@ type Secrets interface {
 	Secret(ctx context.Context, name string) (string, error)
 }
 
+// ProviderSecrets are Secrets that are told which provider asks, for keys
+// that depend on more than the name (the app: two providers may keep one
+// Keychain item, yet use different shared ActNow keys). Backends ask
+// them with the provider's id when the Secrets have the method.
+type ProviderSecrets interface {
+	Secrets
+	ProviderSecret(ctx context.Context, provider, name string) (string, error)
+}
+
 // SecretsFunc adapts a function to Secrets.
 type SecretsFunc func(ctx context.Context, name string) (string, error)
 
@@ -222,7 +231,13 @@ func lookupKey(ctx context.Context, s Secrets, p Preset) (string, error) {
 		}
 		return "", newErr(CodeNoKey, "provider", p.ID)
 	}
-	key, err := s.Secret(ctx, p.SecretName())
+	var key string
+	var err error
+	if ps, ok := s.(ProviderSecrets); ok {
+		key, err = ps.ProviderSecret(ctx, p.ID, p.SecretName())
+	} else {
+		key, err = s.Secret(ctx, p.SecretName())
+	}
 	if err != nil {
 		if errors.Is(err, ErrNoSecret) {
 			if p.KeyOptional || p.Auth == AuthNone {

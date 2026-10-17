@@ -33,4 +33,5 @@ func stampDictation(old Settings, next *Settings) {
 
 func cloneFamily(s *Settings) {
 	s.Family.ConflictShown = maps.Clone(s.Family.ConflictShown)
+	s.Dubbing.CredentialRefs = maps.Clone(s.Dubbing.CredentialRefs)
 }

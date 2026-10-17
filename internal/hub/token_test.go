@@ -3,6 +3,7 @@ package hub
 // The Hugging Face token and the other Keychain secrets.
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -71,5 +72,45 @@ func TestSecrets(t *testing.T) {
 	Secret("mt.deepl", "").Set("k")
 	if !strings.Contains(stdin, `-l "AudioSmith mt.deepl"`) {
 		t.Errorf("default label: %q", stdin)
+	}
+}
+
+// The family spec's order (§8.4): $HF_TOKEN, the shared token, AudioSmith's
+// own item, the token file; a shared token that cannot be read counts as
+// none.
+func TestTokenOrder(t *testing.T) {
+	saved := security
+	defer func() { security = saved }()
+	own := ""
+	security = func(_ string, a ...string) ([]byte, error) {
+		if a[0] == "find-generic-password" && own != "" {
+			return []byte(own + "\n"), nil
+		}
+		return nil, ErrNoKeychain
+	}
+	k := Keychain{Service: "S", Account: "A"}
+	file := filepath.Join(t.TempDir(), "token")
+	t.Setenv("HF_TOKEN_PATH", file)
+	os.WriteFile(file, []byte("hf_file\n"), 0o600)
+	shared := func() (string, error) { return " hf_shared ", nil }
+	broken := func() (string, error) { return "", errors.New("not consented") }
+	cases := []struct {
+		env, own string
+		shared   func() (string, error)
+		want     string
+		src      TokenSource
+	}{
+		{"hf_env", "hf_own", shared, "hf_env", TokenEnv},
+		{"", "hf_own", shared, "hf_shared", TokenShared},
+		{"", "hf_own", broken, "hf_own", TokenKeychain},
+		{"", "hf_own", nil, "hf_own", TokenKeychain},
+		{"", "", broken, "hf_file", TokenCLI},
+	}
+	for _, c := range cases {
+		t.Setenv("HF_TOKEN", c.env)
+		own = c.own
+		if tok, src := TokenFrom(c.shared, k); tok != c.want || src != c.src {
+			t.Errorf("%+v: %q %q", c, tok, src)
+		}
 	}
 }

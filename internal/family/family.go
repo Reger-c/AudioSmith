@@ -19,7 +19,7 @@
 // Files: family.go (Family, Start, discovery, notifications),
 // manifest.go (the manifest), migrate.go (Migrate, the wanted claims),
 // claims.go (claims after downloads and deletes), legacy.go (apps without
-// a manifest).
+// a manifest), credentials.go (shared API keys and the HF token).
 package family
 
 import (
@@ -400,7 +400,7 @@ func (f *Family) DeletedIn(repo string) string {
 }
 
 // topics AudioSmith follows (spec §5.4).
-var topics = []string{actnow.TopicApps, actnow.TopicModels, actnow.TopicSettings, actnow.TopicRuntime, actnow.TopicMemory}
+var topics = []string{actnow.TopicApps, actnow.TopicModels, actnow.TopicSettings, actnow.TopicCredentials, actnow.TopicRuntime, actnow.TopicMemory}
 
 // watch subscribes once to the change notifications; topics arriving
 // together are handled once.

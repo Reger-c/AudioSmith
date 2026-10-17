@@ -72,6 +72,7 @@ func (a *app) connectFamily() {
 	a.fam = family.New(family.Options{})
 	a.lib.setFamily(a.fam)
 	a.connectFamilyRuntime() // family_coord.go (thread #73)
+	a.connectKeys()          // family_keys.go (thread #74)
 }
 
 // startFamily sets AudioSmith up in the family directory in the
@@ -91,6 +92,9 @@ func (a *app) startFamily(dataDir string) {
 			a.showFamily(v)
 			if slices.Contains(topics, actnow.TopicModels) {
 				a.refreshModels() // another app downloaded or deleted a model
+			}
+			if slices.Contains(topics, actnow.TopicCredentials) || slices.Contains(topics, actnow.TopicApps) {
+				a.reloadKeys() // family_keys.go: a key shared, changed or removed
 			}
 		})
 	})

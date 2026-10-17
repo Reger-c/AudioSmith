@@ -109,6 +109,10 @@ func (a *app) loadKeyInfo(id string, p llm.Preset) {
 	if p.Local || p.Auth == llm.AuthNone {
 		return
 	}
+	if ks, ok := llmKeySlot(a.prefs, id); ok && a.lib.keys != nil {
+		a.loadKey(ks, a.keyLoaded(ks)) // family_keys.go: own and shared keys
+		return
+	}
 	name := llm.ProviderConfig{ID: id, Preset: p.ID}
 	pr, err := name.Resolve()
 	if err != nil {
@@ -133,6 +137,16 @@ func (a *app) saveKey(id, key string) {
 	key = strings.TrimSpace(key)
 	if e := a.llmForm.edits[id]; e != nil {
 		e.key = ""
+	}
+	if ks, ok := llmKeySlot(a.prefs, id); ok && a.lib.keys != nil {
+		// family_keys.go: shared with the other ActNow apps when the user
+		// lets them; removing asks first when they use it.
+		if key == "" {
+			a.removeFamilyKey(ks)
+		} else {
+			a.saveFamilyKey(ks, key)
+		}
+		return
 	}
 	a.async(func() {
 		err := item.Set(key)
@@ -285,6 +299,7 @@ func (a *app) writingSettings(c *ui.Context) {
 	a.localLLMSettings(c) // local_llm.go
 
 	sectionTitle(c, i18n.T("Providers"))
+	a.keySecurityHelp(c) // family_keys_view.go: with another ActNow app only
 	if len(a.prefs.LLM.Providers) == 0 {
 		ui.Text(c, i18n.T("No provider set up. Ollama on this Mac is used without one.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
 	}
@@ -357,18 +372,7 @@ func (a *app) providerCard(c *ui.Context, p settings.LLMProvider) {
 		})
 		if !pr.Local && !preset.Local && preset.Auth != llm.AuthNone {
 			ui.Text(c, i18n.T("API key")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-			ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-				ui.TextInput(c.Key("key"), &e.key).Password().Placeholder(i18n.T("API key")).Label(i18n.T("API key")).Width(px(t, 220))
-				if ui.Button(c.Key("key-save"), i18n.T("Save")).Disabled(strings.TrimSpace(e.key) == "").Clicked() {
-					a.saveKey(p.ID, e.key)
-				}
-				if f.hasKey[p.ID] {
-					ui.Text(c, i18n.T("A key is saved in the Keychain.")).FontSize(px(t, 12)).TextColor(t.Success)
-					if ui.Button(c.Key("key-remove"), i18n.T("Remove the key")).Clicked() {
-						a.saveKey(p.ID, "")
-					}
-				}
-			})
+			a.providerKey(c, p.ID, e)
 		}
 		if msg := f.test[p.ID]; msg != "" {
 			color := t.Success
@@ -380,4 +384,30 @@ func (a *app) providerCard(c *ui.Context, p settings.LLMProvider) {
 			ui.Text(c, i18n.T("Testing…")).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		}
 	})
+}
+
+// providerKey is a provider's API key: its input, Save and Remove the
+// key; or another ActNow app's key to use (family_keys_view.go).
+func (a *app) providerKey(c *ui.Context, id string, e *providerEdit) {
+	t := c.Theme()
+	f := &a.llmForm
+	ks, fam := llmKeySlot(a.prefs, id)
+	if fam && a.keyOffer(c, ks, true) {
+		return
+	}
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		ui.TextInput(c.Key("key"), &e.key).Password().Placeholder(i18n.T("API key")).Label(i18n.T("API key")).Width(px(t, 220))
+		if ui.Button(c.Key("key-save"), i18n.T("Save")).Disabled(strings.TrimSpace(e.key) == "").Clicked() {
+			a.saveKey(id, e.key)
+		}
+		if f.hasKey[id] {
+			ui.Text(c, i18n.T("A key is saved in the Keychain.")).FontSize(px(t, 12)).TextColor(t.Success)
+			if ui.Button(c.Key("key-remove"), i18n.T("Remove the key")).Clicked() {
+				a.saveKey(id, "")
+			}
+		}
+	})
+	if fam {
+		a.keyNotes(c, ks, e.key)
+	}
 }

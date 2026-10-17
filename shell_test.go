@@ -95,7 +95,7 @@ func useFakeHub(t *testing.T, a *app) *fakeHF {
 		fs.f.ready() // the engine restarted for the new model folder
 	}
 	saved := hubToken
-	hubToken = func() string { return "" }
+	hubToken = func(func() (string, error)) string { return "" }
 	t.Cleanup(func() { hubToken = saved })
 	return f
 }

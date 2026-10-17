@@ -262,13 +262,14 @@ func (a *app) loadSettingsForm() {
 // loadTokenInfo finds which HF token downloads use, in the background
 // (the Keychain blocks).
 func (a *app) loadTokenInfo() {
+	shared := a.lib.sharedHFToken() // family_keys.go: the family's, when used
 	a.async(func() {
-		tok, src := hub.Token(hub.DefaultKeychain)
+		tok, src := hub.TokenFrom(shared, hub.DefaultKeychain)
 		info := i18n.T("No token: gated models cannot download.")
 		switch src {
 		case hub.TokenEnv:
 			info = i18n.T("Using %s from $HF_TOKEN.", hub.MaskToken(tok))
-		case hub.TokenKeychain:
+		case hub.TokenShared, hub.TokenKeychain: // both in the Keychain
 			info = i18n.T("Using %s from the Keychain.", hub.MaskToken(tok))
 		case hub.TokenCLI:
 			info = i18n.T("Using %s from huggingface-cli login.", hub.MaskToken(tok))
@@ -314,6 +315,16 @@ func (a *app) chooseCacheDir() {
 func (a *app) saveToken(tok string) {
 	tok = strings.TrimSpace(tok)
 	a.token = ""
+	if a.lib.keys != nil {
+		// family_keys.go: shared with the other ActNow apps when the user
+		// lets them; removing asks first when they use it.
+		if tok == "" {
+			a.removeFamilyKey(hfKeySlot(a.prefs))
+		} else {
+			a.saveFamilyKey(hfKeySlot(a.prefs), tok)
+		}
+		return
+	}
 	a.async(func() {
 		err := hub.DefaultKeychain.Set(tok)
 		a.post(func() {
