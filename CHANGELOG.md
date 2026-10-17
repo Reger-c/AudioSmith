@@ -12,6 +12,9 @@
 - Downloads coordinate with the other apps: a file another app is downloading is not fetched twice ("Downloading in Dicta…"), and a model is not deleted while another app downloads or uses it.
 - The engine no longer guesses which version of a model to load when several are on disk.
 
+### New icon
+- AudioSmith has its own icon: an anvil with a spark on teal, in the style of the other ActNow apps (with Liquid Glass on macOS 26). The menu bar icon is the anvil too; while dictation listens, a dot takes the spark's place.
+
 ## 0.4.0-beta.4
 
 ### Updates and downloads behind a proxy
