@@ -265,7 +265,11 @@ func lineID(p *lfPage, i int) string {
 	return p.doc.Lines[i].ID
 }
 
-// lineSpec is a chapter holding only the line id of spec.
+// lineSpec is a chapter holding only the line id of spec. A line's
+// preview is the line on its own, with its own emotion's instruction, not
+// its character's track (services story_track.go): quick, and it never
+// makes the track again; the chapter's render says it within its track.
+// An edited line makes its track again when the chapter renders.
 func lineSpec(spec *services.LongformSpec, id string) (services.ChapterSpec, bool) {
 	for _, ch := range spec.Chapters {
 		var lines []services.LineSpec

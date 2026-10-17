@@ -19,7 +19,9 @@ package services
 // exactly as before: one gap, a call per line.
 //
 // Files: story_pacing.go (gaps by turn, levelling), story_merge.go
-// (merged turns), story_delivery.go (instructions).
+// (merged turns), story_delivery.go (instructions), story_emotion.go
+// (emotions: their instructions, smoothing and gaps), story_track.go and
+// story_align.go (character tracks).
 
 import (
 	"math"

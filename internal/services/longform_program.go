@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -166,13 +167,6 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 		}
 		return gap
 	}
-	// The merged turns, by their first line.
-	merged := map[int][]int{}
-	if paced && !p.Production.NoMerge {
-		for _, g := range mergeGroups(p.Lines, info, p.Production.VaryRepeats) {
-			merged[g[0]] = g
-		}
-	}
 	// The tracks: each character's lines in stretches, by line.
 	tracked := map[int]*trackStep{}
 	if paced && !p.Production.NoTracks && r.engine != nil && r.aligner != "" {
@@ -181,6 +175,15 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 			return nil, "", nil, err
 		}
 		tracked = t
+	}
+	// The merged turns, by their first line: of lines not in a track.
+	merged := map[int][]int{}
+	if paced && !p.Production.NoMerge {
+		for _, g := range mergeGroups(p.Lines, info, p.Production.VaryRepeats) {
+			if !slices.ContainsFunc(g, func(li int) bool { return tracked[li] != nil }) {
+				merged[g[0]] = g
+			}
+		}
 	}
 	for li := 0; li < len(p.Lines); li++ {
 		if li > 0 {
