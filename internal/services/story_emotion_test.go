@@ -187,6 +187,9 @@ func TestEmotionDirectedStory(t *testing.T) {
 	if len(gaps) != 3 || gaps[0] <= 0.22 || gaps[1] >= 0.22 {
 		t.Errorf("gaps %v (the pleading line's answer waits, the excited answer comes quicker)", gaps)
 	}
+	if LineInstruct(ls, 2, spec.Scene) != "略带兴奋" || LineInstruct([]LineSpec{{Direction: "小声", Spans: []SpanSpec{{Text: "好。"}}}}, 0, "") != "这一句：小声。" {
+		t.Error("LineInstruct")
+	}
 	p.Production.NoEmotionGaps = true
 	_, steps = chapterKeyOf(t, p, cv)
 	if steps[1].silence != 0.32 {

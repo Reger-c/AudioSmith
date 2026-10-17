@@ -244,6 +244,24 @@ func turnEmotion(lines []LineSpec) (emotion, own string, intensity int) {
 	return emotion, "first " + strings.Join(phrases, ", then "), intensity
 }
 
+// LineInstruct is the instruction line li of a chapter's lines is sent
+// when it is said on its own (not merged into a turn), "" for none: its
+// emotion's, else the first director's (previews, evaluation).
+func LineInstruct(lines []LineSpec, li int, scene string) string {
+	l := lines[li]
+	if len(l.Spans) == 0 {
+		return ""
+	}
+	say := l.Spans[0].Text
+	switch {
+	case l.Emotion != "":
+		return EmotionInstruct(l.Emotion, l.Intensity, l.Direction, emotionCont(lines, li), cjkShare(say) >= 0.3)
+	case l.Direction != "" || l.Persona != "" || scene != "":
+		return StoryInstruct(say, scene, l.Persona, l.Direction, l.Intensity, "")
+	}
+	return ""
+}
+
 // EmotionExaggeration is Chatterbox's emotion exaggeration for an
 // intensity (its default is 0.5).
 func EmotionExaggeration(intensity int) float64 {
