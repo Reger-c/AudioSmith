@@ -15,10 +15,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/actnowkit/models"
 )
 
 // chunks is how many ranges a file of size downloads in: 1 under two chunks.
@@ -72,6 +72,7 @@ type fileState struct {
 	parts  *partsFile // nil: sequential
 	left   int        // tasks not done
 	failed error
+	lock   *models.HeldLock // the blob's family lock, released when it is in place
 }
 
 // Download fetches what Plan lists into the cache: the auxiliary repos
@@ -103,43 +104,19 @@ func (c *Client) Download(ctx context.Context, e catalog.Entry, progress func(Pr
 	return nil
 }
 
-// fetchPlan downloads one repo's plan.
-func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)) error {
-	repoDir := RepoDir(c.opts.CacheDir, p.repo)
-	blobs := filepath.Join(repoDir, "blobs")
-	if err := os.MkdirAll(blobs, 0o755); err != nil {
-		return err
-	}
-
-	var done atomic.Int64
-	done.Store(p.TotalBytes - p.Bytes)
-	var current atomic.Value
-	current.Store("")
-	report := throttle(c.progressEvery, func(final bool) {
-		if progress != nil {
-			progress(Progress{Repo: p.repo, File: current.Load().(string), Bytes: done.Load(), TotalBytes: p.TotalBytes, Mirror: p.ep})
-		}
-	})
-	report(true)
-
-	// Tasks for what is missing.
+// fetchFiles downloads files (blobs missing from the cache, whose locks
+// r holds) into r's repo: chunked, resuming what is there, finishing
+// each file (and releasing its lock) as its last task ends.
+func (r *fetchRun) fetchFiles(ctx context.Context, files []remoteFile) error {
+	c, p := r.c, r.p
 	var tasks []task
 	var states []*fileState
-	scheduled := map[string]bool{}
-	for _, f := range p.files {
-		// Two files with the same content (identical prompts) are one
-		// blob: fetch it once, or the two writers race on its .incomplete.
-		if scheduled[f.blob] {
-			continue
-		}
-		scheduled[f.blob] = true
-		final := filepath.Join(blobs, f.blob)
-		if st, err := os.Stat(final); err == nil && st.Size() == f.Size {
-			continue
-		}
-		fs := &fileState{remoteFile: f, path: final + ".incomplete"}
+	for _, f := range files {
+		final := filepath.Join(r.blobs, f.blob)
+		fs := &fileState{remoteFile: f, path: final + ".incomplete", lock: r.locks[f.blob]}
 		n := c.chunks(f.Size)
 		have, parts := partialDone(final, f.Size, n)
+		r.done.Add(have)
 		if n > 1 {
 			if parts == nil {
 				// Start a parts file: chunks inside what a sequential
@@ -195,8 +172,8 @@ func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)
 	for range c.opts.Parallel {
 		wg.Go(func() {
 			for t := range queue {
-				current.Store(t.file.Path)
-				err := c.fetch(ctx, p, t, func(n int64) { done.Add(n); report(false) })
+				r.current.Store(t.file.Path)
+				err := c.fetch(ctx, p, t, func(n int64) { r.done.Add(n); r.report(false) })
 				if err != nil {
 					fail(fmt.Errorf("%s/%s: %w", p.repo, t.file.Path, err))
 					continue
@@ -221,14 +198,13 @@ func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)
 	if firstErr != nil {
 		return firstErr
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
+	return ctx.Err()
+}
 
-	// Every blob is there: link the snapshot, then write the ref.
-	if err := linkSnapshot(repoDir, p.commit, p.files); err != nil {
-		return err
-	}
+// writeRef writes the ref of a finished snapshot: refs/<branch> for a
+// branch; refs/main for a pinned commit unless main names another
+// snapshot that is there.
+func writeRef(repoDir string, p *plan) error {
 	ref := p.rev
 	if isCommit(ref) {
 		// A pinned commit is found by its path; tools that resolve the
@@ -242,13 +218,10 @@ func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)
 			}
 		}
 	}
-	if ref != "" {
-		if err := writeAtomic(filepath.Join(repoDir, "refs", filepath.FromSlash(ref)), []byte(p.commit)); err != nil {
-			return err
-		}
+	if ref == "" {
+		return nil
 	}
-	report(true)
-	return nil
+	return writeAtomic(filepath.Join(repoDir, "refs", filepath.FromSlash(ref)), []byte(p.commit))
 }
 
 // throttle calls fn at most once every d, and always when final.

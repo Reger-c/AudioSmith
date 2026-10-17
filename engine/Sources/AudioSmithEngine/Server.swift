@@ -50,6 +50,7 @@ enum EngineError: Error, LocalizedError {
     case badRequest(String)
     case unsupported(String, capability: String)
     case notDownloaded(model: String, missing: [String])
+    case pathRequired(model: String, snapshots: [String])
     case loadFailed(String)
     case inputTooLong(limit: Int, actual: Int, unit: String)
     case fileNotFound(String)
@@ -62,6 +63,7 @@ enum EngineError: Error, LocalizedError {
         case .badRequest(let m), .loadFailed(let m): m
         case .unsupported(let m, _): m
         case .notDownloaded(let model, _): "\(model) is not downloaded"
+        case .pathRequired(let model, let snapshots): "\(model) has \(snapshots.count) snapshots in the model folder; the job must name the one to load"
         case .inputTooLong(let limit, let actual, let unit): "The text is \(actual) \(unit); the model takes at most \(limit) per request"
         case .fileNotFound(let path): "No such file: \(path)"
         case .unsupportedMedia(let path, let why): "Cannot read \(path): \(why)"
@@ -78,6 +80,9 @@ enum EngineError: Error, LocalizedError {
         case .notDownloaded(let model, let missing):
             RPCError(Code.modelNotDownloaded, m,
                      data: .object(["model": .string(model), "missing": .array(missing.map { .string($0) })]))
+        case .pathRequired(let model, let snapshots):
+            RPCError(Code.modelPathRequired, m,
+                     data: .object(["model": .string(model), "snapshots": .array(snapshots.map { .string($0) })]))
         case .loadFailed: RPCError(Code.modelLoadFailed, m)
         case .inputTooLong(let limit, let actual, let unit):
             RPCError(Code.inputTooLong, m, data: .object(["limit": .int(Int64(limit)), "actual": .int(Int64(actual)), "unit": .string(unit)]))

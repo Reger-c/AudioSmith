@@ -100,12 +100,15 @@ public enum Code {
     public static let permissionDenied = "permission_denied"
     public static let deviceUnavailable = "device_unavailable"
     public static let contextTooLong = "context_too_long"
+    // ActNow family spec §7.1: several snapshots of the model are in the
+    // cache and the job named none (snapshotChoice).
+    public static let modelPathRequired = "model_path_required"
 
     public static let all: Set<String> = [
         badRequest, methodNotFound, notInitialized, protocolMismatch, unsupported, modelNotDownloaded,
         modelLoadFailed, licenceRequired, oom, busy, cancelled, `internal`,
         inputTooLong, fileNotFound, unsupportedMedia, permissionDenied, deviceUnavailable,
-        contextTooLong,
+        contextTooLong, modelPathRequired,
     ]
 }
 

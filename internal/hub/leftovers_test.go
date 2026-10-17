@@ -63,7 +63,7 @@ func TestLeftovers(t *testing.T) {
 	other := filepath.Join(home, "notes.txt")
 	os.WriteFile(other, []byte("mine"), 0o644)
 
-	ls, err := Leftovers(cache, removed)
+	ls, err := Leftovers(cache, removed, noFamily)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,11 +80,11 @@ func TestLeftovers(t *testing.T) {
 	if total != 3340 { // blobs once (links not followed) + the engine copy
 		t.Errorf("total %d", total)
 	}
-	freed, err := RemoveLeftovers(cache, removed)
-	if err != nil || freed != total {
-		t.Fatalf("freed %d, %v", freed, err)
+	freed, stayed, err := RemoveLeftovers(cache, removed, noFamily)
+	if err != nil || freed != total || len(stayed) != 0 {
+		t.Fatalf("freed %d, kept %v, %v", freed, stayed, err)
 	}
-	if ls, _ := Leftovers(cache, removed); len(ls) != 0 {
+	if ls, _ := Leftovers(cache, removed, noFamily); len(ls) != 0 {
 		t.Errorf("left %v", ls)
 	}
 	for _, repo := range kept {
@@ -99,7 +99,7 @@ func TestLeftovers(t *testing.T) {
 		t.Error(err)
 	}
 	for _, bad := range []string{"", "..", "../x", "a/../../b", "a/b/c", "/abs", "a"} {
-		if _, err := RemoveLeftovers(cache, []string{bad}); err == nil {
+		if _, _, err := RemoveLeftovers(cache, []string{bad}, noFamily); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
 	}

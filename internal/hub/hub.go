@@ -83,6 +83,10 @@ type Progress struct {
 	Bytes      int64  // done, all files
 	TotalBytes int64
 	Mirror     string // endpoint in use (after racing)
+	// WaitingFor is the app (a name; "" when unknown) downloading a
+	// file this download needs, when it waits for it (Waiting).
+	WaitingFor string
+	Waiting    bool
 }
 
 // DownloadProgress is published on the core.Bus while downloading (at
@@ -120,6 +124,10 @@ type Options struct {
 	// HTTPClient makes the requests; nil = a client with timeouts and
 	// Proxy.
 	HTTPClient *http.Client
+	// Family is how the other ActNow apps sharing the folder are found
+	// (family.go): deleting keeps their models, and the lock owner files
+	// name this app. The zero value asks LaunchServices.
+	Family Family
 }
 
 // Downloader manages model files. Goroutine-safe; methods may block on I/O.
@@ -140,7 +148,8 @@ type Downloader interface {
 	// removing bad blobs so that a later Download repairs them. It needs
 	// the HF API when e lists no files with hashes.
 	Verify(ctx context.Context, e catalog.Entry) ([]string, error)
-	// Delete removes the entry's snapshot and the blobs no other snapshot uses.
+	// Delete removes the entry's snapshot and the blobs no other snapshot
+	// uses, unless another family app may use them (Client.Remove).
 	Delete(ctx context.Context, e catalog.Entry) error
 }
 

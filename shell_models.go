@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
@@ -29,6 +30,9 @@ type modelsState struct {
 	models    map[string]*modelState // by modelKey
 	deleteAsk bool
 	deleting  catalog.Entry
+	// deleteShared are the other ActNow apps that may use the model
+	// being deleted (hub.Family): its files stay (spec §7.10.3).
+	deleteShared []string
 	// modelsFind is the search (friendly and technical names, tags);
 	// modelsDetail the cards whose details are open, by id.
 	modelsFind   string
@@ -176,6 +180,9 @@ func (a *app) downloadUpdated(j jobs.Job) {
 	case jobs.StateWaiting, jobs.StateQueued, jobs.StateRunning:
 		m.downloading = true
 		m.progress = hub.Progress{Repo: e.Repo, Bytes: j.Progress.Bytes, TotalBytes: j.Progress.TotalBytes, Mirror: j.Progress.Message}
+		if j.Progress.Stage == hub.StageWaiting {
+			m.progress.Mirror, m.progress.Waiting, m.progress.WaitingFor = "", true, j.Progress.Message
+		}
 		return
 	}
 	if !m.downloading {
@@ -259,17 +266,36 @@ func (a *app) verifyModel(e catalog.Entry) {
 	})
 }
 
+// askDelete asks before deleting e, after finding out (LaunchServices,
+// in the background) whether other ActNow apps may use it.
+func (a *app) askDelete(e catalog.Entry) {
+	fam := a.hubClient().Options().Family
+	a.async(func() {
+		users := fam.UsersOf(e.Repo)
+		a.post(func() { a.deleting, a.deleteShared, a.deleteAsk = e, users, true })
+	})
+}
+
+// deleteModel deletes e's files, unless another ActNow app may use them
+// (hub.Client.Remove keeps them).
 func (a *app) deleteModel(e catalog.Entry) {
 	client := a.hubClient()
 	m := a.model(e)
 	a.async(func() {
-		err := client.Delete(context.Background(), e)
+		r, err := client.Remove(context.Background(), e)
 		l, _ := client.Status(context.Background(), e)
 		a.post(func() {
 			m.local, m.known = l, true
-			if err != nil {
+			holder, busy := hub.Holder(err)
+			switch {
+			case busy:
+				a.toast(busyText(holder)) // models_removed.go
+			case err != nil:
 				a.toast(i18n.T("Could not delete %s: %v", modelRef(e), err))
-			} else {
+			case len(r.Kept) > 0:
+				a.logs.Append(core.LogEntry{Source: "hub", Message: "kept " + e.Repo + ": used by " + strings.Join(r.Kept, ", ")})
+				a.toast(sharedText(r.Kept, m.local.Bytes)) // installed since the dialog
+			default:
 				a.toast(i18n.T("Deleted %s", modelRef(e)))
 			}
 		})

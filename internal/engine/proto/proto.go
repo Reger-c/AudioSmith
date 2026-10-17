@@ -178,6 +178,12 @@ const (
 	CodePermissionDenied  = "permission_denied"  // macOS refused a permission; data: {"permission":"microphone"}
 	CodeDeviceUnavailable = "device_unavailable" // the capture device is unknown, gone or busy; data: {"device":"…"}
 	CodeContextTooLong    = "context_too_long"   // llm.generate: prompt + maxTokens over the context the engine allows; data: {"limit":16384,"actual":20000,"unit":"tokens"}
+
+	// Added for the ActNow family (its spec §7.1): the job named no
+	// snapshot directory and the cache, shared with other apps, holds
+	// several of the model; data: {"model":"…","snapshots":["<commit>",…]}.
+	// The app always names one (the executors' ModelPath).
+	CodeModelPathRequired = "model_path_required"
 )
 
 // Codes lists every error code the engine may send.
@@ -185,7 +191,7 @@ var Codes = []string{
 	CodeBadRequest, CodeMethodNotFound, CodeNotInitialized, CodeProtocolMismatch, CodeUnsupported,
 	CodeModelNotDownloaded, CodeModelLoadFailed, CodeLicenceRequired, CodeOOM, CodeBusy, CodeCancelled, CodeInternal,
 	CodeInputTooLong, CodeFileNotFound, CodeUnsupportedMedia, CodePermissionDenied, CodeDeviceUnavailable,
-	CodeContextTooLong,
+	CodeContextTooLong, CodeModelPathRequired,
 }
 
 // Retryable reports whether a job failing with code may be retried automatically.

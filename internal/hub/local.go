@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/actnowkit/models"
 )
 
 // weightExts are the extensions of model weights: a snapshot without one
@@ -212,67 +213,44 @@ func (c *Client) verifyOne(ctx context.Context, e catalog.Entry) ([]string, erro
 	return bad, nil
 }
 
-// Delete removes e's snapshot, the refs pointing at it, and the blobs no
-// other snapshot links to (partial downloads included). The repo
-// directory goes when no snapshot is left. Auxiliary repos stay: they are
-// small and other entries may share them.
-func (c *Client) Delete(ctx context.Context, e catalog.Entry) error {
-	defer c.lockRepo(e.Repo)()
-	return Delete(c.opts.CacheDir, e)
+// Removal is what Remove did.
+type Removal struct {
+	// Kept are the other family apps that may use the repo (names): its
+	// files stayed on this Mac (spec §7.10.3).
+	Kept  []string
+	Freed int64
 }
 
-// Delete is Client.Delete for a cache directory. The engine's own copy of
-// the repo (EngineCopy) goes too: it would take space, and the engine
-// would load it instead of a newer download.
-func Delete(cacheDir string, e catalog.Entry) error {
-	if err := os.RemoveAll(EngineCopy(cacheDir, e.Repo)); err != nil {
-		return err
+// Remove deletes e's snapshot unless another installed family app may
+// use its repo (Options.Family; the files stay and Kept names the apps):
+// the snapshot, the refs pointing at it and the blobs no other snapshot
+// links to (partial downloads included); the repo directory and its
+// engine copy when no snapshot is left. Auxiliary repos stay: they are
+// small and other entries may share them. A repo another process is
+// downloading (its lock is held) is not touched: *models.BusyError (see
+// Holder).
+func (c *Client) Remove(ctx context.Context, e catalog.Entry) (Removal, error) {
+	defer c.lockRepo(e.Repo)()
+	return Remove(c.opts.CacheDir, e, c.opts.Family)
+}
+
+// Delete is Remove without its report.
+func (c *Client) Delete(ctx context.Context, e catalog.Entry) error {
+	_, err := c.Remove(ctx, e)
+	return err
+}
+
+// Remove is Client.Remove for a cache directory.
+func Remove(cacheDir string, e catalog.Entry, fam Family) (Removal, error) {
+	if users := fam.UsersOf(e.Repo); len(users) > 0 {
+		return Removal{Kept: users}, nil
 	}
-	repoDir := RepoDir(cacheDir, e.Repo)
-	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
-		return nil
+	commit := commitOf(RepoDir(cacheDir, e.Repo), e)
+	if commit == "" {
+		commit = noSnapshot
 	}
-	snaps := filepath.Join(repoDir, "snapshots")
-	if commit := commitOf(repoDir, e); commit != "" {
-		if err := os.RemoveAll(filepath.Join(snaps, commit)); err != nil {
-			return err
-		}
-		os.RemoveAll(filepath.Join(snaps, commit+".incomplete"))
-		refs := filepath.Join(repoDir, "refs")
-		filepath.WalkDir(refs, func(p string, d fs.DirEntry, err error) error {
-			if err == nil && !d.IsDir() {
-				if data, err := os.ReadFile(p); err == nil && strings.TrimSpace(string(data)) == commit {
-					os.Remove(p)
-				}
-			}
-			return nil
-		})
-	}
-	// Blobs the remaining snapshots use.
-	used := map[string]bool{}
-	filepath.WalkDir(snaps, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && d.Type()&fs.ModeSymlink != 0 {
-			if target, err := os.Readlink(p); err == nil {
-				used[filepath.Base(target)] = true
-			}
-		}
-		return nil
-	})
-	if !nonEmpty(snaps) {
-		return os.RemoveAll(repoDir)
-	}
-	blobs := filepath.Join(repoDir, "blobs")
-	entries, _ := os.ReadDir(blobs)
-	for _, de := range entries {
-		name := de.Name()
-		base, _, _ := strings.Cut(name, ".incomplete")
-		if !used[base] {
-			if err := os.Remove(filepath.Join(blobs, name)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	freed, err := deleteRepo(cacheDir, e.Repo, commit, fam)
+	return Removal{Freed: freed}, err
 }
 
 // EngineCopiesDir is where mlx-audio-swift keeps its own copies of the
@@ -290,27 +268,11 @@ func EngineCopy(cacheDir, repo string) string {
 // in EngineCopiesDir after a failed load. Left there, the next load of
 // that repo finds an "incomplete" model and deletes the repo's snapshot
 // from the hub cache as well (research/m0-spikes.md §2). The supervisor
-// calls it before starting an engine. It returns what it removed.
+// calls it before starting an engine. Only directories untouched for
+// models.EngineCopyMinAge (10 minutes) go: a younger one may be another
+// family app's engine at work (spec §7.8). It returns what it removed.
 func CleanEngineCopies(cacheDir string) ([]string, error) {
-	dir := EngineCopiesDir(cacheDir)
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var removed []string
-	for _, de := range entries {
-		p := filepath.Join(dir, de.Name())
-		if !de.IsDir() || nonEmpty(p) {
-			continue
-		}
-		if err := os.Remove(p); err == nil {
-			removed = append(removed, de.Name())
-		}
-	}
-	return removed, nil
+	return models.CleanEngineCopies(cacheDir, models.EngineCopyMinAge)
 }
 
 // Leftover is what a repo AudioSmith no longer uses (a removed model's,
@@ -320,7 +282,18 @@ type Leftover struct {
 	Repo  string
 	Dirs  []string // existing directories, absolute
 	Bytes int64    // regular files under them (blobs, copies; links not followed)
+	// UsedBy are the other family apps that may use the repo (names):
+	// cleaning up keeps it.
+	UsedBy []string
+	// Busy: another process held the repo's lock when cleaning up (it
+	// downloads or deletes the repo), so it stayed; BusyBy names the app
+	// when known.
+	Busy   bool
+	BusyBy string
 }
+
+// Kept reports whether cleaning up leaves l alone.
+func (l Leftover) Kept() bool { return len(l.UsedBy) > 0 || l.Busy }
 
 // repoID is an "owner/name" Hugging Face repo id.
 var repoID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
@@ -334,10 +307,27 @@ func leftoverDirs(cacheDir, repo string) ([]string, error) {
 	return []string{RepoDir(cacheDir, repo), EngineCopy(cacheDir, repo)}, nil
 }
 
-// Leftovers reports what of repos is on disk in cacheDir; repos with
-// nothing there are left out.
-func Leftovers(cacheDir string, repos []string) ([]Leftover, error) {
+// dirBytes is the size of the regular files under dir (links not
+// followed); 0 when it is not there.
+func dirBytes(dir string) int64 {
+	var n int64
+	filepath.WalkDir(dir, func(_ string, de fs.DirEntry, err error) error {
+		if err == nil && de.Type().IsRegular() {
+			if info, err := de.Info(); err == nil {
+				n += info.Size()
+			}
+		}
+		return nil
+	})
+	return n
+}
+
+// Leftovers reports what of repos is on disk in cacheDir, and which of
+// them other family apps may use (fam); repos with nothing there are
+// left out.
+func Leftovers(cacheDir string, repos []string, fam Family) ([]Leftover, error) {
 	var out []Leftover
+	var users map[string][]string
 	for _, repo := range repos {
 		dirs, err := leftoverDirs(cacheDir, repo)
 		if err != nil {
@@ -349,38 +339,46 @@ func Leftovers(cacheDir string, repos []string) ([]Leftover, error) {
 				continue
 			}
 			l.Dirs = append(l.Dirs, d)
-			filepath.WalkDir(d, func(_ string, de fs.DirEntry, err error) error {
-				if err == nil && de.Type().IsRegular() {
-					if info, err := de.Info(); err == nil {
-						l.Bytes += info.Size()
-					}
-				}
-				return nil
-			})
+			l.Bytes += dirBytes(d)
 		}
 		if len(l.Dirs) > 0 {
+			if users == nil {
+				users = fam.Users()
+			}
+			l.UsedBy = users[strings.ToLower(repo)]
 			out = append(out, l)
 		}
 	}
 	return out, nil
 }
 
-// RemoveLeftovers deletes the directories of repos in cacheDir (their
-// cache directories and engine copies; see Leftovers) and nothing else.
-// It returns the bytes freed.
-func RemoveLeftovers(cacheDir string, repos []string) (int64, error) {
-	ls, err := Leftovers(cacheDir, repos)
+// RemoveLeftovers deletes repos from cacheDir (see Leftovers) except
+// those other family apps may use, snapshot by snapshot as Remove does
+// (never a whole directory another process may be writing: each repo is
+// deleted holding its lock, and one whose lock is held stays). It
+// returns the bytes freed and the leftovers it kept.
+func RemoveLeftovers(cacheDir string, repos []string, fam Family) (int64, []Leftover, error) {
+	ls, err := Leftovers(cacheDir, repos, fam)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	var freed int64
+	var kept []Leftover
 	for _, l := range ls {
-		for _, d := range l.Dirs {
-			if err := os.RemoveAll(d); err != nil {
-				return freed, err
-			}
+		if l.Kept() {
+			kept = append(kept, l)
+			continue
 		}
-		freed += l.Bytes
+		n, err := deleteRepo(cacheDir, l.Repo, "", fam)
+		freed += n
+		if name, busy := Holder(err); busy {
+			l.Busy, l.BusyBy = true, name
+			kept = append(kept, l)
+			continue
+		}
+		if err != nil {
+			return freed, kept, err
+		}
 	}
-	return freed, nil
+	return freed, kept, nil
 }

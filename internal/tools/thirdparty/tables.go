@@ -17,6 +17,7 @@ var goLicences = map[string]string{
 	"github.com/egoist/mygo":                 "MIT",
 	"github.com/go-text/typesetting":         "Unlicense OR BSD-3-Clause",
 	"github.com/google/jsonschema-go":        "MIT",
+	"github.com/hehehai/actnowkit":           "Apache-2.0",
 	"github.com/jfreymuth/oggvorbis":         "MIT",
 	"github.com/jfreymuth/vorbis":            "MIT",
 	"github.com/modelcontextprotocol/go-sdk": "Apache-2.0 AND MIT",
