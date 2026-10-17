@@ -1,11 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.4.0-beta.5
 
 ### Downloads and updates move to actnow.dev
 - AudioSmith now has its home on our website: [actnow.dev/audiosmith](https://actnow.dev/audiosmith). Download it from [actnow.dev/download/audiosmith](https://actnow.dev/download/audiosmith) (free; the download needs a free account), and read every version's notes at [actnow.dev/audiosmith/changelog](https://actnow.dev/audiosmith/changelog). The source code stays on GitHub under the AGPL-3.0, and you can still build AudioSmith yourself.
 - Updates come from actnow.dev: the daily check reads the version file there, and with Receive beta updates on also the betas' one, and offers the newer version. Copies of 0.4.0-beta.4 and earlier update to this version from GitHub, one last time.
 - Settings → Diagnostics and about links to the website, the download page and the release notes.
+
+### Models shared with other ActNow apps
+- Clean up, Delete and Settings → Storage → "Erase everything" no longer delete the models Dicta or VoxtNew use while those apps are installed: Clean up lists them as "Kept: used by Dicta", and Delete says the files stay on this Mac.
+- Downloads coordinate with the other apps: a file another app is downloading is not fetched twice ("Downloading in Dicta…"), and a model is not deleted while another app downloads or uses it.
+- The engine no longer guesses which version of a model to load when several are on disk.
 
 ## 0.4.0-beta.4
 
