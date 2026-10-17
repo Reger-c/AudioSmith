@@ -17,6 +17,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
+	famset "github.com/hehehai/actnowkit/settings"
 )
 
 // netCheck is the result of reaching one host.
@@ -119,6 +120,7 @@ func (a *app) networkSettings(c *ui.Context) {
 			}
 		})
 	}
+	a.sharedScope(c, famset.KeyHFEndpoints) // family_shared_view.go: the ActNow family's
 	settingRowNote(c, "proxy", i18n.T("Proxy"), a.proxyInfo, func() {
 		opts := proxyOptions()
 		if ui.Select(c.Key("proxy-select"), &a.proxyMode, opts).Label(i18n.T("Proxy")).Width(px(t, 240)).Changed() {
@@ -144,6 +146,7 @@ func (a *app) networkSettings(c *ui.Context) {
 			}
 		})
 	}
+	a.sharedScope(c, famset.KeyProxy)
 
 	sectionTitle(c, i18n.T("Connection"))
 	settingRow(c, "net-test", i18n.T("Test the connection"), i18n.T("Reaches Hugging Face, its mirror and GitHub through the proxy above."), func() {

@@ -73,6 +73,9 @@ func (a *app) shownPath() string {
 // in a column on the left (0.3: Typeless-style, research/ui-design-spec.md).
 func (a *app) settingsDialog(c *ui.Context) {
 	if !a.settingsOpen {
+		if len(a.otherShown) > 0 {
+			a.forgetOtherShown() // family_shared.go: "… uses a different …" says it once
+		}
 		return
 	}
 	t := c.Theme()

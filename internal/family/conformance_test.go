@@ -2,7 +2,8 @@ package family
 
 // actnowkit's conformance scenarios (spec §16.1) run against AudioSmith's
 // own code: its downloader (internal/hub, with the claims of Claimed) and
-// its deletes (hub.Remove deciding with Decider), in the fixture's
+// its deletes (hub.Remove deciding with Decider) and its shared settings
+// (Shared over AudioSmith's settings service), in the fixture's
 // directories.
 
 import (
@@ -12,6 +13,7 @@ import (
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/hub"
+	ass "github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/actnowkit/conformance"
 	"github.com/hehehai/actnowkit/models"
 )
@@ -19,6 +21,8 @@ import (
 type adapter struct {
 	f   *Family
 	hub string
+	own *ass.Store
+	sh  *Shared
 }
 
 func newAdapter(t testing.TB, fx *conformance.Fixture, bundleID string) any {
@@ -32,7 +36,41 @@ func newAdapter(t testing.TB, fx *conformance.Fixture, bundleID string) any {
 	if err := f.Start(context.Background(), Inputs{Version: "0.4.0", Hub: fx.Hub}, func(string) []models.Claim { return nil }); err != nil {
 		t.Fatal(err)
 	}
-	return &adapter{f: f, hub: fx.Hub}
+	own := ass.NewMemory()
+	sh := NewShared(f, SharedOptions{Own: own, DefaultHub: func() string { return fx.Hub }})
+	if err := sh.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return &adapter{f: f, hub: fx.Hub, own: own, sh: sh}
+}
+
+// update is a change of AudioSmith's settings, handed to Shared as the
+// app does (settings.Changed).
+func (a *adapter) update(ctx context.Context, fn func(*ass.Settings)) error {
+	old := a.own.Get()
+	if err := a.own.Update(ctx, fn); err != nil {
+		return err
+	}
+	return a.sh.Changed(ctx, old, a.own.Get())
+}
+
+func (a *adapter) Set(ctx context.Context, key, value string) error {
+	return a.update(ctx, func(s *ass.Settings) { SetOwnValue(s, key, value) })
+}
+
+func (a *adapter) StopFollowing(ctx context.Context, key string) error {
+	return a.update(ctx, func(s *ass.Settings) { s.Family.SetFollows(key, false) })
+}
+
+func (a *adapter) Effective(ctx context.Context, key string) (string, error) {
+	old := a.own.Get()
+	if err := a.sh.Adopt(ctx); err != nil { // as on activation
+		return "", err
+	}
+	if err := a.sh.Changed(ctx, old, a.own.Get()); err != nil {
+		return "", err
+	}
+	return a.sh.Effective(key), nil
 }
 
 func (a *adapter) BundleID() string { return a.f.BundleID }

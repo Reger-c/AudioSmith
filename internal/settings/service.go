@@ -147,6 +147,7 @@ func normalize(s Settings) Settings {
 	normalizeM2(&s)
 	normalizeM7(&s)
 	normalizeExport(&s)
+	normalizeFamily(&s)
 	return s
 }
 

@@ -19,7 +19,9 @@
 // Files: family.go (Family, Start, discovery, notifications),
 // manifest.go (the manifest), migrate.go (Migrate, the wanted claims),
 // claims.go (claims after downloads and deletes), legacy.go (apps without
-// a manifest), credentials.go (shared API keys and the HF token).
+// a manifest), credentials.go (shared API keys and the HF token),
+// shared.go (the shared settings), move.go (moving the models to the
+// family's model folder).
 package family
 
 import (
@@ -345,7 +347,7 @@ func (f *Family) OnChange(fn func(topics []string)) {
 // Reread is what a notification does, for when the app becomes active
 // (spec §5.4: notifications are hints, apps reread on activation).
 func (f *Family) Reread() {
-	f.handle([]string{actnow.TopicApps, actnow.TopicModels})
+	f.handle([]string{actnow.TopicApps, actnow.TopicModels, actnow.TopicSettings})
 }
 
 // handle rereads what the topics changed and tells OnChange.

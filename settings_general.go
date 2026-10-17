@@ -14,6 +14,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/settings"
+	famset "github.com/hehehai/actnowkit/settings"
 )
 
 func (a *app) generalSettings(c *ui.Context) {
@@ -28,8 +29,9 @@ func (a *app) generalSettings(c *ui.Context) {
 			a.updateSettings(func(s *settings.Settings) { s.General.Language = tag })
 		}
 	})
-	a.m2GeneralSettings(c) // M2: dictation_settings.go
-	a.onboardingRow(c)     // M7a: onboarding.go
+	a.sharedScope(c, famset.KeyLanguage) // family_shared_view.go: the ActNow family's
+	a.m2GeneralSettings(c)               // M2: dictation_settings.go
+	a.onboardingRow(c)                   // M7a: onboarding.go
 }
 
 func (a *app) appearanceSettings(c *ui.Context) {
@@ -71,6 +73,7 @@ func (a *app) modelSettings(c *ui.Context) {
 			a.updateSettings(func(s *settings.Settings) { s.Models.CacheDir = "" })
 		}
 	})
+	a.sharedScope(c, famset.KeyModelsRoot)
 
 	settingRowNote(c, "network-link", i18n.T("Download source and proxy"), a.proxyInfo, func() { // M7a: moved to Settings → Network
 		if ui.Button(c.Key("network-open"), i18n.T("Network…")).Clicked() {
