@@ -9,6 +9,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -81,6 +82,10 @@ type Dictation struct {
 	Output     string `json:"output"` // "paste" | "copy"
 	Sounds     bool   `json:"sounds"`
 	Device     string `json:"device,omitempty"` // capture device id; "" = the system's
+	// EnabledAt is when the user last set the shortcut or turned
+	// dictation on (UTC; zero = before AudioSmith recorded it), for the
+	// ActNow family's shortcut conflicts (family.go).
+	EnabledAt time.Time `json:"enabledAt,omitzero"`
 }
 
 // Dictation modes and outputs.

@@ -115,6 +115,7 @@ type Family struct {
 	stores    map[string]*models.Store
 	pending   []pendingClaim
 	watcher   *actnow.Watcher
+	watching  chan struct{} // closed when the watcher's goroutine ended
 	onChange  func(topics []string)
 }
 
@@ -385,8 +386,11 @@ func (f *Family) watch() {
 		return
 	}
 	f.watcher = w
+	done := make(chan struct{})
+	f.watching = done
 	f.mu.Unlock()
 	go func() {
+		defer close(done)
 		for t := range w.C {
 			seen := []string{t}
 			timer := time.NewTimer(f.settle)
@@ -413,10 +417,11 @@ func (f *Family) watch() {
 // Close stops the watcher (at quit).
 func (f *Family) Close() {
 	f.mu.Lock()
-	w := f.watcher
-	f.watcher = nil
+	w, done := f.watcher, f.watching
+	f.watcher, f.watching = nil, nil
 	f.mu.Unlock()
 	if w != nil {
 		w.Close()
+		<-done // what it was handling is done: nothing runs after Close
 	}
 }

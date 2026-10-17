@@ -5,6 +5,7 @@ package family
 import (
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/hehehai/actnowkit/registry"
 	"github.com/hehehai/actnowkit/shortcuts"
@@ -23,6 +24,10 @@ type Inputs struct {
 	Shortcut        string
 	ShortcutHold    bool
 	ShortcutEnabled bool
+	// ShortcutSince is when the user last set the shortcut or turned
+	// dictation on (the manifest's enabledAt: the later of two apps
+	// with the same keys prompts, spec §10.4); zero = unknown.
+	ShortcutSince time.Time
 
 	// The Local API (spec §11.2: declared, not yet offered to others).
 	APIEnabled bool
@@ -73,6 +78,10 @@ func (f *Family) Manifest(in Inputs) registry.Manifest {
 			}
 			m.Shortcuts = []shortcuts.Shortcut{{ID: "dictation", Title: "Dictation", Keys: keys, Trigger: trigger,
 				Enabled: in.ShortcutEnabled, Mechanism: shortcuts.Carbon}}
+			if !in.ShortcutSince.IsZero() {
+				at := in.ShortcutSince.UTC()
+				m.Shortcuts[0].EnabledAt = &at
+			}
 		} else {
 			f.logf("family: dictation shortcut %q left out of the manifest: %v", in.Shortcut, err)
 		}

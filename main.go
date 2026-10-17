@@ -60,9 +60,9 @@ func main() {
 	a.updates = useUpdates()                   // updates.go: the updater plugin (thread #50)
 	a.dataHome = home                          // M7a: settings_storage.go
 	a.connectShell(logDir)                     // shell.go
+	a.connectFamily()                          // family_app.go (thread #72): the ActNow family (before the engine: its memory budget)
 	a.connectEngine(eng)                       // enginelink.go
 	a.registerDubMedia()                       // M4: dub_pages.go (the video preview's scheme)
-	a.connectFamily()                          // family_app.go (thread #72): the ActNow family
 
 	mygo.App.WhenReady(func() {
 		a.openWindow() // shell.go

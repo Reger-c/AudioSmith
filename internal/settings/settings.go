@@ -47,6 +47,8 @@ type Settings struct {
 	Export Export `json:"export"`
 	// Software updates (thread #52, updates.go of the app).
 	Updates Updates `json:"updates"`
+	// The ActNow family (family.go; internal/family).
+	Family Family `json:"family,omitzero"`
 }
 
 // Updates: the update channel. The updater's other preferences (the

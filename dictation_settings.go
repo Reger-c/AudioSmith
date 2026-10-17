@@ -299,6 +299,7 @@ func (a *app) saveShortcut(acc string) {
 	}
 	f.recording, f.pending = false, ""
 	a.updateSettings(func(st *settings.Settings) { st.Dictation.Shortcut, st.Dictation.Enabled = s.String(), true })
+	a.noteUsedBy(a.shortcutUsedBy(s.String())) // family_coord.go: the user saw "Also used by…"
 	a.applyDictShortcut()
 	if a.dictRegErr == "" {
 		a.toast(i18n.T("Dictation shortcut: %s", s.Glyphs()))
@@ -503,10 +504,14 @@ func (a *app) shortcutRow(c *ui.Context) {
 			if s, err := dictation.ParseShortcut(f.pending); err == nil {
 				if cs := dictation.Conflicts(s, appShortcuts()); len(cs) > 0 {
 					hint, col = conflictText(cs[0]), t.Warning
+				} else if hits := a.shortcutUsedBy(f.pending); len(hits) > 0 {
+					hint, col = usedByText(hits), t.Warning // another ActNow app's (family_coord.go)
 				}
 			}
 		}
 		ui.Text(c.Key("dict-record-hint"), hint).FontSize(px(t, 12)).TextColor(col)
+	} else {
+		a.familyShortcutWarnings(c) // family_coord.go
 	}
 }
 

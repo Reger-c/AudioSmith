@@ -19,7 +19,7 @@ github.com/hehehai/AudioSmith
 │   │   └── enginetest/  a scripted protocol-2 engine for tests (the test binary re-runs itself)
 │   ├── catalog/         model catalogue: catalog.json (entries, pinned commits, licences, the removed models' alias table); presets.json (recommended models per page and language, tuned defaults: thread #41); STTFor (speech recognition by language: #46)
 │   ├── hub/             model files: HF cache layout, downloader, model.download jobs, token, proxy
-│   ├── family/          the ActNow family (spec phase 1, actnowkit): manifest, discovery, model claims, migration
+│   ├── family/          the ActNow family (spec phase 1, actnowkit): manifest, discovery, model claims, migration, runtime file + memory budget, shortcut conflicts
 │   ├── licence/         the licence gate (core.LicenceService) over the store's licences
 │   ├── settings/        the typed, versioned settings document + Service                (leaf)
 │   ├── notify/          the notification centre (kept in the store's documents)
@@ -78,7 +78,7 @@ watermark ──▶ torchpt            main ──▶ watermark
 store ──▶ core, jobs            store/sqlitestore ──▶ core, jobs, store, store/historyjson
 engine ──▶ core, engine/proto, jobs (its executors)        engine/enginetest ──▶ engine/proto
 hub ──▶ catalog, jobs (the download executor)              catalog ──▶ lang
-family ──▶ catalog (claims of catalogue entries)           hub ─╳─▶ family (main passes Options.Claimed)
+family ──▶ catalog (claims of catalogue entries), engine/proto (Runtime is an engine.Family)   hub, engine ─╳─▶ family (main passes Options.Claimed, Config.Family)
 licence ──▶ catalog, core       notify, logs ──▶ core
 text/* ──▶ text                 doc ──▶ text, doc/subtitle, doc/textenc      doc/subtitle ──▶ text
 dsp/* ──▶ dsp siblings only (wav, edit, mix, qc… ──▶ dsp; loudness ──▶ dsp, dynamics, filter; …)
@@ -209,6 +209,8 @@ Downloads (Models page, or Download next to the Studio's error) are `model.downl
 | Store: Takes, Voices (+Usage), Projects, Licences, Documents, Favorites, `jobs.Store` | `internal/store`, `sqlitestore/migrations/001_init.sql`, `002_voices.sql` (M1: voices search/origin, favorites) | done (SQLite) |
 | Jobs: lanes, priorities, states, DAG, retry, interrupted-on-restart | `internal/jobs` | done |
 | Engine supervisor: `Start/Call/Status/Restart/Stop`, `SetMemoryBudget`, `SetIdleUnload`, `SetCacheDir` | `internal/engine/supervisor.go` | done |
+| Family memory (spec §11.1; P5): optional `engine.Config.Family` (`Budget(own, physical)`, `Publish`, `RequestMemory`, `Requested`, `UnloadIdleAfter`; engine imports no actnowkit) — the budget is `min(setting, 60 % of RAM − other running family apps' loaded bytes)`; before a job loads a model not loaded on its worker (`makeRoom`, size = its files): own idle models go first (LRU), then one `RequestMemory` (waits ≤ 2 s for the others' runtime files to shrink), then it loads anyway; another app's request unloads models idle ≥ 60 s (fresh `engine.stats`; busy models never); `Publish` when models or their busy state change, after evictions and worker exits. App side `family.Runtime` (runtime/<bundle id>.json, `Close` = `famruntime.Remove` in OnWillQuit before `h.Stop()`, `pasting` around dictation's paste via `dictation.Inserter.Pasting`, `LoadedIn` for P3) | internal/engine/supervise_family.go, internal/family/runtime.go, family_coord.go | P5 |
+| Shortcut coordination (spec §10.4; P5): manifest `shortcuts[0]` = dictation (normalized keys, press/hold, carbon, `enabledAt` = `settings.Dictation.EnabledAt`, stamped by `settings.Store.Update` when the keys change or dictation turns on); `Family.UsedBy(keys)` → "Also used by Auralink (Transcribe)" under the recorder (saving allowed; the pair then counts as shown); `Family.ShortcutConflicts(forUI)` at start and on `TopicApps` → warning on Settings → Dictation, and when `Prompt` (AudioSmith is the later) a non-modal card (Change shortcut / Open <app> settings = their `links.shortcuts` / Ignore) once per pair (`settings.Family.ConflictShown`); dev builds never count, the UI names release builds only | internal/family/shortcuts.go, family_coord.go, dictation_settings.go | P5 |
 | Engine executors: `RegisterExecutors(sched, sup, ExecutorOptions{ModelPath, Licences})` | `internal/engine/executors.go` | done |
 | Protocol 2 (+ `SynthesizeParams.modelPath`, OmniVoice `steps`/`duration`) | `internal/engine/proto`, `engine/Fixtures`, [protocol-v2.md](protocol-v2.md) | done |
 | Catalogue v2: entries, aux repos, hidden, **pinned commits**, licences, language codes validated with `lang` | `internal/catalog` | done |
