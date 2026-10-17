@@ -10,7 +10,7 @@ AudioSmith joins the ActNow family: it works together with the other ActNow apps
 - Deleting a model that another app also uses asks what to do. Remove from AudioSmith keeps the files on this Mac for that app. Delete for all apps deletes them; the other app then has to download the model again. Clean up and "Erase everything" keep what other apps use, and say which app uses it. A model another app deleted for all apps shows "Deleted in Dicta · Download again".
 - Settings → Storage shows how much space AudioSmith shares with other apps. It also offers to clean up models that only uninstalled apps used.
 - If you accepted a model's licence in another app, AudioSmith still shows the licence, says when you accepted it, and asks you to continue.
-- Kokoro's, Chatterbox's and Whisper's helper files now always load at the version AudioSmith downloaded, even when another app keeps a different version.
+- Kokoro's, Chatterbox's and Whisper's helper files now always load from the copy AudioSmith downloaded, at that version. Before, the engine could download them again on first use, or pick up another app's version.
 
 ### Settings shared with other ActNow apps
 - The interface language, proxy, download source and model folder are shared with the other ActNow apps. With another app installed, each of these settings says whether it applies to all ActNow apps, and you can keep a different one for AudioSmith only.

@@ -107,7 +107,7 @@ func (a *app) openWorkflows(lib *library) {
 			if host == nil || host.sup == nil {
 				return nil
 			}
-			return engine.Executor(host.sup, dub.RoleOf(method), method)
+			return engine.Executor(host.sup, dub.RoleOf(method), method, engine.ExecutorOptions{AuxPaths: lib.auxSnapshots})
 		},
 		ModelPath: lib.modelSnapshot,
 		STT:       func() services.WorkflowSTT { return workflowSTT(lib) },
