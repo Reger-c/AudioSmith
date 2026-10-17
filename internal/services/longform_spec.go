@@ -69,6 +69,8 @@ type LineSpec struct {
 	// words. Turn: a turn of the scene.
 	Emotion string `json:"emotion,omitempty"`
 	Turn    bool   `json:"turn,omitempty"`
+	// Baseline is the character's baseline emotion (tracks are said in it).
+	Baseline string `json:"baseline,omitempty"`
 }
 
 // SpanSpec is a part of a line in one voice.

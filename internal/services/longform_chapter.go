@@ -53,6 +53,9 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 	}
 	defer st.cleanup()
 	res := ChapterResult{Output: p.Output, Key: key, Chunks: n, Warnings: warnings}
+	if _, paced := GapsOf(p.Production.Pacing); paced && p.Production.Steer {
+		_, res.Steered = steerLines(p.Lines)
+	}
 	res.Lines = make([]LinePlace, len(p.Lines))
 	for i, l := range p.Lines {
 		res.Lines[i] = LinePlace{ID: l.ID, Start: -1, Spans: make([]SpanPlace, len(l.Spans))}
@@ -89,7 +92,39 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		}
 		i++
 		c := *s.chunk
-		if s.lead != nil {
+		if s.track != nil {
+			// A line of a character's track: cut from it, else as usual.
+			seg := s.track.seg
+			if !seg.made {
+				seg.made = true
+				seg.err = cr.trackCut(ctx, st, i, n, seg)
+				if seg.err != nil && ctx.Err() == nil {
+					r.logf("chapter %s: lines %v: no track (%v); making them one by one", job.ID, seg.lines, seg.err)
+					res.TracksFailed++
+				} else if seg.err == nil {
+					res.Tracks++
+					res.TrackLines += len(seg.lines)
+				}
+			}
+			if seg.err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				for _, f := range s.track.fallback {
+					if f.chunk != nil {
+						n++
+						st.total += f.chunk.chars
+					}
+				}
+				for _, f := range s.track.fallback {
+					if err := run(f); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			c.path, c.seg.Text = seg.paths[s.track.k], seg.texts[s.track.k]
+		} else if s.lead != nil {
 			// A line said after a lead-in: cut from it, else as usual.
 			cached, err := cr.leadIn(ctx, st, i, n, s)
 			if err != nil {

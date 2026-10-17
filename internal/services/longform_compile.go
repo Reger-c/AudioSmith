@@ -167,7 +167,7 @@ func (c *compiler) story() {
 				ls.Intensity = min(max(l.Intensity, 0), IntensityStrong)
 			}
 			if e := NormEmotion(l.Emotion); e != "" {
-				ls.Emotion, ls.Intensity, ls.Turn = e, min(max(l.Intensity, 0), IntensityStrong), l.Turn
+				ls.Emotion, ls.Intensity, ls.Turn, ls.Baseline = e, min(max(l.Intensity, 0), IntensityStrong), l.Turn, baseline
 				if e == EmotionSteady && baseline != "" && baseline != EmotionSteady {
 					// The character's baseline going on, faintly.
 					ls.Emotion, ls.Intensity = baseline, min(ls.Intensity, IntensityLight)

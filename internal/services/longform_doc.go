@@ -183,6 +183,22 @@ type Production struct {
 	// is cut off with the forced aligner (story_leadin.go), so the line
 	// starts in the mood the last one left.
 	LeadIn bool `json:"leadIn,omitempty"`
+	// Tracks (experimental): within a chapter, a character's lines are
+	// said in one synthesis per stretch between their turns (in their
+	// baseline feeling), cut apart with the forced aligner and put back in
+	// the dialogue (story_track.go).
+	Tracks bool `json:"tracks,omitempty"`
+	// Steer (experimental): a line is synthesized with punctuation (and
+	// at most a sentence-final particle) that follows its emotion; the
+	// words never change (story_steer.go).
+	Steer bool `json:"steer,omitempty"`
+	// Temperature and TopP replace the model's sampling defaults (0: the
+	// model's); CharacterSeeds gives each character a seed of its own,
+	// from the story's and the character's (the "steadier delivery"
+	// preset: StoryTemperature, StoryTopP).
+	Temperature    float64 `json:"temperature,omitempty"`
+	TopP           float64 `json:"topP,omitempty"`
+	CharacterSeeds bool    `json:"characterSeeds,omitempty"`
 }
 
 // DefaultProduction are the production settings of a new project.

@@ -166,6 +166,16 @@ func (m ModelInfo) FillDefaults(t *core.Take, workflow string) {
 	}
 }
 
+// samples says whether the model samples (it has a temperature by
+// default for workflow): stories' sampling settings apply to it.
+func (m ModelInfo) samples(workflow string) bool {
+	d, ok := m.Defaults[workflow]
+	if !ok {
+		d = m.Defaults[""]
+	}
+	return d.Temperature > 0
+}
+
 // Lang is the BCP-47 tag of a recipe's language for the text pipeline:
 // its language parameter, else its voice's language, else "" (guess).
 func (m ModelInfo) Lang(language, voice string) string {

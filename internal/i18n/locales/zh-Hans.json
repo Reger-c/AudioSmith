@@ -3378,5 +3378,11 @@
   "emotion\u0004Turn": "转折",
   "emotion\u0004Worried": "担心",
   "emotion\u0004turn": "转折",
-  "intensity\u0004Barely": "很轻"
+  "intensity\u0004Barely": "很轻",
+  "Each part in one go": "每个角色一次读完",
+  "Punctuation follows the emotion": "标点随情绪调整",
+  "Steadier delivery": "更稳的演绎",
+  "Experimental. Each character's lines are said in one synthesis per stretch between their turns, in their baseline feeling, so the voice carries on from line to line; the forced aligner (%s) cuts them apart. A stretch that cannot be cut cleanly is made line by line.": "实验功能。每个角色的台词在两个转折之间一次合成，用角色的情绪基调，让声音一句接一句延续下去；再用强制对齐（%s）切开。切不干净的一段改为逐句生成。",
+  "Experimental. Lines are synthesized with punctuation that follows their emotion: a calm line without its “!”, a hesitant one with “…”. The words never change, and the story shows the lines as written.": "实验功能。合成时按情绪调整标点：平稳的句子去掉“！”，犹豫的句子加上“……”。字词不会改变，故事里显示的仍是原文。",
+  "Experimental. Tighter sampling (temperature %.2f, top-p %.2f) and a seed of each character's own: lines are less often overplayed, and a render made again sounds the same.": "实验功能。收紧采样（temperature %.2f，top-p %.2f），并给每个角色固定的随机种子：台词更少“演过头”，重新渲染时听起来也一样。"
 }
