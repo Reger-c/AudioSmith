@@ -43,15 +43,14 @@ func (a *adapter) family() hub.Family {
 }
 
 // claims registers refs for model (the first its own repo, the others
-// auxiliary), as a finished download does.
+// auxiliary) as AudioSmith reuses a model: Family.Reuse.
 func (a *adapter) claims(ctx context.Context, model, origin string, refs ...models.Ref) error {
+	var cs []models.Claim
 	for i, r := range refs {
-		c := models.Claim{Repo: r.Repo, Revision: r.Revision, Model: model, Aux: i > 0, Origin: origin}
-		if err := a.f.Store(a.hub).Claim(ctx, c); err != nil {
-			return err
-		}
+		cs = append(cs, models.Claim{Repo: r.Repo, Revision: r.Revision, Model: model, Aux: i > 0, Origin: origin})
 	}
-	return nil
+	_, err := a.f.Reuse(ctx, a.hub, cs)
+	return err
 }
 
 func (a *adapter) Reuse(ctx context.Context, refs ...models.Ref) error {

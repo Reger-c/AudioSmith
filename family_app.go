@@ -45,24 +45,32 @@ type familyState struct {
 type familyView struct {
 	others  []string
 	deleted map[string]string
+	shares  map[string]family.Share // family_reuse.go
+	loaded  map[string][]string
 }
 
-func readFamilyView(fam *family.Family) familyView {
+// readFamilyView reads it for the model folder hub; rt (the runtime
+// files, "Also loaded in") may be nil.
+func readFamilyView(fam *family.Family, rt *family.Runtime, hub string) familyView {
 	v := familyView{others: fam.OthersForUI(), deleted: map[string]string{}}
 	for _, e := range catalog.Builtin().Entries {
 		if name := fam.DeletedIn(e.Repo); name != "" {
 			v.deleted[strings.ToLower(e.Repo)] = name
 		}
 	}
+	if len(v.others) > 0 {
+		readShares(&v, fam, rt, hub) // family_reuse.go
+	}
 	return v
 }
 
 // showFamily takes v on the main thread.
 func (a *app) showFamily(v familyView) {
-	a.famOthers, a.famDeleted = v.others, v.deleted
+	a.famOthers, a.famDeleted, a.famShares, a.famLoaded = v.others, v.deleted, v.shares, v.loaded
 	if len(a.famOthers) == 0 {
-		a.famDeleted = nil
+		a.famDeleted, a.famShares, a.famLoaded = nil, nil, nil
 	}
+	a.familyShown() // family_reuse.go
 }
 
 // connectFamily makes AudioSmith's Family (no file touched yet) and has
@@ -85,12 +93,13 @@ func (a *app) startFamily(dataDir string) {
 		return
 	}
 	inputs := func() family.Inputs { return familyInputs(lib.settings.Get(), version, dataDir) }
+	rt := a.famRT
 	fam.OnChange(func(topics []string) {
 		a.familyChanged(topics) // family_coord.go: memory requests, shortcut conflicts
 		if slices.Contains(topics, actnow.TopicCredentials) {
 			a.checkSharedKeys() // family_keys_gone.go: a shared key deleted or changed
 		}
-		v := readFamilyView(fam)
+		v := readFamilyView(fam, rt, modelCache(lib.settings.Get()))
 		a.post(func() {
 			a.showFamily(v)
 			if slices.Contains(topics, actnow.TopicModels) {
@@ -117,7 +126,7 @@ func (a *app) startFamily(dataDir string) {
 		if err != nil {
 			log.Printf("family: %v (no manifest this time; deletes write no claims)", err)
 		}
-		v := readFamilyView(fam)
+		v := readFamilyView(fam, rt, modelCache(lib.settings.Get()))
 		a.post(func() { a.showFamily(v) })
 		a.familyStarted()   // family_coord.go
 		a.checkSharedKeys() // family_keys_gone.go: keys deleted while AudioSmith was not running
@@ -174,27 +183,82 @@ func (l *library) familyOptions(o *hub.Options) {
 // model folder hub (family.Migrate): the catalogue's, and the custom
 // repos it knows of — the Studio's and those of the downloads it still
 // remembers (finished model.download jobs).
+//
+// On a first run (the setup never done) only those AudioSmith shows it
+// has used or downloaded (usedRepos): the others on disk are other apps'
+// (or a Python tool's), and reusing them is the user's choice (the reuse
+// card, [Use] on the Models page) or follows from using one
+// (family_reuse.go). AudioSmith's own models must be claimed whatever the
+// setup says (a user who quit the wizard and downloaded from Models):
+// writing the manifest ends Dicta's legacy protection of them.
 func (l *library) familyWanted(cacheDir string) []models.Claim {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	used := l.usedRepos(ctx)
 	var custom []string
-	var d studioDraft
-	if ok, err := l.svc.Drafts.Load(ctx, studioDraftKey, &d); err == nil && ok && d.CustomRepo != "" {
-		custom = append(custom, d.CustomRepo)
-	}
-	done, err := l.sched.List(ctx, jobs.Filter{Kind: hub.KindDownload, States: []jobs.State{jobs.StateSucceeded}})
-	if err != nil {
-		log.Printf("family: downloads: %v", err)
-	}
-	for _, j := range done {
-		var p hub.DownloadParams
-		if json.Unmarshal(j.Params, &p) == nil && p.Repo != "" {
-			if _, builtin := catalog.Builtin().ByID(p.ID); !builtin && !slices.Contains(custom, p.Repo) {
-				custom = append(custom, p.Repo)
-			}
+	for _, repo := range used {
+		if _, builtin := catalog.Builtin().ByRepo(repo); !builtin {
+			custom = append(custom, repo)
 		}
 	}
-	return family.Wanted(cacheDir, catalog.Builtin().Entries, custom)
+	all := family.Wanted(cacheDir, catalog.Builtin().Entries, custom)
+	if l.settings.Get().Setup.Done {
+		return all
+	}
+	ids := map[string]bool{}
+	for _, repo := range used {
+		e, ok := catalog.Builtin().ByRepo(repo)
+		if !ok {
+			e = catalog.Custom(repo)
+		}
+		ids[family.ModelID(e)] = true
+	}
+	return slices.DeleteFunc(all, func(c models.Claim) bool { return !ids[c.Model] })
+}
+
+// usedRepos are the repos AudioSmith has shown it uses: the Studio
+// draft's model and custom repo, the models of its takes, and those its
+// finished jobs named (downloads' repos, every job's "model").
+func (l *library) usedRepos(ctx context.Context) []string {
+	var out []string
+	add := func(repo string) {
+		repo = strings.TrimSpace(repo)
+		if repo != "" && models.ValidRepo(repo) && !slices.ContainsFunc(out, func(r string) bool { return strings.EqualFold(r, repo) }) {
+			out = append(out, repo)
+		}
+	}
+	var d studioDraft
+	if ok, err := l.svc.Drafts.Load(ctx, studioDraftKey, &d); err == nil && ok {
+		if e, ok := catalog.Builtin().ByLabel(d.ModelLabel); ok {
+			add(e.Repo)
+		}
+		add(d.CustomRepo)
+	}
+	if takes, err := l.svc.Takes.List(ctx, core.TakeQuery{}); err == nil {
+		for _, t := range takes {
+			add(t.Model)
+		}
+	} else {
+		log.Printf("family: takes: %v", err)
+	}
+	done, err := l.sched.List(ctx, jobs.Filter{States: []jobs.State{jobs.StateSucceeded}})
+	if err != nil {
+		log.Printf("family: jobs: %v", err)
+	}
+	for _, j := range done {
+		var p struct {
+			Repo  string `json:"repo"`
+			Model string `json:"model"`
+		}
+		if json.Unmarshal(j.Params, &p) != nil {
+			continue
+		}
+		if j.Kind == hub.KindDownload {
+			add(p.Repo)
+		}
+		add(p.Model)
+	}
+	return out
 }
 
 // familyErase forgets AudioSmith's claims in cacheDir after "Erase

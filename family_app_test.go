@@ -17,6 +17,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/family"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/actnowkit/conformance"
 	"github.com/hehehai/actnowkit/models"
 )
@@ -34,6 +35,15 @@ type sharedFamily struct {
 
 func useFamily(t *testing.T, a *app, register ...string) *sharedFamily {
 	t.Helper()
+	// An AudioSmith that was set up: the migration claims its models.
+	a.updateSettings(func(s *settings.Settings) { s.Setup.Done = true })
+	return startFamily(t, a, register...)
+}
+
+// startFamily is useFamily as the settings are (a first run when the
+// setup was never done: nothing migrated).
+func startFamily(t *testing.T, a *app, register ...string) *sharedFamily {
+	t.Helper()
 	fx := conformance.New(t)
 	for _, bid := range register {
 		fx.Register(bid)
@@ -47,7 +57,7 @@ func useFamily(t *testing.T, a *app, register ...string) *sharedFamily {
 	if err := fam.Start(context.Background(), familyInputs(a.prefs, "0.4.0", t.TempDir()), a.lib.familyWanted); err != nil {
 		t.Fatal(err)
 	}
-	a.showFamily(readFamilyView(fam))
+	a.showFamily(readFamilyView(fam, nil, modelCache(a.prefs)))
 	return &sharedFamily{fx, a, fam}
 }
 
@@ -212,5 +222,11 @@ func TestNoFamilyWording(t *testing.T) {
 	a.eraseKeeps()
 	if a.resetKeeps != "" {
 		t.Errorf("erase keeps %q", a.resetKeeps)
+	}
+	// P3: no family lines, no [Use] (TestNoFamilyWordingFirstRun has the rest).
+	a.deleteModel(e, models.ThisApp) // the test build keeps the files
+	a.refreshFamily()
+	if m := a.model(e); a.familyLine(e, m) != "" || a.installedBy(e, m) != "" || a.modelStateText(e, m) != "Downloaded · 9 B" {
+		t.Errorf("models page: %q %q %q", a.familyLine(e, m), a.installedBy(e, m), a.modelStateText(e, m))
 	}
 }

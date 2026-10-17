@@ -52,6 +52,7 @@ type app struct {
 	familyState                       // family_app.go (thread #72): the ActNow family directory
 	familyCoord                       // family_coord.go (thread #73): shortcuts and memory with the family
 	familyKeys                        // family_keys.go (thread #74): API keys shared with the family
+	familyReuse                       // family_reuse.go (thread #75): reusing other apps' models, licences
 }
 
 func newApp(eng *engineHost, lib *library) *app {

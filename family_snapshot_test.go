@@ -66,7 +66,7 @@ func snapshotsFamily(t *testing.T, out string) {
 		tf.claim(t, "dev.hehehai.pik", catalogEntry(t, "silero-vad"))
 		tf.Uninstall("dev.hehehai.pik")
 		tf.fam.Reread()
-		a.showFamily(readFamilyView(tf.fam))
+		a.showFamily(readFamilyView(tf.fam, nil, cache))
 		// Removed models on disk: Gemma 4 E4B, which Dicta uses, and Parakeet.
 		gemma, parakeet := "mlx-community/gemma-4-e4b-it-4bit", "mlx-community/parakeet-tdt-0.6b-v3"
 		fakeHubRepo(t, cache, gemma, 5000)

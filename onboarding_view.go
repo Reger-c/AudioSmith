@@ -290,6 +290,10 @@ func (a *app) obModels(c *ui.Context) {
 	if a.obPack == "" && a.prefs.Setup.Pack == "" {
 		a.obPack = rec
 	}
+	if a.obSurveyFor != a.obPack {
+		a.surveyPack(a.obPack) // family_reuse.go
+	}
+	a.reuseCard(c)
 	k := tok(t)
 	for _, p := range modelPacks {
 		total, missing, names := a.packSizes(p.id)

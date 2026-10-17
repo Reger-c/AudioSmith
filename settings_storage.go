@@ -463,7 +463,11 @@ func (a *app) storageSettings(c *ui.Context) {
 	}
 
 	sectionTitle(c, i18n.T("Models"))
-	settingRow(c, "st-models", shortPath(modelCache(a.prefs)), i18n.T("Shared with other apps that use the Hugging Face cache. Change it in Settings → Models and downloads."), func() {
+	shared := i18n.T("Shared with other apps that use the Hugging Face cache. Change it in Settings → Models and downloads.")
+	if len(a.famOthers) > 0 {
+		shared = i18n.T("Shared by all ActNow apps. Change it in Settings → Models and downloads.") // spec §7.10.2
+	}
+	settingRow(c, "st-models", shortPath(modelCache(a.prefs)), shared, func() {
 		open("st-open-models", modelCache(a.prefs))
 	})
 	if r != nil {

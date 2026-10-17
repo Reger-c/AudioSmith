@@ -203,6 +203,7 @@ func (a *app) downloadUpdated(j jobs.Job) {
 	case jobs.StateSucceeded:
 		lg.Append(core.LogEntry{Source: "hub", Level: core.SeveritySuccess, Message: "downloaded " + e.Repo})
 		a.notify(core.SeveritySuccess, i18n.T("%s is downloaded", modelRef(e)), "", "/models")
+		a.refreshFamily() // family_reuse.go: shared with whom
 		if a.needDownload != nil && a.needDownload.Repo == e.Repo {
 			a.needDownload, a.jobError = nil, ""
 		}
@@ -303,6 +304,7 @@ func (a *app) deleteModel(e catalog.Entry, scope models.Scope) {
 		l, _ := client.Status(context.Background(), e)
 		a.post(func() {
 			m.local, m.known = l, true
+			a.refreshFamily() // family_reuse.go
 			holder, busy := hub.Holder(err)
 			names := a.familyNames(append(slices.Clone(r.Decision.Users), r.Decision.LoadedBy...))
 			switch {
@@ -329,9 +331,15 @@ func (a *app) deleteModel(e catalog.Entry, scope models.Scope) {
 }
 
 // askLicence shows the licence dialog for e; then (may be nil) runs after
-// the user accepted.
+// the user accepted. When the user accepted it in another ActNow app, the
+// dialog says so first (family_reuse.go; spec §7.9).
 func (a *app) askLicence(e catalog.Entry, then func()) {
-	a.licenceEntry, a.licenceThen, a.licenceAgree, a.licenceOpen = e, then, false, true
+	a.licenceEntry, a.licenceThen, a.licenceAgree = e, then, false
+	a.licenceFromFamily(e, func() {
+		if a.licenceEntry.Repo == e.Repo {
+			a.licenceOpen = true
+		}
+	})
 }
 
 // licenceModal is the licence acceptance dialog.
@@ -352,10 +360,22 @@ func (a *app) licenceModal(c *ui.Context) {
 					ui.Link(c, i18n.T("Read the licence"), lic.URL)
 				}
 			})
-			ui.Checkbox(c.Key("licence-agree"), &a.licenceAgree, i18n.T("I have read the licence and will use this model only as it allows."))
+			if a.licenceFrom != "" {
+				// Accepted in another ActNow app: shown again, Continue (spec §7.9).
+				ui.Text(c, i18n.T("You accepted this licence in %s on %s.", a.licenceFrom, i18n.Date(a.licenceAt)))
+			} else {
+				ui.Checkbox(c.Key("licence-agree"), &a.licenceAgree, i18n.T("I have read the licence and will use this model only as it allows."))
+			}
 			ui.Row(c).Gap(px(t, sp2)).Justify(ui.End).Children(func() {
 				if ui.Button(c.Key("licence-cancel"), i18n.T("Cancel")).Clicked() {
 					a.licenceOpen, a.licenceThen = false, nil
+				}
+				if a.licenceFrom != "" {
+					if primaryButton(c.Key("licence-continue"), i18n.T("Continue")).Clicked() {
+						a.acceptLicenceAs(e, a.licenceThen, false)
+						a.licenceOpen, a.licenceThen = false, nil
+					}
+					return
 				}
 				if primaryButton(c.Key("licence-accept"), i18n.T("Accept")).Disabled(!a.licenceAgree).Clicked() {
 					a.acceptLicence(e, a.licenceThen)
@@ -368,12 +388,20 @@ func (a *app) licenceModal(c *ui.Context) {
 	}
 }
 
-// acceptLicence records the acceptance of e's licence for e, then runs then.
-func (a *app) acceptLicence(e catalog.Entry, then func()) {
+// acceptLicence records the acceptance of e's licence for e, in
+// AudioSmith and for the ActNow family, then runs then.
+func (a *app) acceptLicence(e catalog.Entry, then func()) { a.acceptLicenceAs(e, then, true) }
+
+// acceptLicenceAs is acceptLicence; forFamily false leaves the family's
+// record alone (Continue after an acceptance in another app).
+func (a *app) acceptLicenceAs(e catalog.Entry, then func(), forFamily bool) {
 	gate := a.licences
 	acc := core.LicenceAcceptance{Licence: e.Licence.ID, Model: e.Repo}
 	a.async(func() {
 		err := gate.Accept(context.Background(), acc)
+		if err == nil && forFamily {
+			a.recordLicence(e) // family_reuse.go
+		}
 		list, _ := gate.List(context.Background())
 		a.post(func() {
 			if err != nil {

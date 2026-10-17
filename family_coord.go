@@ -58,7 +58,7 @@ func (a *app) connectFamilyRuntime() {
 			return filepath.Base(dir) // …/snapshots/<commit>
 		}
 		return ""
-	}})
+	}, Loaded: func(repos []string) { go a.claimInUse(repos) }}) // family_reuse.go
 }
 
 // engineFamily is the supervisor's engine.Family: nil without the family
