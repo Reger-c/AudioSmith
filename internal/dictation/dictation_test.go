@@ -133,3 +133,34 @@ func TestNativeOffMac(t *testing.T) {
 		t.Error("microphone granted off macOS")
 	}
 }
+
+// The family hears when the paste starts and ends: around the clipboard
+// write, ⌘V and the restore; nothing when the text is only copied.
+func TestInsertTellsPasting(t *testing.T) {
+	f := NewFake()
+	f.Write(transfer.TextData("old"))
+	var seen []string
+	in := inserter(f)
+	in.Pasting = func(_ context.Context, on bool) {
+		seen = append(seen, map[bool]string{true: "on:" + f.ClipText(), false: "off:" + f.ClipText()}[on])
+	}
+	f.OnPaste = func() { seen = append(seen, "paste") }
+	if res := in.Insert(ctx, Target{PID: 7}, "dictated"); res.Outcome != Inserted || !res.Restored {
+		t.Fatalf("%+v", res)
+	}
+	if want := []string{"on:old", "paste", "off:old"}; len(seen) != 3 || seen[0] != want[0] || seen[1] != want[1] || seen[2] != want[2] {
+		t.Errorf("pasting %v, want %v", seen, want)
+	}
+	seen = nil
+	f.ActivateOK = false // gives up after writing the clipboard
+	in.Insert(ctx, Target{PID: 7}, "dictated")
+	if len(seen) != 2 || seen[1][:4] != "off:" {
+		t.Errorf("a paste given up: %v", seen)
+	}
+	seen = nil
+	in.CopyOnly = true
+	in.Insert(ctx, Target{PID: 7}, "dictated")
+	if len(seen) != 0 {
+		t.Errorf("copy only: %v", seen)
+	}
+}

@@ -54,6 +54,9 @@ func NewSupervisor(cfg Config) Supervisor {
 		s.roles = append(s.roles, r)
 		s.workers[r] = &worker{role: r, status: WorkerStatus{Role: r, State: WorkerStopped, Since: time.Now()}}
 	}
+	if cfg.Family != nil {
+		go s.watchFamily(cfg.Family)
+	}
 	return s
 }
 
@@ -280,6 +283,7 @@ func (s *supervisor) exited(p *proc, waitErr error) {
 	st := s.statusLocked(w)
 	s.mu.Unlock()
 	s.publish(st)
+	s.publishFamily() // its models are gone
 }
 
 // ready waits for w to be ready and returns its process. A worker that is
@@ -332,7 +336,11 @@ func (s *supervisor) Call(ctx context.Context, role proto.Role, id, method strin
 	if err != nil {
 		return nil, err
 	}
-	return p.call(ctx, id, method, params, notify, proto.IsJob(method))
+	job := proto.IsJob(method)
+	if job {
+		s.makeRoom(ctx, role, params) // supervise_family.go
+	}
+	return p.call(ctx, id, method, params, notify, job)
 }
 
 func (s *supervisor) Restart(role proto.Role) error {
@@ -363,6 +371,7 @@ func (s *supervisor) Restart(role proto.Role) error {
 		<-p.exited
 	}
 	s.spawn(w, false)
+	s.publishFamily() // its models are gone
 	return nil
 }
 

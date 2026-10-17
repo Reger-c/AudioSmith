@@ -87,6 +87,11 @@ type Config struct {
 	// together; above it the supervisor unloads the least recently used
 	// idle models (models.unload). 0 means 60% of physical memory.
 	MemoryBudget int64
+	// Family, when set, shares the budget with the other ActNow family
+	// apps (supervise_family.go): it caps MemoryBudget, hears what the
+	// workers hold, and is asked for memory before a load that does not
+	// fit; its requests unload the models idle for a minute.
+	Family Family
 	// IdleUnload unloads a model nobody used for this long (settings:
 	// "Unload idle models"); 0 keeps models until the budget needs room.
 	IdleUnload time.Duration

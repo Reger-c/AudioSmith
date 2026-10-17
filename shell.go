@@ -277,6 +277,8 @@ func (a *app) view(c *ui.Context) {
 	a.onboarding(c) // M7a: the first-run wizard, under the licence dialog
 	a.licenceModal(c)
 	a.exportDialog(c) // export_dialog.go (thread #31)
+	// family_coord.go: a shortcut conflict's card (not modal).
+	a.shortcutConflictCard(c)
 	a.modelsAlerts(c)
 	a.removedAlert(c) // models_removed.go
 	a.toastsView(c)   // last: over dialogs too

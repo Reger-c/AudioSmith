@@ -244,7 +244,8 @@ func (a *app) dictDeliver(s *dictSession, t core.Transcript) {
 	if wall <= 0 {
 		wall = translate.DefaultCleanupBudget
 	}
-	in := dictation.Inserter{Sys: a.dictSys, Clip: a.dictClip, CopyOnly: d.Output == settings.OutputCopy, Sleep: dictSleep}
+	in := dictation.Inserter{Sys: a.dictSys, Clip: a.dictClip, CopyOnly: d.Output == settings.OutputCopy, Sleep: dictSleep,
+		Pasting: a.familyPasting} // family_coord.go
 	target := s.target
 	svc := a.trSvc
 	a.async(func() {
