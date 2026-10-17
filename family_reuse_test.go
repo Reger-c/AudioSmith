@@ -14,9 +14,11 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/family"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
 	"github.com/hehehai/actnowkit/conformance"
 	"github.com/hehehai/actnowkit/models"
@@ -381,5 +383,37 @@ func TestReuseCardAfterDiscovery(t *testing.T) {
 	tt.Frame()
 	if !slices.ContainsFunc(tt.Texts(), func(s string) bool { return strings.HasPrefix(s, "Installed by Dicta · ") }) {
 		t.Errorf("card %q", tt.Texts())
+	}
+}
+
+// A first run (the setup never done) still claims, origin migrated, what
+// AudioSmith shows it downloaded or used — a finished download, a take's
+// model — but not the models only Dicta put there (hard constraint 1 of
+// the phase-1 plan: the manifest ends Dicta's legacy protection).
+func TestFirstRunClaimsOwnModels(t *testing.T) {
+	i18n.SetLocale("en")
+	a, eng, _ := newTestApp(t)
+	delete(eng.executors, hub.KindDownload)
+	kokoro, base, asr := catalogEntry(t, "kokoro-82m-bf16"), catalogEntry(t, "qwen3-tts-0.6b-base-8bit"), catalogEntry(t, catalog.DefaultDictation)
+	a.download(kokoro)
+	eng.succeed(eng.sent[len(eng.sent)-1].ID, nil) // it finished
+	if js, _ := a.lib.sched.List(context.Background(), jobs.Filter{Kind: hub.KindDownload, States: []jobs.State{jobs.StateSucceeded}}); len(js) != 1 {
+		t.Fatalf("download jobs %v", js)
+	}
+	addTake(t, a, core.Take{ID: "take-base", Text: "Hello", Model: base.Repo, SampleRate: 24000}, 1)
+	tf := startFamily(t, a, dictaID)
+	tf.claim(t, dictaID, asr)
+	mine := tf.Claims(family.ReleaseBundleID)
+	for _, e := range []catalog.Entry{kokoro, base} {
+		if c, ok := mine.Find(refOf(e)); !ok || c.Origin != models.OriginMigrated {
+			t.Errorf("%s: %+v %v", e.ID, c, ok)
+		}
+	}
+	if _, ok := mine.Find(refOf(asr)); ok {
+		t.Error("claimed a model only Dicta put there")
+	}
+	main := slices.DeleteFunc(slices.Clone(mine.Claims), func(c models.Claim) bool { return c.Aux })
+	if len(main) != 2 { // (and Kokoro's auxiliary repos)
+		t.Errorf("claims %+v", mine.Claims)
 	}
 }

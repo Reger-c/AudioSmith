@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -218,7 +220,18 @@ func (s fakeSched) Get(_ context.Context, id string) (jobs.Job, error) {
 	return j, nil
 }
 
-func (s fakeSched) List(context.Context, jobs.Filter) ([]jobs.Job, error) { return nil, nil }
+// List returns the finished jobs of the filter's kind and states (tests
+// that look at the job history); without states, none (no history).
+func (s fakeSched) List(_ context.Context, fl jobs.Filter) ([]jobs.Job, error) {
+	var out []jobs.Job
+	for _, j := range s.f.jobs {
+		if len(fl.States) > 0 && slices.Contains(fl.States, j.State) && (fl.Kind == "" || fl.Kind == j.Spec.Kind) {
+			out = append(out, j)
+		}
+	}
+	slices.SortFunc(out, func(a, b jobs.Job) int { return strings.Compare(a.ID, b.ID) })
+	return out, nil
+}
 
 type fakeSup struct{ f *fakeEngine }
 

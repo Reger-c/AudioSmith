@@ -184,35 +184,81 @@ func (l *library) familyOptions(o *hub.Options) {
 // repos it knows of — the Studio's and those of the downloads it still
 // remembers (finished model.download jobs).
 //
-// None on a first run (the setup never done): the models on disk then
-// are other apps' (or a Python tool's), not AudioSmith's — the migration
-// of spec §15.2 step 3 is for an app that has models of its own. Their
-// reuse is the user's choice (the reuse card, [Use] on the Models page)
-// or follows from using one (family_reuse.go).
+// On a first run (the setup never done) only those AudioSmith shows it
+// has used or downloaded (usedRepos): the others on disk are other apps'
+// (or a Python tool's), and reusing them is the user's choice (the reuse
+// card, [Use] on the Models page) or follows from using one
+// (family_reuse.go). AudioSmith's own models must be claimed whatever the
+// setup says (a user who quit the wizard and downloaded from Models):
+// writing the manifest ends Dicta's legacy protection of them.
 func (l *library) familyWanted(cacheDir string) []models.Claim {
-	if !l.settings.Get().Setup.Done {
-		return nil
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	used := l.usedRepos(ctx)
 	var custom []string
-	var d studioDraft
-	if ok, err := l.svc.Drafts.Load(ctx, studioDraftKey, &d); err == nil && ok && d.CustomRepo != "" {
-		custom = append(custom, d.CustomRepo)
-	}
-	done, err := l.sched.List(ctx, jobs.Filter{Kind: hub.KindDownload, States: []jobs.State{jobs.StateSucceeded}})
-	if err != nil {
-		log.Printf("family: downloads: %v", err)
-	}
-	for _, j := range done {
-		var p hub.DownloadParams
-		if json.Unmarshal(j.Params, &p) == nil && p.Repo != "" {
-			if _, builtin := catalog.Builtin().ByID(p.ID); !builtin && !slices.Contains(custom, p.Repo) {
-				custom = append(custom, p.Repo)
-			}
+	for _, repo := range used {
+		if _, builtin := catalog.Builtin().ByRepo(repo); !builtin {
+			custom = append(custom, repo)
 		}
 	}
-	return family.Wanted(cacheDir, catalog.Builtin().Entries, custom)
+	all := family.Wanted(cacheDir, catalog.Builtin().Entries, custom)
+	if l.settings.Get().Setup.Done {
+		return all
+	}
+	ids := map[string]bool{}
+	for _, repo := range used {
+		e, ok := catalog.Builtin().ByRepo(repo)
+		if !ok {
+			e = catalog.Custom(repo)
+		}
+		ids[family.ModelID(e)] = true
+	}
+	return slices.DeleteFunc(all, func(c models.Claim) bool { return !ids[c.Model] })
+}
+
+// usedRepos are the repos AudioSmith has shown it uses: the Studio
+// draft's model and custom repo, the models of its takes, and those its
+// finished jobs named (downloads' repos, every job's "model").
+func (l *library) usedRepos(ctx context.Context) []string {
+	var out []string
+	add := func(repo string) {
+		repo = strings.TrimSpace(repo)
+		if repo != "" && models.ValidRepo(repo) && !slices.ContainsFunc(out, func(r string) bool { return strings.EqualFold(r, repo) }) {
+			out = append(out, repo)
+		}
+	}
+	var d studioDraft
+	if ok, err := l.svc.Drafts.Load(ctx, studioDraftKey, &d); err == nil && ok {
+		if e, ok := catalog.Builtin().ByLabel(d.ModelLabel); ok {
+			add(e.Repo)
+		}
+		add(d.CustomRepo)
+	}
+	if takes, err := l.svc.Takes.List(ctx, core.TakeQuery{}); err == nil {
+		for _, t := range takes {
+			add(t.Model)
+		}
+	} else {
+		log.Printf("family: takes: %v", err)
+	}
+	done, err := l.sched.List(ctx, jobs.Filter{States: []jobs.State{jobs.StateSucceeded}})
+	if err != nil {
+		log.Printf("family: jobs: %v", err)
+	}
+	for _, j := range done {
+		var p struct {
+			Repo  string `json:"repo"`
+			Model string `json:"model"`
+		}
+		if json.Unmarshal(j.Params, &p) != nil {
+			continue
+		}
+		if j.Kind == hub.KindDownload {
+			add(p.Repo)
+		}
+		add(p.Model)
+	}
+	return out
 }
 
 // familyErase forgets AudioSmith's claims in cacheDir after "Erase
