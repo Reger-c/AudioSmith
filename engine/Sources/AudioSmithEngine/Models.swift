@@ -193,21 +193,8 @@ func modelType(_ dir: URL) -> String? {
 /// the whole model there, doubling its disk use; a copy left from that is
 /// replaced by links here.
 func linkedModelDirectory(_ model: String, snapshot: URL) throws -> URL {
-    let fm = FileManager.default
     let dir = engineCopyDirectory(model)
-    try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-    for name in try fm.contentsOfDirectory(atPath: snapshot.path) where !name.hasPrefix(".") {
-        let link = dir.appendingPathComponent(name).path
-        let target = snapshot.appendingPathComponent(name).path
-        if (try? fm.destinationOfSymbolicLink(atPath: link)) == target { continue }
-        try? fm.removeItem(atPath: link)
-        do {
-            try fm.createSymbolicLink(atPath: link, withDestinationPath: target)
-        } catch {
-            // Another worker linked it at the same moment.
-            guard (try? fm.destinationOfSymbolicLink(atPath: link)) == target else { throw error }
-        }
-    }
+    try linkSnapshot(snapshot, into: dir)
     return dir
 }
 

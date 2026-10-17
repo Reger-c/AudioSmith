@@ -28,6 +28,7 @@ import (
 	"log"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -114,15 +115,19 @@ type Family struct {
 	found     []registry.Found
 	stores    map[string]*models.Store
 	pending   []pendingClaim
-	watcher   *actnow.Watcher
-	watching  chan struct{} // closed when the watcher's goroutine ended
-	onChange  func(topics []string)
+	// deleted are the models other apps deleted for all apps that
+	// AudioSmith had claimed (tombstones applied): repo (lower case) →
+	// the deleting app's bundle id, until AudioSmith downloads them again.
+	deleted  map[string]string
+	watcher  *actnow.Watcher
+	watching chan struct{} // closed when the watcher's goroutine ended
+	onChange func(topics []string)
 }
 
 // New makes the Family; it touches no file.
 func New(o Options) *Family {
 	f := &Family{Dir: o.Dir, BundleID: o.BundleID, sys: o.System, appPath: o.AppPath, logf: o.Logf, settle: o.Settle,
-		stores: map[string]*models.Store{}}
+		stores: map[string]*models.Store{}, deleted: map[string]string{}}
 	if f.Dir.Root == "" {
 		f.Dir = actnow.Default()
 	}
@@ -191,9 +196,7 @@ func (f *Family) Start(ctx context.Context, in Inputs, wanted func(hub string) [
 	f.flushPending(ctx)
 	werr := f.writeManifest(in)
 	f.Rediscover()
-	if _, err := store.ApplyTombstones(); err != nil {
-		f.logf("family: tombstones: %v", err)
-	}
+	f.applyTombstones(store)
 	f.watch()
 	return werr
 }
@@ -357,15 +360,43 @@ func (f *Family) handle(topics []string) {
 		f.Rediscover()
 	}
 	if st == ready && slices.Contains(topics, actnow.TopicModels) {
-		if ts, err := f.Store(hub).ApplyTombstones(); err != nil {
-			f.logf("family: tombstones: %v", err)
-		} else if len(ts) > 0 {
-			f.logf("family: %d models deleted for all apps by another app", len(ts))
-		}
+		f.applyTombstones(f.Store(hub))
 	}
 	if fn != nil {
 		fn(topics)
 	}
+}
+
+// applyTombstones drops AudioSmith's claims on models another app deleted
+// for all apps, and remembers them for the Models page.
+func (f *Family) applyTombstones(store *models.Store) {
+	ts, err := store.ApplyTombstones()
+	if err != nil {
+		f.logf("family: tombstones: %v", err)
+		return
+	}
+	if len(ts) > 0 {
+		f.logf("family: %d models deleted for all apps by another app", len(ts))
+	}
+	f.mu.Lock()
+	for _, t := range ts {
+		f.deleted[strings.ToLower(t.Repo)] = t.RemovedBy
+	}
+	f.mu.Unlock()
+}
+
+// DeletedIn names the app (a release build of another family app; spec
+// §7.10) that deleted repo for all apps while AudioSmith used it, for
+// "Deleted in Dicta · Download again"; "" when none did, or AudioSmith
+// downloaded it again since.
+func (f *Family) DeletedIn(repo string) string {
+	f.mu.Lock()
+	bid := f.deleted[strings.ToLower(repo)]
+	f.mu.Unlock()
+	if names := VisibleNames(models.User{BundleID: bid}); len(names) > 0 {
+		return names[0]
+	}
+	return ""
 }
 
 // topics AudioSmith follows (spec §5.4).

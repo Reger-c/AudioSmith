@@ -2661,7 +2661,6 @@
   "There is no page at %s.": "%s 处没有页面。",
   "There is no transcript yet.": "还没有文字稿。",
   "There is nothing to say.": "没有可朗读的内容。",
-  "These models are also used by other ActNow apps and will be kept: %s (%s)": "以下模型也被其他 ActNow app 使用，将被保留：%s（%s）",
   "They hung up before saying anything.": "对方在说话前就挂断了。",
   "Thinking": "思考中",
   "This Mac": "这台 Mac",
@@ -3269,5 +3268,16 @@
   "≈ %s of audio": "约 %s 音频",
   "Hear %s": "试听 %s",
   "Stop the preview": "停止试听",
-  "The site offers this video only as separate video and audio streams, which need ffmpeg to join: set ffmpeg up in Settings → Audio tools, then try again.": "这个网站只提供分开的视频流和音频流，需要 ffmpeg 合并：请在 设置 → 音频工具 里设置 ffmpeg 后重试。"
+  "The site offers this video only as separate video and audio streams, which need ffmpeg to join: set ffmpeg up in Settings → Audio tools, then try again.": "这个网站只提供分开的视频流和音频流，需要 ffmpeg 合并：请在 设置 → 音频工具 里设置 ffmpeg 后重试。",
+  "%d model (%s) is only used by apps that are no longer installed.": "有 %d 个模型（%s）只被已卸载的 app 使用。",
+  "%d models (%s) are only used by apps that are no longer installed.": "有 %d 个模型（%s）只被已卸载的 app 使用。",
+  "%s will need to download it again (%s).": "%s 再次使用时需要重新下载（%s）。",
+  "Delete for all apps…": "为所有 app 删除…",
+  "Delete %s for all apps?": "为所有 app 删除%s？",
+  "Deleted in %s · Download again": "已在 %s 中删除 · 重新下载",
+  "Only AudioSmith: %s · Shared with %s: %s": "仅 AudioSmith：%s · 与 %s 共用：%s",
+  "Remove from AudioSmith": "从 AudioSmith 移除",
+  "Remove %s from AudioSmith?": "从 AudioSmith 移除%s？",
+  "Removed %s": "已移除%s",
+  "These models are also used by %s and will be kept: %s (%s)": "以下模型也被 %s 使用，将被保留：%s（%s）"
 }

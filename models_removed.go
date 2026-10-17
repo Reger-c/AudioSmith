@@ -15,6 +15,7 @@ package main
 // the Models page (removedRow): AudioSmith never deletes them by itself.
 
 import (
+	"context"
 	"maps"
 	"slices"
 	"strings"
@@ -381,8 +382,8 @@ func (a *app) removedShows(kind int) bool {
 
 // removedOnDisk are the removed models with files to clean up, and the
 // bytes of each (its auxiliary repos count as its own); kept are those
-// with files another ActNow app may use, with why ("Kept: used by
-// Dicta").
+// with files another ActNow app uses, with why ("Kept: used by Dicta"),
+// when the app can be named.
 func (a *app) removedOnDisk() (names []string, bytes []int64, kept []string) {
 	for _, r := range catalog.Builtin().Removed {
 		var n int64
@@ -393,7 +394,7 @@ func (a *app) removedOnDisk() (names []string, bytes []int64, kept []string) {
 				continue
 			}
 			if l.Kept() {
-				for _, u := range l.UsedBy {
+				for _, u := range a.familyNames(l.Users) { // named only as spec §7.10 allows
 					if !slices.Contains(users, u) {
 						users = append(users, u)
 					}
@@ -472,8 +473,7 @@ func (a *app) cleanRemoved() {
 	opts := a.hubClient().Options()
 	repos := removedRepos()
 	a.async(func() {
-		freed, kept, err := hub.RemoveLeftovers(opts.CacheDir, repos, opts.Family)
-		a.familyForget(opts.CacheDir, repos) // family_app.go
+		freed, kept, err := hub.RemoveLeftovers(context.Background(), opts.CacheDir, repos, opts.Family)
 		ls, _ := hub.Leftovers(opts.CacheDir, repos, opts.Family)
 		a.post(func() {
 			a.cleaning, a.removedLeft, a.removedKnown = false, ls, true

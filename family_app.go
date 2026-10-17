@@ -3,15 +3,16 @@ package main
 // The ActNow family, phase 1 (internal/family; family spec v1.0.4): the
 // manifest in $FAMILY/apps, discovery of the other family apps, and the
 // claims on the models AudioSmith uses, so that the other apps keep them.
-// Data only: the UI shows nothing of it yet (phase-0 texts stay, and
-// family texts appear only when another family app's release build is
-// installed, internal/family OthersForUI).
+// The UI names other apps only when a release build of another family
+// app is installed (famOthers, internal/family OthersForUI; spec §7.10):
+// otherwise there is no family wording anywhere, deletes ask as before.
 
 import (
 	"context"
 	"encoding/json"
 	"log"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -32,6 +33,36 @@ type familyState struct {
 	// famDirty asks the family worker to compare the manifest with the
 	// settings again (one pending request is enough).
 	famDirty chan struct{}
+	// famOthers are the other family apps the UI may name (OthersForUI):
+	// empty, no family wording. famDeleted maps a catalogue repo (lower
+	// case) to the app that deleted it for all apps (the Models page's
+	// "Deleted in Dicta · Download again").
+	famOthers  []string
+	famDeleted map[string]string
+}
+
+// familyView is what the UI shows of the family, read on a goroutine.
+type familyView struct {
+	others  []string
+	deleted map[string]string
+}
+
+func readFamilyView(fam *family.Family) familyView {
+	v := familyView{others: fam.OthersForUI(), deleted: map[string]string{}}
+	for _, e := range catalog.Builtin().Entries {
+		if name := fam.DeletedIn(e.Repo); name != "" {
+			v.deleted[strings.ToLower(e.Repo)] = name
+		}
+	}
+	return v
+}
+
+// showFamily takes v on the main thread.
+func (a *app) showFamily(v familyView) {
+	a.famOthers, a.famDeleted = v.others, v.deleted
+	if len(a.famOthers) == 0 {
+		a.famDeleted = nil
+	}
 }
 
 // connectFamily makes AudioSmith's Family (no file touched yet) and has
@@ -55,9 +86,13 @@ func (a *app) startFamily(dataDir string) {
 	inputs := func() family.Inputs { return familyInputs(lib.settings.Get(), version, dataDir) }
 	fam.OnChange(func(topics []string) {
 		a.familyChanged(topics) // family_coord.go: memory requests, shortcut conflicts
-		if slices.Contains(topics, actnow.TopicModels) {
-			a.post(a.refreshModels) // another app downloaded or deleted a model
-		}
+		v := readFamilyView(fam)
+		a.post(func() {
+			a.showFamily(v)
+			if slices.Contains(topics, actnow.TopicModels) {
+				a.refreshModels() // another app downloaded or deleted a model
+			}
+		})
 	})
 	mygo.App.OnDidBecomeActive(func() { go fam.Reread() }) // spec §5.4: notifications are only hints
 	a.famDirty = make(chan struct{}, 1)
@@ -73,8 +108,10 @@ func (a *app) startFamily(dataDir string) {
 		err := fam.Start(ctx, inputs(), lib.familyWanted)
 		cancel()
 		if err != nil {
-			log.Printf("family: %v (no manifest this time; phase-0 rules apply)", err)
+			log.Printf("family: %v (no manifest this time; deletes write no claims)", err)
 		}
+		v := readFamilyView(fam)
+		a.post(func() { a.showFamily(v) })
 		a.familyStarted() // family_coord.go
 		for range dirty {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -119,6 +156,7 @@ func (l *library) familyOptions(o *hub.Options) {
 		return
 	}
 	o.Family.BundleID = fam.BundleID
+	o.Family.Decider = fam.Decider(o.CacheDir)
 	o.Claimed = func(ctx context.Context, cacheDir string, d hub.Finished) error {
 		return fam.Claimed(ctx, cacheDir, family.ClaimOf(d.Entry, d.Repo, d.Commit, d.Files, d.Aux, models.OriginDownloaded))
 	}
@@ -151,25 +189,23 @@ func (l *library) familyWanted(cacheDir string) []models.Claim {
 	return family.Wanted(cacheDir, catalog.Builtin().Entries, custom)
 }
 
-// familyRelease takes e off AudioSmith's claims after Models → Delete
-// removed it (its own repo and its auxiliary repos: the files of these
-// stay, the claim keeps naming AudioSmith's other models using them).
-func (a *app) familyRelease(cacheDir string, e catalog.Entry) {
+// familyErase forgets AudioSmith's claims in cacheDir after "Erase
+// everything" deleted its models (the next start claims what other apps
+// kept on disk).
+func (a *app) familyErase(cacheDir string) {
 	if a.fam == nil {
 		return
 	}
-	if err := a.fam.Release(cacheDir, family.ModelID(e), append([]string{e.Repo}, auxRepos(e)...)...); err != nil {
-		log.Printf("family: release %s: %v", e.Repo, err)
+	if err := a.fam.ForgetAll(cacheDir); err != nil {
+		log.Printf("family: erase: %v", err)
 	}
 }
 
-// familyForget drops AudioSmith's claims on repos that Clean up or
-// "Erase everything" deleted (the ones kept for other apps stay claimed).
-func (a *app) familyForget(cacheDir string, repos []string) {
-	if a.fam == nil {
-		return
+// familyNames are the apps the UI may name among users (spec §7.10):
+// none unless another family app's release build is installed.
+func (a *app) familyNames(users []models.User) []string {
+	if len(a.famOthers) == 0 {
+		return nil
 	}
-	if err := a.fam.Forget(cacheDir, repos...); err != nil {
-		log.Printf("family: forget: %v", err)
-	}
+	return family.VisibleNames(users...)
 }

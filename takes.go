@@ -294,6 +294,12 @@ func (l *library) modelSnapshot(ctx context.Context, repo string) (string, error
 	return loc.Snapshot, nil
 }
 
+// auxSnapshots are the snapshot directories of the auxiliary repos of a
+// model (engine.ExecutorOptions.AuxPaths).
+func (l *library) auxSnapshots(ctx context.Context, repo string) map[string]string {
+	return hub.AuxSnapshots(modelCache(l.settings.Get()), entryFor(repo))
+}
+
 // modelReady is services.Config.Ready.
 func (l *library) modelReady(ctx context.Context, repo string) error {
 	_, err := l.modelSnapshot(ctx, repo)

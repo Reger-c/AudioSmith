@@ -1,18 +1,22 @@
 package main
 
-// ActNow family apps that share the model folder (the family spec's
-// phase 0; internal/hub/family.go): what Models → Delete, Clean up and
-// Settings → Storage → Erase everything keep for them, and the words for
-// a model another app is downloading.
+// ActNow family apps that share the model folder (the family spec §7.6,
+// §7.10; internal/hub family.go and delete.go, internal/family): the
+// delete dialog of a model they use, what Clean up and Settings →
+// Storage → Erase everything keep for them, and the words for a model
+// another app is downloading. Other apps are named only when a release
+// build of one is installed (family_app.go familyNames).
 
 import (
 	"cmp"
 	"slices"
 	"strings"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/actnowkit/models"
 )
 
 // keptReason says in the log why Clean up kept l.
@@ -55,30 +59,86 @@ func auxRepos(e catalog.Entry) []string {
 }
 
 // eraseKeeps finds, in the background, the models on disk that other
-// ActNow apps may use, which "Erase everything" with the models keeps,
-// for its confirmation.
+// ActNow apps use, which "Erase everything" with the models keeps, for
+// its confirmation (spec §7.6 step 3); said only when it can name them
+// (spec §7.10).
 func (a *app) eraseKeeps() {
 	opts := a.hubClient().Options()
 	a.resetKeeps = ""
 	a.async(func() {
 		ls, _ := hub.Leftovers(opts.CacheDir, catalogRepos(), opts.Family)
-		var names []string
-		var bytes int64
-		for _, l := range ls {
-			if len(l.UsedBy) == 0 {
-				continue
-			}
-			bytes += l.Bytes
-			if name := catalog.Builtin().DisplayName(l.Repo); !slices.Contains(names, name) {
-				names = append(names, name)
-			}
-		}
-		text := ""
-		if len(names) > 0 {
-			text = i18n.T("These models are also used by other ActNow apps and will be kept: %s (%s)", listJoin(names), humanBytes(bytes))
-		}
-		a.post(func() { a.resetKeeps = text })
+		a.post(func() { a.resetKeeps = a.keepsText(ls) })
 	})
+}
+
+// keepsText lists the models of ls other apps use: "These models are also
+// used by Dicta and will be kept: …".
+func (a *app) keepsText(ls []hub.Leftover) string {
+	var names, apps []string
+	var bytes int64
+	for _, l := range ls {
+		users := a.familyNames(l.Users)
+		if !l.InUse || len(users) == 0 {
+			continue
+		}
+		bytes += l.Bytes
+		if name := catalog.Builtin().DisplayName(l.Repo); !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+		for _, u := range users {
+			if !slices.Contains(apps, u) {
+				apps = append(apps, u)
+			}
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return i18n.T("These models are also used by %s and will be kept: %s (%s)", listJoin(apps), listJoin(names), humanBytes(bytes))
+}
+
+// removeSharedDialog asks how to delete e, which other ActNow apps use
+// (spec §7.10.3): "Remove from AudioSmith" (the default: their files
+// stay), "Delete for all apps…" (confirmed again: they would download it
+// again), or Cancel.
+func (a *app) removeSharedDialog(c *ui.Context, e catalog.Entry) {
+	t := c.Theme()
+	open := a.deleteAsk
+	ui.Modal(c.Key("delete-shared"), &open, func() {
+		ui.Column(c).Width(px(t, 460)).Gap(px(t, sp3)).Children(func() {
+			if a.deleteAllAsk {
+				ui.Text(c, i18n.T("Delete %s for all apps?", modelRef(e))).Bold()
+				ui.Text(c, i18n.T("%s will need to download it again (%s).", listJoin(a.deleteShared), mb(a.deleteFree))).TextColor(t.TextMuted)
+				ui.Row(c).Gap(px(t, sp2)).Justify(ui.End).Children(func() {
+					if ui.Button(c.Key("delete-all-cancel"), i18n.T("Cancel")).AutoFocus().Clicked() {
+						open = false
+					}
+					if recordButton(c.Key("delete-all-ok"), i18n.T("Delete")).Clicked() {
+						open = false
+						a.deleteModel(e, models.AllApps)
+					}
+				})
+				return
+			}
+			ui.Text(c, i18n.T("Remove %s from AudioSmith?", modelRef(e))).Bold()
+			ui.Text(c, sharedText(a.deleteShared, a.model(e).local.Bytes)).TextColor(t.TextMuted)
+			ui.Row(c).Gap(px(t, sp2)).Justify(ui.End).Children(func() {
+				if ui.Button(c.Key("delete-cancel"), i18n.T("Cancel")).Clicked() {
+					open = false
+				}
+				if ui.Button(c.Key("delete-all"), i18n.T("Delete for all apps…")).Clicked() {
+					a.deleteAllAsk = true
+				}
+				if primaryButton(c.Key("delete-remove"), i18n.T("Remove from AudioSmith")).AutoFocus().Clicked() {
+					open = false
+					a.deleteModel(e, models.ThisApp)
+				}
+			})
+		})
+	})
+	if !open {
+		a.deleteAsk, a.deleteAllAsk = false, false
+	}
 }
 
 // waitingText says a download waits for another app that downloads a

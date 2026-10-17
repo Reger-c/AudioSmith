@@ -124,9 +124,10 @@ type Options struct {
 	// HTTPClient makes the requests; nil = a client with timeouts and
 	// Proxy.
 	HTTPClient *http.Client
-	// Family is how the other ActNow apps sharing the folder are found
-	// (family.go): deleting keeps their models, and the lock owner files
-	// name this app. The zero value asks LaunchServices.
+	// Family is how downloads and deletes deal with the other ActNow apps
+	// sharing the folder (family.go): the lock owner files name this app,
+	// and deletes keep what other apps' claims say they use (Decider).
+	// The zero value reads no claims.
 	Family Family
 	// Claimed, when set, is called for each repo a download finished
 	// (the entry's auxiliary repos, then its own), holding the repo's
@@ -167,8 +168,9 @@ type Downloader interface {
 	// removing bad blobs so that a later Download repairs them. It needs
 	// the HF API when e lists no files with hashes.
 	Verify(ctx context.Context, e catalog.Entry) ([]string, error)
-	// Delete removes the entry's snapshot and the blobs no other snapshot
-	// uses, unless another family app may use them (Client.Remove).
+	// Delete removes the entry from AudioSmith: its snapshot and the
+	// blobs no other snapshot uses go unless another family app uses
+	// them (Client.Remove).
 	Delete(ctx context.Context, e catalog.Entry) error
 }
 

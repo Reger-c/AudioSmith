@@ -191,6 +191,17 @@ final class Server: @unchecked Sendable {
             return out.fail(id, RPCError(Code.methodNotFound, "Unknown method \(method)"))
         }
         do {
+            // A model job's auxiliary repos load from the app's snapshots
+            // (auxPaths, AuxLinks.swift), not from what the cache's ref names.
+            if let aux = (try? msg.decodeParams(AuxParams.self))?.auxPaths, !aux.isEmpty {
+                do {
+                    try linkAuxRepos(aux, hub: hubCacheDirectory())
+                } catch AuxLinkError.missing(let repo, let path) {
+                    throw EngineError.notDownloaded(model: repo, missing: [path])
+                } catch AuxLinkError.badRepo(let repo) {
+                    throw EngineError.badRequest("Bad auxiliary repo \(repo)")
+                }
+            }
             switch method {
             case Method.stats:
                 out.result(id, stats())

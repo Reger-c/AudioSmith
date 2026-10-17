@@ -18,49 +18,48 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/actnowkit/conformance"
 	"github.com/hehehai/actnowkit/family"
 	"github.com/hehehai/actnowkit/models"
 )
 
-// noFamily: no other family app is installed. withDicta: Dicta is.
-var (
-	noFamily  = Family{Installed: func(string) bool { return false }}
-	withDicta = Family{Installed: func(bid string) bool { return bid == "dev.hehehai.dicta" }}
-)
+// noFamily reads no claims (no family directory).
+var noFamily = Family{}
 
 const (
 	gemma    = "mlx-community/gemma-4-e4b-it-4bit"  // removed from AudioSmith; Dicta's default LLM
 	parakeet = "mlx-community/parakeet-tdt-0.6b-v3" // removed; not in the pins table
 	dictaID  = "dev.hehehai.dicta"
+	testRev  = "0123456789abcdef0123456789abcdef01234567" // fakeRepo's snapshot
 )
 
-func TestFamilyUsers(t *testing.T) {
-	if u := noFamily.Users(); len(u) != 0 {
-		t.Errorf("nothing installed: %v", u)
-	}
-	for repo, want := range map[string]string{
-		gemma:                               "Dicta",
-		"mlx-community/Qwen3-ASR-0.6B-4bit": "Dicta",
-		"openai/whisper-large-v3":           "Dicta", // Whisper Turbo's auxiliary repo
-		"mlx-community/Qwen3-ASR-1.7B-8bit": "",      // VoxtNew's only
-		"mlx-community/Kokoro-82M-bf16":     "",
-		parakeet:                            "",
-	} {
-		got := withDicta.UsersOf(repo)
-		if want == "" && len(got) != 0 || want != "" && !slices.Equal(got, []string{want}) {
-			t.Errorf("%s: %v, want %q", repo, got, want)
+// storeDecider is the app's Decider without the transition's legacy
+// users (internal/family): a models.Store.
+type storeDecider struct{ *models.Store }
+
+func (d storeDecider) DeleteModel(ctx context.Context, ref models.Ref, e catalog.Entry, scope models.Scope) (models.Result, error) {
+	return d.Store.DeleteModel(ctx, ref, e.ID, scope)
+}
+
+// familyFixture is a family directory and model folder (conformance)
+// where AudioSmith decides with its claims, and Dicta is installed (a
+// manifest) and claims what claim names.
+func familyFixture(t *testing.T, claim ...string) (*conformance.Fixture, Family, *models.Store) {
+	t.Helper()
+	fx := conformance.New(t)
+	fx.Register(dictaID)
+	dicta := fx.Peer(dictaID)
+	for _, repo := range claim {
+		fakeRepo(t, fx.Hub, repo, 100)
+		if err := dicta.Claim(context.Background(), models.Claim{Repo: repo, Revision: testRev, Aux: true}); err != nil {
+			t.Fatal(err)
 		}
 	}
-	both := Family{Installed: func(string) bool { return true }}
-	if got := both.UsersOf("mlx-community/qwen3-asr-0.6b-4bit"); !slices.Equal(got, []string{"Dicta", "VoxtNew"}) {
-		t.Errorf("both installed: %v", got)
-	}
-	var asked []string
-	f := Family{Installed: func(bid string) bool { asked = append(asked, bid); return false }}
-	f.Users()
-	if !slices.Equal(asked, []string{dictaID, "dev.hehehai.voxtnew"}) {
-		t.Errorf("asked %v", asked)
-	}
+	me := fx.Peer(BundleID)
+	return fx, Family{Decider: storeDecider{me}}, me
+}
+
+func TestAppName(t *testing.T) {
 	for bid, want := range map[string]string{dictaID: "Dicta", dictaID + ".dev": "Dicta", "com.example.x": "com.example.x", "": ""} {
 		if got := AppName(bid); got != want {
 			t.Errorf("AppName(%q) = %q", bid, got)
@@ -69,18 +68,19 @@ func TestFamilyUsers(t *testing.T) {
 }
 
 // TestCleanUpKeepsFamilyRepos: Clean up leaves the removed models Dicta
-// uses while Dicta is installed, and deletes them once it is not.
+// claims, and deletes the others (unclaimed old downloads included);
+// once Dicta released it, the next clean-up deletes it too.
 func TestCleanUpKeepsFamilyRepos(t *testing.T) {
-	cache := t.TempDir()
-	fakeRepo(t, cache, gemma, 500)
+	fx, fam, _ := familyFixture(t, gemma)
+	cache := fx.Hub
 	fakeRepo(t, cache, parakeet, 300)
 	repos := []string{gemma, parakeet}
-	ls, err := Leftovers(cache, repos, withDicta)
-	if err != nil || len(ls) != 2 || !slices.Equal(ls[0].UsedBy, []string{"Dicta"}) || ls[1].Kept() {
+	ls, err := Leftovers(cache, repos, fam)
+	if err != nil || len(ls) != 2 || !slices.Equal(ls[0].UsedBy, []string{"Dicta"}) || ls[0].Users[0].BundleID != dictaID || ls[1].Kept() {
 		t.Fatalf("leftovers %+v %v", ls, err)
 	}
-	freed, kept, err := RemoveLeftovers(cache, repos, withDicta)
-	if err != nil || freed != 300 || len(kept) != 1 || kept[0].Repo != gemma {
+	freed, kept, err := RemoveLeftovers(context.Background(), cache, repos, fam)
+	if err != nil || freed != 300 || len(kept) != 1 || kept[0].Repo != gemma || !slices.Equal(kept[0].UsedBy, []string{"Dicta"}) {
 		t.Fatalf("freed %d, kept %+v, %v", freed, kept, err)
 	}
 	if _, err := os.Stat(filepath.Join(RepoDir(cache, gemma), "blobs", "abc123")); err != nil {
@@ -89,9 +89,12 @@ func TestCleanUpKeepsFamilyRepos(t *testing.T) {
 	if _, err := os.Stat(RepoDir(cache, parakeet)); !os.IsNotExist(err) {
 		t.Errorf("parakeet left: %v", err)
 	}
-	freed, kept, err = RemoveLeftovers(cache, repos, noFamily)
-	if err != nil || freed != 500 || len(kept) != 0 {
-		t.Fatalf("without Dicta: freed %d, kept %+v, %v", freed, kept, err)
+	if _, err := fx.Peer(dictaID).Release(models.Ref{Repo: gemma, Revision: testRev}, ""); err != nil {
+		t.Fatal(err)
+	}
+	freed, kept, err = RemoveLeftovers(context.Background(), cache, repos, fam)
+	if err != nil || freed != 100 || len(kept) != 0 {
+		t.Fatalf("after Dicta released it: freed %d, kept %+v, %v", freed, kept, err)
 	}
 	if _, err := os.Stat(RepoDir(cache, gemma)); !os.IsNotExist(err) {
 		t.Errorf("gemma left: %v", err)
@@ -110,7 +113,7 @@ func TestCleanUpPerSnapshot(t *testing.T) {
 	partial := filepath.Join(repo, "blobs", "bead.incomplete")
 	os.WriteFile(partial, make([]byte, 70), 0o644)
 	release := holdLock(t, cache, parakeet, "bead", dictaID)
-	freed, kept, err := RemoveLeftovers(cache, []string{parakeet}, noFamily)
+	freed, kept, err := RemoveLeftovers(context.Background(), cache, []string{parakeet}, noFamily)
 	if err != nil || freed != 300 || len(kept) != 0 {
 		t.Fatalf("freed %d, kept %+v, %v", freed, kept, err)
 	}
@@ -121,7 +124,7 @@ func TestCleanUpPerSnapshot(t *testing.T) {
 		t.Errorf("snapshots left: %v", entries)
 	}
 	release()
-	if freed, _, err := RemoveLeftovers(cache, []string{parakeet}, noFamily); err != nil || freed != 70 {
+	if freed, _, err := RemoveLeftovers(context.Background(), cache, []string{parakeet}, noFamily); err != nil || freed != 70 {
 		t.Fatalf("second clean-up freed %d, %v", freed, err)
 	}
 	if _, err := os.Stat(repo); !os.IsNotExist(err) {
@@ -129,49 +132,101 @@ func TestCleanUpPerSnapshot(t *testing.T) {
 	}
 }
 
-// TestRemoveKeepsShared: Models → Delete of a model Dicta uses removes
-// it from AudioSmith only: the files stay, and Kept says who uses them.
+// TestRemoveKeepsShared: Models → Delete of a model Dicta claims removes
+// it from AudioSmith only: AudioSmith's claim goes, the files stay, Kept
+// says who uses them. "Delete for all apps" deletes them and leaves a
+// tombstone for Dicta.
 func TestRemoveKeepsShared(t *testing.T) {
-	cache := t.TempDir()
-	e := catalog.Entry{Repo: "mlx-community/Qwen3-ASR-0.6B-4bit", Revision: "0123456789abcdef0123456789abcdef01234567"}
-	fakeRepo(t, cache, e.Repo, 100)
-	r, err := Remove(cache, e, withDicta)
-	if err != nil || !slices.Equal(r.Kept, []string{"Dicta"}) || r.Freed != 0 {
+	e := catalog.Entry{ID: "qwen3-asr", Repo: "mlx-community/Qwen3-ASR-0.6B-4bit", Revision: testRev}
+	fx, fam, me := familyFixture(t, e.Repo)
+	ctx := context.Background()
+	ref := models.Ref{Repo: e.Repo, Revision: testRev}
+	if err := me.Claim(ctx, models.Claim{Repo: e.Repo, Revision: testRev, Model: e.ID}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Remove(ctx, fx.Hub, e, fam, models.ThisApp)
+	if err != nil || r.Deleted || !slices.Equal(r.Kept, []string{"Dicta"}) || r.Freed != 0 || len(r.Decision.Users) != 1 {
 		t.Fatalf("remove %+v %v", r, err)
 	}
-	if l, _ := Status(cache, e); l.State != Downloaded {
+	if l, _ := Status(fx.Hub, e); l.State != Downloaded {
 		t.Errorf("after removing from AudioSmith: %+v", l)
 	}
-	r, err = Remove(cache, e, noFamily)
-	if err != nil || len(r.Kept) != 0 || r.Freed != 100 {
-		t.Fatalf("remove without Dicta %+v %v", r, err)
+	if fx.Claimed(BundleID, ref) {
+		t.Error("AudioSmith still claims what it removed")
 	}
-	if _, err := os.Stat(RepoDir(cache, e.Repo)); !os.IsNotExist(err) {
+	r, err = Remove(ctx, fx.Hub, e, fam, models.AllApps)
+	if err != nil || !r.Deleted || !r.Tombstoned || r.Freed != 100 {
+		t.Fatalf("delete for all apps %+v %v", r, err)
+	}
+	if _, err := os.Stat(RepoDir(fx.Hub, e.Repo)); !os.IsNotExist(err) {
 		t.Errorf("repo left: %v", err)
+	}
+	if hit, err := fx.Peer(dictaID).ApplyTombstones(); err != nil || len(hit) != 1 {
+		t.Errorf("Dicta's tombstones %v %v", hit, err)
+	}
+}
+
+// TestRemoveAux: Delete takes the model's auxiliary repos too, unless
+// another of AudioSmith's models or another app uses them.
+func TestRemoveAux(t *testing.T) {
+	const tok, g2p = "acme/shared-tokenizer", "acme/own-g2p"
+	a := catalog.Entry{ID: "a", Repo: "acme/model-a", Revision: testRev, Aux: []catalog.Aux{{Repo: tok, Revision: testRev}, {Repo: g2p, Revision: testRev}}}
+	b := catalog.Entry{ID: "b", Repo: "acme/model-b", Revision: testRev, Aux: []catalog.Aux{{Repo: tok, Revision: testRev}}}
+	fx, fam, me := familyFixture(t)
+	ctx := context.Background()
+	for _, r := range []string{a.Repo, b.Repo, tok, g2p} {
+		fakeRepo(t, fx.Hub, r, 100)
+	}
+	for _, e := range []catalog.Entry{a, b} {
+		me.Claim(ctx, models.Claim{Repo: e.Repo, Revision: testRev, Model: e.ID})
+		for _, x := range e.Aux {
+			me.Claim(ctx, models.Claim{Repo: x.Repo, Revision: testRev, Model: e.ID, Aux: true})
+		}
+	}
+	r, err := Remove(ctx, fx.Hub, a, fam, models.ThisApp)
+	if err != nil || !r.Deleted || r.Freed != 200 {
+		t.Fatalf("remove a: %+v %v", r, err)
+	}
+	for repo, want := range map[string]bool{a.Repo: false, g2p: false, tok: true, b.Repo: true} {
+		if _, err := os.Stat(RepoDir(fx.Hub, repo)); (err == nil) != want {
+			t.Errorf("%s there: %v, want %v", repo, err == nil, want)
+		}
+	}
+	if c, ok := fx.Claims(BundleID).Find(models.Ref{Repo: tok, Revision: testRev}); !ok || !slices.Equal(c.Users(), []string{"b"}) {
+		t.Errorf("the shared tokenizer's claim %+v", c)
 	}
 }
 
 // TestDeleteRefusedWhileLocked: a repo another process holds (Dicta
 // downloads it) is neither deleted nor cleaned up; it says who.
 func TestDeleteRefusedWhileLocked(t *testing.T) {
-	cache := t.TempDir()
-	e := catalog.Entry{Repo: parakeet, Revision: "0123456789abcdef0123456789abcdef01234567"}
-	fakeRepo(t, cache, parakeet, 100)
-	release := holdLock(t, cache, parakeet, "", dictaID)
-	_, err := Remove(cache, e, noFamily)
-	if name, busy := Holder(err); !busy || name != "Dicta" {
-		t.Fatalf("remove while locked: %v (%q %v)", err, name, busy)
-	}
-	freed, kept, err := RemoveLeftovers(cache, []string{parakeet}, noFamily)
-	if err != nil || freed != 0 || len(kept) != 1 || !kept[0].Busy || kept[0].BusyBy != "Dicta" {
-		t.Fatalf("clean up while locked: freed %d, kept %+v, %v", freed, kept, err)
-	}
-	if l, _ := Status(cache, e); l.State != Downloaded {
-		t.Errorf("files went: %+v", l)
-	}
-	release()
-	if r, err := Remove(cache, e, noFamily); err != nil || r.Freed != 100 {
-		t.Fatalf("after release %+v %v", r, err)
+	for name, fam := range map[string]Family{"no family": noFamily, "claims": {}} {
+		t.Run(name, func(t *testing.T) {
+			fx := conformance.New(t)
+			cache := fx.Hub
+			if name == "claims" {
+				fam = Family{Decider: storeDecider{fx.Peer(BundleID)}}
+			}
+			e := catalog.Entry{Repo: parakeet, Revision: testRev}
+			fakeRepo(t, cache, parakeet, 100)
+			release := holdLock(t, cache, parakeet, "", dictaID)
+			ctx := context.Background()
+			_, err := Remove(ctx, cache, e, fam, models.ThisApp)
+			if name, busy := Holder(err); !busy || name != "Dicta" {
+				t.Fatalf("remove while locked: %v (%q %v)", err, name, busy)
+			}
+			freed, kept, err := RemoveLeftovers(ctx, cache, []string{parakeet}, fam)
+			if err != nil || freed != 0 || len(kept) != 1 || !kept[0].Busy || kept[0].BusyBy != "Dicta" {
+				t.Fatalf("clean up while locked: freed %d, kept %+v, %v", freed, kept, err)
+			}
+			if l, _ := Status(cache, e); l.State != Downloaded {
+				t.Errorf("files went: %+v", l)
+			}
+			release()
+			if r, err := Remove(ctx, cache, e, fam, models.ThisApp); err != nil || r.Freed != 100 {
+				t.Fatalf("after release %+v %v", r, err)
+			}
+		})
 	}
 }
 

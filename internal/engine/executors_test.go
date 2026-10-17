@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -162,6 +163,12 @@ func TestExecutorsFillModelPaths(t *testing.T) {
 			}
 			return "/cache/" + model, nil
 		},
+		AuxPaths: func(_ context.Context, model string) map[string]string {
+			if model == "mlx-community/Kokoro-82M-bf16" {
+				return map[string]string{"beshkenadze/kitten-tts-g2p": "/cache/g2p"}
+			}
+			return nil
+		},
 	})
 	ctx := context.Background()
 	sched.Start(ctx)
@@ -197,6 +204,14 @@ func TestExecutorsFillModelPaths(t *testing.T) {
 	json.Unmarshal(sup.params[1], &lp)
 	if sp.ModelPath != "/cache/mlx-community/Kokoro-82M-bf16" || sp.Text != "hi" || lp.Path != "/cache/m/one" {
 		t.Errorf("params %s %s", sup.params[0], sup.params[1])
+	}
+	// Kokoro's auxiliary repo goes with it; a model without one gets none.
+	var aux struct {
+		Aux map[string]string `json:"auxPaths"`
+	}
+	json.Unmarshal(sup.params[0], &aux)
+	if aux.Aux["beshkenadze/kitten-tts-g2p"] != "/cache/g2p" || strings.Contains(string(sup.params[1]), proto.ParamAuxPaths) {
+		t.Errorf("auxPaths %s / %s", sup.params[0], sup.params[1])
 	}
 
 	j := run(proto.MethodTTSSynthesize, proto.SynthesizeParams{Model: "missing/model", Text: "x"})
