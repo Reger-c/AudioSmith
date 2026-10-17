@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.0-beta.6
+
+AudioSmith joins the ActNow family: it works together with the other ActNow apps on this Mac (Dicta, Auralink, Pik, VoxtNew). The apps share one copy of each model, some settings, and, if you agree, API keys, and they don't get in each other's way. AudioSmith names another app only when a released version of it is installed; with no other ActNow app, nothing on screen changes.
+
+### Models shared with other ActNow apps
+- On first run, if another app (say Dicta) has already downloaded some of the models AudioSmith needs, the setup says so ("3 models are already on this Mac · Installed by Dicta · no download needed") and uses them. Only the rest is downloaded. Choose models… lets you pick them yourself on the Models page.
+- The Models page shows which models AudioSmith shares with other apps ("Shared with Dicta"), which ones another app has loaded right now ("Also loaded in Dicta"), and which ones another app installed ("Installed · from Dicta", with Use).
+- Deleting a model that another app also uses asks what to do. Remove from AudioSmith keeps the files on this Mac for that app. Delete for all apps deletes them; the other app then has to download the model again. Clean up and "Erase everything" keep what other apps use, and say which app uses it. A model another app deleted for all apps shows "Deleted in Dicta · Download again".
+- Settings → Storage shows how much space AudioSmith shares with other apps. It also offers to clean up models that only uninstalled apps used.
+- If you accepted a model's licence in another app, AudioSmith still shows the licence, says when you accepted it, and asks you to continue.
+- Kokoro's, Chatterbox's and Whisper's helper files now always load at the version AudioSmith downloaded, even when another app keeps a different version.
+
+### Settings shared with other ActNow apps
+- The interface language, proxy, download source and model folder are shared with the other ActNow apps. With another app installed, each of these settings says whether it applies to all ActNow apps, and you can keep a different one for AudioSmith only.
+- When another app keeps its models in a different folder, the Models page offers to move AudioSmith's models there. The move can be cancelled, and models the folder already has are not copied again.
+
+### API keys shared with other ActNow apps
+- API keys and the Hugging Face token can be shared with the other ActNow apps. With another app installed, a checkbox under the key ("Let other ActNow apps on this Mac use this key") chooses whether to share it.
+- AudioSmith offers a key saved in another app ("Use the DeepSeek key from Auralink"). It reads that key only after you click Use this key.
+- Removing a key that another app also uses asks whether to stop using it here or to delete it for all apps. If another app deletes a shared key, AudioSmith asks you for a key again. "Erase everything" never deletes another app's key.
+- The Hugging Face token is looked up in this order: `$HF_TOKEN`, the shared token, AudioSmith's own, the huggingface-cli token file.
+
+### Shortcuts and memory
+- If another ActNow app uses the same keys as the dictation shortcut, Settings → Dictation says so. The app that took the keys last shows the notice once, with Change shortcut, Open Auralink settings and Ignore. While you record a new shortcut, "Also used by Auralink (Transcribe)" warns you, but you can still save it.
+- The ActNow apps share one memory budget. Before AudioSmith loads a model, it unloads its own idle models first. If that is not enough, it asks the other apps to unload models that have been idle for a minute. It does the same when they ask, and never unloads a model a job is using.
+- Dictation's paste no longer overwrites the clipboard while another ActNow app is pasting.
+
+### Dubbing
+- The online translators (DeepL, Google, Microsoft) have an API key field in the Translate step's Advanced options. Before, the key had to be added to the Keychain by hand.
+
+### Fixes
+- The Dub page's button read "Generate dub%!(EXTRA int=1)" with one target language. It reads "Generate dub" again, and the Translate button got the same fix.
+- `HF_ENDPOINT` now overrides the download source chosen in Settings. Before, the setting won.
+
 ## 0.4.0-beta.5
 
 ### Downloads and updates move to actnow.dev
