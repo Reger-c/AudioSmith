@@ -62,7 +62,10 @@ type library struct {
 
 	synthMu sync.Mutex
 	synth   func() jobs.Executor // the engine's tts.synthesize, for renders (useEngine)
-	encode  func() jobs.Executor // M3: the engine's media.encode, for M4B books (useEncoder, longform.go)
+	// engineFn is the engine's executor of other gpu methods, for renders
+	// that align or check what they made (useEngine).
+	engineFn func(method string) jobs.Executor
+	encode   func() jobs.Executor // M3: the engine's media.encode, for M4B books (useEncoder, longform.go)
 
 	wm watermarkState // watermark_app.go (thread #14)
 }
@@ -129,14 +132,17 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 	l.svc = services.New(services.Config{
 		Store: st, Bus: bus, Scheduler: l.sched, Licences: l.licences,
 		Ready: l.modelReady, Async: o.Async,
-		Synth:     l.synthExecutor,
-		ModelPath: l.modelSnapshot,
-		Models:    modelInfo,
-		Replace:   replaceRemovedTake, // models_removed.go
-		CacheDir:  cacheDir,
-		KeepTakes: func() int { return l.settings.Get().Studio.KeepTakes },
-		Encode:    l.encodeExecutor,  // M3: longform.go
-		Watermark: l.watermarkRender, // watermark_app.go (thread #14)
+		Synth:      l.synthExecutor,
+		ModelPath:  l.modelSnapshot,
+		Models:     modelInfo,
+		Replace:    replaceRemovedTake, // models_removed.go
+		CacheDir:   cacheDir,
+		KeepTakes:  func() int { return l.settings.Get().Studio.KeepTakes },
+		Encode:     l.encodeExecutor,  // M3: longform.go
+		Watermark:  l.watermarkRender, // watermark_app.go (thread #14)
+		Engine:     l.engineExecutor,
+		Aligner:    modelRepo(catalog.DefaultAlign),
+		Recognizer: modelRepo(catalog.DefaultSTT),
 	})
 	async := o.Async
 	if async == nil {
@@ -152,24 +158,6 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 		}
 	})
 	return l, nil
-}
-
-// useEngine gives renders the engine's tts.synthesize executor; fn is
-// asked as each render starts (the engine may connect later).
-func (l *library) useEngine(fn func() jobs.Executor) {
-	l.synthMu.Lock()
-	l.synth = fn
-	l.synthMu.Unlock()
-}
-
-func (l *library) synthExecutor() jobs.Executor {
-	l.synthMu.Lock()
-	fn := l.synth
-	l.synthMu.Unlock()
-	if fn == nil {
-		return nil
-	}
-	return fn()
 }
 
 // capNames are a catalogue entry's capabilities as the services name them.
@@ -371,6 +359,12 @@ func (a *app) openTakes(lib *library) {
 			return nil
 		}
 		return engine.Executor(host.sup, proto.RoleGPU, proto.MethodTTSSynthesize, engine.ExecutorOptions{AuxPaths: lib.auxSnapshots})
+	})
+	lib.useEngineFor(func(method string) jobs.Executor {
+		if host == nil || host.sup == nil {
+			return nil
+		}
+		return engine.Executor(host.sup, proto.RoleGPU, method, engine.ExecutorOptions{AuxPaths: lib.auxSnapshots})
 	})
 	a.takeStore = lib.store.Takes()
 	a.peaks = map[string][]float32{}

@@ -196,6 +196,11 @@ type renderer struct {
 	cacheMax int64
 	// watermark marks finished renders (watermark.go).
 	watermark WatermarkFunc
+	// engine runs the other engine requests of renders (story lead-ins:
+	// stt.align, stt.transcribe) with the aligner and recognizer repos;
+	// nil: none.
+	engine              func(method string) jobs.Executor
+	aligner, recognizer string
 }
 
 func (r *renderer) model(repo string) ModelInfo {

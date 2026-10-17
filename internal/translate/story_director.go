@@ -43,6 +43,11 @@ type StoryScriptLine struct {
 	Speaker   string
 	Text      string
 	Direction string
+	// The line's emotion so far (DirectEmotions): Fixed when the user set
+	// it, so the director keeps it.
+	Emotion   string
+	Intensity int
+	Fixed     bool
 }
 
 // StoryDirection is the director's proposal.
@@ -124,6 +129,9 @@ type storyPromptLine struct {
 	Speaker   string
 	Text      string
 	Direction string
+	Emotion   string
+	Intensity int
+	Fixed     bool
 }
 
 // Available reports whether a language model is set up for the director.
@@ -197,7 +205,7 @@ func (d *StoryDirector) Direct(ctx context.Context, s StoryScript) (StoryDirecti
 func promptLine(i int, l StoryScriptLine) storyPromptLine {
 	who := strings.TrimSpace(l.Speaker)
 	return storyPromptLine{N: i + 1, Speaker: who, Text: clipRunes(strings.Join(strings.Fields(l.Text), " "), 600),
-		Direction: strings.TrimSpace(l.Direction)}
+		Direction: strings.TrimSpace(l.Direction), Emotion: strings.TrimSpace(l.Emotion), Intensity: l.Intensity, Fixed: l.Fixed}
 }
 
 // castNames are the characters who speak, in order.

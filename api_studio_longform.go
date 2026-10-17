@@ -271,7 +271,8 @@ func (b *apiBackend) longformJSON(ctx context.Context, p core.Project, d service
 		}
 		for _, l := range d.Lines {
 			out.Lines = append(out.Lines, api.StoryLineJSON{ID: l.ID, Text: l.Text, Speaker: names[l.Character], Voice: l.Voice,
-				Speed: l.Speed, PauseAfter: l.PauseAfter, Chapter: l.Chapter, Direction: l.Direction, Intensity: l.Intensity})
+				Speed: l.Speed, PauseAfter: l.PauseAfter, Chapter: l.Chapter, Direction: l.Direction, Intensity: l.Intensity,
+				Emotion: l.Emotion, Turn: l.Turn})
 		}
 		out.Scene, out.Pacing, out.Continuity = d.Scene, apiPacing(d.Production.Pacing), storyContinuity(d.Model)
 	} else {

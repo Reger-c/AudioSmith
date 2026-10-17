@@ -42,6 +42,9 @@ type Traits struct {
 	// Instruct: takes a delivery instruction in its voice field
 	// (TakesInstruct): stories send their scene, personas and directions.
 	Instruct bool `json:"instruct,omitempty"`
+	// Exaggeration: takes an emotion exaggeration (Chatterbox, capability
+	// "exaggeration"): stories send their lines' emotion intensities.
+	Exaggeration bool `json:"exaggeration,omitempty"`
 }
 
 // WithCatalog applies what the catalogue knows of the model (v3): its
@@ -78,7 +81,8 @@ func TraitsFor(family string, caps []string) Traits {
 		Steps:     slices.Contains(caps, "steps"),
 		NonVerbal: slices.Contains(caps, "nonVerbal"),
 		MaxChars:  400, MaxCharsCJK: 200,
-		Instruct: TakesInstruct(caps),
+		Instruct:     TakesInstruct(caps),
+		Exaggeration: slices.Contains(caps, "exaggeration"),
 	}
 	switch family {
 	case "kokoro":

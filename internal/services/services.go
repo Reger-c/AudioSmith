@@ -84,6 +84,13 @@ type Config struct {
 
 	// Watermark marks every finished render (watermark.go); nil: none.
 	Watermark WatermarkFunc
+
+	// Engine returns the engine's executor of a method other than
+	// tts.synthesize, for renders that align or check what they made
+	// (story lead-ins: Aligner, Recognizer are the forced aligner's and
+	// the speech recognizer's repos); nil: renders do neither.
+	Engine              func(method string) jobs.Executor
+	Aligner, Recognizer string
 }
 
 // Services is the set of services over one store, as core.Services for

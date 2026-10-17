@@ -47,6 +47,8 @@ func (a *app) lfChanges(p *lfPage) []string {
 	add(pr.Seed != 0, i18n.T("Seed"))
 	add(p.kind == core.ProjectStory && pr.NoMerge, i18n.T("Merge a character's lines"))
 	add(p.kind == core.ProjectStory && pr.NoLevel, i18n.T("Even out each voice"))
+	add(p.kind == core.ProjectStory && pr.NoEmotionGaps, i18n.T("Pauses follow the emotion"))
+	add(p.kind == core.ProjectStory && pr.LeadIn, i18n.T("Lead-in from the last line"))
 	return out
 }
 
@@ -84,6 +86,15 @@ func (a *app) lfAdvanced(c *ui.Context, p *lfPage, locked bool) {
 					if ui.Switch(c.Key("perf-level-switch"), &level).Label(i18n.T("Even out each voice")).Disabled(locked).Changed() {
 						d.Production.NoLevel = !level
 					}
+				})
+				emoGaps := !d.Production.NoEmotionGaps
+				formRow(c, "perf-emotion-gaps-row", i18n.T("Pauses follow the emotion"), i18n.T("Lines with an emotion change the pauses around them: excited or angry lines come quicker, hesitant or sad ones after a longer pause."), func() {
+					if ui.Switch(c.Key("perf-emotion-gaps"), &emoGaps).Label(i18n.T("Pauses follow the emotion")).Disabled(locked).Changed() {
+						d.Production.NoEmotionGaps = !emoGaps
+					}
+				})
+				formRow(c, "perf-lead-in-row", i18n.T("Lead-in from the last line"), i18n.T("Experimental. A character's line is said with the end of their previous line before it, and that part is cut off again with the forced aligner (%s), so the line starts in the mood the last one left. About twice the synthesis; a line that cannot be cut cleanly is made as usual.", modelRefID(catalog.DefaultAlign)), func() {
+					ui.Switch(c.Key("perf-lead-in"), &d.Production.LeadIn).Label(i18n.T("Lead-in from the last line")).Disabled(locked)
 				})
 			}
 			a.lfProduction(c, p, locked)

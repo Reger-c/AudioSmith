@@ -30,8 +30,11 @@ type Take struct {
 	Duration    float64 `json:"duration,omitempty"` // target length in seconds (OmniVoice); 0 = natural
 	Steps       int     `json:"steps,omitempty"`    // diffusion steps (OmniVoice); 0 = the model's
 	// M1 engine parameters (protocol 2, M1); zero = the model's default.
-	Guidance    float64 `json:"guidance,omitempty"`    // classifier-free guidance scale
-	VoicePrompt string  `json:"voicePrompt,omitempty"` // tts.encodeVoice file of the clone reference (absolute path)
+	Guidance float64 `json:"guidance,omitempty"` // classifier-free guidance scale
+	// Exaggeration is Chatterbox's emotion exaggeration (stories set it
+	// from a line's emotion intensity); 0 = the model's.
+	Exaggeration float64 `json:"exaggeration,omitempty"`
+	VoicePrompt  string  `json:"voicePrompt,omitempty"` // tts.encodeVoice file of the clone reference (absolute path)
 
 	// Relations (M1+). Empty for MVP takes.
 	VoiceID   string `json:"voiceId,omitempty"`   // Voice profile it was spoken with

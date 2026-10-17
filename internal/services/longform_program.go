@@ -66,7 +66,14 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 		if p.Production.Guidance > 0 {
 			t.Guidance = p.Production.Guidance
 		}
-		if l.Direction != "" || l.Persona != "" || p.Scene != "" {
+		switch {
+		case l.Emotion != "":
+			// Directed by emotion: a short phrase, no persona or scene.
+			withDelivery(&t, info, EmotionInstruct(l.Emotion, l.Intensity, l.Direction, emotionCont(p.Lines, li), cjkShare(say) >= 0.3))
+			if info.Exaggeration {
+				t.Exaggeration = EmotionExaggeration(l.Intensity)
+			}
+		case l.Direction != "" || l.Persona != "" || p.Scene != "":
 			prev := ""
 			if li > 0 && paced && !sameSpeaker(p.Lines[li-1], l) && p.Lines[li-1].Character != "" && StoryPrevDirection {
 				prev = p.Lines[li-1].Direction
@@ -146,7 +153,10 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 	gapBefore := func(li int) float64 {
 		l, prev := p.Lines[li], p.Lines[li-1]
 		if paced {
-			return TurnGap(turns, prev, l)
+			if p.Production.NoEmotionGaps {
+				return TurnGap(turns, prev, l)
+			}
+			return emotionGap(TurnGap(turns, prev, l), prev, l)
 		}
 		gap := gaps.Line
 		if prev.PauseAfter > 0 {
@@ -181,6 +191,19 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 				continue
 			}
 		}
+		if paced && p.Production.LeadIn && cr.r.engine != nil && cr.r.aligner != "" {
+			if prefix := leadPrefix(p.Lines, li); prefix != "" {
+				st, err := cr.lead(p, li, prefix, take, planOf, lineSteps, info, modelPath)
+				if err != nil {
+					return nil, "", nil, err
+				}
+				if st != nil {
+					steps = append(steps, *st)
+					fmt.Fprintf(h, "lead %s %s\x00", leadVersion, st.chunk.key)
+					continue
+				}
+			}
+		}
 		ls, err := lineSteps(li, h)
 		if err != nil {
 			return nil, "", nil, err
@@ -206,7 +229,11 @@ func (cr chapterRenderer) turn(p *ChapterParams, g []int,
 	for i, li := range g {
 		lines[i] = p.Lines[li]
 	}
-	p.Lines[g[0]].Direction, p.Lines[g[0]].Intensity = turnDirection(lines)
+	if e, own, in := turnEmotion(lines); e != "" {
+		p.Lines[g[0]].Emotion, p.Lines[g[0]].Direction, p.Lines[g[0]].Intensity = e, own, in
+	} else {
+		p.Lines[g[0]].Direction, p.Lines[g[0]].Intensity = turnDirection(lines)
+	}
 	t, seed, extra, err := take(g[0], p.Lines[g[0]].Spans[0], joined)
 	p.Lines[g[0]] = saved
 	if err != nil {

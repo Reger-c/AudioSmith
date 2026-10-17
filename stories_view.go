@@ -209,7 +209,7 @@ func (a *app) storyLine(c *ui.Context, p *lfPage, i int, l *services.StoryLine, 
 				ui.Text(c, strconv.Itoa(a.lineNumber(p, i))).FontSize(px(t, fsMicro)).TextColor(k.Text3).Width(px(t, 20)).Shrink(0)
 				a.characterSelect(c, p, l, locked)
 				ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Grow(1).MinWidth(0).ClipX().Children(func() {
-					if l.Direction != "" {
+					if l.Direction != "" || l.Emotion != "" {
 						directionChip(c, l, heard)
 					}
 					if l.Voice != "" {
@@ -381,7 +381,11 @@ func (a *app) storyCast(c *ui.Context, p *lfPage, locked bool) {
 				}
 			})
 			a.lfVoiceSelect(c, "cast-voice-"+m.ID, &m.Voice, e, i18n.T("Default voice"), locked)
-			if storyContinuity(p.doc.Model) != services.ContinuityInstruct {
+			level := storyContinuity(p.doc.Model)
+			if level != services.ContinuityLines && (m.Baseline != "" || storyHasEmotions(&p.doc)) {
+				baselineSelect(c, m, locked) // stories_perf_view.go
+			}
+			if level != services.ContinuityInstruct {
 				return // a persona is an instruction: only models that take one hear it
 			}
 			ui.TextInput(c.Key("persona"), &m.Persona).Placeholder(i18n.T("Persona: age, temperament, way of speaking")).

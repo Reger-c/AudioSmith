@@ -125,7 +125,9 @@ type StoryLineJSON struct {
 	PauseAfter int     `json:"pause_after_ms,omitempty"`
 	Chapter    bool    `json:"chapter,omitempty"`
 	Direction  string  `json:"direction,omitempty"` // how the line is said (never spoken)
-	Intensity  int     `json:"intensity,omitempty"` // of the direction: 1 restrained, 2 clear, 3 strong
+	Intensity  int     `json:"intensity,omitempty"` // of the direction: 1 restrained, 2 clear, 3 strong; with an emotion 0–3
+	Emotion    string  `json:"emotion,omitempty"`   // the AI director's emotion of the line (steady, happy, hurt…)
+	Turn       bool    `json:"turn,omitempty"`      // a turn of the scene: its feeling may change at once
 }
 
 // ProblemJSON is something that stops (Blocking) or affects a render.

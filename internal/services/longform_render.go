@@ -95,6 +95,11 @@ type ChapterResult struct {
 	// be, made line by line instead.
 	Turns        int `json:"turns,omitempty"`
 	TurnsUnsplit int `json:"turnsUnsplit,omitempty"`
+	// LeadIns are the lines said after a lead-in and cut from it
+	// (story_leadin.go); LeadInsFailed the ones that could not be cut,
+	// made as usual instead.
+	LeadIns       int `json:"leadIns,omitempty"`
+	LeadInsFailed int `json:"leadInsFailed,omitempty"`
 	// Levelled counts the lines brought toward their character's loudness.
 	Levelled int               `json:"levelled,omitempty"`
 	Report   LoudnessReport    `json:"report"`
@@ -141,6 +146,7 @@ type chapterStep struct {
 	line    int
 	span    int
 	turn    *turnStep
+	lead    *leadStep // a line said after a lead-in (story_leadin.go)
 }
 
 // turnStep is a merged turn: its lines, their expected lengths, and the

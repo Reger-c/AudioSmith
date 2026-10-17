@@ -121,9 +121,9 @@ func (c *compiler) story() {
 		}
 		ch := len(c.spec.Chapters) - 1
 		// The line's voice: its own, its character's, the story's.
-		ref, who, persona := d.Voice, "", ""
+		ref, who, persona, baseline := d.Voice, "", "", ""
 		if m, ok := cast[l.Character]; ok {
-			who, persona = m.Name, strings.TrimSpace(m.Persona)
+			who, persona, baseline = m.Name, strings.TrimSpace(m.Persona), NormEmotion(m.Baseline)
 			if m.Voice != "" {
 				ref = m.Voice
 			}
@@ -165,6 +165,13 @@ func (c *compiler) story() {
 			ls.Direction, ls.Persona = strings.TrimSpace(l.Direction), persona
 			if ls.Direction != "" {
 				ls.Intensity = min(max(l.Intensity, 0), IntensityStrong)
+			}
+			if e := NormEmotion(l.Emotion); e != "" {
+				ls.Emotion, ls.Intensity, ls.Turn = e, min(max(l.Intensity, 0), IntensityStrong), l.Turn
+				if e == EmotionSteady && baseline != "" && baseline != EmotionSteady {
+					// The character's baseline going on, faintly.
+					ls.Emotion, ls.Intensity = baseline, min(ls.Intensity, IntensityLight)
+				}
 			}
 			cur.Lines = append(cur.Lines, c.counted(ls))
 		}

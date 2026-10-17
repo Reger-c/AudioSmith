@@ -28,8 +28,9 @@ func kittenDoc(d *services.LongformDoc) {
 	}
 }
 
-const kittenDirection = `{"scene":"傍晚的家里，孩子想领养小猫，妈妈犹豫","cast":[{"name":"孩子","persona":"七岁女孩，活泼爱撒娇"},{"name":"妈妈","persona":"温柔的妈妈，略疲惫"}],
-"lines":[{"n":1,"direction":"小声试探","intensity":1},{"n":2,"direction":"撒娇央求","intensity":2},{"n":3,"direction":"犹豫但温和","intensity":2},{"n":4,"direction":"急切地保证","intensity":3}]}`
+const kittenEmotions = `{"scene":"傍晚的家里，孩子想领养小猫，妈妈犹豫","cast":[{"name":"孩子","baseline":"excited"},{"name":"妈妈","baseline":"tender"}],
+"lines":[{"n":1,"emotion":"steady","intensity":1,"turn":false,"note":"小声试探"},{"n":2,"emotion":"pleading","intensity":2,"turn":false,"note":"撒娇央求"},
+{"n":3,"emotion":"worried","intensity":1,"turn":false,"note":"犹豫但温和"},{"n":4,"emotion":"excited","intensity":3,"turn":false,"note":"急切地保证"}]}`
 
 // The catalogue says what the engine reports: Qwen3-TTS CustomVoice and
 // VoiceDesign take instructions; the stories' and dubs' logic read it
@@ -84,12 +85,12 @@ func TestStoryPerformanceUI(t *testing.T) {
 		t.Errorf("no model: %q", a.toasts)
 	}
 
-	// With one, it fills the scene, personas and directions in.
+	// With one, it plans the emotions.
 	f := &fakeLLM{answer: func(req llm.Request) (string, error) {
 		if !strings.Contains(req.Messages[len(req.Messages)-1].Content, "孩子 (voice: 明亮的年轻女声)") {
 			t.Errorf("the director does not hear the voices: %s", req.Messages[len(req.Messages)-1].Content)
 		}
-		return kittenDirection, nil
+		return kittenEmotions, nil
 	}}
 	useFakeLLM(a, f)
 	tt.SetSize(1100, 1400)
@@ -100,49 +101,55 @@ func TestStoryPerformanceUI(t *testing.T) {
 	for range 5 {
 		tt.Frame()
 	}
-	if p.doc.Scene == "" || p.doc.Lines[3].Direction != "急切地保证" {
-		t.Fatalf("not directed: %q %v %d", a.toasts, p.directing, f.calls)
+	d := &p.doc
+	if d.Scene == "" || d.Lines[3].Emotion != services.EmotionExcited || d.Lines[3].Intensity != 3 || d.Cast[0].Baseline != services.EmotionExcited {
+		t.Fatalf("not directed: %q %v %d %+v", a.toasts, p.directing, f.calls, d.Lines)
 	}
 	tt.SetSize(1100, 900)
-	// Fill in what is empty keeps what the user wrote.
+	// Directing again keeps what the user set; the rest follows it.
 	a.clearDirection(p)
-	p.doc.Lines[3].Direction = "大声"
-	a.directStory(p, false)
+	d.Lines[3].Emotion, d.Lines[3].Intensity, d.Lines[3].EmotionByUser = services.EmotionHurt, 1, true
+	a.directStory(p, true)
 	for range 5 {
 		tt.Frame()
 	}
-	d := &p.doc
-	if p.directing || d.Scene != "傍晚的家里，孩子想领养小猫，妈妈犹豫" || d.Cast[0].Persona != "七岁女孩，活泼爱撒娇" ||
-		d.Lines[1].Direction != "撒娇央求" || d.Lines[1].Intensity != 2 || d.Lines[3].Direction != "大声" {
+	if p.directing || d.Scene != "傍晚的家里，孩子想领养小猫，妈妈犹豫" || d.Lines[1].Emotion != services.EmotionPleading || d.Lines[1].Intensity != 2 ||
+		d.Lines[1].Note != "撒娇央求" || d.Lines[3].Emotion != services.EmotionHurt || d.Lines[3].Intensity != 1 {
 		t.Fatalf("directed: %+v", *d)
 	}
-	if !tt.HasText("撒娇央求") || !tt.HasText("小声试探 · Restrained") || !tt.HasText("4 lines directed") {
+	if !tt.HasText("Pleading · 2") || !tt.HasText("Hurt · 1") || !tt.HasText("4 lines directed") {
 		t.Errorf("chips: %q", tt.Texts())
 	}
-	// The spoken text is untouched; the spec carries the directions.
+	// The spoken text is untouched; the spec carries the emotions, a steady
+	// line in its character's baseline.
 	a.compileLf(p)
-	l := p.spec.Chapters[0].Lines[1]
-	if l.Spans[0].Text != "妈妈，我想领养一只小猫，可以吗？" || l.Direction != "撒娇央求" || l.Persona != "七岁女孩，活泼爱撒娇" || p.spec.Scene != d.Scene {
-		t.Errorf("spec line %+v", l)
-	}
-
-	// Again, replacing all.
-	a.directStory(p, true)
-	tt.Frame()
-	if d.Lines[3].Direction != "急切地保证" || d.Lines[3].Intensity != 3 {
-		t.Errorf("replaced: %+v", d.Lines[3])
+	l, l0 := p.spec.Chapters[0].Lines[1], p.spec.Chapters[0].Lines[0]
+	if l.Spans[0].Text != "妈妈，我想领养一只小猫，可以吗？" || l.Emotion != services.EmotionPleading || l.Intensity != 2 ||
+		l0.Emotion != services.EmotionExcited || l0.Intensity != 1 {
+		t.Errorf("spec lines %+v %+v", l0, l)
 	}
 	a.clearDirection(p)
 	if storyDirected(d) {
 		t.Error("cleared")
 	}
 
-	// A line's options edit its direction.
-	d.Lines[1].Direction = "撒娇央求"
+	// A line's options edit its emotion; the user's edits are marked.
 	p.sel = 1
 	tt.Frame()
-	if !tt.HasText("Direction") || !tt.HasText("Intensity: —") {
+	if !tt.HasText("Emotion: —") || !tt.HasText("Turn") {
 		t.Errorf("line options: %q", tt.Texts())
+	}
+	d.Lines[1].Emotion = services.EmotionPleading
+	tt.Frame()
+	if !tt.HasText("Own words") {
+		t.Errorf("own words: %q", tt.Texts())
+	}
+
+	// A story of the first director keeps its direction row.
+	d.Lines[1].Emotion, d.Lines[1].Direction = "", "撒娇央求"
+	tt.Frame()
+	if !tt.HasText("Direction") || !tt.HasText("Intensity: —") {
+		t.Errorf("v1 line options: %q", tt.Texts())
 	}
 
 	// A model that takes no instructions: line by line, with the advice.
@@ -212,19 +219,20 @@ func TestStoryPerformanceAPI(t *testing.T) {
 	e.onMain(func() { e.a.llmReg.Register(localProvider, nil) })
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "all"}, api.CodeLLMUnavailable)
 
-	// The AI director, through the writing-help model.
+	// The AI director, through the writing-help model: what the API set is kept.
 	e.onMain(func() {
 		useFakeLLM(e.a, &fakeLLM{answer: func(llm.Request) (string, error) {
-			return `{"scene":"Kitchen, after school","cast":[{"name":"Kid","persona":"eager"},{"name":"Mom","persona":"tired, kind"}],
-		"lines":[{"n":1,"direction":"hopeful","intensity":2},{"n":2,"direction":"begging","intensity":3},{"n":3,"direction":"gentle doubt","intensity":1}]}`, nil
+			return `{"scene":"Kitchen, after school","cast":[{"name":"Kid","baseline":"excited"},{"name":"Mom","baseline":"tender"}],
+		"lines":[{"n":1,"emotion":"excited","intensity":2,"turn":false,"note":"hopeful"},{"n":2,"emotion":"pleading","intensity":3,"turn":false,"note":"begging"},{"n":3,"emotion":"worried","intensity":1,"turn":false,"note":"gentle doubt"}]}`, nil
 		}})
 	})
 	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "fill"}, &p)
-	if p.Scene != scene || persona("Kid") != "seven, lively" || persona("Mom") != "tired, kind" || p.Lines[1].Direction != "pleading" || p.Lines[0].Direction != "hopeful" {
+	if p.Scene != scene || persona("Kid") != "seven, lively" || p.Lines[1].Direction != "pleading" || p.Lines[1].Emotion != "" ||
+		p.Lines[0].Emotion != "excited" || p.Lines[0].Intensity != 2 || p.Lines[2].Emotion != "worried" {
 		t.Fatalf("filled %+v", p)
 	}
 	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "all"}, &p)
-	if p.Scene != "Kitchen, after school" || p.Lines[1].Direction != "begging" {
+	if p.Scene != "Kitchen, after school" || p.Lines[1].Direction != "pleading" || p.Lines[2].Intensity != 1 {
 		t.Fatalf("replaced %+v", p)
 	}
 	e.onMain(func() {

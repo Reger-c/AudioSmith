@@ -54,8 +54,8 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 		if err != nil {
 			return err
 		}
-		l.Direction = strings.TrimSpace(dir)
-		if l.Direction == "" {
+		l.Direction, l.EmotionByUser = strings.TrimSpace(dir), true // the director keeps it
+		if l.Direction == "" && l.Emotion == "" {
 			l.Intensity = 0
 		}
 	}
@@ -67,7 +67,7 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 		if n < 0 || n > services.IntensityStrong {
 			return errBadRequest("intensities", "An intensity is 1 (restrained), 2 (clear) or 3 (strong); 0 clears it.")
 		}
-		l.Intensity = n
+		l.Intensity, l.EmotionByUser = n, true
 	}
 	switch req.Pacing {
 	case "":
@@ -94,7 +94,7 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 	if len(storyScript(d, nil).Lines) == 0 {
 		return errBadRequest("direct", "The story has no lines to direct.")
 	}
-	dir, err := (&translate.StoryDirector{Router: b.router}).Direct(ctx, storyScript(d, voices))
+	em, err := (&translate.StoryDirector{Router: b.router}).DirectEmotions(ctx, storyScript(d, voices), emotionVocab(storyZh(d)))
 	if err != nil {
 		if c := translate.Code(err); c == translate.CodeNoLLM || c == llm.CodeNoRoute {
 			return apiErr(http.StatusBadRequest, api.CodeLLMUnavailable, "direct",
@@ -102,7 +102,7 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 		}
 		return apiErr(http.StatusBadGateway, api.CodeDirectorFailed, "direct", "The AI director failed: %v", err)
 	}
-	applyDirection(d, dir, req.Direct == "fill")
+	applyEmotions(d, em, req.Direct == "fill")
 	return nil
 }
 
