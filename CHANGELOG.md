@@ -13,7 +13,7 @@
 - The engine no longer guesses which version of a model to load when several are on disk.
 
 ### New icon
-- AudioSmith has its own icon: an anvil with a spark on teal, in the style of the other ActNow apps (with Liquid Glass on macOS 26). The menu bar icon is the anvil too; while dictation listens, a dot takes the spark's place.
+- AudioSmith has its own icon: a flat white anvil with a lime spark on solid teal, in the same flat style as the other ActNow apps (macOS 26 adds its Liquid Glass look). The menu bar icon is the anvil too; while dictation listens, a dot takes the spark's place.
 
 ## 0.4.0-beta.4
 
