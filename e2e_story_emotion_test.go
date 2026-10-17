@@ -73,6 +73,7 @@ type expLine struct {
 	Turn      bool    `json:"turn,omitempty"`
 	Direction string  `json:"direction,omitempty"`
 	Instruct  string  `json:"instruct"`
+	Said      string  `json:"said,omitempty"` // the synthesis text, when steered
 	Start     float64 `json:"start"`
 	End       float64 `json:"end"`
 	Gap       float64 `json:"gapBefore"`
@@ -89,6 +90,8 @@ type expManifest struct {
 	Chunks                int
 	Turns, TurnsUnsplit   int
 	LeadIns, LeadFailed   int
+	Tracks, TrackLines    int
+	TracksFailed, Steered int
 	Lines                 []expLine
 }
 
@@ -248,8 +251,28 @@ func expDirected(t *testing.T, doc services.LongformDoc, dir, v string) services
 	var em translate.StoryEmotions
 	read("director-v2.json", &em)
 	applyEmotions(&d, em, false)
-	d.Production.NoEmotionGaps = v == "A"
-	d.Production.LeadIn = v == "AEB"
+	// "A" then the parts on top: E (gaps), B (lead-ins), F (tracks), G
+	// (punctuation), H (steadier sampling); "@t/p" sets the sampling,
+	// "#n" adds n to the seed (the sweep).
+	flags, rest, _ := strings.Cut(v, "@")
+	flags, seed, _ := strings.Cut(flags, "#")
+	if _, s, ok := strings.Cut(rest, "#"); ok {
+		rest, seed = rest[:len(rest)-len(s)-1], s
+	}
+	pr := &d.Production
+	pr.NoEmotionGaps = !strings.Contains(flags, "E")
+	pr.LeadIn, pr.Tracks, pr.Steer = strings.Contains(flags, "B"), strings.Contains(flags, "F"), strings.Contains(flags, "G")
+	if strings.Contains(flags, "H") {
+		pr.SetSteadier(true)
+	}
+	if rest != "" {
+		fmt.Sscanf(rest, "%g/%g", &pr.Temperature, &pr.TopP)
+	}
+	if seed != "" {
+		var n int64
+		fmt.Sscanf(seed, "%d", &n)
+		d.Seed += n
+	}
 	return d
 }
 
@@ -302,7 +325,7 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 				t.Fatalf("%s-%s: %+v %+v", m, v, body.Chapters, body.Error)
 			}
 			took := time.Since(started).Seconds()
-			name := m + "-" + v
+			name := m + "-" + strings.NewReplacer("/", "_", "@", "_t", "#", "_s").Replace(v)
 			vdir := filepath.Join(dir, name)
 			os.MkdirAll(vdir, 0o755)
 			wavPath := filepath.Join(dir, name+".wav")
@@ -316,7 +339,8 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 			b, _ := json.MarshalIndent(res, "", " ")
 			os.WriteFile(wavPath+".json", b, 0o644)
 			man := expManifest{Story: filepath.Base(dir), Model: m, Variant: v, Seconds: math.Round(took*10) / 10, AudioSeconds: res.AudioSeconds,
-				Cached: res.Cached, Chunks: res.Chunks, Turns: res.Turns, TurnsUnsplit: res.TurnsUnsplit, LeadIns: res.LeadIns, LeadFailed: res.LeadInsFailed}
+				Cached: res.Cached, Chunks: res.Chunks, Turns: res.Turns, TurnsUnsplit: res.TurnsUnsplit, LeadIns: res.LeadIns, LeadFailed: res.LeadInsFailed,
+				Tracks: res.Tracks, TrackLines: res.TrackLines, TracksFailed: res.TracksFailed, Steered: res.Steered}
 			man.Lines = expLines(t, ctx, h.sup, a.lib, wavPath, vdir, res, spec)
 			b, _ = json.MarshalIndent(man, "", " ")
 			os.WriteFile(filepath.Join(dir, name+".manifest.json"), b, 0o644)
@@ -324,8 +348,9 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 			for _, l := range man.Lines {
 				cer += l.CER
 			}
-			t.Logf("%s/%s: %.1f s audio in %.0f s; turns %d (unsplit %d); lead-ins %d (failed %d); mean CER %.3f",
-				filepath.Base(dir), name, res.AudioSeconds, took, res.Turns, res.TurnsUnsplit, res.LeadIns, res.LeadInsFailed, cer/float64(len(man.Lines)))
+			t.Logf("%s/%s: %.1f s audio in %.0f s; turns %d (unsplit %d); lead-ins %d (failed %d); tracks %d/%d lines (failed %d); steered %d; mean CER %.3f",
+				filepath.Base(dir), name, res.AudioSeconds, took, res.Turns, res.TurnsUnsplit, res.LeadIns, res.LeadInsFailed,
+				res.Tracks, res.TrackLines, res.TracksFailed, res.Steered, cer/float64(len(man.Lines)))
 		}
 	}
 }
@@ -369,6 +394,11 @@ func expLines(t *testing.T, ctx context.Context, sup engine.Supervisor, lib *lib
 		out = append(out, expLine{N: i + 1, Who: l.Character, Text: text, Emotion: l.Emotion, Intensity: l.Intensity, Turn: l.Turn, Direction: l.Direction,
 			Instruct: services.LineInstruct(lines, i, spec.Scene), Start: lp.Start, End: lp.End, Gap: gap, File: filepath.Base(f),
 			Heard: tr.Text, CER: dub.Drift(fold.Replace(text), fold.Replace(tr.Text))})
+		if spec.Production.Steer {
+			if said := services.SteerText(text, l.Emotion, l.Intensity); said != text {
+				out[len(out)-1].Said = said
+			}
+		}
 	}
 	return out
 }

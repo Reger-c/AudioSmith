@@ -143,10 +143,13 @@ func steerLines(lines []LineSpec) ([]LineSpec, int) {
 // The "steadier delivery" preset of stories (Production.Temperature,
 // TopP, CharacterSeeds): sampling tighter than the Studio's (Qwen3-TTS
 // 0.7 / 0.8), so a line is less often overplayed, and a seed per
-// character, so a render made again sounds the same.
+// character, so a render made again sounds the same. Thread #78's sweep
+// (8 lines × 3 seeds, 0.6B CustomVoice): 0.6 / 0.75 varied least between
+// seeds (pitch SD 1.05 st, 0.7 / 0.8: 1.57) with as much pitch movement
+// inside a line; 0.55 / 0.7 and 0.4 / 0.6 were no steadier.
 const (
-	StoryTemperature = 0.55
-	StoryTopP        = 0.7
+	StoryTemperature = 0.6
+	StoryTopP        = 0.75
 )
 
 // Steadier reports whether a production has the steadier-delivery
