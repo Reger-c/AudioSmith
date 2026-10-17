@@ -62,13 +62,15 @@ func main() {
 	a.connectShell(logDir)                     // shell.go
 	a.connectEngine(eng)                       // enginelink.go
 	a.registerDubMedia()                       // M4: dub_pages.go (the video preview's scheme)
+	a.connectFamily()                          // family_app.go (thread #72): the ActNow family
 
 	mygo.App.WhenReady(func() {
 		a.openWindow() // shell.go
 		a.startEngine()
-		a.startDubs()        // M4: dub.go (the watch folder)
-		a.startAPI(dataDir)  // M5: api.go — the Local API and MCP (thread #20)
-		a.connectDictation() // M2: dictation.go (shortcut, menu bar icon, close to tray)
+		a.startDubs()          // M4: dub.go (the watch folder)
+		a.startAPI(dataDir)    // M5: api.go — the Local API and MCP (thread #20)
+		a.connectDictation()   // M2: dictation.go (shortcut, menu bar icon, close to tray)
+		a.startFamily(dataDir) // family_app.go: manifest and claims, in the background
 		mygo.App.OnSecondInstance(func([]string, string) { a.post(a.showMainWindow) })
 	})
 	// The engines stop on OnWillQuit (enginelink.go), so the scheduler

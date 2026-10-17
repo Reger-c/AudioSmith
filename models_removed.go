@@ -473,6 +473,7 @@ func (a *app) cleanRemoved() {
 	repos := removedRepos()
 	a.async(func() {
 		freed, kept, err := hub.RemoveLeftovers(opts.CacheDir, repos, opts.Family)
+		a.familyForget(opts.CacheDir, repos) // family_app.go
 		ls, _ := hub.Leftovers(opts.CacheDir, repos, opts.Family)
 		a.post(func() {
 			a.cleaning, a.removedLeft, a.removedKnown = false, ls, true
