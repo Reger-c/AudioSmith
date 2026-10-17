@@ -303,3 +303,4 @@ The engine builds on upstream Blaizzy/mlx-audio-swift (pinned commit, see README
 | Model smoke | `scripts/smoke-models.sh [ids]` | Mac + network: every catalogue model, per-model report |
 | Dictation latency, long render, real media | `AUDIOSMITH_E2E=1 go test -run 'TestDictationLatency|TestLongRender|TestRealEngineMedia' -v ./...` | Mac (see README) |
 | Keychain, proxy | `AUDIOSMITH_MAC=1 go test -run TestMacKeychainAndProxy -v ./internal/hub` | Mac |
+| ActNow family start (real LaunchServices) | `AUDIOSMITH_MAC=1 ACTNOW_FAMILY_DIR=/tmp/x/ActNow HF_HUB_CACHE=/tmp/x/hub [AUDIOSMITH_APP=build/darwin-arm64/AudioSmith.app] go test -run TestMacFamily -v ./internal/family`, then `go run github.com/hehehai/actnowkit/cmd/actnow-conformance check\|discover\|claims` with the same env | Mac, throwaway dirs only |
