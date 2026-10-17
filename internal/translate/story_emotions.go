@@ -12,6 +12,7 @@ package translate
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ type StoryBaseline struct {
 // the caller normalises it), intensity 0–3, turn and note.
 type StoryLineEmotion struct {
 	N         int    `json:"n"`
+	Speaker   string `json:"speaker"`
 	Emotion   string `json:"emotion"`
 	Intensity int    `json:"intensity"`
 	Turn      bool   `json:"turn"`
@@ -63,11 +65,12 @@ var emotionSchema = func() *llm.Schema {
 		}, "name", "baseline")),
 		"lines": llm.Array(llm.Object(map[string]*llm.Schema{
 			"n":         llm.Integer(),
+			"speaker":   llm.String(),
 			"emotion":   llm.String(),
 			"intensity": llm.Integer(), // 0–3, clamped: a 4 is no reason to ask again
 			"turn":      llm.Boolean(),
 			"note":      llm.String(),
-		}, "n", "emotion", "intensity", "turn", "note")),
+		}, "n", "emotion", "intensity", "turn", "note")), // speaker: optional, checked when given
 	}, "scene", "cast", "lines")
 	s.Name = "story_emotions"
 	return s
@@ -120,13 +123,25 @@ func (d *StoryDirector) DirectEmotions(ctx context.Context, s StoryScript, vocab
 			return StoryEmotions{}, newErr(CodeConfig, "service", "llm", "field", "template")
 		}
 		var got StoryEmotions
-		req := llm.Request{Messages: msgs, Schema: emotionSchema, Timeout: budget, Temperature: llm.F64(0.3),
-			MaxTokens: 300 + 56*(last-first)}
-		bctx, cancel := llm.WithBudget(ctx, budget)
-		_, err = d.Router.JSON(bctx, llm.SkillDirectionParse, req, &got, 1)
-		cancel()
-		if err != nil {
-			return StoryEmotions{}, err
+		for try := 0; ; try++ {
+			req := llm.Request{Messages: msgs, Schema: emotionSchema, Timeout: budget, Temperature: llm.F64(0.3),
+				MaxTokens: 300 + 64*(last-first)}
+			bctx, cancel := llm.WithBudget(ctx, budget)
+			got = StoryEmotions{}
+			_, err = d.Router.JSON(bctx, llm.SkillDirectionParse, req, &got, 1)
+			cancel()
+			if err != nil {
+				return StoryEmotions{}, err
+			}
+			// A small model may slip a line and number the rest one off
+			// (thread #78): each answer names its speaker, so a slip shows.
+			bad := misnumbered(got.Lines, s.Lines, first, last)
+			if bad == 0 || try == 1 {
+				break
+			}
+			msgs = append(msgs, llm.Message{Role: llm.User, Content: fmt.Sprintf(
+				"Your answer numbered the lines wrongly: %d answers name another speaker than the line with that number (for example line %d is spoken by %s). Answer again for every line from %d to %d, each with its own number and speaker.",
+				bad, firstMisnumbered(got.Lines, s.Lines, first, last), speakerOf(s.Lines, firstMisnumbered(got.Lines, s.Lines, first, last)), first+1, last)})
 		}
 		if first == 0 {
 			if sc := clipScript(got.Scene, storySceneMax, storySceneMaxLatin); sc != "" {
@@ -146,6 +161,9 @@ func (d *StoryDirector) DirectEmotions(ctx context.Context, s StoryScript, vocab
 			if l.N < first+1 || l.N > last || seen[l.N] {
 				continue
 			}
+			if !sameSpeaker(l.Speaker, speakerOf(s.Lines, l.N)) {
+				continue // misnumbered still: the line stays undirected (steady)
+			}
 			seen[l.N] = true
 			if f := s.Lines[l.N-1]; f.Fixed {
 				l.Emotion, l.Intensity = f.Emotion, f.Intensity // the user's
@@ -157,4 +175,45 @@ func (d *StoryDirector) DirectEmotions(ctx context.Context, s StoryScript, vocab
 		}
 	}
 	return out, nil
+}
+
+// speakerOf is who says line n (1-based) of lines: "Narrator" for none.
+func speakerOf(lines []StoryScriptLine, n int) string {
+	if n < 1 || n > len(lines) {
+		return ""
+	}
+	if who := strings.TrimSpace(lines[n-1].Speaker); who != "" {
+		return who
+	}
+	return "Narrator"
+}
+
+// sameSpeaker compares an answer's speaker with a line's; an answer
+// that names none is taken on trust.
+func sameSpeaker(answer, line string) bool {
+	answer = strings.TrimSpace(answer)
+	return answer == "" || strings.EqualFold(answer, line) ||
+		strings.EqualFold(line, "Narrator") && (answer == "旁白" || strings.EqualFold(answer, "narration"))
+}
+
+// misnumbered counts the answers for lines first+1…last that name
+// another speaker than their line's.
+func misnumbered(got []StoryLineEmotion, lines []StoryScriptLine, first, last int) int {
+	n := 0
+	for _, l := range got {
+		if l.N > first && l.N <= last && !sameSpeaker(l.Speaker, speakerOf(lines, l.N)) {
+			n++
+		}
+	}
+	return n
+}
+
+// firstMisnumbered is the first line whose answer names another speaker.
+func firstMisnumbered(got []StoryLineEmotion, lines []StoryScriptLine, first, last int) int {
+	for _, l := range got {
+		if l.N > first && l.N <= last && !sameSpeaker(l.Speaker, speakerOf(lines, l.N)) {
+			return l.N
+		}
+	}
+	return first + 1
 }

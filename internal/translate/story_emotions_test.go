@@ -36,7 +36,7 @@ func TestDirectEmotions(t *testing.T) {
 		t.Errorf("scene %q cast %v", got.Scene, got.Baselines)
 	}
 	// Intensities clamped, the user's line kept, notes cut, lines beyond the script dropped.
-	want := "[{1 pleading 2 false 撒娇央求，期待妈妈答应} {2 worried 3 false 担心照顾不过来} {3 excited 3 true 急切保证} {4 steady 0 false }]"
+	want := "[{1  pleading 2 false 撒娇央求，期待妈妈答应} {2  worried 3 false 担心照顾不过来} {3  excited 3 true 急切保证} {4  steady 0 false }]"
 	if fmt.Sprint(got.Lines) != want {
 		t.Errorf("lines %v\nwant  %s", got.Lines, want)
 	}
@@ -82,5 +82,38 @@ func TestDirectEmotionsEnglishAndBatches(t *testing.T) {
 	}
 	if n := got.Lines[0].Note; n != "goes on calmly, as before, nothing much changes here at all" {
 		t.Errorf("note %q", n)
+	}
+}
+
+// An answer that slipped a line (numbers one off) is asked again; lines
+// still misnumbered stay undirected.
+func TestDirectEmotionsMisnumbered(t *testing.T) {
+	s := StoryScript{Lines: []StoryScriptLine{{Speaker: "Kid", Text: "Can I?"}, {Speaker: "Mom", Text: "Maybe."}, {Speaker: "Kid", Text: "Please!"}, {Speaker: "Mom", Text: "Fine."}}}
+	slipped := `{"scene":"","cast":[],"lines":[{"n":1,"speaker":"Kid","emotion":"pleading","intensity":1,"turn":false,"note":""},
+	{"n":2,"speaker":"Kid","emotion":"pleading","intensity":2,"turn":false,"note":""},{"n":3,"speaker":"Mom","emotion":"tender","intensity":1,"turn":true,"note":""}]}`
+	good := `{"scene":"","cast":[],"lines":[{"n":1,"speaker":"Kid","emotion":"pleading","intensity":1,"turn":false,"note":""},
+	{"n":2,"speaker":"Mom","emotion":"hesitant","intensity":1,"turn":false,"note":""},{"n":3,"speaker":"Kid","emotion":"pleading","intensity":2,"turn":false,"note":""},
+	{"n":4,"speaker":"Mom","emotion":"tender","intensity":1,"turn":true,"note":""}]}`
+	calls := 0
+	m := &model{handle: func(sys, user string) (string, error) {
+		calls++
+		if calls == 1 {
+			return slipped, nil
+		}
+		if !strings.Contains(user, "numbered the lines wrongly") || !strings.Contains(user, "line 2 is spoken by Mom") {
+			t.Errorf("no repair note: %s", user)
+		}
+		return good, nil
+	}}
+	got, err := (&StoryDirector{Router: router(m)}).DirectEmotions(context.Background(), s, testVocab)
+	if err != nil || calls != 2 || len(got.Lines) != 4 || got.Lines[1].Emotion != "hesitant" {
+		t.Fatalf("%d calls, %+v, %v", calls, got.Lines, err)
+	}
+	// Still slipped the second time: only the lines whose speaker fits.
+	calls = 0
+	m.handle = func(string, string) (string, error) { calls++; return slipped, nil }
+	got, err = (&StoryDirector{Router: router(m)}).DirectEmotions(context.Background(), s, testVocab)
+	if err != nil || calls != 2 || fmt.Sprint(got.Lines) != "[{1 Kid pleading 1 false }]" {
+		t.Errorf("%d calls, %v, %v", calls, got.Lines, err)
 	}
 }

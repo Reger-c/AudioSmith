@@ -7,7 +7,7 @@ Read the whole scene first: who these people are, what each wants, and where the
 
 - "scene": one short sentence on where and when, how the characters relate and what is at stake as it begins (at most {{if .Zh}}40 Chinese characters{{else}}20 words{{end}}). Keep the given scene unless it is empty.
 - "cast": for each speaking character (names exactly as given), a "baseline": their usual feeling through this scene, one of the emotions below (a lively child is often "excited" or "happy", a tired, caring parent "tender" or "worried").
-- "lines": for each numbered line from {{.First}} to {{.Last}}: "n", "emotion", "intensity", "turn" and "note".
+- "lines": for each numbered line from {{.First}} to {{.Last}}, in order, none skipped: "n" (its number), "speaker" (who says it, as written in the script), "emotion", "intensity", "turn" and "note".
   - "emotion": exactly one of these keys:
 {{- range .Vocab}}
     - {{.Key}}{{if .Word}} ({{.Word}}){{end}}
