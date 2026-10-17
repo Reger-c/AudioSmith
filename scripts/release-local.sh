@@ -6,9 +6,9 @@
 #
 #   scripts/release-local.sh                 # signed + notarized + updates, in build/darwin-arm64
 #   scripts/release-local.sh --upload        # and publish it: actnow.dev + a draft GitHub release
-#                                            # (scripts/release-publish.sh: needs R2_ACCESS_KEY_ID,
-#                                            # R2_SECRET_ACCESS_KEY, ACTNOW_INGEST_TOKEN and gh;
-#                                            # GITHUB_FEED=true for the transition release)
+#                                            # (scripts/release-publish.sh: needs ACTNOW_INGEST_TOKEN
+#                                            # and gh; GITHUB_FEED=true for the transition release;
+#                                            # add --no-publish to stop at "verified" on the site)
 #   scripts/release-local.sh --skip-notarize # signed, not notarized (quicker, for checking the signing)
 #   scripts/release-local.sh --dry-run       # ad hoc, no notarization, no updates: what CI's dry run makes
 #   add --skip-engine to reuse resources/darwin-arm64/engine
@@ -29,11 +29,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-dry=false upload=false notarize=true engine=true
+dry=false upload=false notarize=true engine=true publish_args=()
 for arg in "$@"; do
   case "$arg" in
     --dry-run) dry=true ;;
     --upload) upload=true ;;
+    --no-publish) publish_args+=(--no-publish) ;;
     --skip-notarize) notarize=false ;;
     --skip-engine) engine=false ;;
     *) echo "unknown option $arg (see the header of $0)" >&2; exit 2 ;;
@@ -44,7 +45,6 @@ fail() { echo "release-local: $*" >&2; exit 1; }
 [[ "$(uname -s)/$(uname -m)" == Darwin/arm64 ]] || fail "builds on a Mac with Apple silicon only"
 export PATH="/opt/homebrew/bin:$PATH" GOTOOLCHAIN="${GOTOOLCHAIN:-auto}"
 command -v jq > /dev/null || fail "needs jq"
-version="$(jq -r .version mygo.json)"
 scripts/release-check.sh > /dev/null || exit 1 # the version and its CHANGELOG.md section
 if ! git diff --quiet HEAD 2> /dev/null; then
   echo "release-local: note: the working tree has changes; the build includes them" >&2
@@ -81,9 +81,9 @@ $ids"
     fail "no update keys: run go tool mygo keygen (docs/release.md, step 4), or set MYGO_UPDATER_PRIVATE_KEY and MYGO_UPDATER_PUBLIC_KEY"
   export MYGO_UPDATER_PRIVATE_KEY MYGO_UPDATER_PUBLIC_KEY
   if $upload; then
-    # Before the long build: publishing needs the website's keys.
-    [[ -n "${R2_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}" && -n "${R2_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY:-}}" && -n "${ACTNOW_INGEST_TOKEN:-}" ]] ||
-      fail "--upload needs R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and ACTNOW_INGEST_TOKEN (docs/release.md, step 5)"
+    # Before the long build: publishing needs the website's token and gh.
+    [[ -n "${ACTNOW_INGEST_TOKEN:-}" ]] || fail "--upload needs ACTNOW_INGEST_TOKEN (docs/release.md, step 5)"
+    command -v gh > /dev/null || fail "--upload needs the GitHub CLI (gh) for the draft GitHub release"
   fi
 fi
 
@@ -107,7 +107,7 @@ else
   scripts/verify-release.sh --release
 fi
 if $upload; then
-  # The website (R2 + registration), then the draft GitHub release.
-  scripts/release-publish.sh
+  # The website (scripts/actnow-publish.sh), then the draft GitHub release.
+  scripts/release-publish.sh ${publish_args[@]+"${publish_args[@]}"}
 fi
 exit 0
