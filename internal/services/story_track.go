@@ -9,10 +9,10 @@ package services
 // character's pitch 6.1 → 4.0); the forced aligner then cuts the
 // stretch into its lines, which go back into the dialogue with the
 // pacing's gaps. A stretch breaks at the character's turns, where the
-// feeling changes (a line of intensity 2 or more of another kind of
-// feeling than the stretch's), and at a length limit (about 35 s); a
-// calm stretch is said in the character's baseline, a strong one in its
-// strongest line's emotion.
+// feeling changes (a line of intensity 2 or more of another family of
+// feelings than the stretch's, the baseline's family counting as calm),
+// and at a length limit (about 35 s); a calm stretch is said in the
+// character's baseline, a strong one in its strongest line's emotion.
 //
 // Each cut is checked: the aligner's words must be the text's, each line
 // must last about its share of the stretch, and the recognizer must hear
@@ -85,22 +85,29 @@ type trackStep struct {
 
 // trackFamilies group the emotions a stretch may mix: a line of
 // intensity 2 or more of another family breaks the stretch.
+// (Apologetic is its own: said with a sad line's "带哭腔", a father's
+// apology came out garbled, thread #78.)
 var trackFamilies = map[string]string{
-	EmotionHappy: "bright", EmotionExcited: "bright", EmotionHurt: "low", EmotionSad: "low", EmotionApologetic: "low",
+	EmotionHappy: "bright", EmotionExcited: "bright", EmotionHurt: "low", EmotionSad: "low",
 	EmotionScared: "fear", EmotionWorried: "fear",
 }
 
-// trackKey is the kind of feeling a line has in a stretch: "" when calm
-// (intensity 0 or 1: the character's baseline goes on), else its
-// emotion's family.
-func trackKey(l LineSpec) string {
-	if l.Intensity < 2 || l.Emotion == EmotionSteady {
-		return ""
-	}
-	if f, ok := trackFamilies[l.Emotion]; ok {
+// trackFamily is an emotion's family (itself when it has none).
+func trackFamily(e string) string {
+	if f, ok := trackFamilies[e]; ok {
 		return f
 	}
-	return l.Emotion
+	return e
+}
+
+// trackKey is the kind of feeling a line has in a stretch: "" when calm
+// (intensity 0 or 1, or in the family of the character's baseline: the
+// baseline goes on), else its emotion's family.
+func trackKey(l LineSpec) string {
+	if l.Intensity < 2 || l.Emotion == EmotionSteady || l.Baseline != "" && trackFamily(l.Emotion) == trackFamily(l.Baseline) {
+		return ""
+	}
+	return trackFamily(l.Emotion)
 }
 
 // trackGroups are the stretches of a chapter's lines: per character (and
@@ -153,14 +160,22 @@ func trackGroups(lines []LineSpec, info ModelInfo) [][]int {
 }
 
 // trackFeeling is how a stretch of lines is said: a calm stretch in the
-// character's baseline, faintly (steady when none); a strong one in its
-// strongest line's emotion.
+// character's baseline (steady when none), as strong as its lines of the
+// baseline's family but at most clear (2), at least restrained (1); a
+// strong one in its strongest line's emotion.
 func trackFeeling(lines []LineSpec) (string, int) {
 	if trackKey(lines[0]) == "" {
-		if b := lines[0].Baseline; b != "" && b != EmotionSteady {
-			return b, IntensityLight
+		b := lines[0].Baseline
+		if b == "" || b == EmotionSteady {
+			return EmotionSteady, 0
 		}
-		return EmotionSteady, 0
+		in := IntensityLight
+		for _, l := range lines {
+			if trackFamily(l.Emotion) == trackFamily(b) {
+				in = max(in, min(l.Intensity, IntensityMedium))
+			}
+		}
+		return b, in
 	}
 	best := lines[0]
 	for _, l := range lines[1:] {
@@ -284,7 +299,7 @@ func trackRanges(words []proto.Word, parts []string) ([][2]float64, error) {
 				speech[k] += max(x.End-x.Start, 0)
 			}
 			if float64(empty) > 0.25*float64(len(lw)) {
-				return nil, errCutLength
+				return nil, fmt.Errorf("line %d: %d of %d words without time: %w", k+1, empty, len(lw), errCutLength)
 			}
 			out[k] = [2]float64{lw[0].Start, lw[len(lw)-1].End}
 			k, first = k+1, i+1
@@ -304,10 +319,10 @@ func trackRanges(words []proto.Word, parts []string) ([][2]float64, error) {
 		u := float64(len([]rune(alignUnits(parts[i]))))
 		ratio := speech[i] / (u * total / units)
 		if r[1] <= r[0] || ratio < cutMinRatio || ratio > cutMaxRatio {
-			return nil, errCutLength
+			return nil, fmt.Errorf("line %d: %.1f s of speech, %.2f× its share: %w", i+1, speech[i], ratio, errCutLength)
 		}
 		if i > 0 && r[0] < out[i-1][1]-0.1 {
-			return nil, errCutOrder
+			return nil, fmt.Errorf("line %d: %w", i+1, errCutOrder)
 		}
 	}
 	return out, nil

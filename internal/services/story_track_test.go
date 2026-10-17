@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -127,6 +128,14 @@ func TestTrackGroups(t *testing.T) {
 	if e, i := trackFeeling([]LineSpec{{Baseline: EmotionTender, Emotion: EmotionSteady}, {Baseline: EmotionTender, Emotion: EmotionWorried, Intensity: 1}}); e != EmotionTender || i != 1 {
 		t.Errorf("calm %s %d", e, i)
 	}
+	// The baseline's family is calm: an excited child's happy line goes on in the stretch, which says it a little stronger.
+	bl := []LineSpec{{Baseline: EmotionExcited, Emotion: EmotionHappy, Intensity: 3}, {Baseline: EmotionExcited, Emotion: EmotionExcited, Intensity: 1}}
+	if trackKey(bl[0]) != "" {
+		t.Error("the baseline's family breaks a stretch")
+	}
+	if e, i := trackFeeling(bl); e != EmotionExcited || i != 2 {
+		t.Errorf("baseline family %s %d", e, i)
+	}
 	if e, i := trackFeeling([]LineSpec{{Emotion: EmotionSad, Intensity: 2}, {Emotion: EmotionHurt, Intensity: 3}}); e != EmotionHurt || i != 3 {
 		t.Errorf("strong %s %d", e, i)
 	}
@@ -159,7 +168,7 @@ func TestTrackRanges(t *testing.T) {
 	for i := 4; i < 6; i++ {
 		w[i].End = w[i].Start + 0.01
 	}
-	if _, err := trackRanges(w, parts); err != errCutLength {
+	if _, err := trackRanges(w, parts); !errors.Is(err, errCutLength) {
 		t.Errorf("length: %v", err)
 	}
 	b := dsptest.Concat(dsptest.Sine(24000, 1, 220, -12, 1, 0), dsptest.Silence(24000, 1, 0.2), dsptest.Sine(24000, 1, 220, -12, 1, 0))
