@@ -21,7 +21,7 @@ import (
 // and the AI director of an update.
 func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *services.LongformDoc, req api.LongformUpdate, voices []core.Voice) error {
 	story := p.Kind == core.ProjectStory
-	if !story && (req.Scene != nil || len(req.Personas) > 0 || len(req.Directions) > 0 || len(req.Intensities) > 0 || req.Pacing != "" ||
+	if !story && (req.Scene != nil || len(req.Personas) > 0 || len(req.Directions) > 0 || len(req.Emotions) > 0 || len(req.Intensities) > 0 || req.Pacing != "" ||
 		req.Merge != nil || req.Level != nil || req.Direct != "") {
 		return errBadRequest("scene", "scene, personas, directions, pacing and direct are for stories.")
 	}
@@ -54,9 +54,23 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 		if err != nil {
 			return err
 		}
-		l.Direction = strings.TrimSpace(dir)
-		if l.Direction == "" {
+		l.Direction, l.EmotionByUser = strings.TrimSpace(dir), true // the director keeps it
+		if l.Direction == "" && l.Emotion == "" {
 			l.Intensity = 0
+		}
+	}
+	for id, e := range req.Emotions {
+		l, err := line(id, "emotions")
+		if err != nil {
+			return err
+		}
+		k := services.NormEmotion(e)
+		if k == "" && strings.TrimSpace(e) != "" {
+			return errBadRequest("emotions", "%q is not an emotion; the emotions are: %s.", e, strings.Join(services.Emotions, ", "))
+		}
+		l.Emotion, l.EmotionByUser = k, true // the director keeps it
+		if k == "" {
+			l.Turn = false
 		}
 	}
 	for id, n := range req.Intensities {
@@ -65,9 +79,9 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 			return err
 		}
 		if n < 0 || n > services.IntensityStrong {
-			return errBadRequest("intensities", "An intensity is 1 (restrained), 2 (clear) or 3 (strong); 0 clears it.")
+			return errBadRequest("intensities", "An intensity is 0 (barely, with an emotion), 1 (restrained), 2 (clear) or 3 (strong); 0 clears a direction's.")
 		}
-		l.Intensity = n
+		l.Intensity, l.EmotionByUser = n, true
 	}
 	switch req.Pacing {
 	case "":
@@ -94,7 +108,7 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 	if len(storyScript(d, nil).Lines) == 0 {
 		return errBadRequest("direct", "The story has no lines to direct.")
 	}
-	dir, err := (&translate.StoryDirector{Router: b.router}).Direct(ctx, storyScript(d, voices))
+	em, err := (&translate.StoryDirector{Router: b.router}).DirectEmotions(ctx, storyScript(d, voices), emotionVocab(storyZh(d)))
 	if err != nil {
 		if c := translate.Code(err); c == translate.CodeNoLLM || c == llm.CodeNoRoute {
 			return apiErr(http.StatusBadRequest, api.CodeLLMUnavailable, "direct",
@@ -102,7 +116,7 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 		}
 		return apiErr(http.StatusBadGateway, api.CodeDirectorFailed, "direct", "The AI director failed: %v", err)
 	}
-	applyDirection(d, dir, req.Direct == "fill")
+	applyEmotions(d, em, req.Direct == "fill")
 	return nil
 }
 

@@ -95,6 +95,12 @@ type ChapterResult struct {
 	// be, made line by line instead.
 	Turns        int `json:"turns,omitempty"`
 	TurnsUnsplit int `json:"turnsUnsplit,omitempty"`
+	// Tracks are the stretches of a character's lines said in one
+	// synthesis and cut apart (story_track.go), TrackLines their lines;
+	// TracksFailed the ones that could not be cut, made line by line.
+	Tracks       int `json:"tracks,omitempty"`
+	TrackLines   int `json:"trackLines,omitempty"`
+	TracksFailed int `json:"tracksFailed,omitempty"`
 	// Levelled counts the lines brought toward their character's loudness.
 	Levelled int               `json:"levelled,omitempty"`
 	Report   LoudnessReport    `json:"report"`
@@ -141,6 +147,7 @@ type chapterStep struct {
 	line    int
 	span    int
 	turn    *turnStep
+	track   *trackStep // a line of a character's track (story_track.go)
 }
 
 // turnStep is a merged turn: its lines, their expected lengths, and the

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Stories: emotions that stay coherent across a scene
+- The AI director now reads the whole story and plans its emotions: a usual mood for each character, and for each line one of 13 emotions (steady, happy, excited, tender, pleading, hesitant, worried, hurt, sad, angry, scared, surprised, apologetic) with a strength from 0 to 3, the turns of the scene marked. Most lines stay steady; a character's feeling changes one step at a time, except at a turn.
+- Each line is sent a short instruction made from its emotion ("略带委屈", "非常难过，带哭腔"), the same wording for every line of a character, instead of the persona and the scene with every line. In a test story, a father's voice moved over 8 semitones instead of 19.
+- Each line shows its emotion and strength; you can change them, mark a turn, or write your own wording. Directing again keeps what you changed. Each character has a usual mood you can set.
+- The pauses between lines follow the emotions: excited lines come quicker, hesitant or sad ones after a longer pause (Advanced → "Pauses follow the emotion").
+- A character's lines are said in one go, stretch by stretch, so the voice carries on from line to line instead of starting afresh; AudioSmith cuts them apart again with the forced aligner and checks each line. A stretch that cannot be cut cleanly, and narration, are made line by line. Advanced → "Each character's part in one go" turns this off.
+- Stories directed before this version sound exactly as before until you direct them again.
+- The Local API and MCP: `update_longform` takes `emotions` (line id → emotion) and intensities 0–3; `direct` runs the new director.
+
 ## 0.4.0-beta.6
 
 AudioSmith joins the ActNow family: it works together with the other ActNow apps on this Mac (Dicta, Auralink, Pik, VoxtNew). The apps share one copy of each model, some settings, and, if you agree, API keys, and they don't get in each other's way. AudioSmith names another app only when a released version of it is installed; with no other ActNow app, nothing on screen changes.

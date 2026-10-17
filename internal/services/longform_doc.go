@@ -107,8 +107,22 @@ type StoryLine struct {
 	// "无奈地笑"): an instruction for models that take one. Never spoken.
 	Direction string `json:"direction,omitempty"`
 	// Intensity of the direction: 0 = unset, IntensityLight, Medium or
-	// Strong.
+	// Strong. With an Emotion, 0–3 (0: barely).
 	Intensity int `json:"intensity,omitempty"`
+	// Emotion is the line's feeling from the vocabulary (Emotions,
+	// story_emotion.go), as the second AI director writes it: the line's
+	// instruction is made from it and Intensity (Direction, when set, is
+	// the user's own wording of it). "" = directed as before (Direction).
+	Emotion string `json:"emotion,omitempty"`
+	// Turn marks a turn of the scene (转折): the feeling may change at
+	// once here; elsewhere it moves a step at a time.
+	Turn bool `json:"turn,omitempty"`
+	// Note is the director's continuity note ("接着上一句的委屈"): shown,
+	// never sent.
+	Note string `json:"note,omitempty"`
+	// EmotionByUser: the user set the emotion, intensity, turn or
+	// direction; the director keeps them when it directs again.
+	EmotionByUser bool `json:"emotionByUser,omitempty"`
 }
 
 // Direction intensities (StoryLine.Intensity).
@@ -126,6 +140,9 @@ type CastMember struct {
 	// Persona is the character's performance baseline ("a seven-year-old
 	// girl, lively, coaxing"), for models that take an instruction.
 	Persona string `json:"persona,omitempty"`
+	// Baseline is the character's usual feeling in the story (an
+	// Emotion): its steady lines are said in it, faintly.
+	Baseline string `json:"baseline,omitempty"`
 }
 
 // LexiconEntry is one of a book's pronunciations: Word is said as Say.
@@ -158,6 +175,14 @@ type Production struct {
 	// preset otherwise brings a character's lines toward one level).
 	NoMerge bool `json:"noMerge,omitempty"`
 	NoLevel bool `json:"noLevel,omitempty"`
+	// NoEmotionGaps keeps the pacing's gaps for lines with an emotion,
+	// which otherwise follow it (story_emotion.go).
+	NoEmotionGaps bool `json:"noEmotionGaps,omitempty"`
+	// NoTracks makes a directed story line by line: by default, within a
+	// chapter, the lines of a character that have emotions are said in
+	// one synthesis per stretch of one feeling, cut apart with the forced
+	// aligner and put back in the dialogue (story_track.go).
+	NoTracks bool `json:"noTracks,omitempty"`
 }
 
 // DefaultProduction are the production settings of a new project.

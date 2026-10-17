@@ -64,6 +64,9 @@ func (r *renderer) chunks(p *RenderParams, pl *plan.Plan, info ModelInfo, modelP
 		if t.Guidance != 0 {
 			sp.Guidance = &t.Guidance
 		}
+		if t.Exaggeration != 0 {
+			sp.Exaggeration = &t.Exaggeration
+		}
 		speed := t.Speed
 		if seg.Speed != 1 && seg.Speed > 0 {
 			if speed == 0 {

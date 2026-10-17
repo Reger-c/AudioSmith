@@ -8,6 +8,7 @@ package main
 
 import (
 	"slices"
+	"strconv"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -37,15 +38,21 @@ func storyContinuity(model string) string {
 
 // continuityLabel names a continuity level; continuityTip explains it.
 func continuityLabel(level string) string {
-	if level == services.ContinuityInstruct {
+	switch level {
+	case services.ContinuityInstruct:
 		return i18n.T("Directed delivery")
+	case services.ContinuityIntensity:
+		return i18n.T("Directed intensity")
 	}
 	return i18n.T("Line by line")
 }
 
 func continuityTip(level string) string {
-	if level == services.ContinuityInstruct {
-		return i18n.T("This model hears the scene, each character's persona and each line's direction as an instruction, so the lines carry the moment's feeling. Never spoken.")
+	switch level {
+	case services.ContinuityInstruct:
+		return i18n.T("This model hears each line's emotion as a short instruction (lines the first AI director directed: the scene, the persona and the direction), so the lines carry the moment's feeling. Never spoken.")
+	case services.ContinuityIntensity:
+		return i18n.T("This model hears how strong each line's emotion is (its exaggeration), not the emotion itself.")
 	}
 	return i18n.T("This model says each line as written: scene, personas and directions are kept but not heard. Pacing and merged turns still apply. For directed delivery, use %s or %s.", modelRefID(idCustomVoice), modelRefID(idVoiceDesign))
 }
@@ -89,7 +96,7 @@ func (a *app) storyPerformance(c *ui.Context, p *lfPage, locked bool) {
 	})
 	ui.Row(c.Key("perf-director")).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
 		label := i18n.T("AI director")
-		tip := i18n.T("A language model reads the whole story and fills in the scene, a persona for each character and a direction for each line. You can change any of them.")
+		tip := i18n.T("A language model reads the whole story and plans its emotions: a baseline for each character, and for each line an emotion and its strength, mostly steady, with the turns of the scene marked. You can change any of them; directing again keeps what you set.")
 		disabled := locked || p.directing || len(storyScript(d, nil).Lines) == 0
 		if storyDirected(d) {
 			dropButton(c.Key("perf-direct"), icons.MagicStick3, label).Tooltip(tip).Disabled(disabled).Menu(func(m *ui.Menu) {
@@ -100,7 +107,7 @@ func (a *app) storyPerformance(c *ui.Context, p *lfPage, locked bool) {
 					a.directStory(p, true)
 				}
 				m.Separator()
-				if m.Item(i18n.T("Clear scene, personas and directions")).Chosen() {
+				if m.Item(i18n.T("Clear scene, personas, directions and emotions")).Chosen() {
 					a.clearDirection(p)
 				}
 			})
@@ -116,30 +123,32 @@ func (a *app) storyPerformance(c *ui.Context, p *lfPage, locked bool) {
 	})
 }
 
-// directedLines counts the lines with a direction.
+// directedLines counts the lines with a direction or an emotion.
 func directedLines(d *services.LongformDoc) int {
 	n := 0
 	for _, l := range d.Lines {
-		if l.Direction != "" && !l.Chapter {
+		if (l.Direction != "" || l.Emotion != "") && !l.Chapter {
 			n++
 		}
 	}
 	return n
 }
 
-// clearDirection empties the scene, personas and directions, with Undo.
+// clearDirection empties the scene, personas, baselines, directions and
+// emotions, with Undo.
 func (a *app) clearDirection(p *lfPage) {
 	before := p.doc
 	before.Lines = slices.Clone(p.doc.Lines)
 	before.Cast = slices.Clone(p.doc.Cast)
 	p.doc.Scene = ""
 	for i := range p.doc.Cast {
-		p.doc.Cast[i].Persona = ""
+		p.doc.Cast[i].Persona, p.doc.Cast[i].Baseline = "", ""
 	}
 	for i := range p.doc.Lines {
-		p.doc.Lines[i].Direction, p.doc.Lines[i].Intensity = "", 0
+		l := &p.doc.Lines[i]
+		l.Direction, l.Intensity, l.Emotion, l.Turn, l.Note, l.EmotionByUser = "", 0, "", false, "", false
 	}
-	a.toastUndo(i18n.T("Cleared the scene, personas and directions"), func() {
+	a.toastUndo(i18n.T("Cleared the scene, personas, directions and emotions"), func() {
 		p.doc.Scene, p.doc.Lines, p.doc.Cast = before.Scene, before.Lines, before.Cast
 	})
 }
@@ -149,17 +158,50 @@ func intensityLabels() []string {
 	return []string{i18n.T("Intensity: —"), i18n.T("Restrained"), i18n.X("intensity", "Clear"), i18n.T("Strong")}
 }
 
-// directionChip is a line's direction as a chip ("pleading · strong"),
-// greyed when the model does not hear it.
+// emotionLabels are the emotions' names, in services.Emotions order.
+func emotionLabels() []string {
+	return []string{i18n.X("emotion", "Steady"), i18n.X("emotion", "Happy"), i18n.X("emotion", "Excited"), i18n.X("emotion", "Tender"),
+		i18n.X("emotion", "Pleading"), i18n.X("emotion", "Hesitant"), i18n.X("emotion", "Worried"), i18n.X("emotion", "Hurt"),
+		i18n.X("emotion", "Sad"), i18n.X("emotion", "Angry"), i18n.X("emotion", "Scared"), i18n.X("emotion", "Surprised"),
+		i18n.X("emotion", "Apologetic")}
+}
+
+// emotionLabel names an emotion ("" for none).
+func emotionLabel(e string) string {
+	if i := slices.Index(services.Emotions, services.NormEmotion(e)); i >= 0 {
+		return emotionLabels()[i]
+	}
+	return ""
+}
+
+// emotionIntensityLabels are an emotion's intensities, 0–3.
+func emotionIntensityLabels() []string {
+	return []string{i18n.X("intensity", "Barely"), i18n.T("Restrained"), i18n.X("intensity", "Clear"), i18n.T("Strong")}
+}
+
+// directionChip is a line's direction as a chip ("pleading · strong",
+// "hurt · 2 · turn"), greyed when the model does not hear it.
 func directionChip(c *ui.Context, l *services.StoryLine, heard bool) ui.Element {
 	t := c.Theme()
 	k := tok(t)
 	text := l.Direction
-	if l.Intensity == services.IntensityLight || l.Intensity == services.IntensityStrong {
+	switch {
+	case l.Emotion != "":
+		if text == "" {
+			text = emotionLabel(l.Emotion)
+		}
+		text += " · " + strconv.Itoa(min(max(l.Intensity, 0), 3))
+		if l.Turn {
+			text += " · " + i18n.X("emotion", "turn")
+		}
+	case l.Intensity == services.IntensityLight || l.Intensity == services.IntensityStrong:
 		text += " · " + intensityLabels()[l.Intensity] // "clear" is the usual: unsaid
 	}
 	col, bg := k.AccentInk, k.AccentSoft
 	tip := i18n.T("Direction: %s", text)
+	if l.Note != "" {
+		tip += "\n" + l.Note
+	}
 	if !heard {
 		col, bg = k.Text3, k.Hover
 		tip = i18n.T("Direction: %s (this model does not hear it)", text)
@@ -168,9 +210,16 @@ func directionChip(c *ui.Context, l *services.StoryLine, heard bool) ui.Element 
 		Radius(px(t, 4)).Background(bg).Shrink(1).MinWidth(0).MaxWidth(px(t, 180)).Tooltip(tip)
 }
 
-// lineDirection is the direction row of a line's options.
+// lineDirection is the direction row of a line's options: its emotion,
+// intensity and turn (the second AI director's), or the first
+// director's direction and intensity. What the user changes there the
+// director keeps.
 func (a *app) lineDirection(c *ui.Context, p *lfPage, l *services.StoryLine, locked bool) {
 	t := c.Theme()
+	if l.Emotion != "" || !storyDirected(&p.doc) || storyHasEmotions(&p.doc) {
+		a.lineEmotion(c, l, locked)
+		return
+	}
 	formRow(c, "opt-direction", i18n.X("story", "Direction"), i18n.T("How this line is said: “pleading”, “softly, holding back tears”. Models that take instructions hear it; it is never spoken."), func() {
 		ui.TextInput(c.Key("line-direction"), &l.Direction).Placeholder(i18n.T("e.g. pleading")).Label(i18n.X("story", "Direction")).
 			Width(px(t, 150)).Shrink(1).MinWidth(px(t, 90)).Disabled(locked)
@@ -184,3 +233,77 @@ func (a *app) lineDirection(c *ui.Context, p *lfPage, l *services.StoryLine, loc
 
 // personaSummary is the Performance section's summary: the pacing.
 func personaSummary(d *services.LongformDoc) string { return pacingLabel(d.Production.Pacing) }
+
+// storyHasEmotions says whether any line of a story has an emotion.
+func storyHasEmotions(d *services.LongformDoc) bool {
+	for _, l := range d.Lines {
+		if l.Emotion != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// lineEmotion is the emotion row of a line's options: emotion, intensity,
+// turn, the user's own wording, and the director's note.
+func (a *app) lineEmotion(c *ui.Context, l *services.StoryLine, locked bool) {
+	t := c.Theme()
+	k := tok(t)
+	formRow(c, "opt-emotion", i18n.T("Emotion"), i18n.T("How this line feels, in the AI director's words: most lines are steady (the character's baseline goes on), a few carry a strong feeling. Models that take instructions hear a short instruction made from it; it is never spoken."), func() {
+		labels := append([]string{i18n.T("Emotion: —")}, emotionLabels()...)
+		cur := labels[0]
+		if i := slices.Index(services.Emotions, l.Emotion); i >= 0 {
+			cur = labels[i+1]
+		}
+		if ui.Select(c.Key("line-emotion"), &cur, labels).Label(i18n.T("Emotion")).Width(px(t, 120)).Shrink(1).MinWidth(px(t, 80)).Disabled(locked).Changed() {
+			l.Emotion, l.EmotionByUser = "", true
+			if i := slices.Index(labels, cur); i > 0 {
+				l.Emotion = services.Emotions[i-1]
+			}
+		}
+		il := emotionIntensityLabels()
+		ci := il[min(max(l.Intensity, 0), 3)]
+		if ui.Select(c.Key("line-emotion-intensity"), &ci, il).Label(i18n.T("Intensity")).Width(px(t, 100)).Shrink(1).MinWidth(px(t, 70)).
+			Disabled(locked || l.Emotion == "").Changed() {
+			l.Intensity, l.EmotionByUser = slices.Index(il, ci), true
+		}
+		if ui.Checkbox(c.Key("line-turn"), &l.Turn, i18n.X("emotion", "Turn")).Tooltip(i18n.T("A turn of the scene: the feeling may change at once here (elsewhere it moves a step at a time).")).
+			Disabled(locked || l.Emotion == "").Changed() {
+			l.EmotionByUser = true
+		}
+	})
+	if l.Emotion == "" {
+		return
+	}
+	formRow(c, "opt-own-words", i18n.T("Own words"), i18n.T("Say how the line is delivered in your own words (“撒娇”, “softly”) in place of the emotion's wording; at most about ten characters."), func() {
+		if ui.TextInput(c.Key("line-direction"), &l.Direction).Placeholder(services.EmotionInstruct(l.Emotion, l.Intensity, "", false, i18n.Locale() == "zh-Hans")).
+			Label(i18n.T("Own words")).Width(px(t, 180)).Shrink(1).MinWidth(px(t, 90)).Disabled(locked).Changed() {
+			l.EmotionByUser = true
+		}
+	})
+	if l.Note != "" {
+		caption(c.Key("line-note"), l.Note).TextColor(k.Text3)
+	}
+}
+
+// baselineSelect picks a character's baseline emotion.
+func baselineSelect(c *ui.Context, m *services.CastMember, locked bool) {
+	t := c.Theme()
+	k := tok(t)
+	labels := append([]string{"—"}, emotionLabels()...)
+	cur := labels[0]
+	if i := slices.Index(services.Emotions, m.Baseline); i >= 0 {
+		cur = labels[i+1]
+	}
+	ui.Row(c.Key("baseline-row")).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
+		caption(c, i18n.T("Usual mood")).TextColor(k.Text2).Shrink(0)
+		if ui.Select(c.Key("baseline"), &cur, labels).Label(i18n.T("Baseline mood of %s", m.Name)).
+			Tooltip(i18n.T("The character's usual feeling in this story: their steady lines are said in it, faintly.")).
+			Grow(1).Shrink(1).MinWidth(px(t, 90)).Disabled(locked).Changed() {
+			m.Baseline = ""
+			if i := slices.Index(labels, cur); i > 0 {
+				m.Baseline = services.Emotions[i-1]
+			}
+		}
+	})
+}

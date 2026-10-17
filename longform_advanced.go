@@ -47,6 +47,8 @@ func (a *app) lfChanges(p *lfPage) []string {
 	add(pr.Seed != 0, i18n.T("Seed"))
 	add(p.kind == core.ProjectStory && pr.NoMerge, i18n.T("Merge a character's lines"))
 	add(p.kind == core.ProjectStory && pr.NoLevel, i18n.T("Even out each voice"))
+	add(p.kind == core.ProjectStory && pr.NoEmotionGaps, i18n.T("Pauses follow the emotion"))
+	add(p.kind == core.ProjectStory && pr.NoTracks, i18n.T("Each character's part in one go"))
 	return out
 }
 
@@ -83,6 +85,18 @@ func (a *app) lfAdvanced(c *ui.Context, p *lfPage, locked bool) {
 				formRow(c, "perf-level-row", i18n.T("Even out each voice"), i18n.T("Brings each character's lines toward one loudness, so a voice does not jump in level from line to line; louder or softer directions keep part of their difference."), func() {
 					if ui.Switch(c.Key("perf-level-switch"), &level).Label(i18n.T("Even out each voice")).Disabled(locked).Changed() {
 						d.Production.NoLevel = !level
+					}
+				})
+				emoGaps := !d.Production.NoEmotionGaps
+				formRow(c, "perf-emotion-gaps-row", i18n.T("Pauses follow the emotion"), i18n.T("Lines with an emotion change the pauses around them: excited or angry lines come quicker, hesitant or sad ones after a longer pause."), func() {
+					if ui.Switch(c.Key("perf-emotion-gaps"), &emoGaps).Label(i18n.T("Pauses follow the emotion")).Disabled(locked).Changed() {
+						d.Production.NoEmotionGaps = !emoGaps
+					}
+				})
+				tracks := !d.Production.NoTracks
+				formRow(c, "perf-tracks-row", i18n.T("Each character's part in one go"), i18n.T("A character's lines with emotions are said in one synthesis per stretch of one feeling, so the voice carries on from line to line, and cut apart again with the forced aligner (%s). Narration, and a stretch that cannot be cut cleanly, are made line by line. Off: every line on its own.", modelRefID(catalog.DefaultAlign)), func() {
+					if ui.Switch(c.Key("perf-tracks"), &tracks).Label(i18n.T("Each character's part in one go")).Disabled(locked).Changed() {
+						d.Production.NoTracks = !tracks
 					}
 				})
 			}

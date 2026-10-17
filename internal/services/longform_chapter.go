@@ -89,12 +89,46 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		}
 		i++
 		c := *s.chunk
-		_, hit, err := st.synthesize(ctx, i, n, c)
-		if err != nil {
-			return err
-		}
-		if hit {
-			res.Cached++
+		if s.track != nil {
+			// A line of a character's track: cut from it, else as usual.
+			seg := s.track.seg
+			if !seg.made {
+				seg.made = true
+				seg.err = cr.trackCut(ctx, st, i, n, seg)
+				if seg.err != nil && ctx.Err() == nil {
+					r.logf("chapter %s: lines %v: no track (%v); making them one by one", job.ID, seg.lines, seg.err)
+					res.TracksFailed++
+				} else if seg.err == nil {
+					res.Tracks++
+					res.TrackLines += len(seg.lines)
+				}
+			}
+			if seg.err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				for _, f := range s.track.fallback {
+					if f.chunk != nil {
+						n++
+						st.total += f.chunk.chars
+					}
+				}
+				for _, f := range s.track.fallback {
+					if err := run(f); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			c.path, c.seg.Text = seg.paths[s.track.k], seg.texts[s.track.k]
+		} else {
+			_, hit, err := st.synthesize(ctx, i, n, c)
+			if err != nil {
+				return err
+			}
+			if hit {
+				res.Cached++
+			}
 		}
 		buf, trimmed, lead, err := st.loadChunk(c.path)
 		if err != nil {

@@ -63,6 +63,14 @@ type LineSpec struct {
 	Direction string `json:"direction,omitempty"`
 	Intensity int    `json:"intensity,omitempty"`
 	Persona   string `json:"persona,omitempty"`
+	// Emotion (story_emotion.go): the line's feeling, a steady line's
+	// being its character's baseline; with it, the instruction is made
+	// from Emotion and Intensity (0–3), Direction being the user's own
+	// words. Turn: a turn of the scene.
+	Emotion string `json:"emotion,omitempty"`
+	Turn    bool   `json:"turn,omitempty"`
+	// Baseline is the character's baseline emotion (tracks are said in it).
+	Baseline string `json:"baseline,omitempty"`
 }
 
 // SpanSpec is a part of a line in one voice.

@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -66,7 +67,14 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 		if p.Production.Guidance > 0 {
 			t.Guidance = p.Production.Guidance
 		}
-		if l.Direction != "" || l.Persona != "" || p.Scene != "" {
+		switch {
+		case l.Emotion != "":
+			// Directed by emotion: a short phrase, no persona or scene.
+			withDelivery(&t, info, EmotionInstruct(l.Emotion, l.Intensity, l.Direction, emotionCont(p.Lines, li), cjkShare(say) >= 0.3))
+			if info.Exaggeration {
+				t.Exaggeration = EmotionExaggeration(l.Intensity)
+			}
+		case l.Direction != "" || l.Persona != "" || p.Scene != "":
 			prev := ""
 			if li > 0 && paced && !sameSpeaker(p.Lines[li-1], l) && p.Lines[li-1].Character != "" && StoryPrevDirection {
 				prev = p.Lines[li-1].Direction
@@ -146,7 +154,10 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 	gapBefore := func(li int) float64 {
 		l, prev := p.Lines[li], p.Lines[li-1]
 		if paced {
-			return TurnGap(turns, prev, l)
+			if p.Production.NoEmotionGaps {
+				return TurnGap(turns, prev, l)
+			}
+			return emotionGap(TurnGap(turns, prev, l), prev, l)
 		}
 		gap := gaps.Line
 		if prev.PauseAfter > 0 {
@@ -156,11 +167,22 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 		}
 		return gap
 	}
-	// The merged turns, by their first line.
+	// The tracks: each character's lines in stretches, by line.
+	tracked := map[int]*trackStep{}
+	if paced && !p.Production.NoTracks && r.engine != nil && r.aligner != "" {
+		t, err := cr.tracks(p, take, planOf, lineSteps, info, modelPath)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		tracked = t
+	}
+	// The merged turns, by their first line: of lines not in a track.
 	merged := map[int][]int{}
 	if paced && !p.Production.NoMerge {
 		for _, g := range mergeGroups(p.Lines, info, p.Production.VaryRepeats) {
-			merged[g[0]] = g
+			if !slices.ContainsFunc(g, func(li int) bool { return tracked[li] != nil }) {
+				merged[g[0]] = g
+			}
 		}
 	}
 	for li := 0; li < len(p.Lines); li++ {
@@ -168,6 +190,11 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 			gap := gapBefore(li)
 			steps = append(steps, chapterStep{silence: gap, line: li})
 			fmt.Fprintf(h, "gap %g\x00", gap)
+		}
+		if ts, ok := tracked[li]; ok {
+			steps = append(steps, chapterStep{chunk: ts.chunk, brk: ts.seg.brk, line: li, track: ts})
+			fmt.Fprintf(h, "track %s %s %d\x00", trackVersion, ts.seg.chunk.key, ts.k)
+			continue
 		}
 		if g, ok := merged[li]; ok {
 			st, err := cr.turn(p, g, take, planOf, lineSteps, gapBefore, info, modelPath)
@@ -206,7 +233,11 @@ func (cr chapterRenderer) turn(p *ChapterParams, g []int,
 	for i, li := range g {
 		lines[i] = p.Lines[li]
 	}
-	p.Lines[g[0]].Direction, p.Lines[g[0]].Intensity = turnDirection(lines)
+	if e, own, in := turnEmotion(lines); e != "" {
+		p.Lines[g[0]].Emotion, p.Lines[g[0]].Direction, p.Lines[g[0]].Intensity = e, own, in
+	} else {
+		p.Lines[g[0]].Direction, p.Lines[g[0]].Intensity = turnDirection(lines)
+	}
 	t, seed, extra, err := take(g[0], p.Lines[g[0]].Spans[0], joined)
 	p.Lines[g[0]] = saved
 	if err != nil {

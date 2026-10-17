@@ -116,8 +116,9 @@ func withDelivery(t *core.Take, info ModelInfo, instruct string) {
 
 // Continuity levels of a model for stories (ContinuityOf).
 const (
-	ContinuityInstruct = "instruct" // takes the scene, personas and directions
-	ContinuityLines    = "lines"    // pacing and merged turns only
+	ContinuityInstruct  = "instruct"  // takes the scene, personas and directions
+	ContinuityIntensity = "intensity" // takes the emotions' intensities only (Chatterbox)
+	ContinuityLines     = "lines"     // pacing and merged turns only
 )
 
 // ContinuityOf is what a model does with a story's scene, personas and
@@ -126,6 +127,8 @@ func ContinuityOf(info Traits) string {
 	switch {
 	case info.Instruct:
 		return ContinuityInstruct
+	case info.Exaggeration:
+		return ContinuityIntensity
 	}
 	return ContinuityLines
 }
