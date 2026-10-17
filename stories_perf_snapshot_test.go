@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -93,7 +94,9 @@ func snapshotsStoryPerformance(t *testing.T, out string) {
 			p.open["scene"], p.open["cast"] = false, true
 			save("story-cast-persona")
 			// Directed by emotion (the director v2, thread #78): chips, a line's
-			// emotion row, and the cast's baselines.
+			// emotion row, and the cast's baselines; then back to the
+			// directions for Kokoro's scene.
+			lines, cast := slices.Clone(d.Lines), slices.Clone(d.Cast)
 			for i, em := range []struct {
 				e    string
 				n    int
@@ -112,6 +115,7 @@ func snapshotsStoryPerformance(t *testing.T, out string) {
 			p.sel = -1
 			p.open["scene"], p.open["cast"] = false, true
 			save("story-cast-baseline")
+			d.Lines, d.Cast = lines, cast
 			d.Model, d.Voice = kokoro, "speaker:af_heart"
 			d.Cast[0].Voice, d.Cast[1].Voice = "speaker:af_bella", "speaker:af_heart"
 			p.open["scene"], p.open["cast"] = true, false
