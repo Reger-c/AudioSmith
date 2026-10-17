@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -93,14 +94,15 @@ func TestMacScenarios(t *testing.T) {
 		f.Claimed(ctx, hubDir, ClaimOf(asr, asr.Repo, asr.Revision, nil, false, models.OriginReused))
 		f.Rediscover()
 		r, err = hub.Remove(ctx, hubDir, asr, fam, models.ThisApp)
-		if err != nil || r.Deleted || !fx.Installed(asrRef) || len(r.Decision.Users) != 1 || r.Decision.Users[0].Claim.Repo == "" {
+		byClaim := slices.ContainsFunc(r.Decision.Users, func(u models.User) bool { return u.BundleID == dictaID && u.Claim.Repo != "" })
+		if err != nil || r.Deleted || !fx.Installed(asrRef) || !byClaim {
 			t.Fatalf("scenario 2, Dicta's claim: %+v %v", r, err)
 		}
 		res, err := dicta.Delete(ctx, asrRef, models.ThisApp)
 		if err != nil || !res.Deleted || fx.Installed(asrRef) {
 			t.Fatalf("scenario 2, Dicta deletes it too: %+v %v", res, err)
 		}
-		t.Log("scenario 2: kept by Dicta's claim; gone once Dicta deleted it too")
+		t.Logf("scenario 2: kept by Dicta's claim (users %v); gone once Dicta deleted it too", r.Kept)
 	}
 
 	// Scenarios 3 and 4.
@@ -167,33 +169,40 @@ func TestMacScenarios(t *testing.T) {
 			waited, killed.Sub(start).Round(time.Millisecond), took.Round(time.Millisecond), served, len(weights.Content))
 	}
 
-	// Scenario 8.
-	pikApp, err := conformance.FakeApp(t.TempDir(), "Pik", "dev.hehehai.pik")
+	// Scenario 8. A release build LaunchServices knows is never
+	// "uninstalled" (every family app is on the test Mac): then the
+	// uninstalled app is a test build of Pik, cleaned up by its id (the
+	// UI lists release builds only).
+	pikID := "dev.hehehai.pik"
+	if len(f.sys.AppPaths(pikID)) > 0 {
+		pikID = "dev.hehehai.pik.scenario"
+	}
+	pikApp, err := conformance.FakeApp(t.TempDir(), "Pik", pikID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Write(fx.Family, registry.Manifest{App: "pik", BundleID: "dev.hehehai.pik", Name: "Pik", Version: "test", Path: pikApp,
+	if err := registry.Write(fx.Family, registry.Manifest{App: "pik", BundleID: pikID, Name: "Pik", Version: "test", Path: pikApp,
 		Capabilities: []string{registry.CapModelsHF}, Models: &registry.ModelsInfo{Root: hubDir}}); err != nil {
 		t.Fatal(err)
 	}
 	only := conformance.TestRepo("acme/only-pik", strings.Repeat("d", 40), 1<<20)
 	fx.Install(only)
-	pik := &models.Store{Family: fx.Family, Hub: hubDir, BundleID: "dev.hehehai.pik", AppID: "pik"}
+	pik := &models.Store{Family: fx.Family, Hub: hubDir, BundleID: pikID, AppID: "pik"}
 	if err := pik.Claim(ctx, models.Claim{Repo: only.Ref.Repo, Revision: only.Ref.Revision}); err != nil {
 		t.Fatal(err)
 	}
 	os.RemoveAll(pikApp) // dragged to the Trash
 	f.Rediscover()
-	orphans, err := f.Orphans(hubDir)
-	if err != nil || len(orphans) != 1 || orphans[0].Bytes == 0 {
+	orphans, err := f.Store(hubDir).Orphans()
+	if err != nil || len(orphans) != 1 || orphans[0].BundleID != pikID || orphans[0].Bytes == 0 {
 		t.Fatalf("scenario 8: orphans %+v %v", orphans, err)
 	}
-	freed, err := f.CleanOrphans(ctx, hubDir)
+	freed, err := f.CleanOrphans(ctx, hubDir, pikID)
 	if err != nil || fx.Installed(only.Ref) {
 		t.Fatalf("scenario 8: freed %d, %v", freed, err)
 	}
-	if _, err := os.Stat(fx.Family.AppFile("dev.hehehai.pik")); !os.IsNotExist(err) {
+	if _, err := os.Stat(fx.Family.AppFile(pikID)); !os.IsNotExist(err) {
 		t.Errorf("scenario 8: Pik's manifest stayed: %v", err)
 	}
-	t.Logf("scenario 8: %d model(s) only Pik used, %d bytes, cleaned up", len(orphans[0].Claims), freed)
+	t.Logf("scenario 8: %s uninstalled: %d model(s) only it used, %d bytes, cleaned up", pikID, len(orphans[0].Claims), freed)
 }

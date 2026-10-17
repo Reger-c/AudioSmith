@@ -43,7 +43,14 @@ func (f *Family) Claimed(ctx context.Context, hub string, c models.Claim) error 
 	}
 	store := f.storeLocked(hub)
 	f.mu.Unlock()
-	return store.ClaimLocked(ctx, c)
+	if err := store.ClaimLocked(ctx, c); err != nil {
+		return err
+	}
+	// Again: a notification handled meanwhile may have recorded it.
+	f.mu.Lock()
+	delete(f.deleted, strings.ToLower(c.Repo))
+	f.mu.Unlock()
+	return nil
 }
 
 // flushPending claims the downloads that finished during a migration.

@@ -85,6 +85,9 @@ func TestRealEngineAuxPaths(t *testing.T) {
 		t.Fatalf("kokoro with auxPaths: %v", err)
 	}
 	for _, n := range names {
+		if strings.HasPrefix(n.Name(), ".") {
+			continue // hidden files (.gitattributes) are not linked
+		}
 		target, err := os.Readlink(filepath.Join(stale, n.Name()))
 		if err != nil || target != filepath.Join(aux[g2p], n.Name()) {
 			t.Errorf("%s: %q %v, want a link to the pinned snapshot", n.Name(), target, err)

@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/actnowkit/conformance"
@@ -100,6 +101,7 @@ func TestTombstone(t *testing.T) {
 		t.Errorf("DeletedIn = %q", got)
 	}
 	install(fx, refB)
+	time.Sleep(200 * time.Millisecond) // the watcher handles Dicta's notification too (on macOS)
 	if err := f.Claimed(ctx, fx.Hub, ClaimOf(testCatalog[1], refB.Repo, revB, nil, false, "")); err != nil {
 		t.Fatal(err)
 	}
