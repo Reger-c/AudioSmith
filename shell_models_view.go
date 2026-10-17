@@ -357,17 +357,18 @@ func mb(n int64) string {
 	return fmt.Sprintf("%d B", n)
 }
 
-// modelsAlerts asks before deleting a model: when other ActNow apps may
-// use it, before removing it from AudioSmith only (spec §7.10.3).
+// modelsAlerts asks before deleting a model. A model another installed
+// ActNow app may use is not deleted: the dialog only says so (phase 0 of
+// the family spec has no claims, so there is nothing to remove from
+// AudioSmith alone; phase 1 brings "Remove from AudioSmith").
 func (a *app) modelsAlerts(c *ui.Context) {
 	e := a.deleting
-	title, body, ok := i18n.T("Delete %s?", modelRef(e)), i18n.T("Its files leave the model folder. You can download it again."), i18n.T("Delete")
 	if len(a.deleteShared) > 0 {
-		title = i18n.T("Remove %s from AudioSmith?", modelRef(e))
-		body = i18n.T("%s also uses this model, so its files (%s) stay on this Mac.", listJoin(a.deleteShared), mb(a.model(e).local.Bytes))
-		ok = i18n.T("Remove from AudioSmith")
+		ui.AlertDialog(c, &a.deleteAsk, modelRef(e), sharedText(a.deleteShared, a.model(e).local.Bytes), i18n.T("OK"))
+		return
 	}
-	switch ui.AlertDialog(c, &a.deleteAsk, title, body, i18n.T("Cancel"), ok) {
+	switch ui.AlertDialog(c, &a.deleteAsk, i18n.T("Delete %s?", modelRef(e)),
+		i18n.T("Its files leave the model folder. You can download it again."), i18n.T("Cancel"), i18n.T("Delete")) {
 	case 1:
 		a.deleteModel(e)
 	}

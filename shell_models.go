@@ -276,8 +276,8 @@ func (a *app) askDelete(e catalog.Entry) {
 	})
 }
 
-// deleteModel deletes e's files, or only removes it from AudioSmith when
-// another ActNow app may use them (hub.Client.Remove).
+// deleteModel deletes e's files, unless another ActNow app may use them
+// (hub.Client.Remove keeps them).
 func (a *app) deleteModel(e catalog.Entry) {
 	client := a.hubClient()
 	m := a.model(e)
@@ -294,7 +294,7 @@ func (a *app) deleteModel(e catalog.Entry) {
 				a.toast(i18n.T("Could not delete %s: %v", modelRef(e), err))
 			case len(r.Kept) > 0:
 				a.logs.Append(core.LogEntry{Source: "hub", Message: "kept " + e.Repo + ": used by " + strings.Join(r.Kept, ", ")})
-				a.toast(i18n.T("%s also uses this model, so its files stay on this Mac.", listJoin(r.Kept)))
+				a.toast(sharedText(r.Kept, m.local.Bytes)) // installed since the dialog
 			default:
 				a.toast(i18n.T("Deleted %s", modelRef(e)))
 			}

@@ -94,3 +94,9 @@ func waitingText(p hub.Progress) string {
 	}
 	return i18n.T("Downloading in %s… %d%%", app, pct)
 }
+
+// sharedText says that apps (other ActNow apps) use a model, so its files
+// (bytes) stay (spec §7.10.3).
+func sharedText(apps []string, bytes int64) string {
+	return i18n.T("%s also uses this model, so its files (%s) stay on this Mac.", listJoin(apps), mb(bytes))
+}

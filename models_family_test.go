@@ -87,3 +87,17 @@ func TestRemovedKeptListed(t *testing.T) {
 		t.Errorf("zh kept %q", kept)
 	}
 }
+
+// TestSharedText: Delete of a model Dicta uses only says why its files
+// stay (an OK-only dialog; phase 0 removes nothing).
+func TestSharedText(t *testing.T) {
+	i18n.SetLocale("en")
+	if got := sharedText([]string{"Dicta"}, 712_000_000); got != "Dicta also uses this model, so its files (712 MB) stay on this Mac." {
+		t.Errorf("en %q", got)
+	}
+	i18n.SetLocale("zh-Hans")
+	defer i18n.SetLocale("en")
+	if got := sharedText([]string{"Dicta", "VoxtNew"}, 712_000_000); got != "Dicta、VoxtNew 也在使用这个模型，文件（712 MB）会保留在这台 Mac 上。" {
+		t.Errorf("zh %q", got)
+	}
+}
