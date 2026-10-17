@@ -226,3 +226,33 @@ func TestExecutorsFillModelPaths(t *testing.T) {
 		t.Errorf("refused jobs reached the engine: %d calls", len(sup.params))
 	}
 }
+
+// Executor and KindExecutor take RegisterExecutors's options: the app's
+// renders, transcripts and dub steps pass AuxPaths (they fill the model's
+// path themselves), and without options nothing is added.
+func TestExecutorOptions(t *testing.T) {
+	sup := &recordSup{}
+	aux := ExecutorOptions{AuxPaths: func(context.Context, string) map[string]string {
+		return map[string]string{"beshkenadze/kitten-tts-g2p": "/cache/g2p"}
+	}}
+	params, _ := json.Marshal(proto.SynthesizeParams{Model: "mlx-community/Kokoro-82M-bf16", ModelPath: "/cache/kokoro", Text: "hi"})
+	for _, ex := range []jobs.Executor{
+		Executor(sup, proto.RoleGPU, proto.MethodTTSSynthesize, aux),
+		KindExecutor(sup, proto.KindFor(proto.RoleListen, proto.MethodSTTTranscribe), aux),
+		Executor(sup, proto.RoleGPU, proto.MethodTTSSynthesize),
+	} {
+		if _, err := ex.Run(context.Background(), jobs.Job{ID: "j", Params: params}, func(jobs.Progress) {}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, want := range []bool{true, true, false} {
+		var p struct {
+			ModelPath string            `json:"modelPath"`
+			Aux       map[string]string `json:"auxPaths"`
+		}
+		json.Unmarshal(sup.params[i], &p)
+		if got := p.Aux["beshkenadze/kitten-tts-g2p"] == "/cache/g2p"; got != want || p.ModelPath != "/cache/kokoro" {
+			t.Errorf("call %d: %s", i, sup.params[i])
+		}
+	}
+}

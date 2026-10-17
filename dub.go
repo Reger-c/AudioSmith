@@ -137,7 +137,7 @@ func (a *app) openDubs(lib *library) {
 			if host == nil || host.sup == nil {
 				return nil
 			}
-			return engine.Executor(host.sup, dub.RoleOf(method), method)
+			return engine.Executor(host.sup, dub.RoleOf(method), method, engine.ExecutorOptions{AuxPaths: lib.auxSnapshots})
 		},
 		ModelPath: lib.modelSnapshot,
 		Models:    func() services.DubModels { return dubModels(lib) },

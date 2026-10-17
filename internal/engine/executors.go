@@ -77,10 +77,10 @@ func RegisterExecutors(sched jobs.Scheduler, sup Supervisor, opts ...ExecutorOpt
 
 // KindExecutor runs jobs of kind (a method, or "role:method" from
 // proto.KindFor) on the worker its kind names, as RegisterExecutors's
-// executors do without the options.
-func KindExecutor(sup Supervisor, kind string) jobs.Executor {
+// executors do (with opts, when given).
+func KindExecutor(sup Supervisor, kind string, opts ...ExecutorOptions) jobs.Executor {
 	role, method := proto.SplitKind(kind)
-	return executor(sup, role, method, ExecutorOptions{})
+	return Executor(sup, role, method, opts...)
 }
 
 // Executor runs jobs of kind method as requests to the worker of role,
@@ -89,9 +89,16 @@ func KindExecutor(sup Supervisor, kind string) jobs.Executor {
 // the job is left to the bus. Errors become *jobs.Error with the protocol's
 // code: oom and busy are retryable, and so is the worker dying mid-job
 // (jobs.CodeInterrupted) or not being ready (CodeEngineUnavailable) — the
-// job's MaxAttempts decides whether it runs again.
-func Executor(sup Supervisor, role proto.Role, method string) jobs.Executor {
-	return executor(sup, role, method, ExecutorOptions{})
+// job's MaxAttempts decides whether it runs again. opts, when given, are
+// RegisterExecutors's: the app's renders, transcripts and dub steps fill
+// their models' paths themselves but pass AuxPaths, so their auxiliary
+// repos load at the pinned snapshots too.
+func Executor(sup Supervisor, role proto.Role, method string, opts ...ExecutorOptions) jobs.Executor {
+	var o ExecutorOptions
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	return executor(sup, role, method, o)
 }
 
 func executor(sup Supervisor, role proto.Role, method string, o ExecutorOptions) jobs.Executor {

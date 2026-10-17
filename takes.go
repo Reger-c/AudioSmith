@@ -370,7 +370,7 @@ func (a *app) openTakes(lib *library) {
 		if host == nil || host.sup == nil {
 			return nil
 		}
-		return engine.Executor(host.sup, proto.RoleGPU, proto.MethodTTSSynthesize)
+		return engine.Executor(host.sup, proto.RoleGPU, proto.MethodTTSSynthesize, engine.ExecutorOptions{AuxPaths: lib.auxSnapshots})
 	})
 	a.takeStore = lib.store.Takes()
 	a.peaks = map[string][]float32{}
