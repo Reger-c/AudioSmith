@@ -16,8 +16,12 @@ import (
 // endpoint (Options.Official), and is looked up in this order:
 //
 //	$HF_TOKEN                       development, CI
-//	the Keychain                    what Settings → Models saves
+//	the ActNow family's shared one  when the user shares it (TokenFrom's shared: the app injects it)
+//	the Keychain                    AudioSmith's own item, what Settings → Models saves
 //	huggingface_hub's token file    $HF_TOKEN_PATH, else $HF_HOME/token, else ~/.cache/huggingface/token
+//
+// (the family spec v1.0.4 §8.4 order; this package knows nothing of the
+// family: the app hands TokenFrom the shared token's reader).
 //
 // Every function here may block (the Keychain runs /usr/bin/security):
 // call them off the main thread.
@@ -28,6 +32,7 @@ type TokenSource string
 const (
 	TokenNone     TokenSource = ""
 	TokenEnv      TokenSource = "env"
+	TokenShared   TokenSource = "shared" // the ActNow family's shared token
 	TokenKeychain TokenSource = "keychain"
 	TokenCLI      TokenSource = "file" // huggingface-cli login
 )
@@ -144,10 +149,20 @@ func TokenFile() string {
 	return filepath.Join(home, ".cache", "huggingface", "token")
 }
 
-// Token finds the token and where it came from (see above); "" when none.
-func Token(k Keychain) (string, TokenSource) {
+// Token finds the token and where it came from (see above), without a
+// shared one; "" when none.
+func Token(k Keychain) (string, TokenSource) { return TokenFrom(nil, k) }
+
+// TokenFrom finds the token and where it came from (see above); shared
+// reads the family's shared token (nil = none; an error counts as none).
+func TokenFrom(shared func() (string, error), k Keychain) (string, TokenSource) {
 	if t := strings.TrimSpace(os.Getenv("HF_TOKEN")); t != "" {
 		return t, TokenEnv
+	}
+	if shared != nil {
+		if t, err := shared(); err == nil && strings.TrimSpace(t) != "" {
+			return strings.TrimSpace(t), TokenShared
+		}
 	}
 	if t, err := k.Get(); err == nil && t != "" {
 		return t, TokenKeychain

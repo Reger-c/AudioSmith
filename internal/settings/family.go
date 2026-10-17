@@ -16,6 +16,11 @@ type Family struct {
 	// pair (shortcuts.Conflict.Key: "dictation|<bundle id>|<function>"):
 	// each pair is prompted once (spec §10.4).
 	ConflictShown map[string]bool `json:"conflictShown,omitempty"`
+	// KeyFingerprints are the fingerprints of the shared keys AudioSmith
+	// uses, by vendor, as it last saw them: when one is deleted for all
+	// apps, AudioSmith's own copy of the same key goes too (family spec
+	// §8.3).
+	KeyFingerprints map[string]string `json:"keyFingerprints,omitempty"`
 }
 
 // now is the clock that stamps Dictation.EnabledAt (tests set it).
@@ -33,4 +38,6 @@ func stampDictation(old Settings, next *Settings) {
 
 func cloneFamily(s *Settings) {
 	s.Family.ConflictShown = maps.Clone(s.Family.ConflictShown)
+	s.Family.KeyFingerprints = maps.Clone(s.Family.KeyFingerprints)
+	s.Dubbing.CredentialRefs = maps.Clone(s.Dubbing.CredentialRefs)
 }

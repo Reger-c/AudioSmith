@@ -110,13 +110,19 @@ func X(context, msg string, args ...any) string {
 
 // N picks the singular (one) or plural (other) English source for n by the
 // active locale's plural rule, translates it and formats it with args.
-// Locales without a singular (zh-Hans) always use other.
+// Locales without a singular (zh-Hans) always use other. A singular may
+// leave the count out ("Generate dub" / "Generate %d dubs"): one without
+// a verb is not formatted, so the count does not show as %!(EXTRA int=1).
 func N(n int, one, other string, args ...any) string {
 	msg := other
 	if n == 1 && Locale() == "en" {
 		msg = one
 	}
-	return format(lookup(msg), args)
+	s := lookup(msg)
+	if msg == one && !strings.Contains(s, "%") {
+		return s
+	}
+	return format(s, args)
 }
 
 func lookup(msg string) string {

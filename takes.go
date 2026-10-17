@@ -56,6 +56,9 @@ type library struct {
 	hubMu  sync.Mutex
 	hubCli *hub.Client    // for the current settings; nil until needed
 	fam    *family.Family // claims what downloads finish (family_app.go); nil in tests
+	keys   *family.Keys   // own and shared API keys, HF token (family_keys.go); nil in tests
+	// keyGone ends a key whose shared copy was deleted (family_keys_gone.go).
+	keyGone func(keySlot)
 
 	synthMu sync.Mutex
 	synth   func() jobs.Executor // the engine's tts.synthesize, for renders (useEngine)
@@ -231,9 +234,10 @@ func presetDefaults(e catalog.Entry) map[string]services.ParamDefaults {
 	return out
 }
 
-// hubToken finds the HF token for downloads (tests replace it).
-var hubToken = func() string {
-	t, _ := hub.Token(hub.DefaultKeychain)
+// hubToken finds the HF token for downloads (tests replace it); shared
+// reads the family's shared token (nil = none: family_keys.go).
+var hubToken = func(shared func() (string, error)) string {
+	t, _ := hub.TokenFrom(shared, hub.DefaultKeychain)
 	return t
 }
 
@@ -252,7 +256,7 @@ func (l *library) hub() *hub.Client {
 	if l.hubCli == nil {
 		s := l.settings.Get()
 		m := s.Models
-		o := hub.Options{CacheDir: modelCache(s), Endpoints: m.Endpoints, Proxy: m.Proxy, Token: hubToken}
+		o := hub.Options{CacheDir: modelCache(s), Endpoints: m.Endpoints, Proxy: m.Proxy, Token: func() string { return hubToken(l.sharedHFToken()) }}
 		l.familyOptions(&o)
 		l.hubCli = hub.New(o)
 	}

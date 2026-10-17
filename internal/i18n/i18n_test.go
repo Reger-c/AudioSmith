@@ -22,6 +22,13 @@ func TestEnglishIsIdentity(t *testing.T) {
 	if got := N(2, "%d take", "%d takes", 2); got != "2 takes" {
 		t.Error(got)
 	}
+	// A singular without the count (dub_view_player.go's "Generate dub").
+	if got := N(1, "Generate dub", "Generate %d dubs", 1); got != "Generate dub" {
+		t.Error(got)
+	}
+	if got := N(3, "Generate dub", "Generate %d dubs", 3); got != "Generate 3 dubs" {
+		t.Error(got)
+	}
 	if got := X("verb", "Export"); got != "Export" {
 		t.Error(got)
 	}

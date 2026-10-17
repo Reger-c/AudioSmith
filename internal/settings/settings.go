@@ -121,6 +121,10 @@ type Models struct {
 	// system proxy), "direct", or a proxy URL (hub.Options.Proxy).
 	Proxy      string `json:"proxy,omitempty"`
 	AutoUnload int    `json:"autoUnload"` // minutes idle before unloading a model; 0 = never
+	// HFCredentialRef names the ActNow family's shared Hugging Face token
+	// ("actnow:vendor.huggingface", family spec §8.4); "" = AudioSmith's
+	// own Keychain item only.
+	HFCredentialRef string `json:"hfCredentialRef,omitempty"`
 }
 
 // Engine: resource limits.
