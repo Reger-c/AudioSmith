@@ -90,6 +90,7 @@ engine/enginetest        engine/proto
 
 family                   catalog
 family                   engine/proto
+family                   settings
 
 gallery                  engine/proto
 gallery                  jobs

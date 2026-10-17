@@ -71,6 +71,7 @@ func (a *app) showFamily(v familyView) {
 		a.famDeleted, a.famShares, a.famLoaded = nil, nil, nil
 	}
 	a.familyShown() // family_reuse.go
+	a.showShared()  // family_shared.go
 }
 
 // connectFamily makes AudioSmith's Family (no file touched yet) and has
@@ -81,6 +82,7 @@ func (a *app) connectFamily() {
 	a.lib.setFamily(a.fam)
 	a.connectFamilyRuntime() // family_coord.go (thread #73)
 	a.connectKeys()          // family_keys.go (thread #74)
+	a.connectShared()        // family_shared.go (thread #76)
 }
 
 // startFamily sets AudioSmith up in the family directory in the
@@ -98,6 +100,9 @@ func (a *app) startFamily(dataDir string) {
 		a.familyChanged(topics) // family_coord.go: memory requests, shortcut conflicts
 		if slices.Contains(topics, actnow.TopicCredentials) {
 			a.checkSharedKeys() // family_keys_gone.go: a shared key deleted or changed
+		}
+		if slices.Contains(topics, actnow.TopicSettings) {
+			a.adoptShared() // family_shared.go: another app changed a shared setting
 		}
 		v := readFamilyView(fam, rt, modelCache(lib.settings.Get()))
 		a.post(func() {
@@ -128,6 +133,7 @@ func (a *app) startFamily(dataDir string) {
 		}
 		v := readFamilyView(fam, rt, modelCache(lib.settings.Get()))
 		a.post(func() { a.showFamily(v) })
+		a.startShared()     // family_shared.go: the first-run merge, then the family's values
 		a.familyStarted()   // family_coord.go
 		a.checkSharedKeys() // family_keys_gone.go: keys deleted while AudioSmith was not running
 		for range dirty {

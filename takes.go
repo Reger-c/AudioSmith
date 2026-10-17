@@ -241,7 +241,10 @@ var hubToken = func(shared func() (string, error)) string {
 	return t
 }
 
-// modelCache is the model folder of the settings.
+// modelCache is the model folder of the settings: AudioSmith's own, or
+// the family's while it follows it (written into Models.CacheDir by
+// family.Shared), which beat $HF_HUB_CACHE and $HF_HOME (spec §7.1);
+// else the default rules (hub.CacheDir).
 func modelCache(s settings.Settings) string {
 	if s.Models.CacheDir != "" {
 		return s.Models.CacheDir
@@ -256,7 +259,7 @@ func (l *library) hub() *hub.Client {
 	if l.hubCli == nil {
 		s := l.settings.Get()
 		m := s.Models
-		o := hub.Options{CacheDir: modelCache(s), Endpoints: m.Endpoints, Proxy: m.Proxy, Token: func() string { return hubToken(l.sharedHFToken()) }}
+		o := hub.Options{CacheDir: modelCache(s), Endpoints: downloadEndpoints(s), Proxy: m.Proxy, Token: func() string { return hubToken(l.sharedHFToken()) }}
 		l.familyOptions(&o)
 		l.hubCli = hub.New(o)
 	}

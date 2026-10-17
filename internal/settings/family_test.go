@@ -71,3 +71,37 @@ func TestFamilySettingsJSON(t *testing.T) {
 		t.Errorf("round trip: %s %v", data, err)
 	}
 }
+
+// The shared settings' follow flags: a missing key follows; only false is
+// kept, and the prompts still to show.
+func TestFamilyFollow(t *testing.T) {
+	s := NewMemory()
+	ctx := context.Background()
+	if f := s.Get().Family; !f.Follows("network.proxy") || f.Follow != nil {
+		t.Fatalf("defaults: %+v", f)
+	}
+	if err := s.Update(ctx, func(s *Settings) {
+		s.Family.SetFollows("network.proxy", false)
+		s.Family.SetFollows("general.language", true)
+		s.Family.OtherValue = map[string]bool{"network.proxy": true, "models.root": false}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f := s.Get().Family
+	if f.Follows("network.proxy") || !f.Follows("general.language") || len(f.Follow) != 1 || len(f.OtherValue) != 1 {
+		t.Errorf("after: %+v", f)
+	}
+	if err := s.Update(ctx, func(s *Settings) {
+		s.Family.SetFollows("network.proxy", true)
+		delete(s.Family.OtherValue, "network.proxy")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if f := s.Get().Family; f.Follow != nil || f.OtherValue != nil {
+		t.Errorf("follow again: %+v", f)
+	}
+	data, _ := json.Marshal(s.Get())
+	if strings.Contains(string(data), `"follow"`) {
+		t.Errorf("an all-following document names the flags: %s", data)
+	}
+}

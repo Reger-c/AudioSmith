@@ -134,10 +134,10 @@ func (f *fakeEngine) cancelled(id string) {
 
 type fakeSched struct{ f *fakeEngine }
 
-// Register keeps the executors of Go-side kinds (downloads), which the
-// fake runs at once, inside Submit.
+// Register keeps the executors of Go-side kinds (downloads, moving the
+// models), which the fake runs at once, inside Submit.
 func (s fakeSched) Register(kind string, ex jobs.Executor) {
-	if kind == hub.KindDownload {
+	if kind == hub.KindDownload || kind == kindMoveModels {
 		s.f.executors[kind] = ex
 	}
 }

@@ -67,6 +67,8 @@ func stageText(stage string) string {
 		return i18n.T("Preparing the voice…")
 	case "recording":
 		return i18n.T("Recording…")
+	case "moving": // family_shared.go: Move models
+		return i18n.T("Moving models…")
 	}
 	return i18n.T("Working…")
 }
