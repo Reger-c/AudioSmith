@@ -49,6 +49,14 @@ func TestRing(t *testing.T) {
 	if e := r.Tail(1, "")[0]; e.Level != core.SeverityInfo || e.Time.IsZero() {
 		t.Errorf("defaults %+v", e)
 	}
+	// Seq numbers the lines from 1, whatever the ring dropped.
+	var seqs []uint64
+	for _, e := range r.Tail(10, "") {
+		seqs = append(seqs, e.Seq)
+	}
+	if fmt.Sprint(seqs) != "[3 4 5 6]" {
+		t.Errorf("seqs %v", seqs)
+	}
 }
 
 func TestFilesRotate(t *testing.T) {

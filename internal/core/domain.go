@@ -164,4 +164,7 @@ type LogEntry struct {
 	Source  string    `json:"source"` // "app", "engine:gpu", "engine:listen", "engine:media", "hub"…
 	Message string    `json:"message"`
 	JobID   string    `json:"jobId,omitempty"`
+	// Seq numbers the lines a log appended, from 1: a line's identity in
+	// the logs view (its selection) while lines come and go.
+	Seq uint64 `json:"-"`
 }

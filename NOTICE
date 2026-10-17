@@ -52,6 +52,14 @@ Voice previews (assets/voice-previews)
   made with AudioSmith's engine by scripts/make-voice-previews.sh (2026-10-16).
   The voices are the models' own synthetic speakers, not recordings of people.
 
+VoxtNew (the logs' line selection, shell_logs_select.go)
+  Adapted from VoxtNew (https://github.com/hehehai/sglang-omni, VoxtNew/,
+  commit 21fe7ed7), Copyright 2026 ActNow and the SGLang-Omni Team.
+  Licensed under the Apache License 2.0 (its full text is in
+  THIRD-PARTY-NOTICES.txt, with actnowkit's licence). The selection model
+  itself is actnowkit's listsel package (Apache-2.0, a Go module listed in
+  THIRD-PARTY-NOTICES.txt).
+
 Libraries
   The app (Go) links: purego (Apache-2.0), go-text/typesetting (Unlicense
   OR BSD-3-Clause), google/jsonschema-go (MIT), jfreymuth/oggvorbis and

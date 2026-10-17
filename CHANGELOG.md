@@ -27,6 +27,9 @@ AudioSmith joins the ActNow family: it works together with the other ActNow apps
 - The ActNow apps share one memory budget. Before AudioSmith loads a model, it unloads its own idle models first. If that is not enough, it asks the other apps to unload models that have been idle for a minute. It does the same when they ask, and never unloads a model a job is using.
 - Dictation's paste no longer overwrites the clipboard while another ActNow app is pasting.
 
+### Logs
+- Click a line in the logs (the page or the panel) to copy it. Shift-click, ⌘-click or drag to select several lines, as in Finder; ⌘A selects every line shown, Esc deselects, ⌘C copies. While lines are selected the header says how many, with Copy and Deselect. Right-click a line to copy it, the selected lines or every line shown.
+
 ### Dubbing
 - The online translators (DeepL, Google, Microsoft) have an API key field in the Translate step's Advanced options. Before, the key had to be added to the Keychain by hand.
 

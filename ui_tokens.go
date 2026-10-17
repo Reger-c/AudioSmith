@@ -74,6 +74,9 @@ type tokens struct {
 	Hover   ui.Color // ghost buttons and rows under the pointer
 	Pressed ui.Color // … pressed; the chosen row
 	Line    ui.Color // hairlines: dividers, card borders
+	// Selected: rows selected among many (the logs' lines), the accent's
+	// tint, stronger than Hover; SelectedHover one under the pointer.
+	Selected, SelectedHover ui.Color
 	// Text.
 	Text, Text2, Text3 ui.Color // primary, secondary, tertiary
 	// Ink: the primary button (near-black, near-white in the dark).
@@ -110,6 +113,7 @@ func makeTokens(dark bool) *tokens {
 	k.Ink, k.OnInk = g[9], g[0]
 	k.Accent = accent
 	k.AccentSoft = accent.Alpha(0.12)
+	k.Selected, k.SelectedHover = accent.Alpha(0.2), accent.Alpha(0.28)
 	k.AccentInk = accent
 	if !dark {
 		k.AccentInk = accent.Mix(ui.Hex("#000000"), 0.18)

@@ -45,6 +45,7 @@ type Ring struct {
 	lines []core.LogEntry // ring buffer
 	next  int             // index of the slot to write
 	full  bool
+	seq   uint64 // the last line's Seq
 
 	queue   chan core.LogEntry // to the file writer
 	dropped int                // lines the file writer missed (queue full)
@@ -78,7 +79,8 @@ func New(o Options) *Ring {
 	return r
 }
 
-// Append adds a line; Time defaults to now, Level to info. Never blocks:
+// Append adds a line; Time defaults to now, Level to info, and Seq is
+// the next number (the line's identity in the view). Never blocks:
 // when the file writer falls behind, lines miss the file (not the ring)
 // and a note of how many is written later.
 func (r *Ring) Append(e core.LogEntry) {
@@ -90,6 +92,8 @@ func (r *Ring) Append(e core.LogEntry) {
 	}
 	e.Message = strings.TrimRight(e.Message, "\r\n")
 	r.mu.Lock()
+	r.seq++
+	e.Seq = r.seq
 	r.lines[r.next] = e
 	r.next = (r.next + 1) % len(r.lines)
 	if r.next == 0 {
