@@ -27,6 +27,13 @@ type ExecutorOptions struct {
 	// model that is not on disk fails the job with model_not_downloaded
 	// without asking the engine. nil leaves params as submitted.
 	ModelPath func(ctx context.Context, model string) (string, error)
+	// AuxPaths returns the snapshot directories of a model's auxiliary
+	// repos (repo id → directory: Kokoro's G2P, Whisper's tokenizer),
+	// filled into the job as auxPaths (proto.ParamAuxPaths) with its
+	// path: the engine links mlx-audio-swift's folders of those repos to
+	// them instead of letting it pick a snapshot (the ActNow family spec
+	// §7.1). nil or empty sends none.
+	AuxPaths func(ctx context.Context, model string) map[string]string
 	// Licences, when set, is asked again before a job loads or runs a
 	// model (the services ask first; jobs submitted some other way, or
 	// re-run after the acceptance was withdrawn, are caught here): a
@@ -103,6 +110,9 @@ func executor(sup Supervisor, role proto.Role, method string, o ExecutorOptions)
 			if params, err = withModelPath(ctx, method, params, o.ModelPath); err != nil {
 				return nil, err
 			}
+		}
+		if o.AuxPaths != nil {
+			params = withAuxPaths(ctx, params, o.AuxPaths)
 		}
 		notify := func(m proto.Message) {
 			switch m.Method {
@@ -182,6 +192,32 @@ func withModelPath(ctx context.Context, method string, params json.RawMessage, r
 	}
 	fields[key], _ = json.Marshal(dir)
 	return json.Marshal(fields)
+}
+
+// withAuxPaths fills the snapshot directories of the job's model's
+// auxiliary repos into its params (auxPaths), unless the caller did.
+func withAuxPaths(ctx context.Context, params json.RawMessage, resolve func(context.Context, string) map[string]string) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(params, &fields) != nil {
+		return params
+	}
+	var model string
+	if json.Unmarshal(fields["model"], &model) != nil || model == "" {
+		return params
+	}
+	if _, set := fields[proto.ParamAuxPaths]; set {
+		return params
+	}
+	aux := resolve(ctx, model)
+	if len(aux) == 0 {
+		return params
+	}
+	fields[proto.ParamAuxPaths], _ = json.Marshal(aux)
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return params
+	}
+	return out
 }
 
 // jobError maps a Call error to a *jobs.Error (or ctx's error when the

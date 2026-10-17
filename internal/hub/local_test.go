@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,5 +62,23 @@ func TestCleanEngineCopies(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(copies, "mlx-community_Fresh")); err != nil {
 		t.Error("removed an empty copy made a moment ago")
+	}
+}
+
+// AuxSnapshots names the pinned snapshot of each auxiliary repo there,
+// whatever other commits of it the folder holds (another app's).
+func TestAuxSnapshots(t *testing.T) {
+	cache := t.TempDir()
+	const g2p, tok = "acme/g2p", "acme/tok"
+	pinned, other := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	for _, rev := range []string{pinned, other} {
+		os.MkdirAll(filepath.Join(RepoDir(cache, g2p), "snapshots", rev), 0o755)
+	}
+	os.MkdirAll(filepath.Join(RepoDir(cache, g2p), "refs"), 0o755)
+	os.WriteFile(filepath.Join(RepoDir(cache, g2p), "refs", "main"), []byte(other), 0o644)
+	e := catalog.Entry{Repo: "acme/m", Aux: []catalog.Aux{{Repo: g2p, Revision: pinned}, {Repo: tok, Revision: pinned}}}
+	got := AuxSnapshots(cache, e)
+	if len(got) != 1 || got[g2p] != filepath.Join(RepoDir(cache, g2p), "snapshots", pinned) {
+		t.Errorf("aux snapshots %v", got)
 	}
 }

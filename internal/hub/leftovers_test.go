@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -80,7 +81,7 @@ func TestLeftovers(t *testing.T) {
 	if total != 3340 { // blobs once (links not followed) + the engine copy
 		t.Errorf("total %d", total)
 	}
-	freed, stayed, err := RemoveLeftovers(cache, removed, noFamily)
+	freed, stayed, err := RemoveLeftovers(context.Background(), cache, removed, noFamily)
 	if err != nil || freed != total || len(stayed) != 0 {
 		t.Fatalf("freed %d, kept %v, %v", freed, stayed, err)
 	}
@@ -99,7 +100,7 @@ func TestLeftovers(t *testing.T) {
 		t.Error(err)
 	}
 	for _, bad := range []string{"", "..", "../x", "a/../../b", "a/b/c", "/abs", "a"} {
-		if _, _, err := RemoveLeftovers(cache, []string{bad}, noFamily); err == nil {
+		if _, _, err := RemoveLeftovers(context.Background(), cache, []string{bad}, noFamily); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
 	}

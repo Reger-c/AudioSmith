@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	famodels "github.com/hehehai/actnowkit/models"
 	"os"
 	"strings"
 	"testing"
@@ -145,7 +146,7 @@ func TestModelLifecycle(t *testing.T) {
 		// Delete: unload first (a loaded model cannot be deleted).
 		a.unload()
 		waitFor("unloaded", time.Minute, func() bool { return a.loadedModel == "" })
-		a.deleteModel(e)
+		a.deleteModel(e, famodels.ThisApp)
 		waitFor("deleted", time.Minute, func() bool { return m.local.State == hub.Missing })
 		if _, err := os.Stat(hub.EngineCopy(models, e.Repo)); err == nil {
 			t.Errorf("%s: the engine's copy is left", e.Label)

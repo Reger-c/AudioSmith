@@ -193,6 +193,7 @@ func (a *app) connectEngine(h *engineHost) {
 	h.sup = withMediaTools(h.sup, a.mediaTool) // M7a: ffmpeg behind the media methods (ffmpeg_engine.go)
 	engine.RegisterExecutors(h.sched, h.sup, engine.ExecutorOptions{
 		ModelPath: a.lib.modelSnapshot,
+		AuxPaths:  a.lib.auxSnapshots,
 		Licences:  a.lib.licences,
 	})
 	post := a.enginePost

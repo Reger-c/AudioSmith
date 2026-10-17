@@ -14,6 +14,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -23,6 +25,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
+	"github.com/hehehai/actnowkit/models"
 )
 
 // modelsState is the Models page's view state.
@@ -30,9 +33,14 @@ type modelsState struct {
 	models    map[string]*modelState // by modelKey
 	deleteAsk bool
 	deleting  catalog.Entry
-	// deleteShared are the other ActNow apps that may use the model
-	// being deleted (hub.Family): its files stay (spec §7.10.3).
+	// deleteShared are the other ActNow apps (named, spec §7.10) that
+	// use the model being deleted: the dialog offers "Remove from
+	// AudioSmith" (their files stay) or "Delete for all apps…" (spec
+	// §7.10.3), whose confirmation deleteAllAsk is; deleteFree is what
+	// deleting it would free.
 	deleteShared []string
+	deleteAllAsk bool
+	deleteFree   int64
 	// modelsFind is the search (friendly and technical names, tags);
 	// modelsDetail the cards whose details are open, by id.
 	modelsFind   string
@@ -266,39 +274,54 @@ func (a *app) verifyModel(e catalog.Entry) {
 	})
 }
 
-// askDelete asks before deleting e, after finding out (LaunchServices,
-// in the background) whether other ActNow apps may use it.
+// askDelete asks before deleting e, after finding out (the claims, in
+// the background) whether other ActNow apps use it.
 func (a *app) askDelete(e catalog.Entry) {
-	fam := a.hubClient().Options().Family
+	client := a.hubClient()
 	a.async(func() {
-		users := fam.UsersOf(e.Repo)
-		a.post(func() { a.deleting, a.deleteShared, a.deleteAsk = e, users, true })
+		d, ok, err := client.Decide(e)
+		if err != nil {
+			log.Printf("models: who uses %s: %v", e.Repo, err)
+		}
+		a.post(func() {
+			a.deleting, a.deleteShared, a.deleteFree, a.deleteAllAsk = e, nil, d.FreeBytes, false
+			if ok && d.InUse() {
+				a.deleteShared = a.familyNames(append(slices.Clone(d.Users), d.LoadedBy...))
+			}
+			a.deleteAsk = true
+		})
 	})
 }
 
-// deleteModel deletes e's files, unless another ActNow app may use them
-// (hub.Client.Remove keeps them).
-func (a *app) deleteModel(e catalog.Entry) {
+// deleteModel deletes e from AudioSmith (scope models.ThisApp: its files
+// stay while other ActNow apps use them) or for all apps.
+func (a *app) deleteModel(e catalog.Entry, scope models.Scope) {
 	client := a.hubClient()
 	m := a.model(e)
 	a.async(func() {
-		r, err := client.Remove(context.Background(), e)
-		if err == nil && len(r.Kept) == 0 {
-			a.familyRelease(client.Options().CacheDir, e) // family_app.go
-		}
+		r, err := client.Remove(context.Background(), e, scope)
 		l, _ := client.Status(context.Background(), e)
 		a.post(func() {
 			m.local, m.known = l, true
 			holder, busy := hub.Holder(err)
+			names := a.familyNames(append(slices.Clone(r.Decision.Users), r.Decision.LoadedBy...))
 			switch {
 			case busy:
 				a.toast(busyText(holder)) // models_removed.go
 			case err != nil:
 				a.toast(i18n.T("Could not delete %s: %v", modelRef(e), err))
-			case len(r.Kept) > 0:
-				a.logs.Append(core.LogEntry{Source: "hub", Message: "kept " + e.Repo + ": used by " + strings.Join(r.Kept, ", ")})
-				a.toast(sharedText(r.Kept, m.local.Bytes)) // installed since the dialog
+			case !r.Deleted:
+				// Other apps use it: removed from AudioSmith only.
+				a.logs.Append(core.LogEntry{Source: "hub", Message: "removed " + e.Repo + " from AudioSmith; files kept: used by " + strings.Join(r.Kept, ", ")})
+				if len(names) > 0 {
+					a.toast(sharedText(names, m.local.Bytes))
+				} else {
+					a.toast(i18n.T("Removed %s", modelRef(e)))
+				}
 			default:
+				if r.Tombstoned {
+					a.logs.Append(core.LogEntry{Source: "hub", Message: "deleted " + e.Repo + " for all apps (" + strings.Join(r.Kept, ", ") + " were using it)"})
+				}
 				a.toast(i18n.T("Deleted %s", modelRef(e)))
 			}
 		})

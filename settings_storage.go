@@ -18,6 +18,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/family"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/settings"
@@ -29,9 +30,10 @@ type storageState struct {
 	dataHome string // the default data folder (location.json lives there); "" = the one in use
 	logDir   string
 
-	stReport  *storageReport
-	stLoading bool
-	stLoc     dataLocation
+	stReport      *storageReport
+	stLoading     bool
+	stOrphansBusy bool // cleaning up what only uninstalled apps used (storage_family.go)
+	stLoc         dataLocation
 
 	moving     bool
 	moveDone   int64
@@ -58,6 +60,11 @@ type storageReport struct {
 	ours      int64 // catalogue models in it
 	free      int64 // free space on the data folder's disk
 	freeModel int64 // and on the model folder's
+	// The ActNow family (storage_family.go): AudioSmith's models only it
+	// uses and shared, and those only uninstalled apps used.
+	usage       family.Usage
+	orphans     int
+	orphanBytes int64
 }
 
 // storageCat is a category of files.
@@ -185,6 +192,7 @@ func (a *app) loadStorage() {
 		slices.SortFunc(r.models, func(x, y storageCat) int { return int(y.bytes>>20) - int(x.bytes>>20) })
 		r.modelsAll, _ = treeSize(ctx, models, nil)
 		r.free, r.freeModel = diskFree(data), diskFree(models)
+		a.measureFamily(r, models) // storage_family.go
 		a.post(func() { a.stReport, a.stLoading = r, false })
 	})
 }
@@ -363,8 +371,8 @@ func (a *app) eraseAll() {
 	a.background(func() {
 		if models {
 			// Not what other ActNow apps may use (spec §7.6 step 3).
-			freed, kept, err := hub.RemoveLeftovers(cache, catalogRepos(), fam)
-			a.familyForget(cache, catalogRepos()) // family_app.go
+			freed, kept, err := hub.RemoveLeftovers(context.Background(), cache, catalogRepos(), fam)
+			a.familyErase(cache) // family_app.go
 			log.Printf("erase: models freed %s, kept %d, err %v", humanBytes(freed), len(kept), err)
 		}
 		if keys {
@@ -468,6 +476,7 @@ func (a *app) storageSettings(c *ui.Context) {
 				ui.Text(c, humanBytes(m.bytes)).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.End)
 			}
 		})
+		a.familyStorage(c, r) // storage_family.go
 	}
 
 	sectionTitle(c, i18n.T("Reset"))

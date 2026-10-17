@@ -31,6 +31,7 @@ func (f *Family) Claimed(ctx context.Context, hub string, c models.Claim) error 
 		c.Origin = models.OriginDownloaded
 	}
 	f.mu.Lock()
+	delete(f.deleted, strings.ToLower(c.Repo))
 	if f.state == starting || f.switching {
 		f.pending = append(f.pending, pendingClaim{hub, c})
 		f.mu.Unlock()
@@ -91,30 +92,6 @@ func (f *Family) Release(hub, model string, repos ...string) error {
 		}
 	}
 	return nil
-}
-
-// Forget drops AudioSmith's claims on repos in hub whose snapshot is no
-// longer installed: after Clean up or "Erase everything" deleted them
-// (the repos kept for other apps keep their claims).
-func (f *Family) Forget(hub string, repos ...string) error {
-	store, ok := f.writable(hub)
-	if !ok {
-		return nil
-	}
-	mine, err := store.Claims()
-	if err != nil {
-		return err
-	}
-	var gone []models.Ref
-	for _, c := range mine.Claims {
-		if hasRepo(repos, c.Repo) && models.Check(hub, c).State != models.Installed {
-			gone = append(gone, c.Ref())
-		}
-	}
-	if len(gone) == 0 {
-		return nil
-	}
-	return store.Unclaim(gone...)
 }
 
 func hasRepo(repos []string, repo string) bool {

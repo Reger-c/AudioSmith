@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -82,12 +81,12 @@ func TestMacKeychainAndProxy(t *testing.T) {
 	}
 }
 
-// TestMacFamily checks the family phase 0 on a Mac with Dicta installed,
-// in a temporary model folder and family directory (conformance.New):
-// LaunchServices finds Dicta, Clean up and Delete keep its models; with
+// TestMacFamily checks the family locks on a Mac, in a temporary model
+// folder and family directory (conformance.New): with
 // AUDIOSMITH_ACTNOW_CLI (a built actnow-conformance, actnowkit's own
 // implementation playing Dicta) a delete is refused while it holds the
-// repo, and a real download (Silero VAD, 2 MB) waits for it.
+// repo, and a real download (Silero VAD, 2 MB) waits for it. (Deciding
+// by claims: internal/family TestMacFamily.)
 //
 //	AUDIOSMITH_MAC=1 AUDIOSMITH_ACTNOW_CLI=/path/actnow-conformance go test -run TestMacFamily -v ./internal/hub
 func TestMacFamily(t *testing.T) {
@@ -95,23 +94,7 @@ func TestMacFamily(t *testing.T) {
 		t.Skip("set AUDIOSMITH_MAC=1 on a Mac")
 	}
 	fx := conformance.New(t)
-	var fam Family // LaunchServices
-	if users := fam.UsersOf(gemma); !slices.Contains(users, "Dicta") {
-		t.Fatalf("LaunchServices: Dicta not found (users of %s: %v)", gemma, users)
-	}
-	fakeRepo(t, fx.Hub, gemma, 500)
-	fakeRepo(t, fx.Hub, parakeet, 300)
-	freed, kept, err := RemoveLeftovers(fx.Hub, []string{gemma, parakeet}, fam)
-	if err != nil || freed != 300 || len(kept) != 1 || kept[0].Repo != gemma {
-		t.Fatalf("clean up: freed %d, kept %+v, %v", freed, kept, err)
-	}
-	asr := catalog.Entry{Repo: "mlx-community/Qwen3-ASR-0.6B-4bit", Revision: "0123456789abcdef0123456789abcdef01234567"}
-	fakeRepo(t, fx.Hub, asr.Repo, 100)
-	if r, err := Remove(fx.Hub, asr, fam); err != nil || !slices.Contains(r.Kept, "Dicta") {
-		t.Fatalf("delete of a model Dicta uses: %+v %v", r, err)
-	}
-	t.Logf("Dicta found; Clean up kept %s, Delete kept %s", gemma, asr.Repo)
-
+	ctx := context.Background()
 	cli := os.Getenv("AUDIOSMITH_ACTNOW_CLI")
 	if cli == "" {
 		t.Log("AUDIOSMITH_ACTNOW_CLI unset: no lock checks against actnowkit's CLI")
@@ -134,13 +117,13 @@ func TestMacFamily(t *testing.T) {
 	fakeRepo(t, fx.Hub, parakeet, 300)
 	e := catalog.Entry{Repo: parakeet, Revision: "0123456789abcdef0123456789abcdef01234567"}
 	cmd := hold(parakeet, "shared", 3*time.Second)
-	if _, err := Remove(fx.Hub, e, noFamily); err == nil {
+	if _, err := Remove(ctx, fx.Hub, e, noFamily, models.ThisApp); err == nil {
 		t.Fatal("deleted while Dicta held the repo")
 	} else if name, busy := Holder(err); !busy || name != "Dicta" {
 		t.Fatalf("delete while held: %v", err)
 	}
 	cmd.Wait()
-	if r, err := Remove(fx.Hub, e, noFamily); err != nil || r.Freed != 300 {
+	if r, err := Remove(ctx, fx.Hub, e, noFamily, models.ThisApp); err != nil || r.Freed != 300 {
 		t.Fatalf("delete after: %+v %v", r, err)
 	}
 
@@ -153,7 +136,7 @@ func TestMacFamily(t *testing.T) {
 	start := time.Now()
 	var once sync.Once
 	var first time.Duration // the first progress: after the repo lock
-	err = c.Download(context.Background(), vad, func(p Progress) {
+	err := c.Download(ctx, vad, func(p Progress) {
 		once.Do(func() { first = time.Since(start) })
 	})
 	cmd.Wait()

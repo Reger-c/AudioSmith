@@ -16,6 +16,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/licence"
+	"github.com/hehehai/actnowkit/models"
 )
 
 func (a *app) modelsPage(c *ui.Context) {
@@ -341,6 +342,9 @@ func (a *app) modelStateText(e catalog.Entry, m *modelState) string {
 	case m.local.State == hub.Partial:
 		return i18n.T("Incomplete · %s on disk", mb(m.local.Bytes))
 	}
+	if name := a.famDeleted[strings.ToLower(e.Repo)]; name != "" {
+		return i18n.T("Deleted in %s · Download again", name) // family_app.go
+	}
 	return i18n.T("Not downloaded")
 }
 
@@ -358,18 +362,17 @@ func mb(n int64) string {
 }
 
 // modelsAlerts asks before deleting a model. A model another installed
-// ActNow app may use is not deleted: the dialog only says so (phase 0 of
-// the family spec has no claims, so there is nothing to remove from
-// AudioSmith alone; phase 1 brings "Remove from AudioSmith").
+// ActNow app uses gets the family's dialog (models_family.go); the files
+// of one only a dev build uses stay too, but the dialog is the plain one.
 func (a *app) modelsAlerts(c *ui.Context) {
 	e := a.deleting
 	if len(a.deleteShared) > 0 {
-		ui.AlertDialog(c, &a.deleteAsk, modelRef(e), sharedText(a.deleteShared, a.model(e).local.Bytes), i18n.T("OK"))
+		a.removeSharedDialog(c, e) // models_family.go
 		return
 	}
 	switch ui.AlertDialog(c, &a.deleteAsk, i18n.T("Delete %s?", modelRef(e)),
 		i18n.T("Its files leave the model folder. You can download it again."), i18n.T("Cancel"), i18n.T("Delete")) {
 	case 1:
-		a.deleteModel(e)
+		a.deleteModel(e, models.ThisApp)
 	}
 }

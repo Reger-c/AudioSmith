@@ -186,6 +186,16 @@ const (
 	CodeModelPathRequired = "model_path_required"
 )
 
+// ParamAuxPaths is the member any model job may carry beside model and
+// modelPath (path for models.load): the snapshot directories of the
+// model's auxiliary repos, repo id → directory (Kokoro's G2P repos,
+// Chatterbox's S3 tokenizer, Whisper's tokenizer). mlx-audio-swift finds
+// them by repo id in its own folders of the cache (mlx-audio/…): the
+// engine links those folders to these snapshots before the job, so that
+// a snapshot of another commit (another ActNow app's) is never used; a
+// directory that is not there fails the job with model_not_downloaded.
+const ParamAuxPaths = "auxPaths"
+
 // Codes lists every error code the engine may send.
 var Codes = []string{
 	CodeBadRequest, CodeMethodNotFound, CodeNotInitialized, CodeProtocolMismatch, CodeUnsupported,

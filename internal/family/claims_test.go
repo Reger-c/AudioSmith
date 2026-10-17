@@ -115,9 +115,8 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// Release takes one model off a claim other models share; Forget drops
-// the claims of deleted repos only.
-func TestReleaseAndForget(t *testing.T) {
+// Release takes one model off a claim other models share.
+func TestRelease(t *testing.T) {
 	fx := conformance.New(t)
 	install(fx, refA, refG, refB)
 	shares := append(slices.Clone(testCatalog), catalog.Entry{ID: "tts-c", Repo: "acme/tts-c", Revision: revA,
@@ -145,18 +144,6 @@ func TestReleaseAndForget(t *testing.T) {
 	}
 	if g, ok := c.Find(refG); !ok || !slices.Equal(g.Users(), []string{"tts-c"}) {
 		t.Errorf("the shared aux claim %+v", g)
-	}
-	// Forget: asr-b deleted, tts-c kept (still installed).
-	os.RemoveAll(models.RepoDir(fx.Hub, refB.Repo))
-	if err := f.Forget(fx.Hub, refB.Repo, "acme/tts-c"); err != nil {
-		t.Fatal(err)
-	}
-	c = fx.Claims(ReleaseBundleID)
-	if _, ok := c.Find(refB); ok {
-		t.Error("claim of a deleted repo stayed")
-	}
-	if _, ok := c.Find(models.Ref{Repo: "acme/tts-c", Revision: revA}); !ok {
-		t.Error("claim of an installed repo went")
 	}
 }
 

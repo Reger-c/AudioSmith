@@ -13,9 +13,8 @@ import (
 
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/actnowkit/models"
 )
-
-var testDicta = hub.Family{Installed: func(bid string) bool { return bid == "dev.hehehai.dicta" }}
 
 // fakeHubRepo lays out a repo in a Hugging Face cache: a snapshot with
 // one file linked to a blob of size bytes.
@@ -36,41 +35,21 @@ func fakeHubRepo(t *testing.T, cache, repo string, size int) {
 	}
 }
 
-// TestEraseKeepsFamilyModels: erasing everything with the models deletes
-// the catalogue's repos except those Dicta uses while it is installed
-// (Qwen3-ASR, and Whisper's tokenizer repo); files outside the
-// catalogue stay.
-func TestEraseKeepsFamilyModels(t *testing.T) {
-	repos := catalogRepos()
-	for _, r := range []string{"mlx-community/Kokoro-82M-bf16", "mlx-community/Qwen3-ASR-0.6B-4bit", "openai/whisper-large-v3", "beshkenadze/kitten-tts-g2p"} {
-		if !slices.Contains(repos, r) {
-			t.Fatalf("catalogRepos lacks %s", r)
-		}
-	}
-	cache := t.TempDir()
-	for _, r := range []string{"mlx-community/Kokoro-82M-bf16", "mlx-community/Qwen3-ASR-0.6B-4bit", "openai/whisper-large-v3", "someone/else"} {
-		fakeHubRepo(t, cache, r, 100)
-	}
-	freed, kept, err := hub.RemoveLeftovers(cache, repos, testDicta)
-	if err != nil || freed != 100 || len(kept) != 2 {
-		t.Fatalf("freed %d, kept %+v, %v", freed, kept, err)
-	}
-	for r, want := range map[string]bool{"mlx-community/Kokoro-82M-bf16": false, "mlx-community/Qwen3-ASR-0.6B-4bit": true, "openai/whisper-large-v3": true, "someone/else": true} {
-		if _, err := os.Stat(hub.RepoDir(cache, r)); (err == nil) != want {
-			t.Errorf("%s: there %v, want %v", r, err == nil, want)
-		}
-	}
-}
-
 // TestRemovedKeptListed: Clean up's confirmation lists a removed model
-// Dicta uses as kept, and does not count it in what it frees.
+// Dicta uses as kept (when it may name it), and does not count it in what
+// it frees.
 func TestRemovedKeptListed(t *testing.T) {
 	i18n.SetLocale("en")
 	a := &app{}
 	a.removedLeft = []hub.Leftover{
-		{Repo: "mlx-community/gemma-4-e4b-it-4bit", Bytes: 5000, UsedBy: []string{"Dicta"}},
+		{Repo: "mlx-community/gemma-4-e4b-it-4bit", Bytes: 5000, InUse: true, UsedBy: []string{"Dicta"}, Users: []models.User{{BundleID: dictaID}}},
 		{Repo: "mlx-community/parakeet-tdt-0.6b-v3", Bytes: 300},
 	}
+	// Dicta is not named while no release build of another app is.
+	if _, _, kept := a.removedOnDisk(); len(kept) != 0 {
+		t.Errorf("kept named without an installed app: %q", kept)
+	}
+	a.famOthers = []string{"Dicta"}
 	if n := a.removedBytes(); n != 300 {
 		t.Errorf("bytes %d", n)
 	}
@@ -88,8 +67,7 @@ func TestRemovedKeptListed(t *testing.T) {
 	}
 }
 
-// TestSharedText: Delete of a model Dicta uses only says why its files
-// stay (an OK-only dialog; phase 0 removes nothing).
+// TestSharedText: why the files of a model Dicta uses stay.
 func TestSharedText(t *testing.T) {
 	i18n.SetLocale("en")
 	if got := sharedText([]string{"Dicta"}, 712_000_000); got != "Dicta also uses this model, so its files (712 MB) stay on this Mac." {
