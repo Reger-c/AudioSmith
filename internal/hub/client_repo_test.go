@@ -35,15 +35,16 @@ func TestDelete(t *testing.T) {
 	old := filepath.Join(repo, "snapshots", strings.Repeat("f", 40))
 	os.MkdirAll(old, 0o755)
 	os.Symlink(shared, filepath.Join(old, "config.json"))
-	// The engine's copy of the repo goes with it.
+	// The engine's copy of the repo goes with the repo's last snapshot
+	// (spec §7.8: it belongs to the repo, which other apps' engines read).
 	cp := EngineCopy(c.opts.CacheDir, testRepo)
 	os.MkdirAll(cp, 0o755)
 	os.WriteFile(filepath.Join(cp, "config.json"), []byte("{}"), 0o644)
 	if err := c.Delete(ctx, h.entry()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(cp); !os.IsNotExist(err) {
-		t.Errorf("engine copy left: %v", err)
+	if _, err := os.Stat(cp); err != nil {
+		t.Errorf("engine copy gone with a snapshot left: %v", err)
 	}
 	blobs, _ := os.ReadDir(filepath.Join(repo, "blobs"))
 	if len(blobs) != 1 || blobs[0].Name() != filepath.Base(shared) {
@@ -62,6 +63,9 @@ func TestDelete(t *testing.T) {
 	}
 	if _, err := os.Stat(repo); !os.IsNotExist(err) {
 		t.Errorf("repo dir left: %v", err)
+	}
+	if _, err := os.Stat(cp); !os.IsNotExist(err) {
+		t.Errorf("engine copy left: %v", err)
 	}
 	if l, _ := c.Status(ctx, h.entry()); l.State != Missing {
 		t.Errorf("after delete: %+v", l)

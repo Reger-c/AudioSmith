@@ -338,21 +338,24 @@ func removedRepos() []string {
 	return out
 }
 
-// refreshRemoved measures what the removed models leave on disk, in the
+// refreshRemoved measures what the removed models leave on disk, and
+// which of it other ActNow apps may use (Clean up keeps that), in the
 // background.
 func (a *app) refreshRemoved() {
-	cache := a.hubClient().Options().CacheDir
+	opts := a.hubClient().Options()
 	a.async(func() {
-		ls, _ := hub.Leftovers(cache, removedRepos())
+		ls, _ := hub.Leftovers(opts.CacheDir, removedRepos(), opts.Family)
 		a.post(func() { a.removedLeft, a.removedKnown = ls, true })
 	})
 }
 
-// removedBytes is the space the removed models take.
+// removedBytes is the space Clean up would free.
 func (a *app) removedBytes() int64 {
 	var n int64
 	for _, l := range a.removedLeft {
-		n += l.Bytes
+		if !l.Kept() {
+			n += l.Bytes
+		}
 	}
 	return n
 }
@@ -363,36 +366,51 @@ func removedKind(r catalog.Removed) int {
 }
 
 // removedShows reports whether the clean-up row shows on tab kind: on
-// All, and on the tab of a removed model with files on disk.
+// All, and on the tab of a removed model with files to clean up.
 func (a *app) removedShows(kind int) bool {
 	if kind == 0 {
 		return true
 	}
 	for _, r := range catalog.Builtin().Removed {
-		if removedKind(r) == kind && slices.ContainsFunc(a.removedLeft, func(l hub.Leftover) bool { return slices.Contains(r.Repos(), l.Repo) }) {
+		if removedKind(r) == kind && slices.ContainsFunc(a.removedLeft, func(l hub.Leftover) bool { return !l.Kept() && slices.Contains(r.Repos(), l.Repo) }) {
 			return true
 		}
 	}
 	return false
 }
 
-// removedOnDisk are the removed models with files on disk, and the bytes
-// of each (its auxiliary repos count as its own).
-func (a *app) removedOnDisk() (names []string, bytes []int64) {
+// removedOnDisk are the removed models with files to clean up, and the
+// bytes of each (its auxiliary repos count as its own); kept are those
+// with files another ActNow app may use, with why ("Kept: used by
+// Dicta").
+func (a *app) removedOnDisk() (names []string, bytes []int64, kept []string) {
 	for _, r := range catalog.Builtin().Removed {
 		var n int64
 		found := false
+		var users []string
 		for _, l := range a.removedLeft {
-			if slices.Contains(r.Repos(), l.Repo) {
-				n += l.Bytes
-				found = true
+			if !slices.Contains(r.Repos(), l.Repo) {
+				continue
 			}
+			if l.Kept() {
+				for _, u := range l.UsedBy {
+					if !slices.Contains(users, u) {
+						users = append(users, u)
+					}
+				}
+				continue
+			}
+			n += l.Bytes
+			found = true
 		}
 		if found {
 			names, bytes = append(names, r.Label), append(bytes, n)
 		}
+		if len(users) > 0 {
+			kept = append(kept, r.Label+" · "+i18n.T("Kept: used by %s", listJoin(users)))
+		}
 	}
-	return names, bytes
+	return names, bytes, kept
 }
 
 // listJoin joins names as the interface's language lists them.
@@ -417,7 +435,7 @@ func (a *app) removedRow(c *ui.Context) {
 			iconMark(c, icons.TrashBinMinimalistic, k.Text2, "")
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 				ui.Text(c, i18n.T("Removed models still take %s", mb(n))).FontWeight(600)
-				names, _ := a.removedOnDisk()
+				names, _, _ := a.removedOnDisk()
 				caption(c, i18n.T("%s: AudioSmith no longer uses them.", listJoin(names))).TextColor(k.Text2).MaxLines(2)
 			})
 			if secondaryIconButton(c.Key("models-clean"), icons.TrashBinMinimalistic, i18n.T("Clean up")).Label(i18n.T("Clean up")).
@@ -431,9 +449,12 @@ func (a *app) removedRow(c *ui.Context) {
 // removedAlert confirms the clean-up.
 func (a *app) removedAlert(c *ui.Context) {
 	var lines []string
-	names, bytes := a.removedOnDisk()
+	names, bytes, kept := a.removedOnDisk()
 	for i, n := range names {
 		lines = append(lines, "• "+n+" · "+mb(bytes[i]))
+	}
+	for _, k := range kept {
+		lines = append(lines, "• "+k)
 	}
 	body := i18n.T("Their folders leave the model folder; your other models and files stay:") + "\n" + strings.Join(lines, "\n")
 	if ui.AlertDialog(c, &a.cleanAsk, i18n.T("Clean up removed models (%s)?", mb(a.removedBytes())), body, i18n.T("Cancel"), i18n.T("Clean up")) == 1 {
@@ -441,25 +462,36 @@ func (a *app) removedAlert(c *ui.Context) {
 	}
 }
 
-// cleanRemoved deletes what the removed models left on disk.
+// cleanRemoved deletes what the removed models left on disk, except what
+// other ActNow apps may use or are downloading.
 func (a *app) cleanRemoved() {
 	if a.cleaning {
 		return
 	}
 	a.cleaning = true
-	cache := a.hubClient().Options().CacheDir
+	opts := a.hubClient().Options()
 	repos := removedRepos()
 	a.async(func() {
-		freed, err := hub.RemoveLeftovers(cache, repos)
-		ls, _ := hub.Leftovers(cache, repos)
+		freed, kept, err := hub.RemoveLeftovers(opts.CacheDir, repos, opts.Family)
+		ls, _ := hub.Leftovers(opts.CacheDir, repos, opts.Family)
 		a.post(func() {
 			a.cleaning, a.removedLeft, a.removedKnown = false, ls, true
 			if err != nil {
 				a.toast(i18n.T("Could not clean up: %v", err))
 				return
 			}
-			a.logs.Append(core.LogEntry{Source: "hub", Message: "cleaned up removed models: " + mb(freed)})
+			msg := "cleaned up removed models: " + mb(freed)
+			for _, l := range kept {
+				msg += "; kept " + l.Repo + " (" + keptReason(l) + ")"
+			}
+			a.logs.Append(core.LogEntry{Source: "hub", Message: msg})
 			a.toast(i18n.T("Freed %s", mb(freed)))
+			for _, l := range kept {
+				if l.Busy {
+					a.toast(busyText(l.BusyBy))
+					break
+				}
+			}
 		})
 	})
 }

@@ -87,6 +87,7 @@ Unknown members must be ignored by both sides, so optional fields can be added w
    - `models.load` with a `path` (and `tts.synthesize` with a `modelPath`) loads that snapshot directory.
    - Families mlx-audio-swift cannot load from a directory (Marvis, OmniVoice, Spark in the pin) fall back to resolving the repo id in `hello.cacheDir`, where the hub put the same snapshot (standard layout; for a pinned commit it also writes `refs/main`, so swift-huggingface finds it without the network). Auxiliary repos (Kokoro's G2P) are always resolved that way.
    - Without a path, the engine resolves the repo in `hello.cacheDir` (it sets `HF_HUB_CACHE` to it). A repo counts as present when `<cacheDir>/mlx-audio/<owner>_<name>/config.json` exists or `<cacheDir>/models--<owner>--<name>/snapshots/` has a non-empty snapshot.
+   - Without a path, a job loads the repo's snapshot only when there is exactly one (non-empty, not `<commit>.incomplete`); with several it fails with `model_path_required`. The cache is shared with other apps (the ActNow family spec §7.1), which may keep another commit of the same repo there, so the engine never picks one.
    - The engine keeps several models resident (`AUDIOSMITH_MAX_MODELS`, least recently used first out). The supervisor polls `engine.stats` while jobs run and after each, and unloads the least recently used idle models when all workers' models together exceed `engine.Config.MemoryBudget`.
 
 ## 5. Requests
@@ -488,6 +489,7 @@ At 24 kHz mono, PCM16 in base64 is about 64 KB/s. If profiling ever shows that t
 | `permission_denied` (M1) | macOS refused a permission | `{"permission":"microphone"}` | point to System Settings → Privacy & Security |
 | `device_unavailable` (M1) | The capture device is unknown, gone or busy | `{"device"}` | refresh the device list |
 | `context_too_long` | `llm.generate`: prompt + reply over the context the engine allows | `{"limit","actual","unit":"tokens"}` | split the work |
+| `model_path_required` | A job without `path` / `modelPath`, and several snapshots of the model in the cache | `{"model","snapshots":[…]}` | bug: the executors always send the pinned snapshot |
 
 Messages are the error's own words: the engine takes a Swift error's `errorDescription` (LocalizedError), else its `description` (CustomStringConvertible), else `String(describing:)` (`errorMessage` in Wire.swift), never Cocoa's generic "The operation couldn’t be completed. (… error 0.)". A model's invalid-input errors (`AudioGenerationError.invalidInput`, `MossTTSNanoError.invalidInput`) are `bad_request`.
 

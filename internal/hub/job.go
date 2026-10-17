@@ -78,6 +78,14 @@ func EntryOf(p DownloadParams) (catalog.Entry, error) {
 	return catalog.Custom(p.Repo), nil
 }
 
+// Stages of a download job's progress: downloading (Message: the
+// endpoint in use), or waiting for another app that downloads a file it
+// needs (Message: the app's name, "" when unknown; Progress.WaitingFor).
+const (
+	StageDownloading = "downloading"
+	StageWaiting     = "waiting"
+)
+
 // DownloadExecutor runs model.download jobs with the downloader client()
 // returns when the job starts (the settings decide endpoints, proxy and
 // folder, and may change between jobs). Progress is reported as bytes and
@@ -94,13 +102,17 @@ func DownloadExecutor(client func() Downloader, progress func(Progress)) jobs.Ex
 			return nil, &jobs.Error{Code: CodeFailed, Message: err.Error()}
 		}
 		d := client()
-		report(jobs.Progress{Stage: "downloading", Fraction: -1})
+		report(jobs.Progress{Stage: StageDownloading, Fraction: -1})
 		err = d.Download(ctx, e, func(pr Progress) {
 			frac := -1.0
 			if pr.TotalBytes > 0 {
 				frac = float64(pr.Bytes) / float64(pr.TotalBytes)
 			}
-			report(jobs.Progress{Stage: "downloading", Fraction: frac, Bytes: pr.Bytes, TotalBytes: pr.TotalBytes, Message: pr.Mirror})
+			jp := jobs.Progress{Stage: StageDownloading, Fraction: frac, Bytes: pr.Bytes, TotalBytes: pr.TotalBytes, Message: pr.Mirror}
+			if pr.Waiting {
+				jp.Stage, jp.Message = StageWaiting, pr.WaitingFor
+			}
+			report(jp)
 			if progress != nil {
 				progress(pr)
 			}

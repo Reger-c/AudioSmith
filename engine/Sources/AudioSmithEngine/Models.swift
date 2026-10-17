@@ -258,8 +258,10 @@ func hubCacheDirectory() -> URL {
 }
 
 /// Resolves the local directory of a model job: its modelPath when set,
-/// else the snapshot of model in the HF cache; offline and missing fails
-/// with model_not_downloaded.
+/// else the snapshot of model in the HF cache when there is exactly one
+/// (with several, which may be other apps' commits, the job must name
+/// one: model_path_required); offline and missing fails with
+/// model_not_downloaded.
 func modelDirectory(_ model: String, path: String?, offline: Bool) throws -> URL? {
     if let path, !path.isEmpty { return URL(fileURLWithPath: path) }
     if offline, let missing = missingFromCache(model) {
@@ -267,10 +269,9 @@ func modelDirectory(_ model: String, path: String?, offline: Bool) throws -> URL
     }
     let snapshots = hubCacheDirectory().appendingPathComponent("models--" + model.replacingOccurrences(of: "/", with: "--"))
         .appendingPathComponent("snapshots")
-    let fm = FileManager.default
-    if let shas = try? fm.contentsOfDirectory(atPath: snapshots.path),
-       let sha = shas.first(where: { !((try? fm.contentsOfDirectory(atPath: snapshots.appendingPathComponent($0).path)) ?? []).isEmpty }) {
-        return snapshots.appendingPathComponent(sha)
+    switch snapshotChoice(snapshots) {
+    case .one(let dir): return dir
+    case .several(let names): throw EngineError.pathRequired(model: model, snapshots: names)
+    case .none: return nil
     }
-    return nil
 }

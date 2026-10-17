@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -43,6 +44,9 @@ type storageState struct {
 	resetText  string // typed confirmation
 	resetModel bool   // erase the downloaded models too
 	resetKeys  bool   // and the Keychain items
+	// resetKeeps lists the models other ActNow apps may use, which
+	// erasing keeps (eraseKeeps); "" when none.
+	resetKeeps string
 }
 
 // storageReport is what takes room.
@@ -355,14 +359,12 @@ func (a *app) eraseAll() {
 	accounts := a.keychainAccounts()
 	a.resetAsk = ""
 	a.stopAPI()
+	fam := a.hubClient().Options().Family
 	a.background(func() {
 		if models {
-			for _, e := range catalog.Builtin().Entries {
-				os.RemoveAll(hub.RepoDir(cache, e.Repo))
-				for _, x := range e.Aux {
-					os.RemoveAll(hub.RepoDir(cache, x.Repo))
-				}
-			}
+			// Not what other ActNow apps may use (spec §7.6 step 3).
+			freed, kept, err := hub.RemoveLeftovers(cache, catalogRepos(), fam)
+			log.Printf("erase: models freed %s, kept %d, err %v", humanBytes(freed), len(kept), err)
 		}
 		if keys {
 			for _, acc := range accounts {
@@ -481,6 +483,7 @@ func (a *app) storageSettings(c *ui.Context) {
 	settingRow(c, "st-erase", i18n.T("Erase everything"), i18n.T("Deletes your library (takes, voices, projects, dubs, transcripts), settings, caches and logs, then restarts AudioSmith as new."), func() {
 		if ui.Button(c.Key("st-erase"), i18n.T("Erase…")).Clicked() {
 			a.resetAsk, a.resetText = "everything", ""
+			a.eraseKeeps()
 		}
 	})
 	a.storageDialogs(c)
@@ -511,6 +514,9 @@ func (a *app) storageDialogs(c *ui.Context) {
 		ui.Text(c, i18n.T("Erase everything?")).Bold()
 		ui.Text(c, i18n.T("This deletes your takes, voices, projects, stories, audiobooks, dubs, transcripts and workflows, every setting, the caches and the logs. It cannot be undone. AudioSmith restarts as on its first day.")).Width(px(t, 420))
 		ui.Checkbox(c.Key("st-erase-models"), &a.resetModel, i18n.T("Also delete the models AudioSmith downloaded"))
+		if a.resetModel && a.resetKeeps != "" {
+			ui.Text(c, a.resetKeeps).FontSize(px(t, 12)).TextColor(t.TextMuted).Width(px(t, 420))
+		}
 		ui.Checkbox(c.Key("st-erase-keys"), &a.resetKeys, i18n.T("Also delete the tokens and keys saved in the Keychain"))
 		ui.Text(c, i18n.T("Type DELETE to confirm.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		ui.TextInput(c.Key("st-erase-text"), &a.resetText).Placeholder("DELETE").Width(px(t, 200)).Label(i18n.T("Type DELETE to confirm."))

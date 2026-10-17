@@ -316,7 +316,7 @@ func (a *app) modelActions(c *ui.Context, e catalog.Entry, m *modelState, loaded
 				label = i18n.T("Delete (unload it first)")
 			}
 			if mm.Item(label).Disabled(loaded).Chosen() {
-				a.deleting, a.deleteAsk = e, true
+				a.askDelete(e)
 			}
 		})
 	}
@@ -325,6 +325,8 @@ func (a *app) modelActions(c *ui.Context, e catalog.Entry, m *modelState, loaded
 // modelStateText says what of an entry is on disk.
 func (a *app) modelStateText(e catalog.Entry, m *modelState) string {
 	switch {
+	case m.downloading && m.progress.Waiting:
+		return waitingText(m.progress) // models_family.go
 	case m.downloading:
 		if m.progress.TotalBytes > 0 {
 			return i18n.T("Downloading · %d%%", int(100*m.progress.Bytes/m.progress.TotalBytes))
@@ -355,11 +357,17 @@ func mb(n int64) string {
 	return fmt.Sprintf("%d B", n)
 }
 
-// modelsAlerts asks before deleting a model.
+// modelsAlerts asks before deleting a model: when other ActNow apps may
+// use it, before removing it from AudioSmith only (spec §7.10.3).
 func (a *app) modelsAlerts(c *ui.Context) {
 	e := a.deleting
-	switch ui.AlertDialog(c, &a.deleteAsk, i18n.T("Delete %s?", modelRef(e)),
-		i18n.T("Its files leave the model folder. You can download it again."), i18n.T("Cancel"), i18n.T("Delete")) {
+	title, body, ok := i18n.T("Delete %s?", modelRef(e)), i18n.T("Its files leave the model folder. You can download it again."), i18n.T("Delete")
+	if len(a.deleteShared) > 0 {
+		title = i18n.T("Remove %s from AudioSmith?", modelRef(e))
+		body = i18n.T("%s also uses this model, so its files (%s) stay on this Mac.", listJoin(a.deleteShared), mb(a.model(e).local.Bytes))
+		ok = i18n.T("Remove from AudioSmith")
+	}
+	switch ui.AlertDialog(c, &a.deleteAsk, title, body, i18n.T("Cancel"), ok) {
 	case 1:
 		a.deleteModel(e)
 	}

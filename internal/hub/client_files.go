@@ -56,6 +56,8 @@ func (c *Client) finishFile(ctx context.Context, fs *fileState) error {
 		return err
 	}
 	os.Remove(fs.path + ".parts")
+	// The blob is in place: another app waiting for it may go on.
+	fs.lock.Release()
 	return nil
 }
 
