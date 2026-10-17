@@ -27,8 +27,14 @@ package services
 // time, so they apply to every model; one that reads a stretch badly
 // (skips or garbles a line, as diffusion models such as OmniVoice may
 // over long text) fails the checks and falls back to line by line,
-// stretch by stretch. Kokoro's chunk limit (100 Chinese characters) makes
-// its stretches shorter.
+// stretch by stretch. Measured in thread #78 on Qwen3-TTS 0.6B
+// CustomVoice only (3 stories: 8 of 8 stretches cut, 25 of 36 lines);
+// Kokoro, Chatterbox Turbo and OmniVoice were not tried on the engine
+// (Kokoro's pinned snapshot was not in the test cache, Chatterbox needs a
+// reference clip per character, OmniVoice is not downloaded), so they
+// rely on the checks and the fallback. Kokoro's chunk limit (100 Chinese
+// characters) makes its stretches shorter; a model that takes no
+// instruction says a stretch in its plain voice.
 
 import (
 	"context"
