@@ -71,7 +71,7 @@ func TestDubDialogueSwitch(t *testing.T) {
 	}
 	a.dub.SourceLang = "en"
 	tt.Frame()
-	if !tt.HasText("In conversations: their English voice speaks Chinese (Simplified)") && !slices.ContainsFunc(tt.Texts(), func(s string) bool { return strings.HasPrefix(s, "In conversations: their") }) {
+	if !slices.ContainsFunc(tt.Texts(), func(s string) bool { return strings.HasPrefix(s, "In conversations: their") }) {
 		t.Errorf("speaker note: %q", tt.Texts())
 	}
 	m := a.model(entryFor(dubDialogueEntries()[0].Repo))
@@ -250,12 +250,12 @@ func snapshotsDubDialogue(t *testing.T, out string) {
 		a.dubSet(func(p *dub.Project) { p.ChooseTargets([]string{"zh-Hans"}) })
 		shoot("dlg-dub-cast-off", func() { a.dubSettings(func(s *dub.Settings) { s.Dialogue = dub.DialogueOff }) })
 		a.dubSettings(func(s *dub.Settings) { s.Dialogue = dub.DialogueAuto })
-		d.fe.Garble[dlgZh[2]] = 2
-		d.fe.Heard[dlgZh[2]] = "我很不好"
+		d.fe.Garble[dlgZh[1]] = 2
+		d.fe.Heard[dlgZh[1]] = "我今天很不好"
 		a.dubGenerate()
 		shoot("dlg-dub-lines", func() {
 			a.dubStep = dubStepGenerate
-			a.dubCur = a.dub.Segments[2].ID
+			a.dubCur = a.dub.Segments[1].ID
 		})
 		shoot("dlg-dub-picker", func() {
 			if a.pickerOpen == nil {

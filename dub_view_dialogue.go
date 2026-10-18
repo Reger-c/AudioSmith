@@ -117,7 +117,7 @@ func dubDialogueBlocked(gb int, p *dub.Project, e catalog.Entry, lang string, sk
 func dubDialogueSkipped(langs []string) string {
 	names := make([]string, len(langs))
 	for i, l := range langs {
-		names[i] = dubLangName(l)
+		names[i] = dubLangPlain(l)
 	}
 	return i18n.T("%s: line by line; the multi-speaker models speak only Chinese and English.", strings.Join(names, i18n.T(", ")))
 }
@@ -197,7 +197,7 @@ func (a *app) dubDialogueRefNote(c *ui.Context, d dubDlg, sp string) {
 	}
 	t := c.Theme()
 	ui.Row(c.Key("ref-dialogue")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-		caption(c, i18n.T("In conversations: their %s voice speaks %s", dubLangName(src), dubLangName(d.lang))).TextColor(tok(t).Text3).Grow(1).MinWidth(0)
+		caption(c, i18n.T("In conversations: their %s voice speaks %s", dubLangPlain(src), dubLangPlain(d.lang))).TextColor(tok(t).Text3).Grow(1).MinWidth(0)
 		infoTip(c, i18n.T("The dialogue model clones them from about 12 s of their own lines and what they say there, and speaks the track's language."))
 	})
 }
