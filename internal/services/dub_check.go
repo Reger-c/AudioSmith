@@ -157,12 +157,14 @@ func (s *Dubs) uncheckable(ctx context.Context, err error) error {
 	return nil
 }
 
-// has reports whether line id is in one of the track's conversations
+// has reports whether line id, made on the dub's model, is checked as a
+// conversation's fallback (dubDialogue.mark): it is in one of the
+// track's conversations and the dialogue model was there to compare with
 // (nil: no dialogue model).
 func (dd *dubDialogue) has(id string) bool {
 	if dd == nil {
 		return false
 	}
 	_, ok := dd.byID[id]
-	return ok
+	return ok && dd.reasons[id] != DialogueUnavailable
 }
