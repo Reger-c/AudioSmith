@@ -14,6 +14,7 @@ Stdlib only, no cgo. Samples are float32 in [-1, 1], interleaved (`dsp.Buffer{Ra
 | `dsp/master` | high-pass → EQ → compressor → loudness/ceiling; presets `raw broadcast podcast warm bright cinematic` as data (table in package doc) | `Processor` + `loudness.Stream` |
 | `dsp/edit` | `Concat`/`Joiner` (crossfade, default 50 ms equal-power, or gap; returns spans), `Silence`, `GapPolicy` (chunk/sentence/line/paragraph/chapter), `Trim`/`TrimRange`, `Pauses`, `LimitPauses` | `Joiner` |
 | `dsp/qc` | "Check audio": codes `empty silent invalid_samples clipping silence_gap loudness_jump dc_offset low_level edge_silence click`, severities, seconds ranges, per-code cap | `Checker` |
+| `dsp/refcheck` | voice references (#83): `Measure` (speech, SNR estimate, LUFS, clipping, edges, pauses, F0 spread, rate), hint codes `no_speech too_short very_noisy clipping mismatch noisy short flat slow`, grades, `Tidy` (edges, long pauses, −18 LUFS), `PickWindow`, `Pick` | — |
 | `dsp/analysis` | energy `VAD`, `Onsets` (speech starts + spectral flux), YIN `Pitch` + `Stats`, `LoudnessContour`, `Nuclei`/`SpeakingRate`, `Analyze`/`Baseline`/`Compare` (Prosody Mirror codes `higher lower louder softer faster slower animated flat whispered`) | — |
 | `dsp/mix` | timeline of tracks/clips (sample-accurate offsets, From/To, gain, fades, balance pan, auto resample/remix), mute, `Duck` (under key tracks' clips; merge gap, attack ramp before speech, release after), `Sidechain` | `Mixer.Render(dst, from)` |
 

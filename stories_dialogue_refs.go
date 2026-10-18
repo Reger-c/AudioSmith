@@ -29,22 +29,18 @@ func (a *app) storyDialogueRefs(c *ui.Context, p *lfPage, locked bool) {
 	if len(cast) == 0 {
 		return
 	}
-	ready, missing := 0, 0
+	missing := 0
 	for _, m := range cast {
 		if v := a.findVoice(m.Voice); v != nil && needsReference(v) {
 			missing++
-		} else {
-			ready++
 		}
 	}
-	summary := i18n.T("%d ready", ready)
+	var trailing func()
 	if missing > 0 {
-		summary = i18n.T("%d ready, %d made before rendering", ready, missing)
+		trailing = func() { caption(c, i18n.T("%d to make", missing)).SingleLine().Shrink(0) }
 	}
 	open := p.open["dialogue-refs"]
-	collapsible(c.Key("perf-dialogue-refs"), i18n.T("Character references"), &open, func() {
-		caption(c, summary).SingleLine()
-	}, func() {
+	collapsible(c.Key("perf-dialogue-refs"), i18n.T("Character references"), &open, trailing, func() {
 		for _, m := range cast {
 			ui.Row(c.Key("dref-" + m.ID)).Gap(px(t, sp2)).AlignItems(ui.Start).Children(func() {
 				ui.Text(c, m.Name).FontSize(px(t, fsCaption)).FontWeight(600).Width(px(t, 96)).SingleLine().Ellipsis("…").Shrink(0)
@@ -81,11 +77,13 @@ func (a *app) dialogueRefStatus(c *ui.Context, ref string, locked bool) {
 			caption(c, i18n.T("Could not make the reference: %s", err)).TextColor(c.Theme().Warning)
 		}
 		id := v.ID
-		if ghostButton(c.Key("dref-make-"+id), i18n.T("Make reference")).Disabled(locked).Clicked() {
-			if v := a.findVoice(id); v != nil {
-				a.makeReference(v, nil)
+		ui.Row(c).Children(func() {
+			if ghostButton(c.Key("dref-make-"+id), i18n.T("Make reference")).Disabled(locked).Clicked() {
+				if v := a.findVoice(id); v != nil {
+					a.makeReference(v, nil)
+				}
 			}
-		}
+		})
 	case v.RefCheck != nil:
 		refCheckView(c, "dref-check-"+v.ID, v.RefCheck, refcheck.UseDialogue)
 	case v.Locked:

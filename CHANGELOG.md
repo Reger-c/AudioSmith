@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Better voice references: checked, cleaned, and longer for designed voices
+- Clone and dialogue models copy a reference's noise, loudness, intonation and pace. AudioSmith now checks every reference where it comes in (Clone, an imported voice, Dub's speakers, Stories' whole dialogue) and says in one line how good it is ("Reference quality: good / fine / needs work") with at most two tips: too short, very noisy, distorted, a transcript that does not match, a flat delivery, or (for dialogue) a slow, read-aloud pace. Nothing is blocked.
+- References are cleaned automatically: background noise is removed only when there is some (DeepFilterNet; clean recordings are left alone), the silence before and after is trimmed, long pauses are shortened, and the loudness is evened out to −18 LUFS. The original is kept: Undo on Clone, "Use the original" in the voice's editor.
+- Recordings of 15–30 seconds keep their best 10–14 seconds. Clone has tips for recording your own voice: a quiet small room, talk rather than read, record 15–30 seconds.
+- Designed voices get a reference of their own for clone models, portable copies and Stories' whole dialogue: about 12 seconds of lively everyday speech in a casual tone, the best of three takes. Their greeting sample stays for previews. New designed voices get it when saved; older ones when first used with a clone model or in whole dialogue (or "Make reference" in the voice's menu).
+- Portable copies of built-in voices now read everyday narration instead of a sentence about the recording, asked to sound casual where the model takes an instruction, and keep the best of three takes.
+- Dub denoises a speaker's reference only when it is noisy, and tidies it the same way.
+
 ### Stories: emotions that stay coherent across a scene
 - The AI director now reads the whole story and plans its emotions: a usual mood for each character, and for each line one of 13 emotions (steady, happy, excited, tender, pleading, hesitant, worried, hurt, sad, angry, scared, surprised, apologetic) with a strength from 0 to 3, the turns of the scene marked. Most lines stay steady; a character's feeling changes one step at a time, except at a turn.
 - Each line is sent a short instruction made from its emotion ("略带委屈", "非常难过，带哭腔"), the same wording for every line of a character, instead of the persona and the scene with every line. In a test story, a father's voice moved over 8 semitones instead of 19.
@@ -18,7 +26,7 @@
 
 ### Stories: whole dialogue (整场对话)
 - A new switch under Performance, "Whole dialogue": the characters' lines are spoken by a dialogue model (SoulX-Podcast 1.7B, Apache-2.0) a scene at a time, so each line hears the lines before it and answers them. Narration stays on the story's model.
-- Each character is cloned from their voice: a cloned voice's own clip, or a short sample the voice reads first.
+- Each character is cloned from their voice: a cloned voice's own clip, a designed voice's reference, or a short sample the voice reads first.
 - Every line is checked: one the model does not say clearly is made again with the same context, then on the story's model.
 - Up to four characters per scene. Needs 16 GB of memory (the switch says so on smaller Macs) and a 2.4 GB download; Chinese and English stories. On an M4 it runs at about 0.7× real time.
 

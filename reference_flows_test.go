@@ -116,3 +116,31 @@ func TestRefWindow(t *testing.T) {
 		t.Errorf("unbroken %+v", w)
 	}
 }
+
+// TestVoiceMenuMakeReference: a designed voice's menu offers Make
+// reference while it has none.
+func TestVoiceMenuMakeReference(t *testing.T) {
+	vdm := withDesignCatalog(t)
+	a, eng, tt := newTestApp(t)
+	eng.ready()
+	v := addVoice(t, a, core.Voice{Name: "Kid", Kind: core.VoiceDesigned, Design: "一个七岁的小女孩", Language: "zh", Seed: 3,
+		CreatedWith: vdm.Repo, DesignAttrs: attrsOf("一个七岁的小女孩")}, 0)
+	a.voiceChanged(core.VoiceChanged{Voice: v})
+	a.navigate("/voices")
+	a.openVoiceEditor(v.ID)
+	tt.Frame()
+	if err := tt.Click("More actions"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(tt.Menu(), "Make reference") {
+		t.Fatalf("menu %q", tt.Menu())
+	}
+	from := len(eng.sent)
+	if err := tt.ChooseMenuItem("Make reference"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(refRenders(t, eng, from)) != refCandidates || !tt.HasText("Making a reference… 0 of 3 takes") {
+		t.Errorf("renders %d: %q", len(refRenders(t, eng, from)), tt.Texts())
+	}
+}

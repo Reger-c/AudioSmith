@@ -3389,8 +3389,6 @@
   "Usual mood": "情绪基调",
   "Whole dialogue": "整场对话",
   "model name\u0004Whole-dialogue voices": "整场对话",
-  "%d ready": "%d 个已就绪",
-  "%d ready, %d made before rendering": "%d 个已就绪，%d 个在生成前制作",
   ", ": "，",
   "A little short for dialogue: 8–15 seconds works best.": "用于对话稍短：8–15 秒最好。",
   "A short sample in this voice is made first.": "先用这个声音读一小段样本。",
@@ -3442,5 +3440,9 @@
   "Use the original": "使用原始录音",
   "Very noisy: record again somewhere quiet.": "噪音很大：请换个安静的地方重录。",
   "noise removed": "已降噪",
-  "silences trimmed, loudness evened out": "已去掉多余静音、统一响度"
+  "silences trimmed, loudness evened out": "已去掉多余静音、统一响度",
+  "%d to make": "%d 个待制作",
+  "Their voice sample is very noisy: the clone may carry the noise. Cast a saved voice if it does.": "这个人的声音样本噪音很大，克隆出来可能也带噪音。如果是这样，请改选一个已保存的音色。",
+  "Their voice sample is distorted: the clone may be too. Cast a saved voice if it is.": "这个人的声音样本有破音，克隆出来可能也会。如果是这样，请改选一个已保存的音色。",
+  "Their voice sample is short: the clone may sound unlike them. Cast a saved voice if it does.": "这个人的声音样本太短，克隆出来可能不太像。如果是这样，请改选一个已保存的音色。"
 }
