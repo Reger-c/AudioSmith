@@ -491,3 +491,23 @@ func trimSpan(src string, sp text.Span) text.Span {
 	}
 	return sp
 }
+
+// Marker is a dialogue marker in a line (Markers).
+type Marker struct {
+	Span text.Span
+	Open bool
+}
+
+// Markers are the dialogue markers of one line, in order (for editors).
+func Markers(line string) []Marker {
+	ms := markers(line)
+	out := make([]Marker, len(ms))
+	for i, m := range ms {
+		out[i] = Marker{m.span, m.open}
+	}
+	return out
+}
+
+// DialogueLineOf reads s as a line inside a block (spans into s); ok is
+// false for a blank one.
+func DialogueLineOf(s string) (DialogueLine, bool) { return blockLine(s, 0, len(s)) }

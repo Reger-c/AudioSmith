@@ -64,7 +64,7 @@ type LongformCreate struct {
 type AudiobookCreate struct {
 	Title    string            `json:"title,omitempty" jsonschema:"The book's title; empty: the book's own or the file's."`
 	Path     string            `json:"path,omitempty" jsonschema:"Absolute path of the book: EPUB, TXT, Markdown or DOCX (headings become chapters)."`
-	Text     string            `json:"text,omitempty" jsonschema:"Or the manuscript itself: '# Title' lines start chapters, [voice:NAME] switches to a character's voice."`
+	Text     string            `json:"text,omitempty" jsonschema:"Or the manuscript itself: '# Title' lines start chapters, [voice:NAME] switches to a character's voice, [dialogue] … [/dialogue] holds 'Name: line' lines the dialogue model speaks together."`
 	Model    string            `json:"model,omitempty" jsonschema:"A speech model id (list_models); empty: AudioSmith's default."`
 	Voice    string            `json:"voice,omitempty" jsonschema:"The narrator: a saved voice's name or id (list_voices) or a built-in speaker of the model; empty: the first voice that fits."`
 	Cast     map[string]string `json:"cast,omitempty" jsonschema:"[voice:NAME] name → voice (name or id, or a built-in speaker)."`
@@ -113,6 +113,25 @@ type CastJSON struct {
 	VoiceName string `json:"voice_name,omitempty"`
 	Lines     int    `json:"lines,omitempty"`
 	Persona   string `json:"persona,omitempty"` // stories: the character's performance baseline
+	// Dialogue: an audiobook's name that speaks in a dialogue block.
+	Dialogue bool `json:"dialogue,omitempty"`
+}
+
+// DialogueBlockJSON is a dialogue block of an audiobook's manuscript
+// ([dialogue] … [/dialogue]): where it is, who speaks, and how it is made.
+type DialogueBlockJSON struct {
+	Chapter  int      `json:"chapter"` // 1-based
+	Index    int      `json:"index"`   // 1-based in its chapter (render_longform's dialogue_block)
+	Start    int      `json:"start"`   // byte offsets of the block in script
+	End      int      `json:"end"`
+	Speakers []string `json:"speakers"`
+	Lines    int      `json:"lines"`            // lines with a speaker
+	Uncast   []string `json:"uncast,omitempty"` // speakers without a voice: render_longform gives them their own
+	// Mode is dialogue (the dialogue model speaks it) or per_line (each
+	// line in its voice on the book's model), Reason why per_line:
+	// dialogue_off, not_downloaded, memory, language or one_speaker.
+	Mode   string `json:"mode"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // StoryLineJSON is a line of a story.
@@ -201,7 +220,11 @@ type LongformJSON struct {
 	// a scene at a time (whole dialogue).
 	Dialogue      bool          `json:"dialogue,omitempty"`
 	DialogueModel string        `json:"dialogue_model,omitempty"`
-	Words         int           `json:"words"`
+	// Audiobooks: the manuscript (when it is at most 100 KB; longer ones
+	// are left out) and its dialogue blocks.
+	Script         string              `json:"script,omitempty"`
+	DialogueBlocks []DialogueBlockJSON `json:"dialogue_blocks,omitempty"`
+	Words          int                 `json:"words"`
 	Estimate      float64       `json:"estimated_seconds"`
 	Problems      []ProblemJSON `json:"problems,omitempty"`
 	Book          BookJSON      `json:"book"`
@@ -230,6 +253,7 @@ type LongformUpdate struct {
 	About    string            `json:"description,omitempty" jsonschema:"The book's description, for its tags."`
 	Cover    string            `json:"cover,omitempty" jsonschema:"Absolute path of a PNG or JPEG cover (≤ 8 MB)."`
 	Stems    *bool             `json:"stems,omitempty" jsonschema:"true: renders also write one WAV per character (stems)."`
+	Script   *string           `json:"script,omitempty" jsonschema:"Audiobooks: the whole manuscript, replacing it: '# Title' lines start chapters, [voice:NAME] switches voice, and [dialogue] … [/dialogue] (or [对话] … [/对话]) marks a dialogue block of 'Name: line' lines that the dialogue model speaks together (lines without a name are narration; a line in parentheses is a stage direction, not read)."`
 	// Stories' performance.
 	Scene         *string           `json:"scene,omitempty" jsonschema:"Stories: where and when, who the characters are to each other, the mood (\"\" clears). Models that take instructions hear it with every line; never spoken."`
 	Personas      map[string]string `json:"personas,omitempty" jsonschema:"Stories: character name → persona, its performance baseline (\"seven, lively, coaxing\"; \"\" clears)."`
@@ -239,8 +263,8 @@ type LongformUpdate struct {
 	Pacing        string            `json:"pacing,omitempty" jsonschema:"Stories: gaps between lines: dialogue (tight turns), reading, relaxed, or fixed (one gap for every line)."`
 	Merge         *bool             `json:"merge_turns,omitempty" jsonschema:"Stories, with a pacing: say consecutive lines of one character in one go (default true)."`
 	Level         *bool             `json:"even_out_voices,omitempty" jsonschema:"Stories, with a pacing: bring each character's lines toward one loudness (default true)."`
-	Dialogue      *bool             `json:"dialogue,omitempty" jsonschema:"Stories: true speaks the characters' lines with the dialogue model (dialogue_model; Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the story's model."`
-	DialogueModel string            `json:"dialogue_model,omitempty" jsonschema:"Stories: the dialogue model: soulx (SoulX-Podcast, the default: a 2.4 GB download, 16 GB of memory, up to four voices) or moss (MOSS-TTSD: an 11 GB download, 24 GB of memory, up to five voices, a scene as one recording)."`
+	Dialogue      *bool             `json:"dialogue,omitempty" jsonschema:"Stories: true speaks the characters' lines with the dialogue model (dialogue_model; Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the story's model. Audiobooks: true speaks the [dialogue] blocks with it (on by default once the manuscript has blocks); false reads their lines one by one in their voices."`
+	DialogueModel string            `json:"dialogue_model,omitempty" jsonschema:"Stories and audiobooks: the dialogue model: soulx (SoulX-Podcast, the default: a 2.4 GB download, 16 GB of memory, up to four voices) or moss (MOSS-TTSD: an 11 GB download, 24 GB of memory, up to five voices, a scene as one recording)."`
 	Direct        string            `json:"direct,omitempty" jsonschema:"Stories: run the AI director (the writing-help language model reads the story and plans its emotions: a baseline per character, an emotion, intensity and turn per line) after the other changes: fill (only what is empty) or all (replace what you did not set). Takes up to a minute or two."`
 }
 
@@ -248,6 +272,15 @@ type LongformUpdate struct {
 type LongformRender struct {
 	ID       string `json:"project_id" jsonschema:"The project to render."`
 	Chapters []int  `json:"chapters,omitempty" jsonschema:"Chapter numbers (1-based) to render; empty: the whole book or story."`
+	// DialogueBlock previews one dialogue block of an audiobook.
+	DialogueBlock *DialogueBlockRef `json:"dialogue_block,omitempty" jsonschema:"Audiobooks: preview one dialogue block only (get_longform's dialogue_blocks: chapter and index), without the book or its loudness target."`
+}
+
+// DialogueBlockRef names a dialogue block: its chapter (1-based) and its
+// index in the chapter (1-based).
+type DialogueBlockRef struct {
+	Chapter int `json:"chapter" jsonschema:"The block's chapter (1-based)."`
+	Index   int `json:"index" jsonschema:"The block's index in its chapter (1-based)."`
 }
 
 // LongformExport saves a finished render.

@@ -313,3 +313,30 @@ func blockLanguage(book, words string) (string, bool) {
 
 // book reports whether a chapter is an audiobook's.
 func (p *ChapterParams) book() bool { return p.Workflow == string(core.ProjectAudiobook) }
+
+// DialogueNames are the speakers of a manuscript's dialogue blocks, in
+// order, one spelling each (markup.NameKey).
+func DialogueNames(script string) []string {
+	var out []string
+	blocks, _ := markup.DialogueBlocks(script)
+	for _, b := range blocks {
+		for _, n := range b.Speakers() {
+			if !containsKey(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
+}
+
+// CastNames are the names a manuscript casts: its [voice:NAME] names, then
+// its dialogue blocks' speakers it does not name so.
+func CastNames(script string) []string {
+	out := VoiceNames(script)
+	for _, n := range DialogueNames(script) {
+		if !containsKey(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}

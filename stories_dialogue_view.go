@@ -99,8 +99,15 @@ func storyLanguage(d *services.LongformDoc) string {
 		return d.Language
 	}
 	han := false
+	texts := make([]string, 0, len(d.Lines)+1)
 	for _, l := range d.Lines {
-		for _, r := range l.Text {
+		texts = append(texts, l.Text)
+	}
+	if d.Kind == core.ProjectAudiobook {
+		texts = append(texts, d.Script[:min(len(d.Script), 64<<10)]) // a book: how it starts
+	}
+	for _, l := range texts {
+		for _, r := range l {
 			switch {
 			case unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r):
 				return "ja"
@@ -125,6 +132,9 @@ func dialogueBlockedOn(gb int, d *services.LongformDoc, e catalog.Entry) string 
 	}
 	lang := strings.ToLower(storyLanguage(d))
 	if !slices.ContainsFunc(e.Languages, func(l catalog.Language) bool { return strings.HasPrefix(lang, l.Code) }) {
+		if d.Kind == core.ProjectAudiobook {
+			return i18n.T("For Chinese and English books.")
+		}
 		return i18n.T("For Chinese and English stories.")
 	}
 	return ""

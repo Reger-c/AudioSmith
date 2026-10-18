@@ -85,6 +85,10 @@ type lfPage struct {
 	spec     services.LongformSpec
 	problems []services.Problem
 	stats    services.ScriptStats
+	blocks   []services.DialogueBlockInfo // a manuscript's dialogue passages (audiobook_dialogue.go)
+	cast     []string                     // bookCast, at castRev
+	castRev  int
+	deco     bookDeco // the manuscript's passage styling (audiobook_dialogue_editor.go)
 
 	// View state.
 	lines       ui.ListState
@@ -238,6 +242,7 @@ func (a *app) autosaveLf(p *lfPage) {
 	}
 	p.fp = fp
 	a.compileLf(p)
+	a.bookDialogueDefault(p)
 	d := lfDraft{Version: 1, Doc: p.doc, Project: p.project, Saved: p.savedJSON, Render: p.render, Auto: p.auto}
 	if js := docJSON(&p.doc) + "|" + p.doc.Render + "|" + p.project + "|" + p.render + "|" + strconv.FormatBool(p.auto); js != p.draftJSON {
 		p.draftJSON = js
@@ -263,9 +268,9 @@ func (a *app) lfFingerprint(p *lfPage) string {
 // compileLf compiles a page's document (stats, problems, the spec).
 func (a *app) compileLf(p *lfPage) {
 	d := p.doc
-	spec, probs := services.Compile(&d, a.lfResolver(&d))
+	spec, probs, blocks := services.CompileBook(&d, a.lfResolver(&d))
 	spec.Project = p.project
-	p.spec, p.problems = spec, probs
+	p.spec, p.problems, p.blocks = spec, probs, blocks
 	if p.kind == core.ProjectAudiobook {
 		p.stats = services.StatsOf(d.Script, d.Speed)
 	} else {
