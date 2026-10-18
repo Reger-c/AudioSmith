@@ -24,6 +24,8 @@ api                      watermark
 catalog                  i18n
 catalog                  lang
 
+dialogue                 text
+
 doc                      doc/subtitle
 doc                      doc/textenc
 doc                      text
@@ -124,6 +126,7 @@ mcp                      voicedesign
 notify                   core
 
 services                 core
+services                 dialogue
 services                 doc
 services                 doc/subtitle
 services                 dsp

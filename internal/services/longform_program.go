@@ -203,7 +203,7 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 		}
 		if ds, ok := dialogued[li]; ok {
 			steps = append(steps, chapterStep{chunk: ds.chunk, line: li, dialogue: ds})
-			fmt.Fprintf(h, "dialogue %s %d\x00", ds.seg.key, ds.k)
+			fmt.Fprintf(h, "dialogue %s %d\x00", ds.seg.job.key, ds.k)
 			continue
 		}
 		if ts, ok := tracked[li]; ok {

@@ -115,12 +115,12 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 					res.DialogueFailed += len(seg.lines)
 				default:
 					res.Dialogues++
-					res.DialogueLines += len(seg.lines) - len(seg.failed)
-					res.DialogueFailed += len(seg.failed)
-					res.DialogueRedone += seg.redone
+					res.DialogueLines += len(seg.lines) - len(seg.out.failed)
+					res.DialogueFailed += len(seg.out.failed)
+					res.DialogueRedone += seg.out.redone
 				}
 			}
-			if seg.err != nil || seg.failed[s.dialogue.k] {
+			if _, failed := seg.out.failed[s.dialogue.k]; seg.err != nil || failed {
 				for _, f := range s.dialogue.fallback {
 					if f.chunk != nil {
 						n++
@@ -134,7 +134,7 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 				}
 				return nil
 			}
-			c.path, c.seg.Text = seg.paths[s.dialogue.k], seg.texts[s.dialogue.k]
+			c.path, c.seg.Text = seg.job.paths[s.dialogue.k], seg.job.texts[s.dialogue.k]
 		} else if s.track != nil {
 			// A line of a character's track: cut from it, else as usual.
 			seg := s.track.seg
