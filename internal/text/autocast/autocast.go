@@ -258,6 +258,18 @@ func withDirection(src string, l Line) Line {
 	return l
 }
 
+// Speaker recognises one line as a speaker's: "[Name] text" or
+// "NAME: text" ("名字（说明）：台词"), as Detect does. name is "" for a
+// narrator alias ("旁白：…"); body is where the spoken text starts in
+// line, after the name, colon and any leading stage direction.
+func Speaker(line string) (name, direction string, body int, ok bool) {
+	l, ok := speakerLine(line, text.Span{End: len(line)}, nil)
+	if !ok {
+		return "", "", 0, false
+	}
+	return l.Speaker, l.Direction, l.Span.Start, true
+}
+
 // speakerLine recognises "[Name] text" and "NAME: text".
 func speakerLine(src string, ln text.Span, extra map[string]bool) (Line, bool) {
 	s := ln.Of(src)

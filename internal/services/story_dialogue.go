@@ -142,10 +142,19 @@ func (cr chapterRenderer) dialogues(p *ChapterParams,
 	r := cr.r
 	refs := map[string]int{} // voice key → index in a segment's refs
 	oneTrack := dialogueInfo.Family == FamilyMossTTSD
-	for gi, g := range dialogueGroups(p.Lines, dialogue.LimitsFor(dialogueInfo.Family)) {
+	lim := dialogue.LimitsFor(dialogueInfo.Family)
+	groups, seeds := dialogueGroups(p.Lines, lim), []int64(nil)
+	if p.book() {
+		groups, seeds = bookDialogueGroups(p.Lines, lim, p.Lang) // book_dialogue_render.go
+	}
+	for gi, g := range groups {
 		seg := &dialogueSeg{lines: g}
 		j := &seg.job
-		j.model, j.oneTrack, j.seed, j.lang = p.Production.DialogueModel, oneTrack, p.Seed+int64(1000*p.Index+gi), p.Lang
+		off := int64(1000*p.Index + gi)
+		if seeds != nil {
+			off = seeds[gi]
+		}
+		j.model, j.oneTrack, j.seed, j.lang = p.Production.DialogueModel, oneTrack, p.Seed+off, p.Lang
 		clear(refs)
 		h := sha256.New()
 		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%d\x00%v\x00", dialogueVersion, p.Production.DialogueModel, dialogueInfo.Revision, j.seed, p.Production.DialogueTags)

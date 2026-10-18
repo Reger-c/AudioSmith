@@ -117,3 +117,34 @@ func TestStageDirections(t *testing.T) {
 		}
 	}
 }
+
+// An adverb before the speech verb is no name: "妈妈放下碗，轻声说" does
+// not make 轻声 a character.
+func TestAdverbIsNoName(t *testing.T) {
+	src := "“你来了。”妈妈放下碗，轻声说，“饭在锅里。”"
+	r := Detect(src, nil)
+	if len(r.Speakers) != 0 || len(r.Lines) != 3 || r.Lines[1].Text != "妈妈放下碗，轻声说，" {
+		t.Errorf("speakers %q, lines %+v", r.Speakers, r.Lines)
+	}
+}
+
+func TestSpeaker(t *testing.T) {
+	for _, c := range []struct {
+		line, name, dir string
+		body            int
+		ok              bool
+	}{
+		{"伊内丝：你好", "伊内丝", "", len("伊内丝："), true},
+		{"妈妈（低声）：快睡吧", "妈妈", "低声", len("妈妈（低声）："), true},
+		{"旁白：雾散了", "", "", len("旁白："), true},
+		{"MARA: Hi", "Mara", "", len("MARA: "), true},
+		{"[Mia] (pleading) Please?", "Mia", "pleading", len("[Mia] (pleading) "), true},
+		{"Note: no", "", "", 0, false},
+		{"他放下碗。", "", "", 0, false},
+	} {
+		name, dir, body, ok := Speaker(c.line)
+		if name != c.name || dir != c.dir || body != c.body || ok != c.ok {
+			t.Errorf("%q: %q %q %d %v", c.line, name, dir, body, ok)
+		}
+	}
+}
