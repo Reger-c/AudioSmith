@@ -15,7 +15,7 @@ final class Synthesizer: @unchecked Sendable {
         "voxcpm2", "dia",
     ]
 
-    private let out: Writer
+    let out: Writer
     let store: ModelStore
 
     init(out: Writer, store: ModelStore) {
@@ -56,7 +56,8 @@ final class Synthesizer: @unchecked Sendable {
 
     // MARK: Jobs
 
-    func load(_ p: LoadParams, job: String, offline: Bool) async throws -> LoadResult {
+    func load(_ p: LoadParams, job: String, offline: Bool, auxPaths: [String: String]? = nil) async throws -> LoadResult {
+        if p.task == "dialogue" { return try await loadDialogue(p, job: job, offline: offline, auxPaths: auxPaths) }
         let started = Date()
         let model = try await acquire(p.model, path: p.path, job: job, offline: offline)
         defer { store.release(p.model) }

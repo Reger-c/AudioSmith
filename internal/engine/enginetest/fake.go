@@ -87,7 +87,8 @@ func Methods(role proto.Role) []string {
 	}
 	return append(common, proto.MethodModelsLoad, proto.MethodModelsUnload, proto.MethodModelsLoaded,
 		proto.MethodTTSSynthesize, proto.MethodTTSEncodeVoice, proto.MethodSTTTranscribe, proto.MethodSTTAlign,
-		proto.MethodVADDetect, proto.MethodEnhanceRun, proto.MethodSeparateRun, proto.MethodDiarizeRun, proto.MethodLLMGenerate)
+		proto.MethodVADDetect, proto.MethodEnhanceRun, proto.MethodSeparateRun, proto.MethodDiarizeRun, proto.MethodLLMGenerate,
+		proto.MethodTTSDialogue)
 }
 
 // Concurrency is the jobs an engine of role runs at once: gpu 1, listen 2
@@ -333,6 +334,8 @@ func (f *fakeEngine) startJob(m proto.Message) {
 			f.diarize(m)
 		case proto.MethodLLMGenerate:
 			f.generate(m)
+		case proto.MethodTTSDialogue:
+			f.dialogue(m)
 		case proto.MethodWatermarkEmbed:
 			f.watermarkEmbed(m)
 		case proto.MethodWatermarkDetect:
@@ -379,7 +382,7 @@ func (f *fakeEngine) handleHello(m proto.Message) {
 		families = []string{"whisper", "qwen3_asr", "parakeet"}
 	}
 	if role == proto.RoleGPU {
-		families = []string{"kokoro", "qwen3_tts", "omnivoice", "chatterbox", "whisper", "qwen3_asr", "qwen3_forced_aligner", "silero_vad", "deepfilternet", "htdemucs", "mel_roformer", "sortformer", "qwen3", "gemma4"}
+		families = []string{"kokoro", "qwen3_tts", "omnivoice", "chatterbox", "whisper", "qwen3_asr", "qwen3_forced_aligner", "silero_vad", "deepfilternet", "htdemucs", "mel_roformer", "sortformer", "qwen3", "gemma4", "soulx_podcast"}
 	}
 	if role == proto.RoleMedia {
 		families = []string{"audioseal"}

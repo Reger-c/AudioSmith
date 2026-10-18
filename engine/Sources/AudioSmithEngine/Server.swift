@@ -139,7 +139,7 @@ final class Server: @unchecked Sendable {
         case .gpu:
             m += [Method.modelsLoad, Method.modelsUnload, Method.modelsLoaded, Method.ttsSynthesize, Method.ttsEncodeVoice,
                   Method.sttTranscribe, Method.sttAlign, Method.vadDetect, Method.enhanceRun, Method.separateRun, Method.diarizeRun,
-                  Method.llmGenerate]
+                  Method.llmGenerate, Method.ttsDialogue]
         case .media:
             m += [Method.mediaProbe, Method.mediaDecode, Method.mediaEncode, Method.mediaMux, Method.mediaThumbnail, Method.mediaTranscode,
                   Method.watermarkEmbed, Method.watermarkDetect]
@@ -229,13 +229,20 @@ final class Server: @unchecked Sendable {
                     startJob(id) { try await analyzer.load(p, job: id, offline: offline) }
                 } else {
                     guard let synth else { throw EngineError.badRequest("The \(role.rawValue) worker loads speech-to-text models only (task \"stt\")") }
-                    startJob(id) { try await synth.load(p, job: id, offline: offline) }
+                    let aux = (try? msg.decodeParams(AuxParams.self))?.auxPaths
+                    startJob(id) { try await synth.load(p, job: id, offline: offline, auxPaths: aux) }
                 }
             case Method.ttsSynthesize:
                 let p = try msg.decodeParams(SynthesizeParams.self)
                 guard let synth else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
                 let offline = self.offline
                 startJob(id) { try await synth.synthesize(p, job: id, offline: offline) }
+            case Method.ttsDialogue:
+                let p = try msg.decodeParams(DialogueParams.self)
+                guard let synth else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
+                let offline = self.offline
+                let aux = (try? msg.decodeParams(AuxParams.self))?.auxPaths
+                startJob(id) { try await synth.dialogue(p, job: id, offline: offline, auxPaths: aux) }
             case Method.ttsEncodeVoice:
                 let p = try msg.decodeParams(EncodeVoiceParams.self)
                 guard let synth else { throw RPCError(Code.methodNotFound, "Unknown method \(method)") }
@@ -376,7 +383,7 @@ final class Server: @unchecked Sendable {
         out.result(id, HelloResult(
             protocol: protocolVersion, version: engineVersion, role: role, pid: Int(getpid()),
             concurrency: concurrency, methods: methods,
-            families: role == .gpu ? Synthesizer.families + Analyzer.families + Analyzer.m4Families + Analyzer.llmFamilies : role == .listen ? Analyzer.listenFamilies : MediaWorker.watermarkFamilies,
+            families: role == .gpu ? Synthesizer.families + Synthesizer.dialogueFamilies + Analyzer.families + Analyzer.m4Families + Analyzer.llmFamilies : role == .listen ? Analyzer.listenFamilies : MediaWorker.watermarkFamilies,
             device: deviceInfo()))
     }
 

@@ -54,12 +54,23 @@ let package = Package(
             path: "Sources/AudioSmithText",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // The dialogue models' logic without MLX (SoulX-Podcast's prompts,
+        // history window and sampler, thread #80), so the tests can check it.
+        .target(
+            name: "AudioSmithDialogue",
+            path: "Sources/AudioSmithDialogue",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "AudioSmithEngine",
             dependencies: [
                 "AudioSmithProtocol",
                 "AudioSmithText",
+                "AudioSmithDialogue",
                 .product(name: "MLXAudioCore", package: "mlx-audio-swift"),
+                // S3Gen's public types (SoulX-Podcast's flow, HiFT, CAM++
+                // and S3 tokenizer).
+                .product(name: "MLXAudioCodecs", package: "mlx-audio-swift"),
                 .product(name: "MLXAudioTTS", package: "mlx-audio-swift"),
                 .product(name: "MLXAudioSTT", package: "mlx-audio-swift"),
                 .product(name: "MLXAudioVAD", package: "mlx-audio-swift"),
@@ -79,10 +90,10 @@ let package = Package(
             linkerSettings: [.unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", infoPlist])]
         ),
         // Decodes engine/Fixtures with the Swift types, and checks the text
-        // helpers (scripts/test-engine.sh).
+        // and dialogue helpers (scripts/test-engine.sh).
         .testTarget(
             name: "AudioSmithEngineTests",
-            dependencies: ["AudioSmithProtocol", "AudioSmithText"],
+            dependencies: ["AudioSmithProtocol", "AudioSmithText", "AudioSmithDialogue"],
             path: "Tests/AudioSmithEngineTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

@@ -63,7 +63,7 @@ public enum Method {
         switch method {
         case modelsLoad, ttsSynthesize, ttsEncodeVoice, sttTranscribe, sttAlign, vadDetect, enhanceRun,
              mediaDecode, mediaEncode, captureStart, separateRun, diarizeRun, mediaMux, mediaThumbnail, mediaTranscode,
-             llmGenerate, watermarkEmbed, watermarkDetect:
+             llmGenerate, watermarkEmbed, watermarkDetect, ttsDialogue:
             return true
         default:
             return false
@@ -572,6 +572,8 @@ public func paramsType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.llmToken: LLMTokenParams.self
     case Method.watermarkEmbed: WatermarkEmbedParams.self
     case Method.watermarkDetect: WatermarkDetectParams.self
+    case Method.ttsDialogue: DialogueParams.self
+    case Method.ttsTurn: TurnParams.self
     default: nil
     }
 }
@@ -606,6 +608,7 @@ public func resultType(_ method: String) -> (Decodable & Encodable).Type? {
     case Method.captureDevices: DevicesResult.self
     case Method.captureStart: CaptureResult.self
     case Method.captureStop: CaptureStopResult.self
+    case Method.ttsDialogue: DialogueResult.self
     default: nil
     }
 }

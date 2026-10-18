@@ -1,0 +1,27 @@
+SoulX-Podcast-1.7B, converted for MLX (8-bit language model) by AudioSmith
+Copyright 2025 Soul AI Lab (Soul-AILab) and the SoulX-Podcast authors
+
+This repository redistributes, in converted form, the weights of
+Soul-AILab/SoulX-Podcast-1.7B (https://huggingface.co/Soul-AILab/SoulX-Podcast-1.7B,
+revision 7d381e3aa4f2ac9e23201b57957fd0499f8f2fd1), licensed under the Apache
+License, Version 2.0 (see LICENSE).
+
+Its acoustic components (flow.pt, hift.pt, campplus.onnx) are byte-identical
+to those of FunAudioLLM/CosyVoice2-0.5B (https://huggingface.co/FunAudioLLM/CosyVoice2-0.5B),
+Copyright Alibaba Group (Tongyi SpeechTeam) and the CosyVoice authors, licensed
+under the Apache License, Version 2.0. The CAM++ speaker encoder originates
+from 3D-Speaker (https://github.com/modelscope/3D-Speaker), Apache License 2.0.
+The language model is a fine-tune of Qwen3-1.7B (Qwen team, Alibaba Cloud),
+Apache License 2.0.
+
+Changes made by AudioSmith (https://github.com/hehehai/AudioSmith):
+  - the Qwen3 language model quantized to 8 bits (group size 64, bfloat16
+    scales) with mlx-lm; its tied output layer is not stored separately;
+  - flow.pt, hift.pt and campplus.onnx converted to one safetensors file
+    (s3gen.safetensors, float32): modules renamed, weight norm folded,
+    convolutions transposed to MLX's layout, and the batch norms the ONNX
+    exporter had folded into CAM++'s convolutions written back as identity
+    batch norms with the folded biases;
+  - the tokenizer and configuration files are upstream's, unchanged.
+The conversion is scripts/soulx/convert.py in the AudioSmith repository at
+the commit recorded in conversion.json.

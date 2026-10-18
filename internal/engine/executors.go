@@ -55,6 +55,7 @@ var ExecutorKinds = []string{
 	proto.MethodMediaMux, proto.MethodMediaThumbnail, proto.MethodMediaTranscode,
 	proto.MethodLLMGenerate,
 	proto.MethodWatermarkEmbed, proto.MethodWatermarkDetect,
+	proto.MethodTTSDialogue,
 }
 
 // RegisterExecutors registers the engine-backed job kinds (ExecutorKinds)
@@ -85,7 +86,7 @@ func KindExecutor(sup Supervisor, kind string, opts ...ExecutorOptions) jobs.Exe
 
 // Executor runs jobs of kind method as requests to the worker of role,
 // with the job's id as request id. job.progress becomes the job's
-// progress, tts.chunk and llm.token its chunks (the notification's params JSON); a log line naming
+// progress, tts.chunk, llm.token and tts.turn its chunks (the notification's params JSON); a log line naming
 // the job is left to the bus. Errors become *jobs.Error with the protocol's
 // code: oom and busy are retryable, and so is the worker dying mid-job
 // (jobs.CodeInterrupted) or not being ready (CodeEngineUnavailable) — the
@@ -133,7 +134,7 @@ func executor(sup Supervisor, role proto.Role, method string, o ExecutorOptions)
 					prog.Fraction = *p.Fraction
 				}
 				report(prog)
-			case proto.MethodTTSChunk, proto.MethodLLMToken:
+			case proto.MethodTTSChunk, proto.MethodLLMToken, proto.MethodTTSTurn:
 				if chunk != nil {
 					chunk(m.Params)
 				}
