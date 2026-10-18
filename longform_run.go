@@ -194,6 +194,9 @@ func problemText(p services.Problem) string {
 // audition of chapter or line only: what is "chapter:<n>", "line:<id>").
 func (a *app) startLf(p *lfPage, what string) {
 	a.compileLf(p)
+	if a.lfMakeReferences(p, func() { a.startLf(p, what) }) { // stories_dialogue_refs.go (#83)
+		return
+	}
 	if !strings.HasPrefix(what, "line:") {
 		if msg := a.lfBlocker(p); msg != "" && !(what != "" && a.activeRender() != nil) {
 			a.toast(msg)

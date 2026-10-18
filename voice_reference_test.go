@@ -77,7 +77,7 @@ func TestPortableSpeaker(t *testing.T) {
 	}
 	for i, r := range rs {
 		p := renderOf(t, r)
-		if p.Take.Model != cv.Repo || p.Take.Voice != "Serena" || p.Take.Text != texts[i] || p.Take.Render == nil {
+		if p.Take.Model != cv.Repo || p.Take.Voice != "Serena, "+vd.ConversationalStyle("en") || p.Take.Text != texts[i] || p.Take.Render == nil {
 			t.Fatalf("render %d %+v", i, p.Take)
 		}
 	}
@@ -196,7 +196,8 @@ func TestDesignedReference(t *testing.T) {
 		t.Fatalf("not making: %q %q", a.refFailed(v.ID), a.toasts)
 	}
 	for _, r := range refRenders(t, eng, from) {
-		if p := renderOf(t, r); p.Take.Seed != 11 || p.Take.VoiceID != v.ID || !slices.Contains(vd.ReferenceTexts("zh", vd.RegisterAdult), p.Take.Text) {
+		if p := renderOf(t, r); p.Take.Seed != 11 || p.Take.VoiceID != v.ID || !slices.Contains(vd.ReferenceTexts("zh", vd.RegisterAdult), p.Take.Text) ||
+			!strings.HasSuffix(p.Take.Voice, vd.ConversationalStyle("zh")) || !strings.Contains(p.Take.Voice, "温柔") {
 			t.Errorf("candidate %+v", p.Take)
 		}
 	}

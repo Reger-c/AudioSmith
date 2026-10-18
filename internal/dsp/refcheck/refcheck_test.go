@@ -269,3 +269,18 @@ func TestPick(t *testing.T) {
 		t.Error("picked from none")
 	}
 }
+
+// TestGradeOf: codes graded as reports are; dialogue-only codes do not
+// count for clones.
+func TestGradeOf(t *testing.T) {
+	b := talk(0.2, 0.2, 0.3, 0.3)
+	r := Measure(b, Options{Units: 20, CJK: true, CER: -1})
+	for _, u := range []Use{UseClone, UseDialogue} {
+		if got := GradeOf(codes(r.Hints(UseDialogue)), u); got != r.Grade(u) {
+			t.Errorf("use %d: %s, report says %s", u, got, r.Grade(u))
+		}
+	}
+	if GradeOf([]string{CodeSlow, CodeShort}, UseClone) != Good || GradeOf([]string{CodeClipping}, UseClone) != Poor {
+		t.Error("grades")
+	}
+}

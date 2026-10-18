@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp/refcheck"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
@@ -66,6 +67,9 @@ func (a *app) dubCastPanel(c *ui.Context) {
 					}
 				}
 			})
+			if r, ok := p.References[sp]; ok && len(r.Hints) > 0 { // the reference checker (#83)
+				refCheckView(c, "ref-check", &core.RefQuality{Grade: r.Grade, Hints: r.Hints, Cleaned: dubRefCleaned(r)}, refcheck.UseClone)
+			}
 			if _, ok := p.References[sp]; !ok && p.Stage(dub.StageReferences, "").Status == dub.StatusDone {
 				ui.Row(c).Gap(px(t, 6)).Children(func() {
 					iconMark(c, icons.DangerTriangle, t.Warning, "")
@@ -335,4 +339,16 @@ func dubAnyTranslated(p *dub.Project) bool {
 		}
 	}
 	return false
+}
+
+// dubRefCleaned lists what was done to a speaker's reference.
+func dubRefCleaned(r dub.Reference) []string {
+	var out []string
+	if r.Enhanced {
+		out = append(out, "denoised")
+	}
+	if r.Tidied {
+		out = append(out, "tidied")
+	}
+	return out
 }

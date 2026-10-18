@@ -95,3 +95,33 @@ func (r Report) Grade(u Use) Grade {
 	}
 	return g
 }
+
+// SeverityOf is the severity of a hint code.
+func SeverityOf(code string) Severity {
+	switch code {
+	case CodeNoSpeech, CodeTooShort, CodeVeryNoisy, CodeClipping, CodeMismatch:
+		return Warn
+	}
+	return Info
+}
+
+// ForUse reports whether a hint code applies to use u (short and slow
+// only matter to dialogue models).
+func ForUse(code string, u Use) bool {
+	return u == UseDialogue || code != CodeShort && code != CodeSlow
+}
+
+// GradeOf grades a list of hint codes for use u, as Report.Grade does.
+func GradeOf(codes []string, u Use) Grade {
+	g := Good
+	for _, c := range codes {
+		if !ForUse(c, u) {
+			continue
+		}
+		if SeverityOf(c) == Warn {
+			return Poor
+		}
+		g = OK
+	}
+	return g
+}

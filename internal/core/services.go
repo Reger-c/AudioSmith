@@ -84,6 +84,12 @@ type VoiceService interface {
 	// the voice's sample, its seed the voice's seed.
 	Lock(ctx context.Context, id, takeID string) (Voice, error)
 	Unlock(ctx context.Context, id string) (Voice, error)
+	// CleanReference makes a cleaned copy of the voice's reference (the
+	// file at path, seconds long) its reference, keeping the current one
+	// as RefOriginal; RevertReference undoes it. Neither touches the lock
+	// or the consent: the speaker is the same.
+	CleanReference(ctx context.Context, id, path string, seconds float64, q *RefQuality) (Voice, error)
+	RevertReference(ctx context.Context, id string) (Voice, error)
 	// SetConsent stores a recording of the user reading the consent
 	// statement: the voice becomes Verified. RevokeConsent removes it.
 	SetConsent(ctx context.Context, id string, c ConsentRecording) (Voice, error)

@@ -75,6 +75,7 @@ func (a *app) importVoice(path string) {
 			v := res.Voice
 			a.voiceChanged(core.VoiceChanged{Voice: v})
 			a.openVoiceEditor(v.ID)
+			a.cleanImportedReference(v) // checked and cleaned, the original kept (#83)
 			msg := i18n.T("Imported “%s”", v.Name)
 			if v.Consent.State == core.ConsentIncluded {
 				msg = i18n.T("Imported “%s” (consent included, not verified)", v.Name)

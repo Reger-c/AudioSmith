@@ -15,7 +15,10 @@ import (
 //go:embed reftexts.json
 var refTextsJSON []byte
 
-var refTexts map[string]map[string][]string
+var (
+	refTexts map[string]map[string][]string
+	refStyle map[string]string
+)
 
 func init() {
 	var raw map[string]json.RawMessage
@@ -23,8 +26,11 @@ func init() {
 		panic("voicedesign: reftexts.json: " + err.Error()) // caught by tests
 	}
 	refTexts = map[string]map[string][]string{}
+	if err := json.Unmarshal(raw["style"], &refStyle); err != nil {
+		panic("voicedesign: reftexts.json: style: " + err.Error())
+	}
 	for lang, v := range raw {
-		if strings.HasPrefix(lang, "_") {
+		if strings.HasPrefix(lang, "_") || lang == "style" {
 			continue
 		}
 		var m map[string][]string
@@ -58,6 +64,29 @@ func ReferenceTexts(lang, register string) []string {
 		return append([]string(nil), ts...)
 	}
 	return append([]string(nil), m[RegisterAdult]...)
+}
+
+// ConversationalStyle is the delivery a voice's reference takes ask for,
+// in lang (Chinese or English): casual, like an everyday chat, not read
+// (#81's group D, which the user preferred by ear).
+func ConversationalStyle(lang string) string { return refStyle[RefLang(lang)] }
+
+// WithStyle is a free-form voice description (or a speaker's
+// instruction) with style added.
+func WithStyle(desc, style string) string {
+	desc = strings.TrimSpace(desc)
+	switch {
+	case desc == "":
+		return style
+	case strings.HasSuffix(desc, "。") || strings.HasSuffix(desc, ".") || strings.HasSuffix(desc, "，") || strings.HasSuffix(desc, ","):
+		if RefLang(TextLang(style)) == "en" && !strings.HasSuffix(desc, " ") {
+			return desc + " " + style
+		}
+		return desc + style
+	case RefLang(TextLang(style)) == "zh":
+		return desc + "。" + style
+	}
+	return desc + ". " + style
 }
 
 // Register is the register of the reference texts for a voice with

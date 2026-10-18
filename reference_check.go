@@ -9,6 +9,7 @@ package main
 
 import (
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -70,11 +71,12 @@ func measureRef(path string, sel span, speech []span, transcript, heard string) 
 	return refcheck.Measure(b, o), nil
 }
 
-// refQuality is a report as a voice keeps it: grade and hints for use u,
-// what the cleaning did, and how long the original was.
-func refQuality(r refcheck.Report, u refcheck.Use, cleaned []string, originalSeconds float64) *core.RefQuality {
-	q := &core.RefQuality{Grade: string(r.Grade(u)), Cleaned: cleaned, OriginalSeconds: originalSeconds}
-	for _, h := range r.Hints(u) {
+// refQuality is a report as a voice keeps it: its hints for dialogue
+// (a superset: refCheckView shows those of the use at hand), its grade as
+// a clone reference, what the cleaning did, and how long the original was.
+func refQuality(r refcheck.Report, cleaned []string, originalSeconds float64) *core.RefQuality {
+	q := &core.RefQuality{Grade: string(r.Grade(refcheck.UseClone)), Cleaned: cleaned, OriginalSeconds: originalSeconds}
+	for _, h := range r.Hints(refcheck.UseDialogue) {
 		q.Hints = append(q.Hints, h.Code)
 	}
 	return q
@@ -122,32 +124,33 @@ func refHintText(code string, denoised bool) string {
 	return ""
 }
 
-// refCheckView shows a reference's grade and its first two hints.
-func refCheckView(c *ui.Context, key string, q *core.RefQuality) {
+// refCheckView shows a reference's grade for use u and its first two
+// hints.
+func refCheckView(c *ui.Context, key string, q *core.RefQuality, u refcheck.Use) {
 	if q == nil || q.Grade == "" {
 		return
 	}
 	t := c.Theme()
 	k := tok(t)
-	denoised := false
-	for _, s := range q.Cleaned {
-		denoised = denoised || s == "denoised"
-	}
+	denoised := slices.Contains(q.Cleaned, "denoised")
+	g := refcheck.GradeOf(q.Hints, u)
 	ic, col := icons.CheckCircle, t.Success
-	switch refcheck.Grade(q.Grade) {
+	switch g {
 	case refcheck.OK:
 		ic, col = icons.InfoCircle, k.Text2
 	case refcheck.Poor:
 		ic, col = icons.DangerTriangle, t.Warning
 	}
 	ui.Column(c.Key(key)).Gap(px(t, 2)).MinWidth(0).Children(func() {
-		statusMark(c, ic, col, refGradeText(q.Grade))
-		for i, h := range q.Hints {
-			if i == 2 {
-				break
+		statusMark(c, ic, col, refGradeText(string(g)))
+		shown := 0
+		for _, h := range q.Hints {
+			if shown == 2 || !refcheck.ForUse(h, u) {
+				continue
 			}
 			if s := refHintText(h, denoised); s != "" {
 				caption(c, s).MinWidth(0)
+				shown++
 			}
 		}
 	})

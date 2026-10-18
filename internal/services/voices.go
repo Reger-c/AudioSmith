@@ -339,6 +339,27 @@ func (s *Voices) Lock(ctx context.Context, id, takeID string) (core.Voice, error
 	})
 }
 
+// CleanReference makes the cleaned clip at path the voice's reference;
+// the current one becomes RefOriginal (its cached prompts go).
+func (s *Voices) CleanReference(ctx context.Context, id, path string, seconds float64, q *core.RefQuality) (core.Voice, error) {
+	return s.update(ctx, id, func(v *core.Voice) ([]string, error) {
+		if v.RefAudio == "" || v.RefOriginal != "" {
+			return nil, fmt.Errorf("voice %s: no reference to clean: %w", id, core.ErrInvalid)
+		}
+		name := "cleaned.wav"
+		if err := copyInto(ctx, path, s.FilePath(*v, name)); err != nil {
+			return nil, err
+		}
+		var obsolete []string
+		for _, p := range v.Prompts {
+			obsolete = append(obsolete, p)
+		}
+		v.RefOriginal, v.RefAudio, v.Prompts = v.RefAudio, name, nil
+		v.RefSeconds, v.RefCheck = seconds, q
+		return obsolete, nil
+	})
+}
+
 // RevertReference undoes the automatic cleaning of a voice's reference:
 // the original becomes the reference again (its cached prompts go).
 func (s *Voices) RevertReference(ctx context.Context, id string) (core.Voice, error) {

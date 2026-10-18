@@ -169,6 +169,8 @@ func (a *app) voiceCard(c *ui.Context, v *core.Voice) {
 		playing := a.voicePlaying(v)
 		if j := a.voiceJob("sample", v.ID); j.running() {
 			ui.Spinner(c).Label(i18n.T("Rendering the sample…"))
+		} else if a.refMaking(v.ID) != nil {
+			ui.Spinner(c).Label(i18n.T("Making a reference…")).Tooltip(i18n.T("Making a reference…"))
 		} else if hovered || playing || selected {
 			label, ic := i18n.T("Preview"), icons.Play
 			if playing {
@@ -191,6 +193,11 @@ func (a *app) voiceCard(c *ui.Context, v *core.Voice) {
 						then(v)
 					}
 				})
+				if canMakeReference(v) && v.RefAudio == "" && m.Item(i18n.T("Make reference")).Disabled(a.refMaking(id) != nil).Chosen() {
+					if v := a.findVoice(id); v != nil {
+						a.makeReference(v, nil)
+					}
+				}
 				if canMakePortable(v) && m.Item(i18n.T("Make a portable copy (approximate)")).Chosen() {
 					if v := a.findVoice(id); v != nil {
 						a.makePortable(v)

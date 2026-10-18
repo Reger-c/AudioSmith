@@ -5,7 +5,9 @@ package main
 // and dialogue models copy a reference's intonation, pace and loudness,
 // so the short greeting a designed voice's sample says is a poor one. The
 // voice says refCandidates lively everyday texts (voicedesign's reference
-// texts, 10–14 s); each take is tidied (refcheck.Tidy), measured and heard
+// texts, 10–14 s, no fillers), asked to talk casually (#81's group D, the
+// user's pick by ear: added to a designed voice's description, or a
+// built-in speaker's instruction when its model takes one); each take is tidied (refcheck.Tidy), measured and heard
 // by the recognizer, and the best is kept (refcheck.Pick: no fault, the
 // pitch nearest the voice's sample). A designed voice keeps it as its
 // reference (RefAudio, RefText: what it says exactly), apart from its
@@ -22,6 +24,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dsp/refcheck"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
+	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/licence"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
@@ -110,6 +113,10 @@ func (a *app) makeReference(v *core.Voice, then func(ok bool)) {
 		return
 	}
 	fail := func(msg string) {
+		if a.refMakes == nil {
+			a.refMakes = map[string]*refMake{}
+		}
+		a.refMakes[key] = &refMake{key: key, voiceID: v.ID, err: msg}
 		a.toast(msg)
 		if then != nil {
 			then(false)
@@ -131,13 +138,19 @@ func (a *app) makeReference(v *core.Voice, then func(ok bool)) {
 	if then != nil {
 		m.then = append(m.then, then)
 	}
+	// Asked to talk casually, as #81's group D (which the user preferred):
+	// models that take the description as written.
+	voice := low.Voice
+	if eng, ok := vd.EngineFor(e.Family, e.Repo); ok && eng.Vocabulary == vd.VocabFreeform {
+		voice = vd.WithStyle(voice, vd.ConversationalStyle(designTextLang(lang)))
+	}
 	reg := r.Attrs.Register()
 	if r.Attrs.IsAuto() && r.Description != "" {
 		reg = vd.Parse(r.Description).Attrs.Register()
 	}
 	var takes []core.Take
 	for _, text := range vd.ReferenceTexts(lang, reg)[:refCandidates] {
-		takes = append(takes, core.Take{Text: text, Model: e.Repo, Voice: low.Voice, Seed: r.Seed, Language: modelLanguage(e, lang), VoiceID: v.ID})
+		takes = append(takes, core.Take{Text: text, Model: e.Repo, Voice: voice, Seed: r.Seed, Language: modelLanguage(e, lang), VoiceID: v.ID})
 	}
 	id := v.ID
 	a.startRefMake(m, takes, func() {
@@ -164,6 +177,9 @@ func (a *app) makePortableRef(pj portableJob, t core.Take, retry func()) {
 		return
 	}
 	m := &refMake{key: key, portable: &pj, model: t.Model, lang: vd.RefLang(pj.lang)}
+	if entryFor(t.Model).Has(catalog.CapInstruct) && t.Voice != "" { // "Speaker, instruction"
+		t.Voice += ", " + vd.ConversationalStyle(pj.lang)
+	}
 	var takes []core.Take
 	for _, text := range vd.ReferenceTexts(pj.lang, vd.RegisterAdult)[:refCandidates] {
 		c := t
@@ -366,7 +382,7 @@ func (a *app) refFinish(m *refMake, best *refCand, err string) {
 		done(false, err)
 		return
 	}
-	q := refQuality(best.check.Tidy, refcheck.UseDialogue, []string{"tidied"}, best.check.Raw.Seconds)
+	q := refQuality(best.check.Tidy, []string{"tidied"}, best.check.Raw.Seconds)
 	raw := a.takeStore.AudioPath(*best.take)
 	if pj := m.portable; pj != nil {
 		a.savePortable(*pj, portableFiles{path: best.path, original: raw, text: best.text, seconds: best.secs, model: m.model, check: q}, func(ok bool) {
@@ -401,13 +417,26 @@ func (a *app) refFinish(m *refMake, best *refCand, err string) {
 	})
 }
 
-// ensureReferences makes the references the voices lack (needsReference)
-// and runs then once every one is made or failed; at once when none is
-// missing. It says how many it makes.
+// canMakeReferenceNow reports whether v's reference can be made without
+// asking anything: its design model's licence is accepted (or needs none)
+// and the model is not known to be missing.
+func (a *app) canMakeReferenceNow(v *core.Voice) bool {
+	e, ok := a.designModelFor(v.CreatedWith)
+	if !ok || licence.Required(e) != nil && !licence.Covers(a.accepted, e) {
+		return false
+	}
+	m := a.model(e)
+	return !m.known || m.local.State == hub.Downloaded
+}
+
+// ensureReferences makes the references the voices lack (needsReference),
+// when that asks nothing of the user (canMakeReferenceNow), and runs then
+// once every one is made or failed; at once when none is made. It says
+// how many it makes.
 func (a *app) ensureReferences(vs []*core.Voice, then func()) int {
 	var need []*core.Voice
 	for _, v := range vs {
-		if needsReference(v) && !slices.ContainsFunc(need, func(x *core.Voice) bool { return x.ID == v.ID }) {
+		if needsReference(v) && a.canMakeReferenceNow(v) && !slices.ContainsFunc(need, func(x *core.Voice) bool { return x.ID == v.ID }) {
 			need = append(need, v)
 		}
 	}

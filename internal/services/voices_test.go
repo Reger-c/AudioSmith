@@ -280,3 +280,71 @@ func TestGalleryFavorites(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// TestVoiceReferenceCleaning (thread #83): a reference saved with its
+// original keeps both; cleaning a reference in place keeps the original,
+// the lock and the consent; Undo brings the original back; a designed
+// voice's reference keeps its lock and can be removed.
+func TestVoiceReferenceCleaning(t *testing.T) {
+	e := newEnv(t, nil)
+	vs := e.svc.Voices
+	dir := t.TempDir()
+	clean := writeFile(t, filepath.Join(dir, "clean.wav"), testWAV(2400))
+	orig := writeFile(t, filepath.Join(dir, "orig.wav"), testWAV(4800))
+	q := &core.RefQuality{Grade: "ok", Hints: []string{"noisy"}, Cleaned: []string{"denoised", "tidied"}, OriginalSeconds: 0.2}
+	v, err := vs.SaveFiles(ctx, core.Voice{Name: "Me", Kind: core.VoiceCloned, RefSeconds: 0.1, RefCheck: q},
+		core.VoiceFiles{Reference: clean, Original: orig})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.RefAudio != "reference.wav" || v.RefOriginal != "original.wav" || v.RefCheck.Grade != "ok" || !exists(vs.FilePath(v, "original.wav")) {
+		t.Fatalf("saved %+v", v)
+	}
+	// Undo: the original is the reference again.
+	v, err = vs.RevertReference(ctx, v.ID)
+	if err != nil || v.RefAudio != "original.wav" || v.RefOriginal != "" || v.RefSeconds != 0.2 || len(v.RefCheck.Cleaned) != 0 || exists(vs.FilePath(v, "reference.wav")) {
+		t.Fatalf("reverted %+v %v", v, err)
+	}
+	if _, err := vs.RevertReference(ctx, v.ID); !errors.Is(err, core.ErrInvalid) {
+		t.Errorf("revert twice: %v", err)
+	}
+	// Cleaned in place (an import): consent stays.
+	rec := writeFile(t, filepath.Join(dir, "consent.wav"), testWAV(100))
+	if _, err := vs.SetConsent(ctx, v.ID, core.ConsentRecording{Audio: rec, Statement: "I agree."}); err != nil {
+		t.Fatal(err)
+	}
+	v, err = vs.CleanReference(ctx, v.ID, clean, 0.1, &core.RefQuality{Grade: "good", Cleaned: []string{"tidied"}, OriginalSeconds: 0.2})
+	if err != nil || v.RefAudio != "cleaned.wav" || v.RefOriginal != "original.wav" || !v.Verified() || v.RefSeconds != 0.1 {
+		t.Fatalf("cleaned %+v %v", v, err)
+	}
+	if _, err := vs.CleanReference(ctx, v.ID, clean, 0.1, nil); !errors.Is(err, core.ErrInvalid) {
+		t.Errorf("clean twice: %v", err)
+	}
+	// A new clip with no original drops the old original.
+	v, err = vs.SaveFiles(ctx, v, core.VoiceFiles{Reference: clean})
+	if err != nil || v.RefOriginal != "" || exists(vs.FilePath(v, "original.wav")) || v.Verified() {
+		t.Fatalf("new clip %+v %v", v, err)
+	}
+
+	// A designed voice: its reference keeps the lock; RemoveReference.
+	d, err := vs.SaveFiles(ctx, core.Voice{Name: "Mom", Kind: core.VoiceDesigned, Design: "a mother"}, core.VoiceFiles{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk := core.Take{ID: "t1", Text: "Hi.", Model: "m", Seed: 5, VoiceID: d.ID, File: "t1.wav", CreatedAt: time.Now()}
+	if err := e.st.Takes().Put(ctx, tk); err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(e.st.Takes().AudioDir(), 0o755)
+	writeFile(t, e.st.Takes().AudioPath(tk), testWAV(100))
+	if d, err = vs.Lock(ctx, d.ID, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	d.RefText = "What it says."
+	if d, err = vs.SaveFiles(ctx, d, core.VoiceFiles{Reference: clean}); err != nil || !d.Locked || d.RefAudio == "" || d.RefText != "What it says." {
+		t.Fatalf("designed reference %+v %v", d, err)
+	}
+	if d, err = vs.SaveFiles(ctx, d, core.VoiceFiles{RemoveReference: true}); err != nil || d.RefAudio != "" || d.RefText != "" || exists(vs.FilePath(d, "reference.wav")) {
+		t.Fatalf("removed %+v %v", d, err)
+	}
+}

@@ -129,7 +129,7 @@ func (a *app) cloneQuality() *core.RefQuality {
 	if s.check == nil {
 		return nil
 	}
-	q := refQuality(*s.check, refcheck.UseClone, cloneCleaned(s), s.sel().Len())
+	q := refQuality(*s.check, cloneCleaned(s), s.sel().Len())
 	if s.noisy && !strings.Contains(strings.Join(q.Hints, ","), refcheck.CodeNoisy) && s.check.SNR >= refcheck.NoisySNR {
 		// Denoised since: say so.
 		q.Hints = append([]string{refcheck.CodeNoisy}, q.Hints...)
@@ -182,7 +182,7 @@ func (a *app) cloneCleanup(c *ui.Context) {
 	t := c.Theme()
 	s := &a.clone
 	a.cloneRecheck()
-	refCheckView(c, "clone-check", a.cloneQuality())
+	refCheckView(c, "clone-check", a.cloneQuality(), refcheck.UseClone)
 	ui.Row(c.Key("clone-cleanup")).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
 		switch {
 		case s.busy != "":
