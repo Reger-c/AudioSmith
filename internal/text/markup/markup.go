@@ -13,6 +13,7 @@
 //	[voice:NAME]       switch voice; [voice:] or [voice:default] resets
 //	[laughter] [sigh]… non-verbal tags (Options.NonVerbal), passed through
 //	[[word|say]]       one-off pronunciation override
+//	[对话] … [/对话]    a dialogue block (also [dialogue], 【对话】; dialogue.go)
 //	blank line         paragraph break
 //
 // Any other bracket token is Unknown (it will be read aloud literally) and
@@ -42,9 +43,10 @@ const (
 	Override              // [[word|say]]: Text = word, Say = respelling
 	Paragraph             // blank line(s) between paragraphs
 	Unknown               // unrecognised [tag]: Text = the raw tag, Name = inner text
+	Dialogue              // a dialogue block's marker: Name "open" or "close" (dialogue.go); never spoken
 )
 
-var kindNames = [...]string{"text", "pause", "style_on", "style_off", "voice", "chapter", "non_verbal", "override", "paragraph", "unknown"}
+var kindNames = [...]string{"text", "pause", "style_on", "style_off", "voice", "chapter", "non_verbal", "override", "paragraph", "unknown", "dialogue"}
 
 func (k Kind) String() string {
 	if int(k) < len(kindNames) {
@@ -220,7 +222,17 @@ func (p *parser) hasContent() bool {
 func (p *parser) inline(start, end int) {
 	seg := p.src[start:end]
 	prev := 0
-	for _, t := range text.Tags(seg) {
+	tags := text.Tags(seg)
+	if strings.Contains(seg, "【") {
+		// 【对话】 markers are tags too.
+		for _, m := range markers(seg) {
+			if strings.HasPrefix(m.span.Of(seg), "【") {
+				tags = append(tags, m.span)
+			}
+		}
+		slices.SortFunc(tags, func(a, b text.Span) int { return a.Start - b.Start })
+	}
+	for _, t := range tags {
 		if t.Start > prev {
 			p.addText(start+prev, start+t.Start)
 		}
@@ -238,6 +250,11 @@ func (p *parser) addText(a, b int) {
 
 func (p *parser) tag(sp text.Span) {
 	raw := sp.Of(p.src)
+	if strings.HasPrefix(raw, "【") {
+		open, _ := dialogueWord(strings.TrimSuffix(strings.TrimPrefix(raw, "【"), "】"))
+		p.toks = append(p.toks, Token{Kind: Dialogue, Span: sp, Name: openClose(open)})
+		return
+	}
 	if strings.HasPrefix(raw, "[[") {
 		word, say, ok := text.SplitOverride(raw)
 		if !ok || word == "" || say == "" {
@@ -291,6 +308,9 @@ func (p *parser) tag(sp text.Span) {
 		p.toks = append(p.toks, Token{Kind: StyleOff, Span: sp, Name: st})
 	case p.nonVerbal[lower]:
 		p.toks = append(p.toks, Token{Kind: NonVerbal, Span: sp, Name: lower})
+	case isDialogueWord(inner):
+		open, _ := dialogueWord(inner)
+		p.toks = append(p.toks, Token{Kind: Dialogue, Span: sp, Name: openClose(open)})
 	default:
 		if !p.reported[lower] {
 			p.reported[lower] = true
@@ -535,7 +555,7 @@ func (d *Document) Runs() []Run {
 					break
 				}
 			}
-		case Paragraph:
+		case Paragraph, Dialogue:
 		default:
 			out = append(out, Run{Token: t, Chapter: chapterAt(i), Voice: voice, Styles: styles})
 		}

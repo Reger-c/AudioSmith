@@ -153,6 +153,9 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 	// gapBefore is the silence before line li.
 	gapBefore := func(li int) float64 {
 		l, prev := p.Lines[li], p.Lines[li-1]
+		if g, ok := blockGap(prev, l); ok { // inside a book's dialogue block (book_dialogue_render.go)
+			return g
+		}
 		if paced {
 			if p.Production.NoEmotionGaps {
 				return TurnGap(turns, prev, l)
@@ -185,6 +188,10 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 			return nil, "", nil, err
 		}
 		dialogued = d
+		if p.book() && len(d) > 0 {
+			// Its lines are levelled to the narration (book_dialogue_render.go).
+			fmt.Fprintf(h, "book dialogue level %v\x00", !p.Production.NoLevel)
+		}
 	}
 	// The merged turns, by their first line: of lines not in a track.
 	merged := map[int][]int{}

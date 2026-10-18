@@ -22,6 +22,8 @@ type compiler struct {
 	problems []Problem
 	reported map[string]bool
 	repeats  map[string]int
+	blocks   []DialogueBlockInfo // a manuscript's dialogue blocks (book_dialogue.go)
+	names    []string            // its [voice:] names, once asked for
 }
 
 func (c *compiler) problem(p Problem) {
@@ -56,6 +58,11 @@ func (c *compiler) voice(ref string) (string, bool) {
 // set mean the spec must not be rendered.
 func Compile(d *LongformDoc, resolve VoiceResolver) (LongformSpec, []Problem) {
 	c := &compiler{d: d, resolve: resolve, reported: map[string]bool{}, repeats: map[string]int{}}
+	return c.compile()
+}
+
+func (c *compiler) compile() (LongformSpec, []Problem) {
+	d := c.d
 	c.spec = LongformSpec{Kind: d.Kind, Title: strings.TrimSpace(d.Title), Model: d.Model, Lang: d.Language, Seed: d.Seed,
 		Voices: map[string]core.Take{}, Production: d.Production, Book: d.Book, Format: d.Format, Stems: d.Stems,
 		Lexicon: cleanLexicon(d.Lexicon)}
@@ -203,6 +210,8 @@ func (c *compiler) castVoice(ref, name string, ch, line int) (string, string, bo
 func (c *compiler) manuscript() {
 	d := c.d
 	doc := markup.Parse(d.Script, nil)
+	blocks, bdiags := markup.DialogueBlocks(d.Script)
+	c.blockProblems(bdiags)
 	for _, dg := range doc.Diags {
 		switch dg.Code {
 		case markup.CodeUnknownTag:
@@ -250,7 +259,14 @@ func (c *compiler) manuscript() {
 				c.problem(Problem{Code: ProblemMissingVoice, Blocking: true, Chapter: ci, Line: -1, Params: map[string]string{"voice": d.Voice}})
 			}
 		}
-		for _, ls := range c.spans(src, def, narrator, true, ci, -1, lookup(ci)) {
+		start, end := toks[0].Span.Start, toks[len(toks)-1].Span.End
+		var lines []LineSpec
+		if bs := blocksIn(blocks, start, end); len(bs) > 0 {
+			lines = c.withBlocks(d.Script, start, end, bs, bookChapter{ch: ci, spec: len(c.spec.Chapters), def: def, narrator: narrator, defOK: defOK, lookup: lookup(ci)})
+		} else {
+			lines = c.spans(src, def, narrator, true, ci, -1, lookup(ci))
+		}
+		for _, ls := range lines {
 			ls.Speed = d.Speed
 			ch.Lines = append(ch.Lines, c.counted(ls))
 		}
@@ -260,12 +276,17 @@ func (c *compiler) manuscript() {
 		c.spec.Chapters = append(c.spec.Chapters, ch)
 	}
 	out := c.spec.Chapters[:0]
-	for _, ch := range c.spec.Chapters {
+	index := make([]int, len(c.spec.Chapters)) // before → after
+	for i, ch := range c.spec.Chapters {
+		index[i] = len(out)
 		if len(ch.Lines) > 0 {
 			out = append(out, ch)
 		}
 	}
 	c.spec.Chapters = out
+	for i := range c.blocks {
+		c.blocks[i].Chapter = index[c.blocks[i].Chapter]
+	}
 }
 
 // counted sets a line's Repeat: how many earlier lines say the same with
@@ -289,13 +310,27 @@ func (c *compiler) counted(l LineSpec) LineSpec {
 // next one. Styles open across a switch are closed at its end and opened
 // again after it. lookup resolves a [voice:NAME].
 func (c *compiler) spans(src, key, who string, paragraphs bool, ch, line int, lookup func(string) (string, string, bool)) []LineSpec {
+	at := voiceAt{key: key, who: who, ok: key != ""}
+	return c.spansFrom(src, &at, who, paragraphs, lookup)
+}
+
+// voiceAt is the voice a manuscript is in at a point: a [voice:] switch
+// lasts until the next one, across the pieces a chapter's dialogue
+// blocks cut it into (book_dialogue.go).
+type voiceAt struct {
+	key, who string
+	ok       bool
+}
+
+// spansFrom is spans from the voice at, which it leaves as the text ends.
+func (c *compiler) spansFrom(src string, at *voiceAt, who string, paragraphs bool, lookup func(string) (string, string, bool)) []LineSpec {
 	doc := markup.Parse(src, &markup.Options{NoChapters: true})
 	var out []LineSpec
 	var cur LineSpec
 	var b strings.Builder
 	var styles []string
-	voice, character := key, who
-	ok := key != ""
+	voice, character, ok := at.key, at.who, at.ok
+	defer func() { at.key, at.who, at.ok = voice, character, ok }()
 	flushSpan := func() {
 		t := strings.TrimSpace(b.String())
 		for i := len(styles) - 1; i >= 0; i-- {
@@ -330,6 +365,8 @@ func (c *compiler) spans(src, key, who string, paragraphs bool, ch, line int, lo
 		case markup.Voice:
 			flushSpan()
 			voice, character, ok = lookup(t.Name)
+		case markup.Dialogue:
+			// A stray or nested dialogue marker: never spoken.
 		case markup.StyleOn:
 			styles = append(styles, t.Name)
 			b.WriteString(t.Span.Of(src))

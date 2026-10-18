@@ -75,11 +75,12 @@ type Rules struct {
 // lines (short narration between them does not end it); a dub groups
 // conversations (a silence over 4 s ends one; at least two voices taking
 // turns at least twice; monologues of 4 lines or 30 s stay line by line);
-// an audiobook groups inside its blocks only.
+// an audiobook groups inside its blocks only, a segment of one voice being
+// read line by line (a block of one speaker; thread #88).
 var (
 	StoryRules = Rules{}
 	DubRules   = Rules{MaxGap: 4, MinVoices: 2, MinChanges: 2, MonologueLines: 4, MonologueSeconds: 30}
-	BookRules  = Rules{Blocks: true}
+	BookRules  = Rules{Blocks: true, MinVoices: 2}
 )
 
 // Story asides: a narration line of at most this many unspaced

@@ -63,6 +63,9 @@ type LineSpec struct {
 	Direction string `json:"direction,omitempty"`
 	Intensity int    `json:"intensity,omitempty"`
 	Persona   string `json:"persona,omitempty"`
+	// Block is the dialogue block of a manuscript the line is in
+	// (book_dialogue.go), from 1 in its chapter; 0: none.
+	Block int `json:"block,omitempty"`
 	// Emotion (story_emotion.go): the line's feeling, a steady line's
 	// being its character's baseline; with it, the instruction is made
 	// from Emotion and Intensity (0–3), Direction being the user's own
@@ -101,6 +104,17 @@ const (
 	ProblemEmptyChapter  = "longform.empty_chapter"  // [title]
 	ProblemUnknownTag    = "longform.unknown_tag"    // read aloud [tag]
 	ProblemDuplicateWord = "longform.duplicate_word" // the lexicon lists a word twice [word]
+
+	// A manuscript's dialogue blocks (book_dialogue.go); none blocks.
+	ProblemDialogueUnclosed   = "longform.dialogue_unclosed"    // a block ends with its chapter [at: "heading" when a heading ended it]
+	ProblemDialogueNested     = "longform.dialogue_nested"      // an opening marker inside a block, ignored
+	ProblemDialogueStrayClose = "longform.dialogue_stray_close" // a closer outside a block, ignored
+	ProblemDialogueEmpty      = "longform.dialogue_empty"       // a block with nothing to say, ignored
+	ProblemDialogueUncast     = "longform.dialogue_uncast"      // names in a block without a voice [names]: voices are given at render
+	ProblemDialogueOneSpeaker = "longform.dialogue_one_speaker" // one speaker: read line by line
+	ProblemDialogueUnknown    = "longform.dialogue_unknown"     // "？" turns nobody was found for: the narrator reads them [count]
+	ProblemDialogueLanguage   = "longform.dialogue_language"    // not Chinese or English: read line by line [lang]
+	ProblemDialogueTags       = "longform.dialogue_tags"        // tags the dialogue model leaves out [tags]
 )
 
 // Untitled is the title of chapter n (1-based) without one, for cue sheets
