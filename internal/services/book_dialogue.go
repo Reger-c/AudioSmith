@@ -199,7 +199,7 @@ func (c *compiler) block(src string, b markup.DialogueBlock, n int, bc bookChapt
 				}
 			}
 			for _, t := range text.Tags(say) {
-				if tag := strings.ToLower(t.Of(say)); !strings.HasPrefix(tag, "[[") && !containsKey(info.Tags, tag) {
+				if tag := strings.ToLower(t.Of(say)); !strings.HasPrefix(tag, "[[") && !strings.HasPrefix(tag, "[/") && !containsKey(info.Tags, tag) {
 					info.Tags = append(info.Tags, tag)
 				}
 			}
