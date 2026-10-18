@@ -1,0 +1,30 @@
+{
+  "_comment": "Reference texts (thread #83, after #81 §4.3): what a designed or built-in voice says to make its reference, the clip clone and dialogue models copy it from. 10–14 s each (Chinese 45–60 characters, English 30–40 words): vivid everyday narration, as if telling someone about a small thing, with questions and exclamations; no talk about the recording itself, few fillers (VoiceDesign says 嗯…… slowly), nothing a story is likely to say. Keys: language, then register (adult, child).",
+  "zh": {
+    "adult": [
+      "上周末我去爬山，本来以为一个小时就能到顶，结果走了快三个小时！你猜怎么着？山顶的风景美得不得了，一点都不后悔。",
+      "昨天晚上楼下那家面馆排了好长的队，我也好奇地排了一会儿。牛肉面一端上来，香得不行！你下次要不要一起去尝尝？",
+      "早上出门才发现忘了带伞，雨一下子就大了。我只好躲进旁边的书店，没想到还淘到一本找了好久的旧书，真是意外的收获！",
+      "我最近在学做饭，第一次炒青菜盐放多了，咸得根本吃不下。不过现在好多了，昨天做的番茄炒蛋，家里人都说好吃呢！"
+    ],
+    "child": [
+      "今天放学的时候，我在路上看见一只小鸟，它飞得好高好高呀！我追了好久好久，你说它是不是要飞回家找妈妈了？",
+      "我们班今天开运动会，我跑了第二名！最后一圈我的腿都快没力气了，可是大家都在喊加油，我就一口气冲过去啦！",
+      "奶奶家的院子里种了好多西红柿，红红的，圆圆的。我摘了一个最大的，咬一口好甜呀！你吃过刚摘下来的西红柿吗？",
+      "昨天晚上下雪啦！我和小伙伴在操场上堆了一个大雪人，还给它戴上了我的红帽子。你说它看起来是不是特别神气？"
+    ]
+  },
+  "en": {
+    "adult": [
+      "Last weekend I finally tried that little noodle place around the corner. The line went all the way down the street! Was it worth it? Honestly, yes. I'm already planning to go back on Friday.",
+      "This morning I missed my bus by about ten seconds. I was just standing there, coffee in hand, watching it pull away! Then a friend drove past and gave me a ride. How lucky is that?",
+      "I've been learning to bake bread, and my first loaf was as hard as a rock. My brother tried to cut it and the knife just bounced off! The third one, though, came out perfect.",
+      "On Sunday we hiked up the hill behind the town. I thought it would take an hour, but it took almost three! The view from the top was amazing. Have you ever been up there?"
+    ],
+    "child": [
+      "Guess what? Today at school we had a race, and I came second! My legs were so tired at the end, but everyone was cheering, so I just kept running as fast as I could!",
+      "Grandma has a garden full of tomatoes. I picked the biggest one and it was so sweet! Have you ever eaten a tomato right off the plant? It's way better than the ones from the shop.",
+      "It snowed last night! My friends and I built a huge snowman in the playground and gave him my red hat. Doesn't he look funny? I want to build another one tomorrow!"
+    ]
+  }
+}

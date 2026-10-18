@@ -69,7 +69,8 @@ type VoiceService interface {
 	Save(ctx context.Context, v Voice) (Voice, error)
 	// SaveFiles is Save that first copies files into the voice's directory.
 	// A new reference clears the lock and a verified consent (the new clip
-	// may be another speaker).
+	// may be another speaker), except a designed voice's (rendered from
+	// the voice itself).
 	SaveFiles(ctx context.Context, v Voice, f VoiceFiles) (Voice, error)
 	Delete(ctx context.Context, id string) error
 	// Import reads a .asvoice (or VoiceStudio .ovsvoice) package into a new
@@ -104,6 +105,11 @@ type VoiceQuery struct {
 // leave the voice's files as they are.
 type VoiceFiles struct {
 	Reference string // audio file (absolute path): the new clone reference
+	// Original is the new reference before it was cleaned (Reference is
+	// the cleaned one); RemoveReference removes the reference (a designed
+	// voice whose design changed).
+	Original        string
+	RemoveReference bool
 	Sample    string // audio file: a rendered sample (designed voices)
 	// Portrait is the new portrait, a PNG (already cropped to 256×256);
 	// RemovePortrait deletes the current one.

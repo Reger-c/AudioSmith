@@ -59,9 +59,9 @@ type voicesState struct {
 	// voiceWork the other engine jobs they wait for, by owner.
 	voiceJobs map[string]*voiceJob
 	voiceWork map[string]func(jobs.Job)
-	// portableJobs are the portable copies being rendered, by take id
-	// (voice_portable.go).
-	portableJobs map[string]portableJob
+	// refMakes are the references being made from voices (a designed
+	// voice's, a portable copy's), by key (voice_reference.go).
+	refMakes map[string]*refMake
 }
 
 // clipRef is a reference clip used without saving it as a voice.

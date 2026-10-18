@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dsp/dsptest"
+	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
@@ -157,8 +160,14 @@ func TestDialogueRender(t *testing.T) {
 		t.Fatalf("calls %d, result %+v", len(fd.calls), res)
 	}
 	first, redo := fd.calls[0], fd.calls[1]
-	if len(first.Speakers) != 2 || first.Speakers[1].RefAudio != clone || first.Speakers[0].RefText != PortableLine("zh") || len(first.Turns) != 4 {
+	if len(first.Speakers) != 2 || !strings.Contains(first.Speakers[1].RefAudio, "/chunks/ref-") || first.Speakers[0].RefText != PortableLine("zh") || len(first.Turns) != 4 {
 		t.Errorf("first call %+v", first)
+	}
+	// The clone's clip is tidied: evened out to −18 LUFS like the others.
+	for _, sp := range first.Speakers {
+		if b, _, err := wav.ReadFile(sp.RefAudio); err != nil || math.Abs(loudness.Integrated(b)-(-18)) > 0.3 {
+			t.Errorf("reference %s: %v", sp.RefAudio, err)
+		}
 	}
 	if len(redo.Turns) != 3 || len(redo.Turns[0].Codes) == 0 || len(redo.Turns[1].Codes) == 0 || len(redo.Turns[2].Codes) != 0 || *redo.Seed == *first.Seed {
 		t.Errorf("redo %+v", redo)
@@ -196,6 +205,19 @@ func TestDialogueRender(t *testing.T) {
 	res = run()
 	if res.DialogueFailed != 4 || res.Dialogues != 0 || len(e.synth.texts()) != 6 {
 		t.Errorf("failed segment: %+v, synth %q", res, e.synth.texts())
+	}
+
+	// A designed voice spoken by a model that designs it brings its own
+	// reference (Take.CloneRef): nothing to make on the story's model.
+	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	e.synth.reset()
+	fd.calls, fd.fail = nil, false
+	kidRef := filepath.Join(e.dir, "kid-reference.wav")
+	wav.WriteFile(kidRef, dsptest.Sine(24000, 1, 400, -10, 11, 0), wav.Float32, wav.Options{})
+	spec.Voices["kid"] = core.Take{Voice: "zf_xiaobei", CloneRef: kidRef, CloneRefText: "今天放学的时候，我看见一只小鸟。"}
+	res = run()
+	if len(fd.calls) != 1 || fd.calls[0].Speakers[0].RefText != "今天放学的时候，我看见一只小鸟。" || slices.Contains(e.synth.texts(), PortableLine("zh")) {
+		t.Errorf("designed reference: %+v, synth %q", fd.calls, e.synth.texts())
 	}
 
 	// Off: as before.

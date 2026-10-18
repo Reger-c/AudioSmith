@@ -186,8 +186,14 @@ type Reference struct {
 	End   float64 `json:"end"`
 	Text  string  `json:"text"`
 	Score float64 `json:"score"`
-	// Enhanced: noise was removed (enhance.run).
-	Enhanced bool `json:"enhanced,omitempty"`
+	// Enhanced: noise was removed (enhance.run), as it was noisy; Tidied:
+	// its edges trimmed, long pauses shortened and evened out
+	// (refcheck.Tidy). Grade and Hints are what the reference checker
+	// found in the cut (refcheck codes).
+	Enhanced bool     `json:"enhanced,omitempty"`
+	Tidied   bool     `json:"tidied,omitempty"`
+	Grade    string   `json:"grade,omitempty"`
+	Hints    []string `json:"hints,omitempty"`
 }
 
 // Media are the files the pipeline made, in the project's directory.

@@ -191,36 +191,51 @@ func (a *app) cloneSave() {
 		v.Name, v.RefText, v.Style, v.Language = name, strings.TrimSpace(s.transcript), s.style, s.language
 	}
 	portrait := s.portrait
-	svc, gen := a.lib.svc.Voices, s.gen
-	a.cloneSelection(func(path string, secs float64, err error) {
-		if err != nil {
-			s.saving = false
-			a.toast(i18n.T("Could not save the voice profile: %v", err))
-			return
+	v.RefCheck = a.cloneQuality()
+	gen := s.gen
+	a.cloneOriginal(func(original string) {
+		a.cloneSelection(func(path string, secs float64, err error) {
+			if err != nil {
+				s.saving = false
+				os.Remove(original)
+				a.toast(i18n.T("Could not save the voice profile: %v", err))
+				return
+			}
+			v.RefSeconds = secs
+			a.cloneSaveFiles(v, core.VoiceFiles{Reference: path, Original: original, Portrait: portrait}, gen)
+		})
+	})
+}
+
+// cloneSaveFiles saves the voice with its files (removing the temporary
+// ones), then opens it.
+func (a *app) cloneSaveFiles(v core.Voice, files core.VoiceFiles, gen int) {
+	s := &a.clone
+	svc := a.lib.svc.Voices
+	a.background(func() {
+		saved, err := svc.SaveFiles(context.Background(), v, files)
+		os.Remove(files.Reference)
+		if files.Original != "" {
+			os.Remove(files.Original)
 		}
-		v.RefSeconds = secs
-		a.background(func() {
-			saved, err := svc.SaveFiles(context.Background(), v, core.VoiceFiles{Reference: path, Portrait: portrait})
-			os.Remove(path)
-			a.post(func() {
-				if s.gen == gen {
-					s.saving = false
-				}
-				if err != nil {
-					a.toast(i18n.T("Could not save the voice profile: %v", err))
-					return
-				}
-				if s.replaceFor != "" {
-					a.toast(i18n.T("Reference replaced"))
-				} else {
-					a.toast(i18n.T("Voice profile saved"))
-				}
-				a.voiceChanged(core.VoiceChanged{Voice: saved})
-				a.encodePrompt(saved, a.preset())
-				a.resetClone("") // the next visit to Clone starts with an empty form
-				a.navigate("/voices")
-				a.openVoiceEditor(saved.ID)
-			})
+		a.post(func() {
+			if s.gen == gen {
+				s.saving = false
+			}
+			if err != nil {
+				a.toast(i18n.T("Could not save the voice profile: %v", err))
+				return
+			}
+			if s.replaceFor != "" {
+				a.toast(i18n.T("Reference replaced"))
+			} else {
+				a.toast(i18n.T("Voice profile saved"))
+			}
+			a.voiceChanged(core.VoiceChanged{Voice: saved})
+			a.encodePrompt(saved, a.preset())
+			a.resetClone("") // the next visit to Clone starts with an empty form
+			a.navigate("/voices")
+			a.openVoiceEditor(saved.ID)
 		})
 	})
 }

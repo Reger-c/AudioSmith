@@ -2,7 +2,8 @@ package main
 
 // Portable voices (thread #42): a model's built-in speaker or a designed
 // voice made into a cloned voice that any model that clones can speak
-// with. Its model says a ~10 s line, evened out to −18 LUFS; that take is
+// with. Its model says reference texts (#83: the best of three takes,
+// tidied to −18 LUFS; a designed voice's own reference); that clip is
 // saved as a new cloned voice "<name> (approximate)": a clone of a voice
 // sounds close to it, not the same (#40 measured 0.64–0.70 similarity),
 // so the name and the toast say so.
@@ -14,8 +15,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
-	"github.com/hehehai/AudioSmith/internal/services"
-	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
 // portableTag marks the voices made portable.
@@ -35,41 +34,41 @@ func canMakePortable(v *core.Voice) bool {
 	return v != nil && (v.Kind == core.VoiceBuiltin || v.Kind == core.VoiceDesigned)
 }
 
-// makePortable makes a saved voice portable: a designed voice's sample is
-// used as it is; otherwise its model renders the line first.
+// makePortable makes a saved voice portable: a designed voice's
+// reference is used as it is (made first when it has none; a locked
+// voice's locked take); a built-in voice says refCandidates reference
+// texts, and the best take is kept (voice_reference.go).
 func (a *app) makePortable(v *core.Voice) {
 	if !canMakePortable(v) {
 		return
 	}
 	lang := v.Language
-	if v.Kind == core.VoiceDesigned && v.Sample != "" {
-		a.savePortable(portableJob{name: v.Name, lang: lang, origin: "voice:" + v.ID}, a.voicePath(v, v.Sample), v.SampleText, 0, v.CreatedWith)
+	pj := portableJob{name: v.Name, lang: lang, origin: "voice:" + v.ID}
+	if v.Kind == core.VoiceDesigned {
+		switch {
+		case v.RefAudio != "":
+			a.savePortable(pj, portableFiles{path: a.voicePath(v, v.RefAudio), text: v.RefText, seconds: v.RefSeconds, model: v.CreatedWith, check: v.RefCheck}, nil)
+		case needsReference(v):
+			id := v.ID
+			a.toast(i18n.T("Making a portable copy of “%s”…", v.Name))
+			a.makeReference(v, func(ok bool) {
+				switch v := a.findVoice(id); {
+				case v == nil:
+				case ok:
+					a.makePortable(v)
+				case v.Sample != "": // no reference: its sample, as before
+					a.savePortable(pj, portableFiles{path: a.voicePath(v, v.Sample), text: v.SampleText, model: v.CreatedWith}, nil)
+				}
+			})
+		case v.Sample != "":
+			a.savePortable(pj, portableFiles{path: a.voicePath(v, v.Sample), text: v.SampleText, model: v.CreatedWith}, nil)
+		}
 		return
 	}
-	var t core.Take
-	switch v.Kind {
-	case core.VoiceBuiltin:
-		e := entryFor(v.Model)
-		t = core.Take{Model: e.Repo, Voice: v.Speaker, Language: modelLanguage(e, lang)}
-	case core.VoiceDesigned:
-		e, ok := a.designModelFor(v.CreatedWith)
-		if !ok {
-			a.toast(i18n.T("No model that can design voices is available."))
-			return
-		}
-		r := voiceRecipe(v)
-		if lang == "" {
-			lang = r.Attrs.Language()
-		}
-		low, err := vd.Lower(designTarget(e), r, vd.Options{Lang: designTextLang(lang)})
-		if err != nil {
-			a.toast(err.Error())
-			return
-		}
-		t = core.Take{Model: e.Repo, Voice: low.Voice, Seed: r.Seed, Language: modelLanguage(e, lang)}
-	}
+	e := entryFor(v.Model)
+	t := core.Take{Model: e.Repo, Voice: v.Speaker, Language: modelLanguage(e, lang)}
 	id := v.ID
-	a.renderPortable(portableJob{name: v.Name, lang: lang, origin: "voice:" + v.ID}, t, func() {
+	a.makePortableRef(pj, t, func() {
 		if v := a.findVoice(id); v != nil {
 			a.makePortable(v)
 		}
@@ -88,45 +87,33 @@ func (a *app) makeSpeakerPortable(e catalog.Entry, speaker string) {
 		lang = catalog.BaseLanguage(i18n.Locale())
 	}
 	t := core.Take{Model: e.Repo, Voice: speaker, Language: modelLanguage(e, lang)}
-	a.renderPortable(portableJob{name: speaker, lang: lang, origin: "speaker:" + e.ID + ":" + speaker}, t, func() {
+	a.makePortableRef(portableJob{name: speaker, lang: lang, origin: "speaker:" + e.ID + ":" + speaker}, t, func() {
 		a.makeSpeakerPortable(e, speaker)
 	})
 }
 
-// renderPortable renders the portable line with recipe t, evened out.
-func (a *app) renderPortable(pj portableJob, t core.Take, retry func()) {
-	t.Text = services.PortableLine(pj.lang)
-	t.Render = &core.TakeRender{Bits: 24, Master: services.MasterDefault}
-	if a.portableJobs == nil {
-		a.portableJobs = map[string]portableJob{}
-	}
-	a.toast(i18n.T("Making a portable copy of “%s”…", pj.name))
-	a.voiceGenerate("portable", pj.origin, t, retry)
-	// The job just queued is the newest of its purpose.
-	if j := a.voiceJob("portable", pj.origin); j != nil {
-		a.portableJobs[j.takeID] = pj
-	}
+// portableFiles are what a portable copy is saved from: the reference
+// (path, tidied), the take before tidying (original, if any), what it
+// says, its length, the model that said it and the checker's findings.
+type portableFiles struct {
+	path, original, text string
+	seconds              float64
+	model                string
+	check                *core.RefQuality
 }
 
-// portableTakeCreated saves a rendered portable line as the new voice.
-func (a *app) portableTakeCreated(t core.Take) bool {
-	pj, ok := a.portableJobs[t.ID]
-	if !ok {
-		return false
-	}
-	delete(a.portableJobs, t.ID)
-	a.savePortable(pj, a.takeStore.AudioPath(t), t.Text, t.AudioSeconds, t.Model)
-	return true
-}
-
-// savePortable saves a reference clip as the portable copy.
-func (a *app) savePortable(pj portableJob, path, text string, seconds float64, model string) {
-	v := core.Voice{Name: i18n.T("%s (approximate)", pj.name), Kind: core.VoiceCloned, Language: pj.lang, RefText: text,
-		RefSeconds: seconds, CreatedWith: model, Origin: "portable:" + pj.origin, Tags: []string{portableTag}}
+// savePortable saves a reference clip as the portable copy; then, if
+// given, learns whether it was saved.
+func (a *app) savePortable(pj portableJob, f portableFiles, then func(ok bool)) {
+	v := core.Voice{Name: i18n.T("%s (approximate)", pj.name), Kind: core.VoiceCloned, Language: pj.lang, RefText: f.text,
+		RefSeconds: f.seconds, RefCheck: f.check, CreatedWith: f.model, Origin: "portable:" + pj.origin, Tags: []string{portableTag}}
 	svc := a.lib.svc.Voices
 	a.background(func() {
-		saved, err := svc.SaveFiles(context.Background(), v, core.VoiceFiles{Reference: path})
+		saved, err := svc.SaveFiles(context.Background(), v, core.VoiceFiles{Reference: f.path, Original: f.original})
 		a.post(func() {
+			if then != nil {
+				then(err == nil)
+			}
 			if err != nil {
 				a.toast(i18n.T("Could not save the portable copy: %v", err))
 				return
