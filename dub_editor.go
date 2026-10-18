@@ -211,13 +211,10 @@ func (a *app) dubBadges(s dub.Segment) [][2]string {
 	if rendered && strings.TrimSpace(p.TextFor(s, l)) != "" && (r.Text != p.TextFor(s, l) || r.Start != s.Start) {
 		out = append(out, [2]string{i18n.T("Changed"), "accent"})
 	}
-	if sp := r.Spoken; rendered && sp != nil && !sp.OK() {
-		// The synthesize stage's check (thread #90).
-		if sp.Foreign != "" {
-			out = append(out, [2]string{i18n.T("Wrong language"), "warning"})
-		} else {
-			out = append(out, [2]string{i18n.T("Verify"), "warning"})
-		}
+	if rendered && r.Flag != "" && r.Dialogue == 0 {
+		// The synthesize stage's check (thread #90); a conversation's
+		// line has the badge beside its chip.
+		out = append(out, [2]string{i18n.T("Listen"), "warning"})
 	}
 	if qc := t.QC; qc != nil && !t.QCStale() {
 		for _, q := range qc.Lines {

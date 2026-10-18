@@ -152,8 +152,6 @@ func dubWarningText(code string) string {
 		return i18n.T("Some lines could not be translated: retry them, or write them.")
 	case services.DubWarnLinesFailed:
 		return i18n.T("Some lines could not be generated: they stay silent.")
-	case services.DubWarnLinesUnclear:
-		return i18n.T("Some lines may not say their text in their language, even when made again: listen to the flagged ones and redo or recast them.")
 	case services.WarnNoWordTimes:
 		return i18n.T("Word timings are missing: karaoke subtitles spread the words evenly.")
 	case services.DubWarnDialogueUnavailable:
@@ -161,7 +159,7 @@ func dubWarningText(code string) string {
 	case services.DubWarnDialogueFallback:
 		return i18n.T("Some conversation lines were made line by line: the dialogue model did not say them clearly.")
 	case services.DubWarnLinesFlagged:
-		return i18n.T("Some lines made line by line were not heard clearly either: listen to the lines marked Listen.")
+		return i18n.T("Some lines were not heard clearly, or not in their language, even made again: listen to the lines marked Listen.")
 	}
 	return code
 }

@@ -294,21 +294,41 @@ func dubFallbackText(reason string, e catalog.Entry) string {
 	return i18n.T("The dialogue model could not record this conversation: %s made it alone.", e.DisplayName())
 }
 
-// dubDialogueFlag is a flagged line's warning under it.
+// dubDialogueFlag is a flagged line's warning under it: a conversation's
+// line made line by line, or a line cloned from a clip in another
+// language (thread #90), that failed its check.
 func (a *app) dubDialogueFlag(c *ui.Context, s dub.Segment) {
-	d := a.dubDlgNow
-	if !a.dubDialogueShown(d) {
+	d, lang := a.dubDlgNow, a.dubLang
+	if lang == "" && a.dubDialogueShown(d) {
+		lang = d.lang
+	}
+	if a.dub == nil || lang == "" {
 		return
 	}
-	r, ok := a.dub.Track(d.lang).Lines[s.ID]
-	if !ok || r.Flag == "" || r.Via != dub.ViaFallback {
+	r, ok := a.dub.Track(lang).Lines[s.ID]
+	if !ok || r.Flag == "" || r.File == "" {
 		return
+	}
+	var msg string
+	switch {
+	case r.Via == dub.ViaFallback:
+		if !a.dubDialogueShown(d) {
+			return
+		}
+		switch r.Flag {
+		case dub.FlagHeard:
+			msg = i18n.T("Made line by line, and still not heard clearly (“%s”): listen to it.", r.Heard)
+		case dub.FlagLanguage:
+			msg = i18n.T("Made line by line, and still heard in another language (“%s”): listen to it.", r.Heard)
+		default:
+			msg = i18n.T("Made line by line, and still far too short or long for its text: listen to it.")
+		}
+	case r.Flag == dub.FlagLanguage:
+		msg = i18n.T("Heard in another language, even made again (“%s”): listen to it, or cast another voice.", r.Heard)
+	default:
+		msg = i18n.T("Not heard clearly, even made again (“%s”): listen to it.", r.Heard)
 	}
 	t := c.Theme()
-	msg := i18n.T("Made line by line, and still far too short or long for its text: listen to it.")
-	if r.Flag == dub.FlagHeard {
-		msg = i18n.T("Made line by line, and still not heard clearly (“%s”): listen to it.", r.Heard)
-	}
 	ui.Row(c.Key("dlg-flag")).Gap(px(t, 6)).Children(func() {
 		iconMark(c, icons.DangerTriangle, t.Warning, "")
 		caption(c, msg).TextColor(t.Warning).Grow(1).MinWidth(0)

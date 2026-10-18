@@ -20,7 +20,7 @@
 
 ### Dub: foreign-language videos dubbed into Chinese speak Chinese
 - Dubbing a Japanese or Korean video into Chinese with the default clone model (Qwen3-TTS Base) made many lines in the source language or garbled: given the speaker's clip and its transcript, the model went on in the clip's language (a Japanese test: 9 of 14 lines). Lines in another language than their speaker's clip are now cloned from the clip alone, from its voice print, and come out in the line's language as much like the speaker: in tests from Japanese, Korean, French and English into Chinese and from Chinese into English, 0.4–7 % character errors instead of up to 42 %, and as or more like the speaker. Dubs in the video's own language are made as before.
-- Those lines are also heard again after they are made: a line that is not in its language, or does not say its text, is made once more and the better take kept; one that still fails is marked "Wrong language" or "Verify" in the line list and the step says so, instead of being kept silently.
+- Those lines are also heard again after they are made: a line that is not in its language, or does not say its text, is made once more and the better take kept; one that still fails is marked "Listen" in the line list, with what was heard, and the step says so, instead of being kept silently (the Local API's `flag`: `heard` or `language`). Conversation lines made line by line are checked for the wrong language too.
 - Qwen3-TTS Base, given a clip without its transcript, now clones that voice; it used to speak in no particular voice.
 
 ### Model pickers fit the window; dialogue models in the Stories picker

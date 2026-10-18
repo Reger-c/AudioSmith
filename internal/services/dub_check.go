@@ -5,9 +5,9 @@ package services
 // garbled. Such lines are heard again (speech to text in the line's
 // language, dub.CheckSpoken); one that fails is made once more another
 // way (from the clip alone when its transcript was given, else another
-// seed), the better take is kept, and a line still failing is flagged
-// (Render.Spoken, the stage warning DubWarnLinesUnclear), never kept
-// silently.
+// seed), the better take is kept, and a line still failing is flagged as
+// a conversation's fallback is (Render.Flag and Heard, the stage warning
+// DubWarnLinesFlagged), never kept silently.
 
 import (
 	"context"
@@ -19,10 +19,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 )
-
-// DubWarnLinesUnclear: some checked lines may not say their text in their
-// language (Render.Spoken not OK).
-const DubWarnLinesUnclear = "dub.lines_unclear"
 
 // errNoRecognizer: no speech-to-text model to check a line with.
 var errNoRecognizer = errors.New("dub: no speech-to-text model for the check")
@@ -79,6 +75,7 @@ func retryTake(t core.Take, caps DubModelCaps) core.Take {
 // checking, keeping what was made, when the recognizer cannot run.
 func (s *Dubs) checkLines(ctx context.Context, sc *stageCtx, l, dir string, caps DubModelCaps, lines []checkedLine, rendered map[string]dub.Render) error {
 	p := sc.p
+	heard := map[string]dub.Spoken{}
 	var again []checkedLine
 	for n, c := range lines {
 		seg := p.Segments[c.i]
@@ -91,8 +88,7 @@ func (s *Dubs) checkLines(ctx context.Context, sc *stageCtx, l, dir string, caps
 		if err != nil {
 			return s.uncheckable(ctx, err)
 		}
-		r.Spoken = &sp
-		rendered[seg.ID] = r
+		heard[seg.ID] = sp
 		if !sp.OK() {
 			again = append(again, c)
 		}
@@ -123,7 +119,7 @@ func (s *Dubs) checkLines(ctx context.Context, sc *stageCtx, l, dir string, caps
 			}
 			return s.uncheckable(ctx, err)
 		}
-		if sp.Worse(*first.Spoken) {
+		if sp.Worse(heard[seg.ID]) {
 			if r.File != first.File {
 				os.Remove(sc.path(r.File))
 				os.Remove(sc.path(r.File) + ".txt")
@@ -134,13 +130,15 @@ func (s *Dubs) checkLines(ctx context.Context, sc *stageCtx, l, dir string, caps
 			continue
 		}
 		os.Remove(aside)
-		r.Spoken = &sp
+		heard[seg.ID] = sp
 		rendered[seg.ID] = r
 	}
-	for _, c := range lines {
-		if r := rendered[p.Segments[c.i].ID]; r.Spoken != nil && !r.Spoken.OK() {
-			sc.warn(DubWarnLinesUnclear)
-			break
+	for id, sp := range heard {
+		if f := sp.Flag(); f != "" {
+			r := rendered[id]
+			r.Flag, r.Heard = f, sp.Heard
+			rendered[id] = r
+			sc.warn(DubWarnLinesFlagged)
 		}
 	}
 	return nil

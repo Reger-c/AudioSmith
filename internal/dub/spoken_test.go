@@ -30,6 +30,12 @@ func TestCheckSpoken(t *testing.T) {
 			t.Errorf("%s %q heard %q: %+v ok %v, want ok %v foreign %q", c.lang, c.text, c.heard, s, s.OK(), c.ok, c.foreign)
 		}
 	}
+	if f := CheckSpoken("zh", "带点零食就行。", "お菓子だけ").Flag(); f != FlagLanguage {
+		t.Errorf("flag %q", f)
+	}
+	if f := CheckSpoken("zh", "带点零食就行。", "大田前司").Flag(); f != FlagHeard {
+		t.Errorf("flag %q", f)
+	}
 	if ForeignScript("xx", "本当に") != "" {
 		t.Error("unknown language: no verdict")
 	}

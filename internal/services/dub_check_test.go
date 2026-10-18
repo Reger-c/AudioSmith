@@ -72,10 +72,9 @@ func TestDubCrossLingualClone(t *testing.T) {
 		if n := e.checkCalls(); (n == 6) != c.checked || (n != 0) != c.checked {
 			t.Errorf("%s: %d lines checked", c.name, n)
 		}
-		tr := p.Track(c.target)
-		for id, r := range tr.Lines {
-			if (r.Spoken != nil) != c.checked || r.Spoken != nil && !r.Spoken.OK() {
-				t.Errorf("%s: line %s spoken %+v", c.name, id, r.Spoken)
+		for id, r := range p.Track(c.target).Lines {
+			if r.Flag != "" || r.Heard != "" {
+				t.Errorf("%s: line %s flagged %q %q", c.name, id, r.Flag, r.Heard)
 			}
 		}
 		if st := p.Stage(dub.StageSynthesize, c.target); st.Status != dub.StatusDone || len(st.Warnings) != 0 {
@@ -108,19 +107,22 @@ func TestDubLineCheck(t *testing.T) {
 	tr := p.Track("es")
 	for _, s := range p.Segments {
 		r := tr.Lines[s.ID]
-		if r.File == "" || r.Spoken == nil {
+		if r.File == "" {
 			t.Fatalf("line %q: %+v", s.Text, r)
 		}
 		if _, err := os.Stat(e.dubs.Path(p.ID, r.File)); err != nil {
 			t.Errorf("line %q: %v", s.Text, err)
 		}
-		bad := s.Text == "Goodbye."
-		if r.Spoken.OK() == bad {
-			t.Errorf("line %q: spoken %+v", s.Text, r.Spoken)
+		want, heard := "", ""
+		if s.Text == "Goodbye." {
+			want, heard = dub.FlagHeard, "Sayonara mata ne"
+		}
+		if r.Flag != want || r.Heard != heard {
+			t.Errorf("line %q: flag %q heard %q", s.Text, r.Flag, r.Heard)
 		}
 	}
 	st := p.Stage(dub.StageSynthesize, "es")
-	if !slices.Contains(st.Warnings, DubWarnLinesUnclear) {
+	if !slices.Contains(st.Warnings, DubWarnLinesFlagged) {
 		t.Errorf("stage %+v", st)
 	}
 	left, _ := os.ReadDir(e.dubs.Path(p.ID, "renders/es"))
@@ -142,5 +144,19 @@ func TestRetryTake(t *testing.T) {
 	}
 	if got := retryTake(core.Take{RefAudio: "ref.wav"}, DubModelCaps{CloneAudioOnly: true}); got.Seed == 0 {
 		t.Errorf("clip alone already: %+v", got)
+	}
+}
+
+// TestDubDialogueFallbackLanguage (thread #90): a conversation's line
+// made line by line and heard in another language's script is flagged
+// FlagLanguage.
+func TestDubDialogueFallbackLanguage(t *testing.T) {
+	e, p := dialogueDub(t)
+	e.eng.Garble[zhLines[3]] = 2
+	e.eng.Heard[zhLines[3]] = "ワセジェザケダガーゾ"
+	p = e.run(t, p.ID, RunRequest{Through: dub.StageMix})
+	back := p.Track("zh-Hans").Lines[p.Segments[3].ID]
+	if back.Via != dub.ViaFallback || back.Flag != dub.FlagLanguage || back.Heard != "ワセジェザケダガーゾ" {
+		t.Errorf("given back: %+v", back)
 	}
 }

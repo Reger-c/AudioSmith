@@ -22,7 +22,19 @@ type Spoken struct {
 // OK reports whether the line says its text in its language: the script
 // fits and the error rate is within the check's limit (DriftLimit, as
 // the dub's Verify flags lines).
-func (s Spoken) OK() bool { return s.Foreign == "" && s.Drift <= DriftLimit }
+func (s Spoken) OK() bool { return s.Flag() == "" }
+
+// Flag is the line's Render.Flag: FlagLanguage when heard in another
+// language's script, FlagHeard when it does not say its text, "" when OK.
+func (s Spoken) Flag() string {
+	switch {
+	case s.Foreign != "":
+		return FlagLanguage
+	case s.Drift > DriftLimit:
+		return FlagHeard
+	}
+	return ""
+}
 
 // Worse reports whether s is a worse take of a line than o.
 func (s Spoken) Worse(o Spoken) bool {
