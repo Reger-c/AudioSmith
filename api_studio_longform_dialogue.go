@@ -8,7 +8,6 @@ package main
 // without a voice get their own when the book renders.
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 
@@ -142,28 +141,23 @@ func bookCastJSON(d *services.LongformDoc, voices []core.Voice) []api.CastJSON {
 	return out
 }
 
-// prepareBookRender gives the blocks' uncast speakers voices of their own
-// (saved with the project; returned as name → voice) and readies the
-// spec's dialogue model: the blocks are read line by line when it cannot
-// run.
-func (b *apiBackend) prepareBookRender(ctx context.Context, p core.Project, d *services.LongformDoc, voices []core.Voice) (map[string]string, error) {
+// castBookUncast gives the blocks' uncast speakers voices of their own in
+// d (name → voice; the caller saves it once the render started).
+func (b *apiBackend) castBookUncast(p core.Project, d *services.LongformDoc, voices []core.Voice) map[string]string {
 	if p.Kind != core.ProjectAudiobook {
-		return nil, nil
+		return nil
 	}
 	_, _, blocks := b.compileBook(d, voices)
 	got := castUncast(d, blocks, lfVoicesOf(voices, entryFor(d.Model)))
 	if len(got) == 0 {
-		return nil, nil
-	}
-	if _, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, *d); err != nil {
-		return nil, err
+		return nil
 	}
 	given := map[string]string{}
 	for _, g := range got {
 		name, voice, _ := strings.Cut(g, ": ")
 		given[name] = voice
 	}
-	return given, nil
+	return given
 }
 
 // compileBook compiles a document with the saved voices, with its blocks.

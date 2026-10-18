@@ -235,9 +235,10 @@ func otherSpeaker(items []wrapItem, i int, two []string) string {
 }
 
 // UnwrapDialogue writes block b of src back as paragraphs: a turn as
-// [voice:NAME] and its words, narration in the voice around the block
-// (outer, "" for the narrator's), stage directions and pauses as they
-// stand. The voice after the block is outer again.
+// [voice:NAME] and its words, narration (and stage directions, now read)
+// in the narrator's voice as in the block, pauses as they stand. The voice
+// after the block is the one around it again (outer, "" for the
+// narrator's).
 func UnwrapDialogue(src string, b DialogueBlock, outer string) string {
 	back := outer
 	if back == "" {
@@ -261,9 +262,9 @@ func UnwrapDialogue(src string, b DialogueBlock, outer string) string {
 			if l.Kind != DialogueDirection {
 				s = l.Text.Of(src)
 			}
-			if cur != outer {
-				s = "[voice:" + back + "]" + s
-				cur = outer
+			if cur != "" {
+				s = "[voice:default]" + s
+				cur = ""
 			}
 			paras = append(paras, s)
 		}

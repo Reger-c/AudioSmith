@@ -4891,6 +4891,10 @@
                 },
                 "lines": {
                   "type": "integer"
+                },
+                "dialogue": {
+                  "type": "boolean",
+                  "description": "Audiobooks: the name speaks in a dialogue block."
                 }
               },
               "required": [
@@ -4928,6 +4932,79 @@
               "required": [
                 "id",
                 "text"
+              ]
+            }
+          },
+          "dialogue": {
+            "type": "boolean",
+            "description": "The dialogue model speaks a story's character lines, or an audiobook's dialogue blocks."
+          },
+          "dialogue_model": {
+            "type": "string",
+            "description": "soulx or moss, when dialogue is on and the model can run on this Mac."
+          },
+          "script": {
+            "type": "string",
+            "description": "Audiobooks: the manuscript (left out when longer than 100 KB)."
+          },
+          "dialogue_blocks": {
+            "type": "array",
+            "description": "Audiobooks: the manuscript's [dialogue] … [/dialogue] blocks.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "chapter": {
+                  "type": "integer",
+                  "description": "1-based."
+                },
+                "index": {
+                  "type": "integer",
+                  "description": "1-based in its chapter."
+                },
+                "start": {
+                  "type": "integer",
+                  "description": "Byte offset of the block in script."
+                },
+                "end": {
+                  "type": "integer"
+                },
+                "speakers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "lines": {
+                  "type": "integer",
+                  "description": "Lines with a speaker."
+                },
+                "uncast": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Speakers without a voice: a render gives them their own."
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "dialogue",
+                    "per_line"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Why per_line: dialogue_off, not_downloaded, memory, language or one_speaker."
+                }
+              },
+              "required": [
+                "chapter",
+                "index",
+                "start",
+                "end",
+                "speakers",
+                "lines",
+                "mode"
               ]
             }
           },
@@ -5915,6 +5992,18 @@
           "cover": {
             "type": "string",
             "description": "Absolute path of a PNG or JPEG cover (≤ 8 MB)."
+          },
+          "script": {
+            "type": "string",
+            "description": "Audiobooks: the whole manuscript, replacing it ('# Title' chapters, [voice:NAME] switches, [dialogue] … [/dialogue] blocks of 'Name: line' lines)."
+          },
+          "dialogue": {
+            "type": "boolean",
+            "description": "Stories: the dialogue model speaks the character lines; audiobooks: the dialogue blocks (on by default once there are some)."
+          },
+          "dialogue_model": {
+            "type": "string",
+            "description": "soulx (default) or moss."
           }
         }
       },
@@ -5927,6 +6016,22 @@
               "type": "integer"
             },
             "description": "Chapter numbers (1-based) to render; empty: the whole book or story."
+          },
+          "dialogue_block": {
+            "type": "object",
+            "description": "Audiobooks: preview one dialogue block only (get_longform's dialogue_blocks).",
+            "properties": {
+              "chapter": {
+                "type": "integer"
+              },
+              "index": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "chapter",
+              "index"
+            ]
           }
         }
       },

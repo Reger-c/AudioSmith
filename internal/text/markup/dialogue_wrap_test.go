@@ -92,7 +92,7 @@ func TestUnwrapDialogue(t *testing.T) {
 		t.Fatalf("outer %q", outer)
 	}
 	got := UnwrapDialogue(src, b, outer)
-	want := "[voice:伊内丝]你好。\n\n[voice:托马斯]（低声）嗯。\n\n[voice:旁白甲]他走了。\n\n（汽笛声。）\n\n[pause 1s]\n\n谁？"
+	want := "[voice:伊内丝]你好。\n\n[voice:托马斯]（低声）嗯。\n\n[voice:default]他走了。\n\n（汽笛声。）\n\n[pause 1s]\n\n谁？[voice:旁白甲]"
 	if got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}

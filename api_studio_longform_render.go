@@ -33,10 +33,7 @@ func (b *apiBackend) RenderLongform(ctx context.Context, req api.LongformRender)
 	if err != nil {
 		return api.JobJSON{}, err
 	}
-	given, err := b.prepareBookRender(ctx, p, &d, voices) // api_studio_longform_dialogue.go
-	if err != nil {
-		return api.JobJSON{}, err
-	}
+	given := b.castBookUncast(p, &d, voices) // api_studio_longform_dialogue.go
 	spec, probs := b.compileFor(&d, voices)
 	var blocking []api.ProblemJSON
 	for _, pr := range probs {
@@ -90,10 +87,15 @@ func (b *apiBackend) RenderLongform(ctx context.Context, req api.LongformRender)
 		return api.JobJSON{}, err
 	}
 	if spec.Audition {
+		if len(given) > 0 {
+			if _, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d); err != nil {
+				return api.JobJSON{}, err
+			}
+		}
 		j, err := b.renderTask(ctx, r.ID)
 		return withGiven(j, given), err
 	}
-	// The project remembers its last render, as the page does.
+	// The project remembers its last render (and the voices given), as the page does.
 	d.Render = r.ID
 	if _, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d); err != nil {
 		return api.JobJSON{}, err
