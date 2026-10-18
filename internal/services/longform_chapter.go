@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
@@ -28,15 +29,28 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 	started := time.Now()
 	r := cr.r
 	dialoguePath := ""
+	var unavailable *core.TakeNotice
+	if p.book() && !hasBlocks(p.Lines) {
+		p.Production.Dialogue = false // a book's chapter without dialogue passages
+	}
 	if p.Production.Dialogue && p.Production.DialogueModel != "" && r.engine != nil {
 		var err error
 		if dialoguePath, err = r.modelReady(ctx, p.Production.DialogueModel); err != nil {
-			return nil, err
+			if !p.book() {
+				return nil, err
+			}
+			// A book's dialogue blocks are read line by line instead.
+			r.logf("chapter %s: no dialogue model (%v): the dialogue blocks are read line by line", job.ID, err)
+			p.Production.Dialogue = false
+			unavailable = &core.TakeNotice{Code: NoticeDialogueUnavailable, Severity: "warning", Params: map[string]string{"model": p.Production.DialogueModel}}
 		}
 	}
 	steps, key, warnings, err := cr.program(ctx, p, info, modelPath)
 	if err != nil {
 		return nil, err
+	}
+	if unavailable != nil {
+		warnings = append(warnings, *unavailable)
 	}
 	// A resumed render keeps a chapter made from the same program.
 	if old, err := ReadChapter(p.Output); err == nil && old.Key == key {
@@ -85,6 +99,7 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		return nil, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
 	i := 0
+	made := map[int]bool{} // lines the dialogue model made
 	var run func(s chapterStep) error
 	run = func(s chapterStep) error {
 		if err := ctx.Err(); err != nil {
@@ -135,6 +150,7 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 				return nil
 			}
 			c.path, c.seg.Text = seg.job.paths[s.dialogue.k], seg.job.texts[s.dialogue.k]
+			made[s.line] = true
 		} else if s.track != nil {
 			// A line of a character's track: cut from it, else as usual.
 			seg := s.track.seg
@@ -260,7 +276,8 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 	}
 	report(jobs.Progress{Stage: "writing", Fraction: 1, AudioSeconds: st.seconds()})
 	var level func([]LinePlace) ([]float64, error)
-	if _, paced := GapsOf(p.Production.Pacing); paced && !p.Production.NoLevel {
+	_, paced := GapsOf(p.Production.Pacing)
+	if (paced || p.book() && len(made) > 0) && !p.Production.NoLevel {
 		level = func(places []LinePlace) ([]float64, error) { return st.lineLoudness(ctx, places) }
 	}
 	out, rep, err := st.finishChapter(ctx, loudnessTarget(p.Loudness), func() []lineGain {
@@ -271,6 +288,11 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		if err != nil {
 			r.logf("chapter %s: levelling: %v", job.ID, err)
 			return nil
+		}
+		if !paced { // a book's dialogue lines to its narration (book_dialogue_render.go)
+			g := bookLevelGains(res.Lines, p.Lines, made, lufs)
+			res.Levelled = len(g)
+			return g
 		}
 		who := make([]string, len(p.Lines))
 		for i, l := range p.Lines {

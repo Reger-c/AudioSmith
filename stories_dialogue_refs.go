@@ -99,11 +99,23 @@ func (a *app) dialogueRefStatus(c *ui.Context, ref string, locked bool) {
 // waits). A voice whose reference failed is not tried again here (Make
 // reference in its menu does).
 func (a *app) lfMakeReferences(p *lfPage, again func()) bool {
-	if p.kind != core.ProjectStory || !(p.doc.Production.Dialogue || clonesDesign(entryFor(p.doc.Model))) {
+	book := p.kind == core.ProjectAudiobook && p.doc.Production.Dialogue && len(p.blocks) > 0 // its passages' speakers (thread #88)
+	if !book && (p.kind != core.ProjectStory || !(p.doc.Production.Dialogue || clonesDesign(entryFor(p.doc.Model)))) {
 		return false
 	}
+	speakers := map[string]bool{}
+	for _, ch := range p.spec.Chapters {
+		for _, l := range ch.Lines {
+			if l.Block > 0 && l.Character != "" && len(l.Spans) > 0 {
+				speakers[l.Spans[0].Voice] = true
+			}
+		}
+	}
 	var vs []*core.Voice
-	for _, t := range p.spec.Voices {
+	for key, t := range p.spec.Voices {
+		if book && !speakers[key] {
+			continue
+		}
 		if v := a.findVoice(t.VoiceID); needsReference(v) && a.refFailed(v.ID) == "" && a.canMakeReferenceNow(v) {
 			vs = append(vs, v)
 		}
@@ -112,6 +124,10 @@ func (a *app) lfMakeReferences(p *lfPage, again func()) bool {
 		return false
 	}
 	n := a.ensureReferences(vs, again)
+	if book {
+		a.toast(i18n.N(n, "Making a reference for %d voice first: the book renders after it.", "Making references for %d voices first: the book renders after them.", n))
+		return true
+	}
 	a.toast(i18n.N(n, "Making a reference for %d voice first: the story renders after it.", "Making references for %d voices first: the story renders after them.", n))
 	return true
 }

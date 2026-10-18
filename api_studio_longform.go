@@ -21,6 +21,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/doc"
 	"github.com/hehehai/AudioSmith/internal/services"
+	"github.com/hehehai/AudioSmith/internal/text/markup"
 )
 
 // lfKind is a project kind from the API's.
@@ -104,11 +105,11 @@ func (b *apiBackend) CreateLongform(ctx context.Context, req api.LongformCreate)
 		if d.Voice == "" && len(lfv) > 0 {
 			d.Voice = lfv[0].ref
 		}
-		names := services.VoiceNames(d.Script)
+		names := services.CastNames(d.Script)
 		for name, v := range req.Cast {
-			i := slices.IndexFunc(names, func(n string) bool { return strings.EqualFold(n, name) })
+			i := slices.IndexFunc(names, func(n string) bool { return markup.NameKey(n) == markup.NameKey(name) })
 			if i < 0 {
-				return api.LongformJSON{}, errBadRequest("cast", "The manuscript has no [voice:%s]; its names are: %s.", name, strings.Join(names, ", "))
+				return api.LongformJSON{}, errBadRequest("cast", "The manuscript has no [voice:%s] nor a dialogue speaker %s; its names are: %s.", name, name, strings.Join(names, ", "))
 			}
 			ref, err := voiceRef(voices, e, v, "cast")
 			if err != nil {
@@ -119,6 +120,7 @@ func (b *apiBackend) CreateLongform(ctx context.Context, req api.LongformCreate)
 			}
 			d.VoiceCast[names[i]] = ref
 		}
+		bookDialogueDefault(&d) // api_studio_longform_dialogue.go
 	} else {
 		if err := b.storyLines(&d, req, src, voices, e, lfv); err != nil {
 			return api.LongformJSON{}, err
@@ -240,7 +242,7 @@ func (b *apiBackend) compileFor(d *services.LongformDoc, voices []core.Voice) (s
 
 // longformJSON is a project as agents see it.
 func (b *apiBackend) longformJSON(ctx context.Context, p core.Project, d services.LongformDoc, voices []core.Voice) (api.LongformJSON, error) {
-	spec, probs := b.compileFor(&d, voices)
+	spec, probs, blocks := b.compileBook(&d, voices)
 	e := entryFor(d.Model)
 	out := api.LongformJSON{ID: p.ID, Kind: kindName(p.Kind), Title: firstOf(d.Title, p.Title), Model: e.ID, Voice: d.Voice,
 		VoiceName: voiceLabel(voices, d.Voice), Language: d.Language, Format: firstOf(d.Format, services.FormatWAV), Speed: d.Speed, Stems: d.Stems,
@@ -275,16 +277,17 @@ func (b *apiBackend) longformJSON(ctx context.Context, p core.Project, d service
 				Emotion: l.Emotion, Turn: l.Turn})
 		}
 		out.Scene, out.Pacing, out.Continuity = d.Scene, apiPacing(d.Production.Pacing), storyContinuity(d.Model)
-		out.Dialogue = d.Production.Dialogue
-		if d.Production.Dialogue {
-			if e, _, why := dialogueChoice(readSysInfo().MemoryGB(), &d); why == "" {
-				out.DialogueModel = dialogueModelName(e)
-			}
-		}
 	} else {
-		for _, n := range services.VoiceNames(d.Script) {
-			ref := d.VoiceCast[n]
-			out.Cast = append(out.Cast, api.CastJSON{Name: n, Voice: ref, VoiceName: voiceLabel(voices, ref)})
+		out.Cast = bookCastJSON(&d, voices) // api_studio_longform_dialogue.go
+		if len(d.Script) <= maxScriptJSON {
+			out.Script = d.Script
+		}
+		out.DialogueBlocks = b.dialogueBlocksJSON(&d, blocks)
+	}
+	out.Dialogue = d.Production.Dialogue
+	if d.Production.Dialogue {
+		if e, _, why := dialogueChoice(readSysInfo().MemoryGB(), &d); why == "" {
+			out.DialogueModel = dialogueModelName(e)
 		}
 	}
 	st := services.StatsOf(script, d.Speed)
@@ -338,6 +341,27 @@ func problemMessage(p services.Problem) string {
 		return "Unrecognised tag " + p.Params["tag"] + ": it will be read aloud."
 	case services.ProblemDuplicateWord:
 		return p.Params["word"] + " is listed twice in the pronunciations."
+	case services.ProblemDialogueUnclosed:
+		if p.Params["at"] == "heading" {
+			return "A dialogue block runs into a heading: it ends before it. Close it with [/dialogue]."
+		}
+		return "A dialogue block is not closed: it runs to the end of its chapter. Close it with [/dialogue]."
+	case services.ProblemDialogueNested:
+		return "A [dialogue] inside a dialogue block is ignored."
+	case services.ProblemDialogueStrayClose:
+		return "A [/dialogue] outside a dialogue block is ignored."
+	case services.ProblemDialogueEmpty:
+		return "An empty dialogue block is ignored."
+	case services.ProblemDialogueUncast:
+		return "No voice for " + p.Params["names"] + " in a dialogue block: render_longform gives each a voice of its own (set them in cast)."
+	case services.ProblemDialogueUnknown:
+		return p.Params["count"] + " lines of a dialogue block have no speaker (?:): the narrator reads them."
+	case services.ProblemDialogueOneSpeaker:
+		return "A dialogue block has one speaker: it is read line by line."
+	case services.ProblemDialogueLanguage:
+		return "A dialogue block is not in Chinese or English (" + p.Params["lang"] + "): it is read line by line."
+	case services.ProblemDialogueTags:
+		return "The dialogue model leaves out " + p.Params["tags"] + " in a dialogue block."
 	}
 	return p.Code
 }

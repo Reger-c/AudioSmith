@@ -179,6 +179,7 @@ text/autocast            text
 text/lexicon             text
 
 text/markup              text
+text/markup              text/autocast
 
 text/normalize           text
 

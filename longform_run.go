@@ -187,13 +187,46 @@ func problemText(p services.Problem) string {
 	case services.ProblemDuplicateWord:
 		return i18n.T("“%s” is listed twice in the pronunciations: keep one.", p.Params["word"])
 	}
+	if s := dialogueProblemText(p); s != "" {
+		return s
+	}
 	return p.Code
+}
+
+// dialogueProblemText translates a dialogue passage's problem ("" for
+// another).
+func dialogueProblemText(p services.Problem) string {
+	switch p.Code {
+	case services.ProblemDialogueUnclosed:
+		if p.Params["at"] == "heading" {
+			return i18n.T("A dialogue passage runs into a heading: it ends before it. Close it with [/dialogue].")
+		}
+		return i18n.T("A dialogue passage is not closed: it runs to the end of its chapter. Close it with [/dialogue].")
+	case services.ProblemDialogueNested:
+		return i18n.T("A dialogue passage inside another is ignored.")
+	case services.ProblemDialogueStrayClose:
+		return i18n.T("A [/dialogue] without its passage is ignored.")
+	case services.ProblemDialogueEmpty:
+		return i18n.T("An empty dialogue passage is ignored.")
+	case services.ProblemDialogueUncast:
+		return i18n.T("No voice yet for %s: they get voices of their own when the book is generated.", p.Params["names"])
+	case services.ProblemDialogueUnknown:
+		return i18n.T("%s lines of a dialogue passage have no speaker (“？”): the narrator reads them.", p.Params["count"])
+	case services.ProblemDialogueOneSpeaker:
+		return i18n.T("A dialogue passage has one speaker: it is read line by line.")
+	case services.ProblemDialogueLanguage:
+		return i18n.T("A dialogue passage is not in Chinese or English: it is read line by line.")
+	case services.ProblemDialogueTags:
+		return i18n.T("The dialogue model leaves out %s in a dialogue passage.", p.Params["tags"])
+	}
+	return ""
 }
 
 // startLf compiles a page's document and starts its render (or an
 // audition of chapter or line only: what is "chapter:<n>", "line:<id>").
 func (a *app) startLf(p *lfPage, what string) {
 	a.compileLf(p)
+	a.autoCastBook(p)                                         // a passage's speakers without a voice (audiobook_dialogue.go)
 	if a.lfMakeReferences(p, func() { a.startLf(p, what) }) { // stories_dialogue_refs.go (#83)
 		return
 	}
@@ -208,7 +241,15 @@ func (a *app) startLf(p *lfPage, what string) {
 	if spec.Title == "" {
 		spec.Title = i18n.T("Untitled")
 	}
+	a.bookDialogueSpec(p, &spec)
 	switch {
+	case strings.HasPrefix(what, "block:"):
+		ch, ok := blockSpec(&spec, what)
+		if !ok {
+			return
+		}
+		spec.Chapters = []services.ChapterSpec{ch}
+		spec.Audition = true
 	case strings.HasPrefix(what, "chapter:"):
 		n, _ := strconv.Atoi(strings.TrimPrefix(what, "chapter:"))
 		if n < 0 || n >= len(spec.Chapters) {
