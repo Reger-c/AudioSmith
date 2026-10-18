@@ -3387,9 +3387,15 @@
   "emotion\u0004Apologetic": "愧疚",
   "Stories' performance, never spoken: the scene (where, who, the mood), character → persona (%s), line id → emotion (%s: steady, happy, hurt…), line id → its intensity 0–3 and line id → a direction in your own words (%s). Models that take instructions (%s and %s) hear a short instruction made from them; get_longform's continuity says what the model does with them.": "故事的演绎设定，不会被读出：场景（时间地点、人物关系、氛围）、角色 → 性格（%s）、行 id → 情绪（%s：steady、happy、hurt……）、行 id → 强度 0–3，以及行 id → 用你自己的话写的演绎（%s）。接收指令的模型（%s 和 %s）会收到由它们生成的一条短指令；get_longform 的 continuity 说明当前模型如何使用它们。",
   "Stories: %s or %s runs the AI director: the writing-help language model reads the story and plans its emotions, a baseline per character and an emotion, intensity and turn per line, mostly steady (only what is empty, or replacing all but what you set). Takes up to a minute or two; %s if no language model is set up.": "故事：%s 或 %s 运行 AI 导演：写作助手的语言模型通读故事并规划情绪，每个角色一个基调，每句一个情绪、强度和是否转折，大多平稳（只填空白项，或替换除你设置过的以外的全部）。最多需要一两分钟；没有配置语言模型时返回 %s。",
-  "Stories: true speaks the characters' lines with the dialogue model (%s; 16 GB of memory, Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the story's model.": "故事：true 时由对话模型（%s；需要 16 GB 内存，中文和英文）按场景说出角色的台词，每句都听得到前面的话；旁白仍由故事的模型来读。",
   "The characters' lines are spoken by %s a scene at a time, each line hearing the lines before it, so they answer each other; narration stays on the story's model. Each character is cloned from their voice (a cloned voice's clip, else a short sample in that voice). Lines it does not say clearly are made again, then on the story's model. Slower than real time.": "角色的台词由 %s 按场景一次说完，每句都听得到前面的话，所以彼此接得上；旁白仍由故事的模型来读。每个角色从自己的声音克隆（克隆声音用它的录音，其他声音先用它读一小段样本）。没读清楚的句子会重做一次，仍不行就改用故事的模型。比实时慢。",
   "Usual mood": "情绪基调",
   "Whole dialogue": "整场对话",
-  "model name\u0004Whole-dialogue voices": "整场对话"
+  "model name\u0004Whole-dialogue voices": "整场对话",
+  "Stories: true speaks the characters' lines with a dialogue model (Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the story's model. dialogue_model picks it: soulx (%s, the default; 16 GB of memory) or moss (%s; 24 GB, up to five voices, a scene as one recording).": "故事：true 时，角色台词由对话模型（中文、英文）按场景整段说出，每句都听得到前面的台词；旁白仍用故事的模型。dialogue_model 选择模型：soulx（%s，默认；需 16 GB 内存）或 moss（%s；需 24 GB，最多五个声音，一场戏一次录成）。",
+  "Dialogue model": "对话模型",
+  "%s is light (16 GB of memory) and quick; %s is larger (24 GB), up to five voices, and speaks each scene as one recording.": "%s 轻巧（16 GB 内存）、更快；%s 更大（24 GB），最多五个声音，每场戏一次录成。",
+  "This version of AudioSmith has no dialogue model.": "这个版本的 AudioSmith 没有对话模型。",
+  "Speaks a story's dialogue scene by scene as one recording, up to five characters in their cloned voices, with natural pauses between them. Chinese and English; needs 24 GB of memory.": "按场景把故事里的对话一次录成，最多五个角色，用各自克隆的声音，角色之间的停顿自然。支持中文和英文；需要 24 GB 内存。",
+  "A dialogue model: up to five speakers, each cloned from a reference clip and its transcript, speak a whole scene in one go; AudioSmith cuts the recording into the lines and checks each one. Used by Stories' whole-dialogue mode; narration stays on the story's model.": "对话模型：最多五个说话人，各自从一段参考录音和它的文字克隆，一次说完整场戏；AudioSmith 再把录音切回每一句并逐句检查。用于故事的「整场对话」模式；旁白仍由故事的模型来读。",
+  "model name\u0004Whole-dialogue recordings": "整场对话（一次录成）"
 }
