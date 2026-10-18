@@ -35,6 +35,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/services"
+	"github.com/hehehai/AudioSmith/internal/settings"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
@@ -67,6 +68,8 @@ func TestReferencesAB(t *testing.T) {
 	h := &engineHost{bin: bin, logDir: t.TempDir()}
 	a := newApp(h, lib)
 	a.autoplay = false
+	a.updateSettings(func(s *settings.Settings) { s.General.Language = "zh-Hans" }) // newApp applied the system's
+	t.Logf("locale %s", i18n.Locale())
 	events := make(chan func(), 1<<16)
 	a.enginePost = func(fn func()) { events <- fn }
 	a.postQueue = a.enginePost
