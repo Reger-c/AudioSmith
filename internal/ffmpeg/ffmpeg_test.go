@@ -13,7 +13,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/hehehai/actnowkit/mirror"
 )
 
 const versionOut = `ffmpeg version n8.1.2 Copyright (c) 2000-2026 the FFmpeg developers
@@ -115,11 +119,12 @@ func TestInstall(t *testing.T) {
 	defer srv.Close()
 	sum := func(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
 	b := Build{Version: "test",
-		FFmpeg:  Asset{URL: srv.URL + "/ffmpeg", SHA256: sum(files["/ffmpeg"]), Size: int64(len(files["/ffmpeg"]))},
-		FFprobe: Asset{URL: srv.URL + "/ffprobe", SHA256: sum(files["/ffprobe"]), Size: int64(len(files["/ffprobe"]))}}
+		FFmpeg:  Asset{Path: "/ffmpeg", SHA256: sum(files["/ffmpeg"]), Size: int64(len(files["/ffmpeg"]))},
+		FFprobe: Asset{Path: "/ffprobe", SHA256: sum(files["/ffprobe"]), Size: int64(len(files["/ffprobe"]))}}
+	src := &mirror.Client{Sources: []string{srv.URL}, HTTP: srv.Client}
 	dir := filepath.Join(t.TempDir(), "tools", "ffmpeg")
 	var last, total int64
-	path, err := Install(context.Background(), srv.Client(), dir, b, func(d, tot int64) { last, total = d, tot })
+	path, err := Install(context.Background(), src, dir, b, func(d, tot int64) { last, total = d, tot })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +141,7 @@ func TestInstall(t *testing.T) {
 	bad := b
 	bad.FFprobe.SHA256 = strings.Repeat("0", 64)
 	os.WriteFile(filepath.Join(dir, "ffmpeg"), []byte("old"), 0o755)
-	_, err = Install(context.Background(), srv.Client(), dir, bad, nil)
+	_, err = Install(context.Background(), src, dir, bad, nil)
 	var ce *ChecksumError
 	if !errors.As(err, &ce) {
 		t.Fatalf("checksum: %v", err)
@@ -156,6 +161,91 @@ func TestInstall(t *testing.T) {
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Errorf("Remove left %s", dir)
 	}
+}
+
+// source is a fake source of GitHub release files (github.com or the
+// mirror): files by path, served after delay; hits counts requests.
+type source struct {
+	*httptest.Server
+	hits atomic.Int32
+}
+
+func newSource(t *testing.T, files map[string][]byte, delay time.Duration) *source {
+	t.Helper()
+	s := &source{}
+	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.hits.Add(1)
+		data, ok := files[r.URL.Path]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		select {
+		case <-time.After(delay):
+		case <-r.Context().Done():
+			return
+		}
+		w.Write(data)
+	}))
+	t.Cleanup(s.Close)
+	return s
+}
+
+// TestInstallSources: the build comes from the mirror when GitHub does
+// not answer, from GitHub when the mirror serves other files, and fails
+// as a checksum error when every source serves other files.
+func TestInstallSources(t *testing.T) {
+	const ffPath = "/shaka-project/static-ffmpeg-binaries/releases/download/n8.1.2-1/ffmpeg-osx-arm64"
+	const fpPath = "/shaka-project/static-ffmpeg-binaries/releases/download/n8.1.2-1/ffprobe-osx-arm64"
+	good := map[string][]byte{ffPath: []byte("ffmpeg binary"), fpPath: []byte("ffprobe binary!")}
+	bad := map[string][]byte{ffPath: []byte("tampered ffmpeg"), fpPath: []byte("tampered ffprobe")}
+	sum := func(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
+	b := Build{Version: "test",
+		FFmpeg:  Asset{Path: ffPath, SHA256: sum(good[ffPath]), Size: int64(len(good[ffPath]))},
+		FFprobe: Asset{Path: fpPath, SHA256: sum(good[fpPath]), Size: int64(len(good[fpPath]))}}
+	down := httptest.NewServer(http.NotFoundHandler())
+	down.Close() // refuses connections
+
+	t.Run("GitHub down", func(t *testing.T) {
+		m := newSource(t, good, 0)
+		dir := t.TempDir()
+		var last int64
+		if _, err := Install(context.Background(), &mirror.Client{Sources: []string{down.URL, m.URL}}, dir, b, func(d, _ int64) { last = d }); err != nil {
+			t.Fatal(err)
+		}
+		if err := Verify(dir, b); err != nil {
+			t.Error(err)
+		}
+		if last != b.Size() {
+			t.Errorf("progress ends at %d of %d", last, b.Size())
+		}
+	})
+	t.Run("tampered mirror", func(t *testing.T) {
+		m := newSource(t, bad, 0)                      // answers first
+		gh := newSource(t, good, 300*time.Millisecond) // slower
+		dir := t.TempDir()
+		if _, err := Install(context.Background(), &mirror.Client{Sources: []string{gh.URL, m.URL}}, dir, b, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := Verify(dir, b); err != nil {
+			t.Error(err)
+		}
+		if m.hits.Load() < 2 {
+			t.Errorf("the mirror was asked %d times", m.hits.Load())
+		}
+	})
+	t.Run("only tampered", func(t *testing.T) {
+		m1, m2 := newSource(t, bad, 0), newSource(t, bad, 0)
+		dir := t.TempDir()
+		_, err := Install(context.Background(), &mirror.Client{Sources: []string{m1.URL, m2.URL}}, dir, b, nil)
+		var ce *ChecksumError
+		if !errors.As(err, &ce) || ce.Got != sum(bad[ffPath]) {
+			t.Fatalf("want a checksum error, got %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "ffmpeg")); !os.IsNotExist(err) {
+			t.Errorf("installed anyway: %v", err)
+		}
+	})
 }
 
 // --- with a real ffmpeg (skipped when there is none) --------------------------

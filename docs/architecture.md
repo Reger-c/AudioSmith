@@ -281,7 +281,7 @@ Rules that stay:
 | Workflows | `…/AudioSmith/workflows/<id>/{items,out}`; table `workflows` (migration 006) |
 | Calls | `…/AudioSmith/calls/<id>.wav` (recordings, only when on and disclosed); table `calls` (migration 007) |
 | Local API | `…/AudioSmith/api.json` (port file while running), `api-tmp/` (wiped at start), `mcp/` (MCP output folder) |
-| Tools | `…/AudioSmith/tools/` (yt-dlp; an ffmpeg chosen in Settings is used where it is) |
+| Tools | `…/AudioSmith/tools/` (yt-dlp; an ffmpeg chosen in Settings is used where it is). yt-dlp and the ffmpeg download come from GitHub release paths (`dub.YtDlpPath`, `ffmpeg.Asset.Path`) through actnowkit `mirror.Client` (`downloads_github.go`): sources `mirror.Sources(family.EndpointsValue(Models.Endpoints))` — automatic or custom → github.com and mirror.actnow.dev/github raced, "official" → github.com, "mirror" → the mirror (spec §9.6); each file checked against its pinned SHA-256, a wrong one fetched from the next source |
 | Logs | `~/Library/Logs/AudioSmith/audiosmith.log` (app, rotated at 5 MB) and `engine-gpu.log` (engine stderr) |
 | Models | the Hugging Face cache, `~/.cache/huggingface/hub` (`HF_HUB_CACHE`/`HF_HOME`, or Settings → Models → Model folder) |
 | Secrets | the login Keychain, service "AudioSmith": account "huggingface-token" (HF token; or `$HF_TOKEN`, or huggingface-cli's token file), "llm.<provider>", "mt.<service>", "api.key", "twilio.token" |

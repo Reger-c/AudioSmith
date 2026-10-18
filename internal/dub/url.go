@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
@@ -19,6 +18,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/hehehai/actnowkit/mirror"
 )
 
 // Import from a URL (YouTube and the other sites yt-dlp knows), opt-in:
@@ -117,11 +118,15 @@ func LookupHost(ctx context.Context, host string) ([]netip.Addr, error) {
 // --- yt-dlp -----------------------------------------------------------------------
 
 // The yt-dlp build URL import uses: the standalone macOS binary (no
-// Python), pinned. Update both together.
+// Python), pinned. Update all together. YtDlpPath is the file under a
+// source of GitHub releases (github.com, or the ActNow mirror, which
+// keeps this pinned file: actnowkit's mirror package); YtDlpURL is
+// github.com's.
 const (
 	YtDlpVersion = "2026.08.19"
 	YtDlpSHA256  = "0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202"
-	YtDlpURL     = "https://github.com/yt-dlp/yt-dlp/releases/download/" + YtDlpVersion + "/yt-dlp_macos"
+	YtDlpPath    = "/yt-dlp/yt-dlp/releases/download/" + YtDlpVersion + "/yt-dlp_macos"
+	YtDlpURL     = mirror.GitHub + YtDlpPath
 	YtDlpSize    = 37146048
 )
 
@@ -137,75 +142,52 @@ type YtDlp struct {
 	FFmpeg string
 }
 
-// InstallYtDlp downloads yt-dlp into dir (as "yt-dlp"), checks it and
-// makes it executable. progress gets bytes done of the total. It returns
-// the executable's path.
-func InstallYtDlp(ctx context.Context, client *http.Client, dir string, progress func(done, total int64)) (string, error) {
-	if client == nil {
-		client = http.DefaultClient
+// InstallYtDlp downloads yt-dlp into dir (as "yt-dlp") from the fastest
+// of src's sources (nil: github.com and the ActNow mirror), checks it
+// against the pinned SHA-256 (a source that serves anything else is left
+// for the next one) and makes it executable. progress gets bytes done of
+// the total. It returns the executable's path and the source it came
+// from. When only wrong files came, the error is a *URLError with
+// CodeChecksum.
+func InstallYtDlp(ctx context.Context, src *mirror.Client, dir string, progress func(done, total int64)) (string, string, error) {
+	return installYtDlp(ctx, src, dir, ytdlpPin{YtDlpPath, YtDlpSHA256, YtDlpSize}, progress)
+}
+
+// ytdlpPin is the file InstallYtDlp fetches (tests use others).
+type ytdlpPin struct {
+	path, sha256 string
+	size         int64
+}
+
+func installYtDlp(ctx context.Context, src *mirror.Client, dir string, pin ytdlpPin, progress func(done, total int64)) (string, string, error) {
+	if src == nil {
+		src = &mirror.Client{}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return "", "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, YtDlpURL, nil)
+	tmp, from, err := src.File(ctx, pin.path, mirror.FileOptions{
+		Dir: dir, SHA256: pin.sha256, Size: pin.size, Limit: 4*pin.size + 1<<20, Progress: progress,
+	})
 	if err != nil {
-		return "", err
+		if ctx.Err() != nil {
+			return "", "", ctx.Err()
+		}
+		var ce *mirror.ChecksumError
+		if errors.As(err, &ce) {
+			return "", "", &URLError{Code: CodeChecksum, Detail: ce.Got}
+		}
+		return "", "", fmt.Errorf("yt-dlp: download: %w", err)
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("yt-dlp: download: %s", resp.Status)
-	}
+	defer os.Remove(tmp) // after the rename: nothing
 	dst := filepath.Join(dir, "yt-dlp")
-	tmp, err := os.CreateTemp(dir, ".yt-dlp-*")
-	if err != nil {
-		return "", err
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		return "", "", err
 	}
-	defer os.Remove(tmp.Name())
-	h := sha256.New()
-	total := resp.ContentLength
-	if total <= 0 {
-		total = YtDlpSize
+	if err := os.Rename(tmp, dst); err != nil {
+		return "", "", err
 	}
-	var done int64
-	buf := make([]byte, 256<<10)
-	for {
-		n, rerr := resp.Body.Read(buf)
-		if n > 0 {
-			if _, err := tmp.Write(buf[:n]); err != nil {
-				tmp.Close()
-				return "", err
-			}
-			h.Write(buf[:n])
-			done += int64(n)
-			if progress != nil {
-				progress(done, total)
-			}
-		}
-		if rerr == io.EOF {
-			break
-		}
-		if rerr != nil {
-			tmp.Close()
-			return "", rerr
-		}
-	}
-	if err := tmp.Close(); err != nil {
-		return "", err
-	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != YtDlpSHA256 {
-		return "", &URLError{Code: CodeChecksum, Detail: got}
-	}
-	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
-		return "", err
-	}
-	if err := os.Rename(tmp.Name(), dst); err != nil {
-		return "", err
-	}
-	return dst, nil
+	return dst, from, nil
 }
 
 // VerifyYtDlp checks an installed yt-dlp against the pinned checksum.

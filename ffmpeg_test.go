@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/ffmpeg"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/settings"
+	"github.com/hehehai/actnowkit/mirror"
 )
 
 // fakeFFmpeg writes a script that answers like ffmpeg 8 with MP3, Opus
@@ -97,7 +97,7 @@ func TestFFmpegDownload(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	fake := fakeFFmpeg(t)
 	var gotDir string
-	ffmpegInstall = func(ctx context.Context, _ *http.Client, dir string, b ffmpeg.Build, progress func(int64, int64)) (string, error) {
+	ffmpegInstall = func(ctx context.Context, _ *mirror.Client, dir string, b ffmpeg.Build, progress func(int64, int64)) (string, error) {
 		gotDir = dir
 		progress(b.Size()/2, b.Size())
 		os.MkdirAll(dir, 0o755)

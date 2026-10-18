@@ -11,6 +11,11 @@
 - Stories directed before this version sound exactly as before until you direct them again.
 - The Local API and MCP: `update_longform` takes `emotions` (line id → emotion) and intensities 0–3; `direct` runs the new director.
 
+### yt-dlp and ffmpeg download from a mirror too
+- yt-dlp (importing from links) and ffmpeg now download from GitHub or ActNow's mirror, mirror.actnow.dev, whichever is faster; a download that stalls or crawls moves to the other. GitHub's downloads reach many users in China at a few KB/s.
+- Both are still checked against their pinned SHA-256 before use: a file that does not match is fetched again from the other source, so the mirror cannot change what you get.
+- Settings → Network → Download from now covers models and tools: Automatic (the fastest of the official sites and mirrors), Official sites only (huggingface.co, github.com), Mirrors only (hf-mirror.com, mirror.actnow.dev), or Custom (Hugging Face URLs; tools then come from either). Test the connection also reaches mirror.actnow.dev.
+
 ## 0.4.0-beta.6
 
 AudioSmith joins the ActNow family: it works together with the other ActNow apps on this Mac (Dicta, Auralink, Pik, VoxtNew). The apps share one copy of each model, some settings, and, if you agree, API keys, and they don't get in each other's way. AudioSmith names another app only when a released version of it is installed; with no other ActNow app, nothing on screen changes.

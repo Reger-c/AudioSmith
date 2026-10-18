@@ -8,13 +8,13 @@ package main
 
 import (
 	"context"
+	"log"
 	"path/filepath"
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/ffmpeg"
-	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
@@ -110,11 +110,14 @@ func (a *app) installFFmpeg() {
 	ctx, cancel := context.WithCancel(context.Background())
 	*st = ffInstallState{running: true, size: ffmpeg.Pinned.Size(), cancel: cancel}
 	dir := a.ffmpegDir()
-	client := hub.NewHTTPClient(a.prefs.Models.Proxy, 0)
+	src := githubClient(a.prefs) // the download source and proxy as of now
 	a.background(func() {
-		path, err := ffmpegInstall(ctx, client, dir, ffmpeg.Pinned, func(done, total int64) {
+		path, err := ffmpegInstall(ctx, src, dir, ffmpeg.Pinned, func(done, total int64) {
 			a.post(func() { st.done, st.size = done, total })
 		})
+		if err != nil && ctx.Err() == nil {
+			log.Printf("ffmpeg: download: %v", err) // each file's source: "mirror: … from …"
+		}
 		a.post(func() {
 			st.running, st.cancel = false, nil
 			if err != nil {
@@ -265,7 +268,7 @@ func (a *app) ffmpegDownloadSection(c *ui.Context) {
 	sectionTitle(c, i18n.T("Get ffmpeg"))
 	b := ffmpeg.Pinned
 	st := &a.ffInstall
-	desc := i18n.T("ffmpeg %s for Apple silicon from %s on GitHub (%s), checked by SHA-256 before use.", b.Version, b.Name, humanBytes(b.Size())) + " " +
+	desc := i18n.T("ffmpeg %s for Apple silicon from %s on GitHub or the ActNow mirror (%s), checked by SHA-256 before use.", b.Version, b.Name, humanBytes(b.Size())) + " " +
 		i18n.T("Its licence is %s: AudioSmith does not include it, and runs it as a separate program.", b.Licence)
 	switch {
 	case st.running:

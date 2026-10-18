@@ -34,8 +34,9 @@ type networkState struct {
 	netTesting bool
 }
 
-// netHosts are the hosts AudioSmith downloads from.
-var netHosts = []string{"https://huggingface.co", "https://hf-mirror.com", "https://github.com"}
+// netHosts are the hosts AudioSmith downloads from: Hugging Face and its
+// mirror (models), GitHub and the ActNow mirror (ffmpeg, yt-dlp).
+var netHosts = []string{"https://huggingface.co", "https://hf-mirror.com", "https://github.com", "https://mirror.actnow.dev"}
 
 // testNetwork reaches each host through the downloads' proxy.
 func (a *app) testNetwork(then func([]netCheck)) {
@@ -93,9 +94,11 @@ func (a *app) networkSettings(c *ui.Context) {
 	sectionTitle(c, i18n.T("Downloads"))
 	ui.Text(c, i18n.T("Models, ffmpeg and yt-dlp download through these settings. The engine itself never connects to the network.")).
 		FontSize(px(t, 12)).TextColor(t.TextMuted)
-	settingRow(c, "source", i18n.T("Download from"), i18n.T("Mirrors never receive your token; gated models always come from huggingface.co."), func() {
+	sourceNote := i18n.T("Models come from Hugging Face, ffmpeg and yt-dlp from GitHub. Every download is checked (signature or checksum), so a mirror cannot change what you get.") + " " +
+		i18n.T("Mirrors never receive your token; gated models always come from huggingface.co.")
+	settingRow(c, "source", i18n.T("Download from"), sourceNote, func() {
 		opts := sourceOptions()
-		if ui.Select(c.Key("source-select"), &a.source, opts).Label(i18n.T("Download from")).Width(px(t, 240)).Changed() {
+		if ui.Select(c.Key("source-select"), &a.source, opts).Label(i18n.T("Download from")).Width(px(t, 440)).Shrink(1).MinWidth(px(t, 200)).Changed() {
 			var eps []string
 			switch slices.Index(opts, a.source) {
 			case 1:
@@ -112,7 +115,7 @@ func (a *app) networkSettings(c *ui.Context) {
 		}
 	})
 	if slices.Index(sourceOptions(), a.source) == 3 {
-		settingRow(c, "endpoint", i18n.T("Endpoint"), i18n.T("One or more URLs, separated by spaces; the fastest answers."), func() {
+		settingRow(c, "endpoint", i18n.T("Endpoint"), i18n.T("One or more Hugging Face URLs, separated by spaces; the fastest answers. ffmpeg and yt-dlp come from the faster of github.com and mirror.actnow.dev."), func() {
 			in := ui.TextInput(c.Key("endpoint-input"), &a.endpoint).Placeholder("https://hf-mirror.com").Width(px(t, 280)).Label(i18n.T("Endpoint"))
 			if in.Submitted() {
 				eps := strings.Fields(a.endpoint)
@@ -149,7 +152,7 @@ func (a *app) networkSettings(c *ui.Context) {
 	a.sharedScope(c, famset.KeyProxy)
 
 	sectionTitle(c, i18n.T("Connection"))
-	settingRow(c, "net-test", i18n.T("Test the connection"), i18n.T("Reaches Hugging Face, its mirror and GitHub through the proxy above."), func() {
+	settingRow(c, "net-test", i18n.T("Test the connection"), i18n.T("Reaches Hugging Face, GitHub and their mirrors through the proxy above."), func() {
 		if a.netTesting {
 			ui.Spinner(c)
 		}

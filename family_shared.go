@@ -418,11 +418,11 @@ func sharedValueText(key, v string) string {
 	case famset.KeyHFEndpoints:
 		switch v {
 		case famset.EndpointsAuto:
-			return i18n.T("Automatic (fastest of huggingface.co and hf-mirror.com)")
+			return sourceOptions()[0]
 		case famset.EndpointsOfficial:
-			return "huggingface.co"
+			return sourceOptions()[1]
 		case famset.EndpointsMirror:
-			return "hf-mirror.com"
+			return sourceOptions()[2]
 		}
 	case famset.KeyModelsRoot:
 		if v == "" {

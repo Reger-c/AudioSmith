@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,7 +16,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/doc/textenc"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/gallery"
-	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
@@ -43,11 +43,16 @@ func (a *app) installYtDlp() {
 	ctx, cancel := context.WithCancel(context.Background())
 	*y = ytdlpState{installing: true, size: dub.YtDlpSize, cancel: cancel}
 	dir := a.ytdlpDir()
-	client := hub.NewHTTPClient(a.prefs.Models.Proxy, 0)
+	src := githubClient(a.prefs) // the download source and proxy as of now
 	a.background(func() {
-		path, err := ytdlpInstall(ctx, client, dir, func(done, total int64) {
+		path, from, err := ytdlpInstall(ctx, src, dir, func(done, total int64) {
 			a.post(func() { y.done, y.size = done, total })
 		})
+		if err == nil {
+			log.Printf("yt-dlp %s: installed from %s", dub.YtDlpVersion, from)
+		} else if ctx.Err() == nil {
+			log.Printf("yt-dlp %s: %v", dub.YtDlpVersion, err)
+		}
 		a.post(func() {
 			y.installing, y.cancel = false, nil
 			if err != nil {
@@ -79,7 +84,7 @@ func (a *app) dubbingSettings(c *ui.Context) {
 	t := c.Theme()
 	d := a.prefs.Dubbing
 	sectionTitle(c, i18n.T("Import from links"))
-	caption(c, i18n.T("Paste a YouTube (or other) link on the Dub page to dub the video. This needs yt-dlp, a free downloader (about 35 MB), which AudioSmith downloads from GitHub and checks before using. Links to this Mac or the local network, live streams and playlists are refused."))
+	caption(c, i18n.T("Paste a YouTube (or other) link on the Dub page to dub the video. This needs yt-dlp, a free downloader (about 35 MB), which AudioSmith downloads from GitHub or the ActNow mirror and checks before using. Links to this Mac or the local network, live streams and playlists are refused."))
 	y := &a.ytdlp
 	switch {
 	case y.installing:

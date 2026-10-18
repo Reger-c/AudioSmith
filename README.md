@@ -151,7 +151,7 @@ The full reference is [docs/local-api.md](docs/local-api.md), and `/docs` in the
 
 **Beta updates.** Settings → Diagnostics and about → **Receive beta updates**. It is on in a beta (such as 0.4.0-beta.1) and off in a release until you choose. Turning it off never goes back to an older version: a beta stays until a newer release is out.
 
-**Downloads** come from huggingface.co or hf-mirror.com, whichever answers faster, through the system proxy. In mainland China, pick hf-mirror.com in **Settings → Network** if downloads stall.
+**Downloads** come from the official sites or their mirrors, whichever is faster, through the system proxy: models from huggingface.co or hf-mirror.com, ffmpeg and yt-dlp from github.com or mirror.actnow.dev (ActNow's mirror), each checked against its pinned SHA-256. In mainland China, pick **Mirrors only** in **Settings → Network** if downloads stall.
 
 **Permissions** are asked only when a feature needs them: the **Microphone** for recording a voice, dictation and live transcription, and **Accessibility** for dictation to type into other apps.
 

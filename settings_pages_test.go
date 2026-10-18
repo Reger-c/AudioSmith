@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/settings"
+	"github.com/hehehai/actnowkit/mirror"
 )
 
 // stubRelaunch records restarts instead of restarting.
@@ -327,14 +328,14 @@ func TestNetworkUsagePrivacyAppearance(t *testing.T) {
 	}
 	a.navigate("/settings/network")
 	tt.Frame()
-	if !tt.HasText("Download from") || !tt.HasText("Proxy") {
+	if !tt.HasText("Download from") || !tt.HasText("Proxy") || !tt.HasText(mirror.TextSourceAuto.EN) {
 		t.Fatalf("network %q", tt.Texts())
 	}
 	if err := tt.Click("Test"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if len(a.netChecks) != 3 || !tt.HasText("80 ms") || !tt.HasText("timeout") {
+	if len(a.netChecks) != 4 || !tt.HasText("80 ms") || !tt.HasText("timeout") || !tt.HasText("mirror.actnow.dev") {
 		t.Errorf("checks %+v", a.netChecks)
 	}
 	// The models page links here.
