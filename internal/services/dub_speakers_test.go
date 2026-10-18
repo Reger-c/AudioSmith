@@ -2,7 +2,9 @@ package services
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hehehai/AudioSmith/internal/dub"
@@ -17,14 +19,17 @@ func mossModels() *DubModels {
 		Speakers: testMoss, SpeakersLanguages: []string{"zh", "en", "ja"}}
 }
 
-// sttModels are the models stt.transcribe was called with, in order.
+// sttModels are the models stt.transcribe was called with to transcribe
+// the source, in order (not the synthesize stage's check of made lines).
 func (e *dubEnv) sttModels() []string {
 	var out []string
 	for _, c := range e.eng.Calls {
 		if c.Method == proto.MethodSTTTranscribe {
 			var p proto.TranscribeParams
 			json.Unmarshal(c.Params, &p)
-			out = append(out, p.Model)
+			if !strings.Contains(p.Audio, string(filepath.Separator)+"renders"+string(filepath.Separator)) {
+				out = append(out, p.Model)
+			}
 		}
 	}
 	return out
@@ -52,7 +57,12 @@ func TestDubSpeakersModel(t *testing.T) {
 		t.Errorf("stt.align called %d times", n)
 	}
 	var tp proto.TranscribeParams
-	json.Unmarshal(e.eng.Last(proto.MethodSTTTranscribe), &tp)
+	for _, c := range e.eng.Calls {
+		var q proto.TranscribeParams
+		if c.Method == proto.MethodSTTTranscribe && json.Unmarshal(c.Params, &q) == nil && q.Model == testMoss {
+			tp = q
+		}
+	}
 	if tp.Prompt != "AudioSmith" || tp.Words {
 		t.Errorf("params %+v", tp)
 	}

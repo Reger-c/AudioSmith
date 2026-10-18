@@ -76,8 +76,10 @@ const (
 	// DubWarnDialogueFallback: some lines of the conversations were made
 	// line by line (Render.FallbackReason).
 	DubWarnDialogueFallback = "dub.dialogue_fallback"
-	// DubWarnLinesFlagged: some lines made line by line in place of the
-	// dialogue model's did not pass its check either (Render.Flag).
+	// DubWarnLinesFlagged: some lines failed their check (Render.Flag):
+	// made line by line in place of the dialogue model's and not passing
+	// its check either, or cloned from a clip in another language and
+	// still wrong when made again (dub_check.go).
 	DubWarnLinesFlagged = "dub.lines_flagged"
 	// DubDialogueMemory is DubDialogueModel.Blocked on a Mac with too
 	// little memory.
@@ -501,8 +503,9 @@ func (dd *dubDialogue) mark(ctx context.Context, r *dub.Render, id string) {
 }
 
 // check checks a line made on the dub's model as the dialogue model's
-// lines are (a plausible length for its text, the recognizer hears it):
-// the flag ("" when it passes) and what was heard.
+// lines are (a plausible length for its text, the recognizer hears it,
+// in its language's script: dub.ForeignScript): the flag ("" when it
+// passes) and what was heard.
 func (dd *dubDialogue) check(ctx context.Context, file, say string) (string, string) {
 	path := dd.sc.path(file)
 	buf, _, err := wav.ReadFile(path)
@@ -519,6 +522,9 @@ func (dd *dubDialogue) check(ctx context.Context, file, say string) (string, str
 	var tr proto.TranscribeResult
 	if err := dd.dr.call(ctx, proto.MethodSTTTranscribe, dd.dr.recognizer, &proto.TranscribeParams{Audio: path, Language: baseLang(dd.l)}, &tr, nil); err != nil {
 		return "", ""
+	}
+	if dub.ForeignScript(dd.l, tr.Text) != "" {
+		return dub.FlagLanguage, strings.TrimSpace(tr.Text) // another language's script (thread #90)
 	}
 	if dub.Drift(foldPronouns(say), foldPronouns(tr.Text)) > cutMaxCER {
 		return dub.FlagHeard, strings.TrimSpace(tr.Text)

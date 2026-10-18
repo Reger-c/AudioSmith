@@ -244,6 +244,18 @@ func (p *Project) TextFor(s Segment, lang string) string {
 	return s.Lines[l].Text
 }
 
+// CrossLingual reports whether segment s speaks another language in
+// track lang than the source it was cut from (its speaker's clips): the
+// source language is known (not "auto") and its base language differs
+// from the line's (zh-Hant → zh-Hans is the same speech).
+func (p *Project) CrossLingual(s Segment, lang string) bool {
+	src, l := p.SourceLanguage(), LangFor(s, lang)
+	if src == "" || l == "" || strings.EqualFold(src, "auto") {
+		return false
+	}
+	return base(src) != base(l)
+}
+
 // sameLanguage reports whether two BCP-47 tags name the same language
 // variety (es = es-ES differ only by region; zh-Hans ≠ zh-Hant).
 func sameLanguage(a, b string) bool {

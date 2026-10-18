@@ -1,0 +1,110 @@
+diff --git a/Sources/MLXAudioTTS/Models/Qwen3TTS/Qwen3TTS.swift b/Sources/MLXAudioTTS/Models/Qwen3TTS/Qwen3TTS.swift
+index ff0fec7..007d8be 100644
+--- a/Sources/MLXAudioTTS/Models/Qwen3TTS/Qwen3TTS.swift
++++ b/Sources/MLXAudioTTS/Models/Qwen3TTS/Qwen3TTS.swift
+@@ -365,11 +365,18 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+             let customVoicePrompt = isCVModel ? Self.parseCustomVoicePrompt(instruct) : nil
+             let speaker: String? = isCVModel ? customVoicePrompt?.speaker : nil
+             let effectiveInstruct: String? = isCVModel ? customVoicePrompt?.instruction : instruct
++            // A reference without its transcript: its speaker embedding
++            // alone (upstream's x_vector_only_mode), rather than no voice.
++            var xVector: MLXArray?
++            if !isCVModel, let refAudio, speakerEncoder != nil {
++                xVector = extractSpeakerEmbedding(refAudio, upstreamMel: true)
++            }
+             let prepared = prepareGenerationInputs(
+                 text: text,
+                 language: language,
+                 instruct: effectiveInstruct,
+-                speaker: speaker
++                speaker: speaker,
++                speakerEmbedding: xVector
+             )
+             inputEmbedsInit = prepared.0
+             trailingTextHidden = prepared.1
+@@ -838,7 +845,39 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+         return (inputEmbeds, trailingTextHidden, ttsPadEmbed, refCodes)
+     }
+ 
+-    func extractSpeakerEmbedding(_ refAudio: MLXArray) -> MLXArray? {
++    /// The speaker encoder's input as upstream's `mel_spectrogram` makes it
++    /// (Qwen3-TTS `extract_speaker_embedding`): reflect padding of
++    /// (n_fft - hop) / 2, a periodic Hann window, the magnitude spectrum,
++    /// librosa's Slaney mel filters (0–12 kHz) and the natural log of the
++    /// energies clamped at 1e-5. [frames, 128].
++    static func speakerMel(_ audio: MLXArray, sampleRate: Int) -> MLXArray {
++        let nFft = 1024, hop = 256, pad = (nFft - hop) / 2
++        var x = audio
++        let n = x.dim(0)
++        if n > pad + 1 {
++            let head = MLXArray((1 ... pad).reversed().map { Int32($0) })
++            let tail = MLXArray(((n - 1 - pad) ..< (n - 1)).reversed().map { Int32($0) })
++            x = concatenated([x[head], x, x[tail]])
++        } else {
++            x = concatenated([MLXArray.zeros([pad]), x, MLXArray.zeros([pad])])
++        }
++        if x.dim(0) < nFft {
++            x = concatenated([x, MLXArray.zeros([nFft - x.dim(0)])])
++        }
++        let frames = 1 + (x.dim(0) - nFft) / hop
++        let windowed = asStrided(x, [frames, nFft], strides: [hop, 1], offset: 0) * hanningWindow(size: nFft, periodic: true)
++        let spec = MLXFFT.rfft(windowed, axis: 1)
++        let magnitude = sqrt(abs(spec).square() + MLXArray(Float(1e-9)))
++        let filters = melFilters(sampleRate: sampleRate, nFft: nFft, nMels: 128, fMin: 0, fMax: 12000, norm: "slaney", melScale: .slaney)
++        return log(maximum(matmul(magnitude, filters), MLXArray(Float(1e-5))))
++    }
++
++    /// The reference clip's speaker embedding. upstreamMel computes the
++    /// encoder's input as upstream does (speakerMel); without it, the
++    /// Whisper-style mel this port has always used, which ICL clones keep
++    /// so that their voices stay as they were (their voice comes mostly
++    /// from the reference codes; thread #90 measured no clear gain).
++    func extractSpeakerEmbedding(_ refAudio: MLXArray, upstreamMel: Bool = false) -> MLXArray? {
+         guard let speakerEncoder else { return nil }
+ 
+         let rawAudio: MLXArray
+@@ -867,13 +906,15 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+ 
+         for batch in 0 ..< batchSize {
+             let waveform = rawAudio[batch]
+-            let mel = computeMelSpectrogram(
+-                audio: waveform,
+-                sampleRate: speakerEncoder.config.sampleRate,
+-                nFft: 1024,
+-                hopLength: 256,
+-                nMels: 128
+-            )
++            let mel = upstreamMel
++                ? Self.speakerMel(waveform, sampleRate: speakerEncoder.config.sampleRate)
++                : computeMelSpectrogram(
++                    audio: waveform,
++                    sampleRate: speakerEncoder.config.sampleRate,
++                    nFft: 1024,
++                    hopLength: 256,
++                    nMels: 128
++                )
+             mels.append(mel)
+         }
+ 
+@@ -886,7 +927,8 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+         text: String,
+         language: String,
+         instruct: String?,
+-        speaker: String? = nil
++        speaker: String? = nil,
++        speakerEmbedding: MLXArray? = nil
+     ) -> (MLXArray, MLXArray, MLXArray) {
+         guard let tokenizer, let talkerConfig = config.talkerConfig else {
+             fatalError("Tokenizer/config not loaded")
+@@ -914,8 +956,9 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+             languageId = langMap[language.lowercased()]
+         }
+ 
+-        // Speaker embedding (CustomVoice models only)
+-        var speakerEmbed: MLXArray? = nil
++        // Speaker embedding: a CustomVoice speaker's, or the x-vector of a
++        // Base model's reference clip
++        var speakerEmbed: MLXArray? = speakerEmbedding
+         if let speaker = speaker {
+             if let spkIdMap = talkerConfig.spkId,
+                let spkIdValue = spkIdMap[speaker.lowercased()] {

@@ -159,7 +159,7 @@ func dubWarningText(code string) string {
 	case services.DubWarnDialogueFallback:
 		return i18n.T("Some conversation lines were made line by line: the dialogue model did not say them clearly.")
 	case services.DubWarnLinesFlagged:
-		return i18n.T("Some lines made line by line were not heard clearly either: listen to the lines marked Listen.")
+		return i18n.T("Some lines were not heard clearly, or not in their language, even made again: listen to the lines marked Listen.")
 	}
 	return code
 }

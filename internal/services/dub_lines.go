@@ -57,11 +57,25 @@ func (s *Dubs) voiceFor(ctx context.Context, p *dub.Project, seg dub.Segment, l 
 		// reference: the line clones its speaker (or fails, saying why).
 		auto, w := s.autoVoice(p, seg)
 		if auto.RefAudio != "" {
-			return auto, warn
+			return crossLingualClone(p, seg, l, caps, auto), warn
 		}
 		return auto, w
 	}
-	return v, warn
+	return crossLingualClone(p, seg, l, caps, v), warn
+}
+
+// crossLingualClone is v for a line in another language than its
+// speaker's clip (thread #90): given the clip's transcript, Qwen3-TTS
+// Base goes on in the clip's language (a Japanese clip had 9 of 14
+// Chinese lines spoken in Japanese or garbled); from the clip alone (its
+// speaker embedding) it speaks the line's language, as like the speaker.
+// So the speaker's own clip is sent without its transcript to a model
+// that clones that way.
+func crossLingualClone(p *dub.Project, seg dub.Segment, l string, caps DubModelCaps, v dub.VoiceSpec) dub.VoiceSpec {
+	if v.Auto && v.RefText != "" && caps.CloneAudioOnly && p.CrossLingual(seg, l) {
+		v.RefText = ""
+	}
+	return v
 }
 
 // autoVoice is the clone of segment seg's own speaker (Auto).
@@ -277,6 +291,10 @@ type dubWork struct {
 func (s *Dubs) renderWork(ctx context.Context, sc *stageCtx, work []dubWork, dd *dubDialogue, dir string) error {
 	p, l := sc.p, sc.params.Lang
 	rendered := map[string]dub.Render{}
+	// The lines checked once all are made (dub_check.go): kept out of
+	// the flushed batches until then.
+	var checks []checkedLine
+	checked := map[string]dub.Render{}
 	failed := 0
 	flush := func() error {
 		if len(rendered) == 0 {
@@ -319,6 +337,12 @@ func (s *Dubs) renderWork(ctx context.Context, sc *stageCtx, work []dubWork, dd 
 			}
 			failed++
 			r = dub.Render{Key: w.key, Start: seg.Start, Err: err.Error(), Text: w.take.Text}
+		} else if needsCheck(p, seg, l, w.take) && !dd.has(seg.ID) {
+			// Checked once all are made (a conversation's line is
+			// checked as its fallback, dd.mark).
+			checks = append(checks, checkedLine{w.i, w.key, w.take})
+			checked[seg.ID] = r
+			return nil
 		}
 		if dd != nil {
 			dd.mark(ctx, &r, seg.ID)
@@ -380,6 +404,16 @@ func (s *Dubs) renderWork(ctx context.Context, sc *stageCtx, work []dubWork, dd 
 	}
 	if err := flush(); err != nil {
 		return err
+	}
+	if len(checks) > 0 {
+		err := s.checkLines(ctx, sc, l, dir, s.cfg.Caps(p.Settings.Model), checks, checked)
+		rendered = checked
+		if ferr := flush(); err == nil {
+			err = ferr
+		}
+		if err != nil {
+			return err
+		}
 	}
 	if failed > 0 {
 		sc.warn(DubWarnLinesFailed)

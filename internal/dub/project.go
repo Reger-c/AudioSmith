@@ -380,10 +380,13 @@ type Render struct {
 	Dialogue       int    `json:"dialogue,omitempty"`
 	Via            string `json:"via,omitempty"`
 	FallbackReason string `json:"fallbackReason,omitempty"`
-	// Flag: a line made on the dub's model in place of the dialogue
-	// model's failed the same check (FlagHeard: the recognizer heard
-	// Heard; FlagLength: far shorter or longer than its text). It is kept
-	// and shown with a warning, to listen to.
+	// Flag: a line failed its check (FlagHeard: the recognizer heard
+	// Heard; FlagLength: far shorter or longer than its text;
+	// FlagLanguage: heard in another language's script, Heard). Checked
+	// are a line made on the dub's model in place of the dialogue
+	// model's, and one cloned from a clip in another language (thread
+	// #90; made once more before it is flagged). It is kept and shown
+	// with a warning, to listen to.
 	Flag  string `json:"flag,omitempty"`
 	Heard string `json:"heard,omitempty"`
 }
@@ -394,10 +397,11 @@ const (
 	ViaFallback = "fallback"
 )
 
-// Why a fallback line is flagged (Render.Flag).
+// Why a line is flagged (Render.Flag).
 const (
-	FlagHeard  = "heard"
-	FlagLength = "length"
+	FlagHeard    = "heard"
+	FlagLength   = "length"
+	FlagLanguage = "language"
 )
 
 // QCReport is a second-pass check of a track.
