@@ -7,7 +7,7 @@
 - References are cleaned automatically: background noise is removed only when there is some (DeepFilterNet; clean recordings are left alone), the silence before and after is trimmed, long pauses are shortened, and the loudness is evened out to −18 LUFS. The original is kept: Undo on Clone, "Use the original" in the voice's editor.
 - Recordings of 15–30 seconds keep their best 10–14 seconds. Clone has tips for recording your own voice: a quiet small room, talk rather than read, record 15–30 seconds.
 - Designed voices get a reference of their own for clone models, portable copies and Stories' whole dialogue: about 12 seconds of lively everyday speech in a casual tone, the best of three takes. Their greeting sample stays for previews. New designed voices get it when saved; older ones when first used with a clone model or in whole dialogue (or "Make reference" in the voice's menu).
-- Portable copies of built-in voices now read everyday narration instead of a sentence about the recording, asked to sound casual where the model takes an instruction, and keep the best of three takes.
+- Portable copies of built-in voices now read everyday narration instead of a sentence about the recording, asked to sound casual where the model takes an instruction, and keep the best of three takes. They read in the speaker's own language (Vivian, Serena, Uncle_Fu, Dylan and Eric Chinese; Ryan and Aiden English), whatever the app's language.
 - Dub denoises a speaker's reference only when it is noisy, and tidies it the same way.
 
 ### Stories: emotions that stay coherent across a scene
