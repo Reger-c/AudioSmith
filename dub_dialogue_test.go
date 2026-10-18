@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -185,6 +186,30 @@ func TestDubDialogueLines(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("Conversation 1 · line by line") || !tt.HasText("Made line by line, and still not heard clearly (“我很不好”): listen to it.") {
 		t.Errorf("flagged: %q", tt.Texts())
+	}
+}
+
+// The Batch page's switch: on by default (its dubs as new dubs), off
+// carried into the batch's dubs.
+func TestBatchDialogueSwitch(t *testing.T) {
+	d := newDubTest(t, 2)
+	a, tt := d.a, d.tt
+	a.navigate("/batch")
+	tt.Frame()
+	if !tt.HasText("Multi-speaker dialogue") {
+		t.Fatalf("no switch: %q", tt.Texts())
+	}
+	a.batchSetSettings(func(s *services.BatchSettings) { s.Dialogue = dub.DialogueOff })
+	bs := a.batch.settings
+	if bs.Dialogue != dub.DialogueOff {
+		t.Errorf("settings %+v", bs)
+	}
+	ids, errs := a.dubSvc.Enqueue(context.Background(), []string{d.src}, bs)
+	if len(ids) != 1 || len(errs) != 0 {
+		t.Fatalf("enqueue %v %v", ids, errs)
+	}
+	if p, err := a.dubSvc.Get(context.Background(), ids[0]); err != nil || p.Settings.Dialogue != dub.DialogueOff {
+		t.Errorf("batch dub %q %v", p.Settings.Dialogue, err)
 	}
 }
 

@@ -252,13 +252,13 @@
       "id": "soulx-podcast-1.7b-8bit",
       "label": "SoulX-Podcast 1.7B",
       "name": "Dialogue · Light",
-      "summary": "Speaks a story's dialogue a scene at a time, each line hearing the lines before it, in the characters' cloned voices; up to four characters. Chinese and English.",
+      "summary": "Speaks dialogue a scene at a time (a story's scenes, an audiobook's dialogue passages, a dub's conversations), each line hearing the lines before it, in the speakers' cloned voices; up to four voices. Chinese and English.",
       "tags": ["chinese", "english", "clone"],
       "family": "soulx_podcast",
       "repo": "actnowai/SoulX-Podcast-1.7B-MLX-8bit",
       "revision": "a29890e3934561aa36dedbb5e0365a2e6670601f",
       "tasks": ["tts"],
-      "about": "A dialogue model: up to four speakers, each cloned from a reference clip and its transcript, speak a scene turn by turn, so every line answers the one before it. Used by Stories' whole-dialogue mode; narration stays on the story's model.",
+      "about": "A dialogue model: up to four speakers, each cloned from a reference clip and its transcript, speak a scene turn by turn, so every line answers the one before it. Used by Stories' whole dialogue, audiobooks' dialogue passages and the dub's multi-speaker dialogue; narration and the other lines stay on the project's model.",
       "languages": [
         {"code": "zh"},
         {"code": "en"}
