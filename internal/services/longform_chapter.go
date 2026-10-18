@@ -9,6 +9,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
+	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
 
@@ -25,6 +27,13 @@ import (
 func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterParams, info ModelInfo, modelPath string, report func(jobs.Progress)) (json.RawMessage, error) {
 	started := time.Now()
 	r := cr.r
+	dialoguePath := ""
+	if p.Production.Dialogue && p.Production.DialogueModel != "" && r.engine != nil {
+		var err error
+		if dialoguePath, err = r.modelReady(ctx, p.Production.DialogueModel); err != nil {
+			return nil, err
+		}
+	}
 	steps, key, warnings, err := cr.program(ctx, p, info, modelPath)
 	if err != nil {
 		return nil, err
@@ -89,7 +98,44 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 		}
 		i++
 		c := *s.chunk
-		if s.track != nil {
+		if s.dialogue != nil {
+			// A line of a whole-dialogue segment: its file, else as usual.
+			seg := s.dialogue.seg
+			if !seg.made {
+				seg.made = true
+				seg.err = cr.dialogueRun(ctx, st, i, n, seg, p.Production.DialogueModel, dialoguePath)
+				var je *jobs.Error
+				switch {
+				case ctx.Err() != nil:
+					return ctx.Err()
+				case errors.As(seg.err, &je) && (je.Code == proto.CodeModelNotDownloaded || je.Code == proto.CodeLicenceRequired):
+					return seg.err
+				case seg.err != nil:
+					r.logf("chapter %s: lines %v: no dialogue (%v); making them on the story's model", job.ID, seg.lines, seg.err)
+					res.DialogueFailed += len(seg.lines)
+				default:
+					res.Dialogues++
+					res.DialogueLines += len(seg.lines) - len(seg.failed)
+					res.DialogueFailed += len(seg.failed)
+					res.DialogueRedone += seg.redone
+				}
+			}
+			if seg.err != nil || seg.failed[s.dialogue.k] {
+				for _, f := range s.dialogue.fallback {
+					if f.chunk != nil {
+						n++
+						st.total += f.chunk.chars
+					}
+				}
+				for _, f := range s.dialogue.fallback {
+					if err := run(f); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			c.path, c.seg.Text = seg.paths[s.dialogue.k], seg.texts[s.dialogue.k]
+		} else if s.track != nil {
 			// A line of a character's track: cut from it, else as usual.
 			seg := s.track.seg
 			if !seg.made {

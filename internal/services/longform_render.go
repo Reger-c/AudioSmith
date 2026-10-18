@@ -101,6 +101,14 @@ type ChapterResult struct {
 	Tracks       int `json:"tracks,omitempty"`
 	TrackLines   int `json:"trackLines,omitempty"`
 	TracksFailed int `json:"tracksFailed,omitempty"`
+	// Dialogues are the whole-dialogue segments (story_dialogue.go),
+	// DialogueLines their lines from the dialogue model, DialogueRedone
+	// the lines it made twice, DialogueFailed the lines (or segments)
+	// made on the story's model instead.
+	Dialogues      int `json:"dialogues,omitempty"`
+	DialogueLines  int `json:"dialogueLines,omitempty"`
+	DialogueRedone int `json:"dialogueRedone,omitempty"`
+	DialogueFailed int `json:"dialogueFailed,omitempty"`
 	// Levelled counts the lines brought toward their character's loudness.
 	Levelled int               `json:"levelled,omitempty"`
 	Report   LoudnessReport    `json:"report"`
@@ -148,6 +156,8 @@ type chapterStep struct {
 	span    int
 	turn    *turnStep
 	track   *trackStep // a line of a character's track (story_track.go)
+	// dialogue: a line of a whole-dialogue segment (story_dialogue.go).
+	dialogue *dialogueStep
 }
 
 // turnStep is a merged turn: its lines, their expected lengths, and the

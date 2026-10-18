@@ -3333,6 +3333,7 @@
   "Keep separate": "保持分开",
   "%d model (%s) moves there; what the folder has already is not copied again. AudioSmith then keeps its models there, with the other ActNow apps. You can cancel: what has moved stays there.": "%d 个模型（%s）将移到那里，那里已有的不会再复制。之后 AudioSmith 会和其他 ActNow app 一样把模型放在那里。可以随时取消，已移过去的会留在那里。",
   "%d models (%s) move there; what the folder has already is not copied again. AudioSmith then keeps its models there, with the other ActNow apps. You can cancel: what has moved stays there.": "%d 个模型（%s）将移到那里，那里已有的不会再复制。之后 AudioSmith 会和其他 ActNow app 一样把模型放在那里。可以随时取消，已移过去的会留在那里。",
+  "%s is not downloaded (%s).": "%s 尚未下载（%s）。",
   "Move AudioSmith's models to %s?": "把 AudioSmith 的模型移到 %s？",
   "Move": "移动",
   "Moving AudioSmith's models to %s…": "正在把 AudioSmith 的模型移到 %s…",
@@ -3380,10 +3381,14 @@
   "Each character's part in one go": "每个角色一次读完",
   "A character's lines with emotions are said in one synthesis per stretch of one feeling, so the voice carries on from line to line, and cut apart again with the forced aligner (%s). Narration, and a stretch that cannot be cut cleanly, are made line by line. Off: every line on its own.": "同一角色带情绪的台词，情绪相同的一段一次合成，让声音一句接一句延续下去，再用强制对齐（%s）切开。旁白，以及切不干净的一段，按句生成。关闭后每句单独生成。",
   "A dialogue model: up to four speakers, each cloned from a reference clip and its transcript, speak a scene turn by turn, so every line answers the one before it. Used by Stories' whole-dialogue mode; narration stays on the story's model.": "对话模型：最多四个说话人，各用一段参考录音和它的文字稿克隆，一轮接一轮说完一场戏，每句都接着上一句。用于故事的「整场对话」模式；旁白仍由故事的模型来读。",
+  "For Chinese and English stories.": "适用于中文和英文故事。",
+  "Needs %g GB of memory; this Mac has %d GB.": "需要 %g GB 内存；这台 Mac 有 %d GB。",
   "Speaks a story's dialogue scene by scene, each line hearing the lines before it, in the characters' cloned voices. Chinese and English; needs 16 GB of memory.": "按场景说出故事里的对白，每句都听得到前面的话，用各角色克隆的声音。支持中文和英文；需要 16 GB 内存。",
   "emotion\u0004Apologetic": "愧疚",
   "Stories' performance, never spoken: the scene (where, who, the mood), character → persona (%s), line id → emotion (%s: steady, happy, hurt…), line id → its intensity 0–3 and line id → a direction in your own words (%s). Models that take instructions (%s and %s) hear a short instruction made from them; get_longform's continuity says what the model does with them.": "故事的演绎设定，不会被读出：场景（时间地点、人物关系、氛围）、角色 → 性格（%s）、行 id → 情绪（%s：steady、happy、hurt……）、行 id → 强度 0–3，以及行 id → 用你自己的话写的演绎（%s）。接收指令的模型（%s 和 %s）会收到由它们生成的一条短指令；get_longform 的 continuity 说明当前模型如何使用它们。",
   "Stories: %s or %s runs the AI director: the writing-help language model reads the story and plans its emotions, a baseline per character and an emotion, intensity and turn per line, mostly steady (only what is empty, or replacing all but what you set). Takes up to a minute or two; %s if no language model is set up.": "故事：%s 或 %s 运行 AI 导演：写作助手的语言模型通读故事并规划情绪，每个角色一个基调，每句一个情绪、强度和是否转折，大多平稳（只填空白项，或替换除你设置过的以外的全部）。最多需要一两分钟；没有配置语言模型时返回 %s。",
+  "The characters' lines are spoken by %s a scene at a time, each line hearing the lines before it, so they answer each other; narration stays on the story's model. Each character is cloned from their voice (a cloned voice's clip, else a short sample in that voice). Lines it does not say clearly are made again, then on the story's model. Slower than real time.": "角色的台词由 %s 按场景一次说完，每句都听得到前面的话，所以彼此接得上；旁白仍由故事的模型来读。每个角色从自己的声音克隆（克隆声音用它的录音，其他声音先用它读一小段样本）。没读清楚的句子会重做一次，仍不行就改用故事的模型。比实时慢。",
   "Usual mood": "情绪基调",
+  "Whole dialogue": "整场对话",
   "model name\u0004Whole-dialogue voices": "整场对话"
 }
