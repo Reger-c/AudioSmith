@@ -228,6 +228,9 @@ func (a *app) dubFooter(c *ui.Context) {
 				}
 				label = i18n.N(n, "Regenerate %d changed", "Regenerate %d changed", n)
 			}
+			if note := a.dubDialogueCount(); note != "" {
+				caption(c.Key("dub-dialogue-count"), note).TextColor(tok(t).Text3).SingleLine().Shrink(0)
+			}
 			if primaryButton(c.Key("dub-generate"), label).Clicked() {
 				a.dubGenerate()
 			}

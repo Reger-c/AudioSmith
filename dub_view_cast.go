@@ -28,6 +28,8 @@ func (a *app) dubCastPanel(c *ui.Context) {
 		dubPanelTitle(c, i18n.N(len(p.SpeakerLabels()), "Cast · %d speaker", "Cast · %d speakers", len(p.SpeakerLabels())))
 		infoTip(c.Key("cast-tip"), i18n.T("Drag a voice onto a speaker, or pick one from the list. Auto clones each speaker's own voice."))
 	})
+	a.dubDialogueRow(c, locked)
+	dl := a.dubDialogue()
 	choices := a.dubVoiceChoices()
 	// The chips.
 	ui.Row(c.Key("cast-chips")).Gap(px(t, 4)).Wrap().Children(func() {
@@ -73,6 +75,7 @@ func (a *app) dubCastPanel(c *ui.Context) {
 					caption(c, dubRefWarning(r.Hints)).TextColor(t.Warning).Grow(1).MinWidth(0)
 				})
 			}
+			a.dubDialogueRefNote(c, dl, sp)
 			if _, ok := p.References[sp]; !ok && p.Stage(dub.StageReferences, "").Status == dub.StatusDone {
 				ui.Row(c).Gap(px(t, 6)).Children(func() {
 					iconMark(c, icons.DangerTriangle, t.Warning, "")
@@ -116,12 +119,14 @@ func (a *app) dubGeneratePanel(c *ui.Context) {
 	if p.Settings.Model == "" {
 		cur = entryFor(a.dubDefaultModel())
 	}
+	dl := a.dubDialogue()
 	ui.Field(c, i18n.T("Voice model"), func() {
 		a.modelPicker(c, "gen-model", catalog.WorkflowDub, cur, func(e catalog.Entry) {
 			repo := e.Repo
 			a.dubSettings(func(s *dub.Settings) { s.Model = repo })
-		}, pickerOpts{Locked: locked})
+		}, pickerOpts{Locked: locked, Dialogue: a.dubDialoguePick(dl)})
 	})
+	a.dubDialogueGenerateNote(c, dl)
 	caps := dubCaps(p.Settings.Model)
 	if caps.NeedsReference {
 		caption(c.Key("gen-needs-ref"), i18n.T("%s only clones voices: each line speaks in its speaker's own voice or a saved cloned voice.", modelRef(entryFor(p.Settings.Model)))).TextColor(tok(t).Text3)

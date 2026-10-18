@@ -201,7 +201,7 @@ func (a *app) dubSetLine(id, label string, fn func(*dub.Segment)) {
 
 func segEqual(a, b dub.Segment) bool {
 	return a.Volume == b.Volume && a.Speed == b.Speed && a.Direction == b.Direction && a.Voice == b.Voice &&
-		a.Speaker == b.Speaker && a.Lang == b.Lang && a.Locked == b.Locked && a.Start == b.Start && a.End == b.End
+		a.Speaker == b.Speaker && a.Lang == b.Lang && a.Locked == b.Locked && a.Start == b.Start && a.End == b.End && a.NoDialogue == b.NoDialogue
 }
 
 // dubSetTiming moves a line (the timeline, the start/end fields).

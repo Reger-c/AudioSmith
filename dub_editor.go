@@ -160,6 +160,7 @@ func (a *app) dubLines(c *ui.Context) {
 		return i
 	}
 	var after func()
+	a.dubDlgNow = a.dubDialogue()
 	ui.List(c.Key("dub-lines"), &a.dubList2, len(p.Segments)).Grow(1).MinHeight(px(t, 220)).Gap(px(t, 2)).ItemKey(a.dubList2.Key).Rows(func(r ui.ListRow) {
 		if r.Index >= len(a.dub.Segments) {
 			return
@@ -236,6 +237,7 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 	if cur {
 		row.Background(k.Subtle)
 	}
+	a.dubDialogueBar(c, row, id)
 	if row.Clicked() && !cur {
 		a.dubCur = id
 		a.dubTL.sel = id
@@ -277,6 +279,7 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 				if overlap {
 					dubBadge(c, i18n.T("Overlaps the next line"), "danger")
 				}
+				a.dubDialogueChip(c, s)
 				for _, b := range a.dubBadges(s) {
 					dubBadge(c, b[0], b[1])
 				}
@@ -294,6 +297,7 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 				menuDo(m, i18n.T("Merge with previous (⇧⌘M)"), locked || i == 0, func() { after = func() { a.dubMerge(id, false) } })
 				menuDo(m, i18n.T("Merge with next (⌘M)"), locked || i+1 >= len(p.Segments), func() { after = func() { a.dubMerge(id, true) } })
 				menuDo(m, i18n.T("Insert a line below"), locked, func() { after = func() { a.dubInsert(id) } })
+				a.dubDialogueMenu(m, s, locked, &after)
 				m.Separator()
 				menuDo(m, i18n.T("Delete"), locked, func() { after = func() { a.dubDelete(id) } })
 			})
@@ -322,6 +326,7 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 				caption(c, i18n.T("The translation failed (%s).", line.Err)).TextColor(t.Danger).Grow(1).MinWidth(0)
 			})
 		}
+		a.dubDialogueFlag(c, s)
 		if qc := p.Track(a.dubLang).QC; qc != nil && a.dubLang != "" && !p.Track(a.dubLang).QCStale() {
 			for _, q := range qc.Lines {
 				if q.ID == id && q.Flagged {

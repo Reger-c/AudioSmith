@@ -152,6 +152,7 @@ func skillTools() []skillTool {
 			arg(i18n.T("How far to run now: transcript (stop to review the lines), translation, dub (default: everything) or none."), "through"),
 			arg(i18n.T("One voice for every speaker (a saved voice's name or id); empty: each speaker's own voice, cloned from the source."), "voice"),
 			arg(i18n.T("The speech model; empty: the dubbing default. How many people speak (0: detected). Keep music and effects (default true). A title (default: the file's name)."), "model", "speakers", "keep_background", "title"),
+			arg(i18n.T("Multi-speaker dialogue: auto (the default) records the conversations of a Chinese or English track with the dialogue model, each line hearing the one before it (slower; the rest line by line), off line by line; the dialogue model: soulx (the only one for dubs yet)."), "dialogue", "dialogue_model"),
 		}, After: i18n.T("Returns the dub (dub_id) and its job_id (dub:<dub_id>). Translation uses the translator of AudioSmith's settings (local or cloud, as the user chose): if none is set up, the error is dub.no_translator.")},
 		{Name: "get_dub", Lead: i18n.T("a dub: stages, speakers and their voices, tracks (files), and its lines with their translations."), Args: []skillArg{
 			must(i18n.T("The dub."), "dub_id"),
@@ -162,7 +163,8 @@ func skillTools() []skillTool {
 			must(i18n.T("The dub."), "dub_id"),
 			arg(i18n.T("Line edits: objects with id and any of text (the source; its translations are made again), translation with language, speaker, voice."), "segments"),
 			arg(i18n.T("Speaker label (S1, S2…) or * → voice (a saved voice's name or id; default: cloned from the source); speaker label → display name."), "cast", "names"),
-		}, After: i18n.T("Then run_dub makes only the changed lines again.")},
+			arg(i18n.T("Multi-speaker dialogue (auto or off) and its model (soulx); a line's no_dialogue: true makes it line by line."), "dialogue", "dialogue_model"),
+		}, After: i18n.T("Then run_dub makes only the changed lines again: an edited conversation line alone, after the lines before it. get_dub lists the conversations (dialogue_stretches) and says how each line was made (made_by; flag: listen to it).")},
 		{Name: "run_dub", Lead: i18n.T("run a dub's pipeline (again)."), Args: []skillArg{
 			must(i18n.T("The dub."), "dub_id"),
 			arg(i18n.T("transcript, translation, dub (default) or verify (listen again and flag lines that came out wrong)."), "through"),
@@ -180,7 +182,7 @@ func skillTools() []skillTool {
 		}, After: i18n.T("Returns a job_id; when it succeeds its files hold the path written.")},
 		{Name: "batch_dub", Lead: i18n.T("dub several files with the Batch queue: one dub each, at background priority, without review stops."), Args: []skillArg{
 			arg(i18n.T("Absolute paths of videos or audio files, or a folder (its files, not its subfolders)."), "paths", "folder"),
-			arg(i18n.T("Override the Batch page's settings for these files only (nothing is saved): target languages, source language, one voice, model, keep music."), "target_languages", "source_language", "voice", "model", "keep_background"),
+			arg(i18n.T("Override the Batch page's settings for these files only (nothing is saved): target languages, source language, one voice, model, keep music, multi-speaker dialogue (auto or off)."), "target_languages", "source_language", "voice", "model", "keep_background", "dialogue"),
 		}, After: i18n.T("Returns added (each with its dub_id and job_id) and errors (files it could not take).")},
 		{Name: "list_batch", Lead: i18n.T("the Batch queue, its settings and its watch folder (read only: the user sets up watch folders in the app). No arguments.")},
 		{Name: "list_projects", Lead: i18n.T("AudioSmith's project library, as on its Projects page, newest first."), Args: []skillArg{

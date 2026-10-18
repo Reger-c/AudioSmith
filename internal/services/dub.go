@@ -123,6 +123,10 @@ type DubModels struct {
 	STTLanguages   []string
 	OtherSTT       string
 	OtherWordTimes bool
+	// Dialogue are the dialogue models the dub can speak conversations
+	// with, the default first (thread #89: SoulX-Podcast); none: every
+	// line line by line.
+	Dialogue []DubDialogueModel
 }
 
 // STTFor is the speech-to-text model for a language (BCP-47; "" =

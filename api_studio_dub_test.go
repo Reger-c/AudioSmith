@@ -145,3 +145,64 @@ func TestStudioBatch(t *testing.T) {
 		t.Fatalf("POST /api/batch %d %s", status, body)
 	}
 }
+
+// TestStudioDubDialogue: create_dub, edit_dub and batch_dub take
+// dialogue and dialogue_model; get_dub lists the conversations, each
+// line's and how it was made (by the dialogue model: dubtest's fake).
+func TestStudioDubDialogue(t *testing.T) {
+	e := newStudioEnv(t)
+	src := filepath.Join(t.TempDir(), "Talk.wav")
+	if _, err := dubtest.Speech(src, 4); err != nil {
+		t.Fatal(err)
+	}
+	e.fails(t, "create_dub", map[string]any{"path": src, "dialogue": "maybe"}, api.CodeInvalid)
+	e.fails(t, "create_dub", map[string]any{"path": src, "dialogue_model": "moss"}, api.CodeInvalid)
+	var d api.DubJSON
+	e.must(t, "create_dub", map[string]any{"path": src, "target_languages": []string{"zh-Hans"}, "dialogue_model": "soulx"}, &d)
+	if j := e.wait(t, d.JobID); j.State != "succeeded" {
+		t.Fatalf("dubbed %+v", j)
+	}
+	id := d.ID
+	d = api.DubJSON{}
+	e.must(t, "get_dub", map[string]any{"dub_id": id}, &d)
+	if d.Dialogue != dub.DialogueAuto || d.DialogueModel != "soulx" || d.DialogueBlocked != "" || len(d.DialogueStretches) != 1 ||
+		len(d.DialogueStretches[0].Segments) != 4 || d.DialogueStretches[0].Speakers != 2 {
+		t.Fatalf("dialogue %q %q %q %+v", d.Dialogue, d.DialogueModel, d.DialogueBlocked, d.DialogueStretches)
+	}
+	for _, s := range d.Segments {
+		if s.Dialogue != 1 || s.MadeBy != "dialogue" {
+			t.Errorf("line %+v", s)
+		}
+	}
+	// A line kept out, then dialogue off.
+	last := d.Segments[3].ID
+	d = api.DubJSON{}
+	e.must(t, "edit_dub", map[string]any{"dub_id": id, "segments": []map[string]any{{"id": last, "no_dialogue": true}}}, &d)
+	if !d.Segments[3].NoDialogue || d.Segments[3].Dialogue != 0 || len(d.DialogueStretches) != 1 || len(d.DialogueStretches[0].Segments) != 3 {
+		t.Errorf("kept out: %+v %+v", d.Segments[3], d.DialogueStretches)
+	}
+	d = api.DubJSON{}
+	e.must(t, "edit_dub", map[string]any{"dub_id": id, "dialogue": "off"}, &d)
+	if d.Dialogue != dub.DialogueOff || d.DialogueBlocked != dub.DialogueWhyOff || len(d.DialogueStretches) != 0 {
+		t.Errorf("off: %q %q %v", d.Dialogue, d.DialogueBlocked, d.DialogueStretches)
+	}
+	e.fails(t, "edit_dub", map[string]any{"dub_id": id, "dialogue": "maybe"}, api.CodeInvalid)
+	// Another language: line by line, and why.
+	var es api.DubJSON
+	e.must(t, "create_dub", map[string]any{"path": src, "target_languages": []string{"ja"}, "through": "none"}, &es)
+	if es.Dialogue != dub.DialogueAuto || es.DialogueBlocked != dub.DialogueWhySpeakers { // not transcribed yet
+		t.Errorf("ja: %q %q", es.Dialogue, es.DialogueBlocked)
+	}
+	// The batch queue: off for its dubs.
+	var b api.BatchJSON
+	e.must(t, "batch_dub", map[string]any{"paths": []string{src}, "target_languages": []string{"zh-Hans"}, "dialogue": "off"}, &b)
+	if len(b.Added) != 1 {
+		t.Fatalf("batch %+v", b)
+	}
+	p, err := e.a.dubSvc.Get(context.Background(), b.Added[0].ID)
+	if err != nil || p.Settings.Dialogue != dub.DialogueOff {
+		t.Errorf("batch dub's dialogue %q (%v)", p.Settings.Dialogue, err)
+	}
+	e.wait(t, b.Added[0].JobID)
+	e.fails(t, "batch_dub", map[string]any{"paths": []string{src}, "dialogue": "x"}, api.CodeInvalid)
+}

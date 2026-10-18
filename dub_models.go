@@ -9,6 +9,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
@@ -60,6 +61,8 @@ func dubModels(lib *library) services.DubModels {
 			m.SpeakersLanguages = append(m.SpeakersLanguages, catalog.BaseLanguage(l.Code))
 		}
 	}
+	// Conversations (thread #89): the dialogue models a dub speaks with.
+	m.Dialogue = dubDialogueModels(machineMemoryGB())
 	if lib != nil {
 		s := lib.settings.Get()
 		if s.Transcribe.AccurateModel != "" {
@@ -71,6 +74,39 @@ func dubModels(lib *library) services.DubModels {
 	}
 	return m
 }
+
+// dubDialogueModels are the dialogue models a dub can speak its
+// conversations with on a Mac of gb GB (0: unknown): SoulX-Podcast (P2;
+// MOSS-TTSD comes later, plan §2, P3), blocked where it lacks memory.
+func dubDialogueModels(gb int) []services.DubDialogueModel {
+	var out []services.DubDialogueModel
+	for _, e := range dubDialogueEntries() {
+		d := services.DubDialogueModel{Repo: e.Repo, Family: e.Family, Revision: e.Revision}
+		for _, l := range e.Languages {
+			d.Languages = append(d.Languages, catalog.BaseLanguage(l.Code))
+		}
+		if gb > 0 && float64(gb) < e.MinMemoryGB {
+			d.Blocked = services.DubDialogueMemory
+		}
+		out = append(out, d)
+	}
+	return out
+}
+
+// dubDialogueEntries are the catalogue's dialogue models a dub speaks
+// with, the default first.
+func dubDialogueEntries() []catalog.Entry {
+	var out []catalog.Entry
+	for _, e := range dialogueEntries() {
+		if e.Family != services.FamilyMossTTSD { // P3
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// machineMemoryGB is this machine's memory in GB (read once).
+var machineMemoryGB = sync.OnceValue(func() int { return readSysInfo().MemoryGB() })
 
 // dubCaps describes a TTS model to the pipeline.
 func dubCaps(repo string) services.DubModelCaps {

@@ -62,6 +62,14 @@ func (b *apiBackend) BatchDub(ctx context.Context, req api.BatchRequest) (res ap
 	if req.KeepBackground != nil {
 		bs.KeepBackground = *req.KeepBackground
 	}
+	switch m, err := dubDialogueMode(req.Dialogue); {
+	case err != nil:
+		return api.BatchJSON{}, err
+	case m == dub.DialogueOff:
+		bs.Dialogue = dub.DialogueOff
+	case m == dub.DialogueAuto:
+		bs.Dialogue = ""
+	}
 	if len(bs.Targets) == 0 {
 		return api.BatchJSON{}, errBadRequest("target_languages", "Give target_languages: the Batch page has none.")
 	}
@@ -131,6 +139,6 @@ func (b *apiBackend) Batch(ctx context.Context) (api.BatchJSON, error) {
 	out.Watch = &api.WatchFolderJSON{Folder: w.Dir, Active: w.Active, Paused: w.Paused, Added: w.Added, Error: w.Err}
 	bs := b.dubs.BatchSettings(ctx)
 	out.Prefs = &api.BatchSettingsJSON{Targets: bs.Targets, SourceLanguage: bs.SourceLang, Voice: bs.Voice, Model: bs.Model,
-		KeepBackground: bs.KeepBackground, Translator: bs.Translator}
+		KeepBackground: bs.KeepBackground, Translator: bs.Translator, Dialogue: firstOf(bs.Dialogue, dub.DialogueAuto)}
 	return out, nil
 }

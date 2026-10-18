@@ -69,6 +69,7 @@ dsp/stretch              dsp
 
 dsp/wav                  dsp
 
+dub                      dialogue
 dub                      doc/subtitle
 dub                      dsp
 dub                      dsp/analysis
@@ -87,6 +88,7 @@ dub/dubtest              dsp/wav
 dub/dubtest              dub
 dub/dubtest              engine/proto
 dub/dubtest              jobs
+dub/dubtest              text
 
 engine                   core
 engine                   engine/proto

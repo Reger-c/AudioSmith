@@ -67,6 +67,9 @@ func (b *apiBackend) EditDub(ctx context.Context, req api.DubEdit) (api.DubJSON,
 					}
 					s.Voice = ref
 				}
+				if ed.NoDialogue != nil {
+					s.NoDialogue = *ed.NoDialogue
+				}
 			}
 		}
 		for label, v := range req.Cast {
@@ -95,7 +98,7 @@ func (b *apiBackend) EditDub(ctx context.Context, req api.DubEdit) (api.DubJSON,
 			}
 			p.Names[label] = strings.TrimSpace(name)
 		}
-		return nil
+		return applyDubDialogue(&p.Settings, req.Dialogue, req.DialogueModel)
 	})
 	if err != nil {
 		return api.DubJSON{}, notFound(err, "dub", req.ID)
