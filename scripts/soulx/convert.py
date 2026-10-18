@@ -213,6 +213,7 @@ def main():
     ap.add_argument("out")
     ap.add_argument("--swift-params")
     ap.add_argument("--skip-llm", action="store_true")
+    ap.add_argument("--commit", help="AudioSmith commit of this script (default: git rev-parse HEAD)")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
 
@@ -245,10 +246,12 @@ def main():
         src = os.path.join(here, "repo", name)
         if os.path.exists(src):
             shutil.copy(src, os.path.join(a.out, name))
-    try:
-        commit = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-    except OSError:
-        commit = ""
+    commit = a.commit or ""
+    if not commit:
+        try:
+            commit = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        except OSError:
+            pass
     json.dump({"converter": "AudioSmith scripts/soulx/convert.py", "commit": commit or "unknown",
                "upstream": "Soul-AILab/SoulX-Podcast-1.7B@7d381e3aa4f2ac9e23201b57957fd0499f8f2fd1"},
               open(os.path.join(a.out, "conversion.json"), "w"), indent=1)
