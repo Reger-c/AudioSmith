@@ -207,7 +207,15 @@ func (a *app) startRefMake(m *refMake, takes []core.Take, retry func()) {
 		c := &refCand{text: t.Text}
 		m.cands = append(m.cands, c)
 		c.takeID = a.voiceGenerate("reference", m.key, t, retry)
+		// A take refused at once (no take, or its job already failed).
+		if j := a.voiceJobs[c.takeID]; j == nil || j.err != "" {
+			c.err = i18n.T("The job failed")
+			if j != nil {
+				c.err = j.err
+			}
+		}
 	}
+	a.refSettled(m)
 }
 
 // refTakeCreated takes a candidate's take.
