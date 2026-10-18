@@ -248,10 +248,17 @@ func (r *renderer) pruneLongformChunks() {
 	entries, _ := os.ReadDir(r.longformChunkDir())
 	for _, e := range entries {
 		fi, err := e.Info()
-		if err != nil || e.IsDir() || !strings.HasSuffix(e.Name(), ".wav") {
+		if err != nil || e.IsDir() {
 			continue
 		}
 		path := filepath.Join(r.longformChunkDir(), e.Name())
+		if !strings.HasSuffix(e.Name(), ".wav") {
+			// A dialogue line's sidecars (.codes, .fail, .segfail) go with age.
+			if time.Since(fi.ModTime()) > longformKeep && dialogueSidecar(e.Name()) {
+				os.Remove(path)
+			}
+			continue
+		}
 		if time.Since(fi.ModTime()) > longformKeep {
 			os.Remove(path)
 			continue
@@ -269,6 +276,13 @@ func (r *renderer) pruneLongformChunks() {
 		}
 		if os.Remove(f.path) == nil {
 			total -= f.size
+			os.Remove(f.path + ".codes")
 		}
 	}
+}
+
+// dialogueSidecar reports whether a cache file is a dialogue line's
+// sidecar (dialogue_run.go).
+func dialogueSidecar(name string) bool {
+	return strings.HasSuffix(name, ".wav.codes") || strings.HasSuffix(name, ".wav.fail") || strings.HasSuffix(name, ".wav.segfail")
 }

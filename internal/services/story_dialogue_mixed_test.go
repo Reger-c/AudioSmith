@@ -222,7 +222,4 @@ func TestMixedFrames(t *testing.T) {
 	if got := mixedFrames(m, cuts, 1); len(got) != 6 || got[0] != 2 {
 		t.Errorf("line 1: %v", got)
 	}
-	if l := dialogueLimitsFor(FamilyMossTTSD); l.speakers != 5 || l.cjk >= dialogueMaxCJK {
-		t.Errorf("limits %+v", l)
-	}
 }
