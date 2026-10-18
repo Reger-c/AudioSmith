@@ -155,7 +155,7 @@ func (a *app) insertDialogue(p *lfPage) {
 		p.ed.Select(start, end)
 		a.insertMarkup(p, pre+w.Text+post)
 		msg := i18n.N(len(w.Speakers), "Made a dialogue passage: %[1]d speaker · %[2]s", "Made a dialogue passage: %[1]d speakers · %[2]s",
-			len(w.Speakers), i18n.N(w.Turns, "%d line", "%d lines", w.Turns))
+			len(w.Speakers), i18n.N(w.Turns, "%d dialogue line", "%d dialogue lines", w.Turns))
 		if w.Unknown > 0 {
 			msg += i18n.N(w.Unknown, "; %d line has no speaker, marked “？”", "; %d lines have no speaker, marked “？”", w.Unknown)
 		}

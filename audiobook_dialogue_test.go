@@ -59,7 +59,7 @@ func TestAudiobookDialogueInsert(t *testing.T) {
 	if !strings.Contains(p.doc.Script, want) {
 		t.Fatalf("wrapped %q", p.doc.Script)
 	}
-	if !hasAnyText(tt.Texts(), "Made a dialogue passage: 2 speakers · 2 lines") {
+	if !hasAnyText(tt.Texts(), "Made a dialogue passage: 2 speakers · 2 dialogue lines") {
 		t.Errorf("toast %q", tt.Texts())
 	}
 	tt.Frame()
@@ -79,7 +79,7 @@ func TestAudiobookDialogueInsert(t *testing.T) {
 	if bg := p.ed.LineBackgrounds; len(bg) != 1 || bg[0].First != 6 || bg[0].Last != 11 || len(p.ed.GutterMarks) != 6 {
 		t.Errorf("styling %+v %d marks", bg, len(p.ed.GutterMarks))
 	}
-	if len(p.deco.inlays) != 1 || !strings.Contains(p.deco.inlays[0].Text, "2 speakers · 2 lines · ") {
+	if len(p.deco.inlays) != 1 || !strings.Contains(p.deco.inlays[0].Text, "2 speakers · 2 dialogue lines · ") {
 		t.Errorf("inlays %+v", p.deco.inlays)
 	}
 	// 自动分配: each gets a voice of their own, unlike the narrator's.
@@ -155,7 +155,7 @@ func TestBookDialogueReadiness(t *testing.T) {
 
 func TestManuscriptTokens(t *testing.T) {
 	kinds := func(line string, state uint64) ([]string, uint64) {
-		toks, st := tokenizeManuscript(line, state, nil)
+		toks, st := tokenizeManuscriptWith(nil, line, state, nil)
 		var out []string
 		prev := 0
 		for _, tk := range toks {
@@ -194,8 +194,13 @@ func TestManuscriptTokens(t *testing.T) {
 	if st != 0 || !slices.Equal(got, []string{"伊内丝：你好 =text", "[voice:Mara]=variable"}) {
 		t.Errorf("outside %q", got)
 	}
-	if speakerKind("Ines") != speakerKind(" INES ") {
+	var slots *speakerSlots
+	if slots.kind("Ines") != slots.kind(" INES ") {
 		t.Error("a name's colour")
+	}
+	slots = &speakerSlots{}
+	if slots.kind("Ines") != speakerKinds[0] || slots.kind("Tomas") != speakerKinds[1] || slots.kind("INES") != speakerKinds[0] {
+		t.Error("slots")
 	}
 }
 

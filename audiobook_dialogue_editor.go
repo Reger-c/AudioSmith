@@ -28,21 +28,40 @@ const (
 	tokenDirection = editor.TokenEmphasis // （低声） and whole-line stage directions
 )
 
-// speakerKinds colour the speakers' names, a name always the same.
-var speakerKinds = []editor.TokenKind{editor.TokenProperty, editor.TokenConstant, editor.TokenNumber, editor.TokenAttribute}
+// speakerKinds colour the speakers' names: the token kinds a manuscript
+// has no other use for.
+var speakerKinds = []editor.TokenKind{editor.TokenProperty, editor.TokenConstant, editor.TokenNumber, editor.TokenAttribute,
+	editor.TokenTag, editor.TokenLink}
 
-func speakerKind(name string) editor.TokenKind {
-	h := fnv.New32a()
-	h.Write([]byte(markup.NameKey(name)))
-	return speakerKinds[h.Sum32()%uint32(len(speakerKinds))]
+// speakerSlots give each name the next colour as the editor first meets
+// it, so the first six speakers of a book have colours of their own and a
+// name keeps its colour while the book is open.
+type speakerSlots struct{ slot map[string]int }
+
+func (s *speakerSlots) kind(name string) editor.TokenKind {
+	k := markup.NameKey(name)
+	if s == nil {
+		h := fnv.New32a()
+		h.Write([]byte(k))
+		return speakerKinds[h.Sum32()%uint32(len(speakerKinds))]
+	}
+	if s.slot == nil {
+		s.slot = map[string]int{}
+	}
+	n, ok := s.slot[k]
+	if !ok {
+		n = len(s.slot)
+		s.slot[k] = n
+	}
+	return speakerKinds[n%len(speakerKinds)]
 }
 
 // speakerColors are the names' colours, light and dark.
 func speakerColors(t *ui.Theme) []ui.Color {
 	if t.Dark {
-		return []ui.Color{ui.Hex("#2bb3a3"), ui.Hex("#8f8bf5"), ui.Hex("#e0a24a"), ui.Hex("#ec7fb0")}
+		return []ui.Color{ui.Hex("#2bb3a3"), ui.Hex("#e0a24a"), ui.Hex("#8f8bf5"), ui.Hex("#ec7fb0"), ui.Hex("#6cb4ee"), ui.Hex("#a3c75c")}
 	}
-	return []ui.Color{ui.Hex("#0b7a6e"), ui.Hex("#4b46c8"), ui.Hex("#a3530a"), ui.Hex("#b4256a")}
+	return []ui.Color{ui.Hex("#0b7a6e"), ui.Hex("#a3530a"), ui.Hex("#4b46c8"), ui.Hex("#b4256a"), ui.Hex("#1d6fb8"), ui.Hex("#5a7a12")}
 }
 
 // tokenizeTags tokenizes s (markup outside a passage) from offset base.
@@ -67,7 +86,7 @@ func tokenizeTags(s string, base int, tokens []editor.Token) []editor.Token {
 
 // tokenizeBlockLine tokenizes s, a line (or part of one) inside a passage,
 // from offset base.
-func tokenizeBlockLine(s string, base int, tokens []editor.Token) []editor.Token {
+func tokenizeBlockLine(slots *speakerSlots, s string, base int, tokens []editor.Token) []editor.Token {
 	l, ok := markup.DialogueLineOf(s)
 	if !ok {
 		if s != "" {
@@ -94,7 +113,7 @@ func tokenizeBlockLine(s string, base int, tokens []editor.Token) []editor.Token
 		case l.Unknown || l.Name == "":
 			mark(l.NameSpan, editor.TokenInvalid)
 		default:
-			mark(l.NameSpan, speakerKind(l.Name))
+			mark(l.NameSpan, slots.kind(l.Name))
 		}
 		mark(l.DirSpan, tokenDirection)
 	}
@@ -104,10 +123,10 @@ func tokenizeBlockLine(s string, base int, tokens []editor.Token) []editor.Token
 	return tokens
 }
 
-// tokenizeManuscript highlights a manuscript line: Studio's tags (tagKind),
+// tokenizeManuscriptWith highlights a manuscript line: Studio's tags (tagKind),
 // "# " headings, [voice:] as valid, and dialogue passages (the state: 1
 // inside one; a heading ends it).
-func tokenizeManuscript(line string, state uint64, tokens []editor.Token) ([]editor.Token, uint64) {
+func tokenizeManuscriptWith(slots *speakerSlots, line string, state uint64, tokens []editor.Token) ([]editor.Token, uint64) {
 	if text.IsHeading(line) {
 		return append(tokens, editor.Token{End: len(line), Kind: editor.TokenHeading}), 0
 	}
@@ -121,7 +140,7 @@ func tokenizeManuscript(line string, state uint64, tokens []editor.Token) ([]edi
 			return
 		}
 		if in {
-			tokens = tokenizeBlockLine(line[a:b], a, tokens)
+			tokens = tokenizeBlockLine(slots, line[a:b], a, tokens)
 		} else {
 			tokens = tokenizeTags(line[a:b], a, tokens)
 		}
@@ -173,9 +192,9 @@ func (a *app) manuscriptDeco(c *ui.Context, p *lfPage) {
 		for _, b := range blocks {
 			info, compiled := blockInfo(p, b)
 			warn := !b.Closed() || compiled && len(info.Uncast) > 0
-			bg, dot := k.Accent.Alpha(0.05), k.Accent.Alpha(0.55)
+			bg, dot := k.Accent.Alpha(0.05), k.Accent.Alpha(0.35)
 			if warn {
-				bg, dot = t.Warning.Alpha(0.07), t.Warning
+				bg, dot = t.Warning.Alpha(0.07), t.Warning.Alpha(0.6)
 			}
 			first, last := lineOf(b.Span.Start), lineOf(max(b.Span.End-1, b.Span.Start))
 			p.deco.backgrounds = append(p.deco.backgrounds, editor.LineBackground{First: first, Last: last, Color: bg})
@@ -207,7 +226,7 @@ func blockInfo(p *lfPage, b markup.DialogueBlock) (services.DialogueBlockInfo, b
 
 // blockSummary is a passage's line: speakers, lines, and how it is made.
 func blockSummary(b services.DialogueBlockInfo, model string, ready bool) string {
-	parts := []string{i18n.N(len(b.Speakers), "%d speaker", "%d speakers", len(b.Speakers)), i18n.N(b.Turns, "%d line", "%d lines", b.Turns)}
+	parts := []string{i18n.N(len(b.Speakers), "%d speaker", "%d speakers", len(b.Speakers)), i18n.N(b.Turns, "%d dialogue line", "%d dialogue lines", b.Turns)}
 	if ready && b.Language && len(b.Speakers) > 1 {
 		parts = append(parts, model)
 	} else {

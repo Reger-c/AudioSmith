@@ -28,7 +28,7 @@ const maxBookBytes = 64 << 20
 // newManuscriptEditor is the Audiobook's editor.
 func newManuscriptEditor() *editor.State {
 	buf := editor.NewBuffer("")
-	buf.SetLanguage(manuscriptLanguage)
+	buf.SetLanguage(manuscriptLanguage(&speakerSlots{}))
 	return &editor.State{
 		Buffer:          buf,
 		SoftWrap:        true,
@@ -45,10 +45,15 @@ func newManuscriptEditor() *editor.State {
 
 // manuscriptLanguage highlights the markup of a manuscript: Studio's
 // tags (tagKind), "# " chapter headings, [voice:] as valid, and dialogue
-// passages (audiobook_dialogue_editor.go).
-var manuscriptLanguage = &editor.Language{
-	Name:      "AudioSmith manuscript",
-	Tokenizer: editor.TokenizerFunc(tokenizeManuscript),
+// passages, each speaker's name in the colour of its slot
+// (audiobook_dialogue_editor.go).
+func manuscriptLanguage(slots *speakerSlots) *editor.Language {
+	return &editor.Language{
+		Name: "AudioSmith manuscript",
+		Tokenizer: editor.TokenizerFunc(func(line string, state uint64, tokens []editor.Token) ([]editor.Token, uint64) {
+			return tokenizeManuscriptWith(slots, line, state, tokens)
+		}),
+	}
 }
 
 // syncManuscript reconciles the document's script and the editor.
