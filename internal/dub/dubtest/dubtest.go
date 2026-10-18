@@ -17,7 +17,7 @@
 //	vad.detect        the energy VAD
 //	enhance.run       a copy
 //	tts.synthesize    a 220 Hz tone, 0.07 s per character (Duration when given), 24 kHz mono
-//	tts.dialogue      per turn to speak, a 330 Hz tone of 0.07 s per character in OutputDir
+//	tts.dialogue      per turn to speak, a 330 Hz tone as long as text.Estimate in OutputDir
 //	                  (turn-NNN.wav, its text beside it as for stt.transcribe; Garble[text] times
 //	                  "garbled" instead) and codes; context turns (with codes) are not spoken
 //	media.mux/encode/transcode/thumbnail  files describing what they were asked
@@ -43,6 +43,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/text"
 )
 
 // Engine is the fake. Goroutine-safe.
@@ -324,7 +325,7 @@ func (e *Engine) dialogue(p proto.DialogueParams) (proto.DialogueResult, error) 
 		if len(t.Codes) > 0 {
 			continue
 		}
-		secs := 0.07 * float64(max(utf8.RuneCountInString(t.Text), 1))
+		secs := max(text.Estimate(text.Count(t.Text)).Seconds(), 0.3)
 		b := Tone(24000, 1, secs, 330, 0.3)
 		path := filepath.Join(p.OutputDir, fmt.Sprintf("turn-%03d.wav", i))
 		if err := write(proto.Output{Path: path, Bits: 32}, b); err != nil {

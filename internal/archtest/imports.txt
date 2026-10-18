@@ -88,6 +88,7 @@ dub/dubtest              dsp/wav
 dub/dubtest              dub
 dub/dubtest              engine/proto
 dub/dubtest              jobs
+dub/dubtest              text
 
 engine                   core
 engine                   engine/proto

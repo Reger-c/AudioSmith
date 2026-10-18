@@ -32,6 +32,7 @@ type fakeTranslator struct {
 	calls int
 	lines int
 	fail  map[string]bool // lines (by text) that fail
+	speed float64         // the last request's
 }
 
 func (f *fakeTranslator) Info() translate.Info {
@@ -42,6 +43,7 @@ func (f *fakeTranslator) Translate(_ context.Context, req translate.Request) (tr
 	f.mu.Lock()
 	f.calls++
 	f.lines += len(req.Segments)
+	f.speed = req.Speed
 	f.mu.Unlock()
 	res := translate.Result{Translator: "fake"}
 	for _, s := range req.Segments {

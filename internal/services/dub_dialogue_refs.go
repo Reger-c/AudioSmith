@@ -90,7 +90,9 @@ func (s *Dubs) dialogueRef(sc *stageCtx, seg dub.Segment, v dub.VoiceSpec, caps 
 }
 
 // dialogueOwnRef is a speaker's own reference: 10–14 s of their lines,
-// joined (made when the stretch is), else their clone reference.
+// joined (made when the stretch is), else their clone reference. It is
+// kept by its lines and their text: a line moved (its timing edited)
+// keeps it, so the stretch is not made again for it.
 func (s *Dubs) dialogueOwnRef(sc *stageCtx, speaker string, clip func(audio, txt string) dialogueRef) (dialogueRef, error) {
 	p := sc.p
 	r, hasRef := p.References[speaker]
@@ -114,7 +116,7 @@ func (s *Dubs) dialogueOwnRef(sc *stageCtx, speaker string, clip func(audio, txt
 	for _, i := range lines {
 		g := p.Segments[i]
 		spans = append(spans, dsp.Range{Start: g.Start, End: g.End})
-		parts = append(parts, g.ID, g.Start, g.End, g.Text)
+		parts = append(parts, g.ID, g.Text) // not the times: a line moved keeps its reference
 	}
 	h := sha256.Sum256([]byte(fmt.Sprint(parts...)))
 	key := hex.EncodeToString(h[:8])
