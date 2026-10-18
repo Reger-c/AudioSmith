@@ -22,7 +22,7 @@ import (
 func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *services.LongformDoc, req api.LongformUpdate, voices []core.Voice) error {
 	story := p.Kind == core.ProjectStory
 	if !story && (req.Scene != nil || len(req.Personas) > 0 || len(req.Directions) > 0 || len(req.Emotions) > 0 || len(req.Intensities) > 0 || req.Pacing != "" ||
-		req.Merge != nil || req.Level != nil || req.Dialogue != nil || req.Direct != "") {
+		req.Merge != nil || req.Level != nil || req.Dialogue != nil || req.DialogueModel != "" || req.Direct != "") {
 		return errBadRequest("scene", "scene, personas, directions, pacing and direct are for stories.")
 	}
 	if !story {
@@ -98,14 +98,21 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 	if req.Level != nil {
 		d.Production.NoLevel = !*req.Level
 	}
+	if req.DialogueModel != "" {
+		e, ok := dialogueByName(req.DialogueModel)
+		if !ok {
+			return errBadRequest("dialogue_model", "dialogue_model is soulx or moss.")
+		}
+		if why := dialogueBlockedOn(readSysInfo().MemoryGB(), d, e); why != "" {
+			return errBadRequest("dialogue_model", "%s", why)
+		}
+		d.Production.DialogueModel = e.Repo
+	}
 	if req.Dialogue != nil {
 		d.Production.Dialogue = *req.Dialogue
 		if *req.Dialogue {
-			e, ok := dialogueEntry()
-			if !ok {
-				return errBadRequest("dialogue", "This version of AudioSmith has no dialogue model.")
-			}
-			if why := dialogueBlockedOn(readSysInfo().MemoryGB(), d, e); why != "" {
+			e, _, why := dialogueChoice(readSysInfo().MemoryGB(), d)
+			if why != "" {
 				return errBadRequest("dialogue", "%s", why)
 			}
 			d.Production.DialogueModel = e.Repo

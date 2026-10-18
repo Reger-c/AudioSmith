@@ -29,6 +29,8 @@
 - Each character is cloned from their voice: a cloned voice's own clip, a designed voice's reference, or a short sample the voice reads first.
 - Every line is checked: one the model does not say clearly is made again with the same context, then on the story's model.
 - Up to four characters per scene. Needs 16 GB of memory (the switch says so on smaller Macs) and a 2.4 GB download; Chinese and English stories. On an M4 it runs at about 0.7× real time.
+- A second dialogue model, MOSS-TTSD v1.0 (OpenMOSS, Apache-2.0), on Macs with 24 GB of memory or more: pick it under "Dialogue model". It speaks each scene as one recording, with its own pauses between speakers, up to five characters per scene, and AudioSmith cuts the recording into the lines (with the forced aligner) and checks each one; a line it does not say clearly is made again after the lines before it, then on the story's model. An 11 GB download; on an M4 about 0.8× real time, using about 12 GB of memory while it speaks.
+- The Local API and MCP: `update_longform` takes `dialogue_model` (`soulx` or `moss`); `get_longform` returns it.
 
 ### Chinese numbers, phone numbers and units
 - Chinese text now reads phone numbers digit by digit (138-0013-8000, 010-12345678, 拨打10086), ranges (3-5天 → 三到五天, 1-2个 → 一到两个, 10%-20%), scores (3:2 → 三比二), dates with dots (2024.03.05) and units (5km → 五公里, 3.5kg, 100m², 60km/h, 220V, 128GB). Words with digits (MP3, iPhone15, COVID-19) and other languages are unchanged.

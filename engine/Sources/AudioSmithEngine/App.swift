@@ -74,6 +74,10 @@ enum Main {
         if args.first == "--soulx-check" {
             do { exit(try await SoulXCheck.run(Array(args.dropFirst()))) } catch { log("\(errorMessage(error))"); exit(1) }
         }
+        // Developer checks of the MOSS-TTSD port (MossTTSDCheck.swift).
+        if args.first == "--moss-check" {
+            do { exit(try await MossTTSDCheck.run(Array(args.dropFirst()))) } catch { log("\(errorMessage(error))"); exit(1) }
+        }
         let out = Writer()
         let server = Server(role: role, out: out)
         // `--dialogue request.json`: one tts.dialogue (its params as JSON), printed like a job.

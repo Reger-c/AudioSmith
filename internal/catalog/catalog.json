@@ -301,6 +301,57 @@
       ]
     },
     {
+      "id": "moss-ttsd-v1.0-8bit",
+      "label": "MOSS-TTSD v1.0",
+      "name": "Whole-dialogue recordings",
+      "summary": "Speaks a story's dialogue scene by scene as one recording, up to five characters in their cloned voices, with natural pauses between them. Chinese and English; needs 24 GB of memory.",
+      "tags": ["chinese", "english", "clone"],
+      "family": "moss_ttsd",
+      "repo": "actnowai/MOSS-TTSD-v1.0-MLX-8bit",
+      "revision": "39a8fd73873c7e728d12c74d053beb2ead26581d",
+      "tasks": ["tts"],
+      "about": "A dialogue model: up to five speakers, each cloned from a reference clip and its transcript, speak a whole scene in one go; AudioSmith cuts the recording into the lines and checks each one. Used by Stories' whole-dialogue mode; narration stays on the story's model.",
+      "languages": [
+        {"code": "zh"},
+        {"code": "en"}
+      ],
+      "capabilities": ["dialogue", "clone", "seed", "sampling"],
+      "sampleRate": 24000,
+      "rtf": 0.75,
+      "size": 10896424893,
+      "files": [
+        {"path": "config.json", "size": 2000},
+        {"path": "model-00001-of-00002.safetensors", "size": 4519209366, "sha256": "8959f1a4ced90b4e207cda5bbdaa2c4f918352c00831bc456f81e6b99560c378"},
+        {"path": "model-00002-of-00002.safetensors", "size": 4358911142, "sha256": "6a2fc205be8a1924a80fd63781a336d8edd0fa0766ec798b0244fc35c52c03ce"},
+        {"path": "model.safetensors.index.json", "size": 86010},
+        {"path": "codec.safetensors", "size": 2002313654, "sha256": "2cdc8efce694b8ce8a267c1598cde26986206fe57fd4314c0a159c0c4af72f21"},
+        {"path": "codec_config.json", "size": 5720},
+        {"path": "tokenizer.json", "size": 11422691, "sha256": "cb3c8fa82993d515469c2800cc455bff4aaa3c4fed9da1f2b0c0668c304f335a"},
+        {"path": "tokenizer_config.json", "size": 5501},
+        {"path": "vocab.json", "size": 2776833},
+        {"path": "merges.txt", "size": 1671853},
+        {"path": "added_tokens.json", "size": 704},
+        {"path": "special_tokens_map.json", "size": 631},
+        {"path": "generation_config.json", "size": 132},
+        {"path": "chat_template.jinja", "size": 352},
+        {"path": "conversion.json", "size": 342},
+        {"path": "README.md", "size": 4965},
+        {"path": "NOTICE", "size": 1634},
+        {"path": "LICENSE", "size": 11363}
+      ],
+      "minMemoryGB": 24,
+      "quantization": "8bit",
+      "hidden": true,
+      "licence": {
+        "id": "apache-2.0",
+        "name": "Apache 2.0",
+        "url": "https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0",
+        "commercial": true,
+        "verified": true,
+        "note": "OpenMOSS-Team/MOSS-TTSD-v1.0 (revision c7cd852) and OpenMOSS-Team/MOSS-Audio-Tokenizer (revision 3cd226b) model cards, checked 2026-10-18: Apache-2.0; OpenMOSS/MOSS-TTS's code is Apache-2.0 too. The language model is a fine-tune of Qwen3-8B (Apache-2.0). actnowai's repo is AudioSmith's conversion (scripts/mossttsd/convert.py: 8-bit language model and codec) with LICENSE and NOTICE."
+      }
+    },
+    {
       "id": "qwen3-asr-0.6b-4bit",
       "label": "Qwen3-ASR 0.6B",
       "name": "Chinese & English transcription",

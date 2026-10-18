@@ -199,13 +199,14 @@ type LongformJSON struct {
 	Continuity string `json:"continuity,omitempty"`
 	// Dialogue: the characters' lines are spoken by the dialogue model,
 	// a scene at a time (whole dialogue).
-	Dialogue bool          `json:"dialogue,omitempty"`
-	Words    int           `json:"words"`
-	Estimate float64       `json:"estimated_seconds"`
-	Problems []ProblemJSON `json:"problems,omitempty"`
-	Book     BookJSON      `json:"book"`
-	Render   *RenderJSON   `json:"last_render,omitempty"`
-	Updated  time.Time     `json:"updated_at"`
+	Dialogue      bool          `json:"dialogue,omitempty"`
+	DialogueModel string        `json:"dialogue_model,omitempty"`
+	Words         int           `json:"words"`
+	Estimate      float64       `json:"estimated_seconds"`
+	Problems      []ProblemJSON `json:"problems,omitempty"`
+	Book          BookJSON      `json:"book"`
+	Render        *RenderJSON   `json:"last_render,omitempty"`
+	Updated       time.Time     `json:"updated_at"`
 	// Warning: the request named a removed model; its replacement is used.
 	Warning string `json:"warning,omitempty"`
 }
@@ -230,16 +231,17 @@ type LongformUpdate struct {
 	Cover    string            `json:"cover,omitempty" jsonschema:"Absolute path of a PNG or JPEG cover (≤ 8 MB)."`
 	Stems    *bool             `json:"stems,omitempty" jsonschema:"true: renders also write one WAV per character (stems)."`
 	// Stories' performance.
-	Scene       *string           `json:"scene,omitempty" jsonschema:"Stories: where and when, who the characters are to each other, the mood (\"\" clears). Models that take instructions hear it with every line; never spoken."`
-	Personas    map[string]string `json:"personas,omitempty" jsonschema:"Stories: character name → persona, its performance baseline (\"seven, lively, coaxing\"; \"\" clears)."`
-	Directions  map[string]string `json:"directions,omitempty" jsonschema:"Stories: line id → direction, how that line is said (\"pleading\", \"softly, holding back tears\"; \"\" clears). Never spoken."`
-	Emotions    map[string]string `json:"emotions,omitempty" jsonschema:"Stories: line id → its emotion, as the AI director writes it: steady, happy, excited, tender, pleading, hesitant, worried, hurt, sad, angry, scared, surprised or apologetic (\"\" clears). Models that take instructions hear a short instruction made from it and its intensity. Never spoken."`
-	Intensities map[string]int    `json:"intensities,omitempty" jsonschema:"Stories: line id → intensity: of an emotion 0 barely, 1 restrained, 2 clear, 3 strong; of a direction 1–3 (0 clears it)."`
-	Pacing      string            `json:"pacing,omitempty" jsonschema:"Stories: gaps between lines: dialogue (tight turns), reading, relaxed, or fixed (one gap for every line)."`
-	Merge       *bool             `json:"merge_turns,omitempty" jsonschema:"Stories, with a pacing: say consecutive lines of one character in one go (default true)."`
-	Level       *bool             `json:"even_out_voices,omitempty" jsonschema:"Stories, with a pacing: bring each character's lines toward one loudness (default true)."`
-	Dialogue    *bool             `json:"dialogue,omitempty" jsonschema:"Stories: true speaks the characters' lines with the dialogue model (SoulX-Podcast, a 2.4 GB download; 16 GB of memory; Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the story's model."`
-	Direct      string            `json:"direct,omitempty" jsonschema:"Stories: run the AI director (the writing-help language model reads the story and plans its emotions: a baseline per character, an emotion, intensity and turn per line) after the other changes: fill (only what is empty) or all (replace what you did not set). Takes up to a minute or two."`
+	Scene         *string           `json:"scene,omitempty" jsonschema:"Stories: where and when, who the characters are to each other, the mood (\"\" clears). Models that take instructions hear it with every line; never spoken."`
+	Personas      map[string]string `json:"personas,omitempty" jsonschema:"Stories: character name → persona, its performance baseline (\"seven, lively, coaxing\"; \"\" clears)."`
+	Directions    map[string]string `json:"directions,omitempty" jsonschema:"Stories: line id → direction, how that line is said (\"pleading\", \"softly, holding back tears\"; \"\" clears). Never spoken."`
+	Emotions      map[string]string `json:"emotions,omitempty" jsonschema:"Stories: line id → its emotion, as the AI director writes it: steady, happy, excited, tender, pleading, hesitant, worried, hurt, sad, angry, scared, surprised or apologetic (\"\" clears). Models that take instructions hear a short instruction made from it and its intensity. Never spoken."`
+	Intensities   map[string]int    `json:"intensities,omitempty" jsonschema:"Stories: line id → intensity: of an emotion 0 barely, 1 restrained, 2 clear, 3 strong; of a direction 1–3 (0 clears it)."`
+	Pacing        string            `json:"pacing,omitempty" jsonschema:"Stories: gaps between lines: dialogue (tight turns), reading, relaxed, or fixed (one gap for every line)."`
+	Merge         *bool             `json:"merge_turns,omitempty" jsonschema:"Stories, with a pacing: say consecutive lines of one character in one go (default true)."`
+	Level         *bool             `json:"even_out_voices,omitempty" jsonschema:"Stories, with a pacing: bring each character's lines toward one loudness (default true)."`
+	Dialogue      *bool             `json:"dialogue,omitempty" jsonschema:"Stories: true speaks the characters' lines with the dialogue model (dialogue_model; Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the story's model."`
+	DialogueModel string            `json:"dialogue_model,omitempty" jsonschema:"Stories: the dialogue model: soulx (SoulX-Podcast, the default: a 2.4 GB download, 16 GB of memory, up to four voices) or moss (MOSS-TTSD: an 11 GB download, 24 GB of memory, up to five voices, a scene as one recording)."`
+	Direct        string            `json:"direct,omitempty" jsonschema:"Stories: run the AI director (the writing-help language model reads the story and plans its emotions: a baseline per character, an emotion, intensity and turn per line) after the other changes: fill (only what is empty) or all (replace what you did not set). Takes up to a minute or two."`
 }
 
 // LongformRender starts a render.

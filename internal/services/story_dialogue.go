@@ -1,15 +1,18 @@
 package services
 
 // Whole dialogue (Production.Dialogue, thread #80): a story's character
-// lines are spoken by a dialogue model (catalogue capability "dialogue",
-// SoulX-Podcast) a scene at a time, every line hearing the lines before it,
-// instead of line by line or per character stretch; narration stays on
-// the story's model. One tts.dialogue job speaks a segment: consecutive
-// character lines of a chapter (a short narration line between them does
-// not end it; a long one does), at most dialogueMaxSpeakers voices,
-// dialogueMaxTurns lines and about 90 s of speech. The model writes each
-// line to its own file, so nothing is cut: the files go back into the
-// chapter as its lines, with the pacing's gaps (and the emotion's, E).
+// lines are spoken by a dialogue model (catalogue capability "dialogue":
+// SoulX-Podcast, or MOSS-TTSD, thread #82) a scene at a time, every line
+// hearing the lines before it, instead of line by line or per character
+// stretch; narration stays on the story's model. One tts.dialogue job
+// speaks a segment: consecutive character lines of a chapter (a short
+// narration line between them does not end it; a long one does), within
+// the model's limits (dialogueLimitsFor: SoulX-Podcast 4 voices, 16 lines,
+// about 90 s; MOSS-TTSD 5 voices, 24 lines, about 60 s). SoulX-Podcast
+// writes each line to its own file, so nothing is cut; MOSS-TTSD speaks
+// the segment as one track, cut at the lines with the forced aligner
+// (story_dialogue_mixed.go). The lines go back into the chapter with the
+// pacing's gaps (and the emotion's, E).
 //
 // Each speaker is cloned from a reference: a cloned voice's own clip and
 // transcript, a designed voice's reference (Take.CloneRef, thread #83),
@@ -48,8 +51,8 @@ import (
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
-// Segment limits, and how long a narration line may be without ending the
-// segment around it.
+// Segment limits (SoulX-Podcast's; dialogueLimitsFor), and how long a
+// narration line may be without ending the segment around it.
 const (
 	dialogueMaxSpeakers = 4
 	dialogueMaxTurns    = 16
@@ -99,6 +102,8 @@ type dialogueSeg struct {
 	err    error
 	failed map[int]bool
 	redone int
+	// oneTrack: the model speaks the segment as one track (MOSS-TTSD).
+	oneTrack bool
 }
 
 // dialogueStep is line k of a segment, with the steps that make it on the
@@ -131,9 +136,27 @@ func dialogueAside(l LineSpec) bool {
 	return c <= dialogueAsideCJK && w*6 <= dialogueAsideChars
 }
 
+// dialogueLimits bound a segment: voices, lines, unspaced characters and
+// other text (6 per word).
+type dialogueLimits struct{ speakers, turns, cjk, chars int }
+
+// dialogueLimitsFor are a dialogue model family's segment limits.
+// MOSS-TTSD speaks a segment as one track in one call: about 60 s at most
+// (a longer call risks the GPU watchdog and a harder cut), up to its five
+// voices.
+func dialogueLimitsFor(family string) dialogueLimits {
+	if family == FamilyMossTTSD {
+		return dialogueLimits{speakers: 5, turns: 24, cjk: 240, chars: 720}
+	}
+	return dialogueLimits{dialogueMaxSpeakers, dialogueMaxTurns, dialogueMaxCJK, dialogueMaxChars}
+}
+
+// FamilyMossTTSD is MOSS-TTSD's catalogue family: a one-track dialogue model.
+const FamilyMossTTSD = "moss_ttsd"
+
 // dialogueGroups are a chapter's segments: runs of character lines,
 // within the limits.
-func dialogueGroups(lines []LineSpec) [][]int {
+func dialogueGroups(lines []LineSpec, lim dialogueLimits) [][]int {
 	var out [][]int
 	var cur []int
 	voices := map[string]bool{}
@@ -153,8 +176,8 @@ func dialogueGroups(lines []LineSpec) [][]int {
 		}
 		v := l.Spans[0].Voice
 		w, c := text.Count(l.Spans[0].Text)
-		if len(cur) >= dialogueMaxTurns || cjk+c > dialogueMaxCJK || rest+w*6 > dialogueMaxChars ||
-			!voices[v] && len(voices) >= dialogueMaxSpeakers {
+		if len(cur) >= lim.turns || cjk+c > lim.cjk || rest+w*6 > lim.chars ||
+			!voices[v] && len(voices) >= lim.speakers {
 			flush()
 		}
 		cur = append(cur, i)
@@ -192,8 +215,9 @@ func (cr chapterRenderer) dialogues(p *ChapterParams,
 	out := map[int]*dialogueStep{}
 	r := cr.r
 	refs := map[string]int{} // voice key → index in a segment's refs
-	for gi, g := range dialogueGroups(p.Lines) {
-		seg := &dialogueSeg{lines: g, failed: map[int]bool{}, seed: p.Seed + int64(1000*p.Index+gi)}
+	oneTrack := dialogueInfo.Family == FamilyMossTTSD
+	for gi, g := range dialogueGroups(p.Lines, dialogueLimitsFor(dialogueInfo.Family)) {
+		seg := &dialogueSeg{lines: g, failed: map[int]bool{}, seed: p.Seed + int64(1000*p.Index+gi), oneTrack: oneTrack}
 		seg.lang = p.Lang
 		clear(refs)
 		h := sha256.New()
@@ -228,7 +252,7 @@ func (cr chapterRenderer) dialogues(p *ChapterParams,
 				}
 			}
 			tagged := say
-			if p.Production.DialogueTags {
+			if p.Production.DialogueTags && !oneTrack { // SoulX-Podcast's tags
 				tagged = dialogueTag(l) + say
 			}
 			seg.speakers = append(seg.speakers, k)
@@ -395,6 +419,9 @@ func (cr chapterRenderer) dialogueRun(ctx context.Context, st *renderState, i, n
 		}
 		os.WriteFile(seg.paths[0]+".segfail", []byte(err.Error()), 0o644)
 		return err
+	}
+	if res.Mixed != nil {
+		return cr.dialogueMixed(ctx, st, seg, params, res, model)
 	}
 	codes := make([][]int, len(seg.lines))
 	files := make([]string, len(seg.lines))

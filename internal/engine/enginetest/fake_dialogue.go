@@ -14,8 +14,9 @@ import (
 // text in turn-NNN.wav.txt so the fake's stt.transcribe reads it back. A
 // turn whose text contains FakeGarbleMark is written as gibberish when the
 // job's seed is even (the app's per-turn check fails it; a redo with
-// another seed passes). A model with "one-track" in its name writes the
-// whole dialogue to dialogue.wav instead and returns the turns' texts.
+// another seed passes). A model with "one-track" or "moss" in its name
+// (MOSS-TTSD: up to 5 speakers) writes the whole dialogue to dialogue.wav
+// instead and returns the turns' texts and codec frames (16 codes each).
 
 // FakeGarbleMark makes the fake dialogue garble a turn on even seeds.
 const FakeGarbleMark = "〔含糊〕"
@@ -27,12 +28,17 @@ func (f *fakeEngine) dialogue(m proto.Message) {
 		return
 	}
 	lower := strings.ToLower(p.Model)
-	if !strings.Contains(lower, "soulx") && !strings.Contains(lower, "dialogue") {
+	oneTrack := strings.Contains(lower, "one-track") || strings.Contains(lower, "moss")
+	if !strings.Contains(lower, "soulx") && !strings.Contains(lower, "dialogue") && !oneTrack {
 		f.failData(m.ID, proto.CodeUnsupported, map[string]string{"capability": "dialogue"}, "%s cannot speak dialogues", p.Model)
 		return
 	}
-	if len(p.Speakers) > 4 {
-		f.failData(m.ID, proto.CodeUnsupported, map[string]string{"capability": "speakers"}, "%s takes at most 4 speakers", p.Model)
+	maxSpeakers := 4
+	if oneTrack {
+		maxSpeakers = 5
+	}
+	if len(p.Speakers) > maxSpeakers {
+		f.failData(m.ID, proto.CodeUnsupported, map[string]string{"capability": "speakers"}, "%s takes at most %d speakers", p.Model, maxSpeakers)
 		return
 	}
 	pitch := map[string]float64{}
@@ -64,9 +70,12 @@ func (f *fakeEngine) dialogue(m proto.Message) {
 		seed = *p.Seed
 	}
 	res := proto.DialogueResult{Model: p.Model, SampleRate: 24000, Channels: 1, Turns: []proto.DialogueTurnOut{}, Seed: p.Seed, Seconds: 0.05}
-	if strings.Contains(lower, "one-track") {
+	if oneTrack {
 		all := Audio{Rate: 24000, Channels: 1}
 		for i, t := range p.Turns {
+			if len(t.Codes) > 0 {
+				continue
+			}
 			a := Tone(24000, 1, 0.15*float64(len([]rune(t.Text))), pitch[t.Speaker], 0.25)
 			all.Samples = append(all.Samples, a.Samples...)
 			res.Turns = append(res.Turns, proto.DialogueTurnOut{Index: i, Speaker: t.Speaker, Text: t.Text})
@@ -76,7 +85,11 @@ func (f *fakeEngine) dialogue(m proto.Message) {
 			f.fail(m.ID, proto.CodeInternal, "%v", err)
 			return
 		}
-		res.Mixed = &proto.DialogueMixed{Output: out, Frames: int64(all.Frames()), AudioSeconds: all.Seconds()}
+		codes := make([]int, (all.Frames()/1920+1)*16)
+		for k := range codes {
+			codes[k] = (k*37 + int(seed)) % 1024
+		}
+		res.Mixed = &proto.DialogueMixed{Output: out, Frames: int64(all.Frames()), AudioSeconds: all.Seconds(), Codes: codes, Codebooks: 16}
 		res.AudioSeconds = all.Seconds()
 		res.RTF = res.AudioSeconds / res.Seconds
 		f.touch(p.Model)
