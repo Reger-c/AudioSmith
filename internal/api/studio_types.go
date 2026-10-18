@@ -218,18 +218,18 @@ type LongformJSON struct {
 	Continuity string `json:"continuity,omitempty"`
 	// Dialogue: the characters' lines are spoken by the dialogue model,
 	// a scene at a time (whole dialogue).
-	Dialogue      bool          `json:"dialogue,omitempty"`
-	DialogueModel string        `json:"dialogue_model,omitempty"`
+	Dialogue      bool   `json:"dialogue,omitempty"`
+	DialogueModel string `json:"dialogue_model,omitempty"`
 	// Audiobooks: the manuscript (when it is at most 100 KB; longer ones
 	// are left out) and its dialogue blocks.
 	Script         string              `json:"script,omitempty"`
 	DialogueBlocks []DialogueBlockJSON `json:"dialogue_blocks,omitempty"`
 	Words          int                 `json:"words"`
-	Estimate      float64       `json:"estimated_seconds"`
-	Problems      []ProblemJSON `json:"problems,omitempty"`
-	Book          BookJSON      `json:"book"`
-	Render        *RenderJSON   `json:"last_render,omitempty"`
-	Updated       time.Time     `json:"updated_at"`
+	Estimate       float64             `json:"estimated_seconds"`
+	Problems       []ProblemJSON       `json:"problems,omitempty"`
+	Book           BookJSON            `json:"book"`
+	Render         *RenderJSON         `json:"last_render,omitempty"`
+	Updated        time.Time           `json:"updated_at"`
 	// Warning: the request named a removed model; its replacement is used.
 	Warning string `json:"warning,omitempty"`
 }

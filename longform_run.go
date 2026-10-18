@@ -226,7 +226,7 @@ func dialogueProblemText(p services.Problem) string {
 // audition of chapter or line only: what is "chapter:<n>", "line:<id>").
 func (a *app) startLf(p *lfPage, what string) {
 	a.compileLf(p)
-	a.autoCastBook(p) // a passage's speakers without a voice (audiobook_dialogue.go)
+	a.autoCastBook(p)                                         // a passage's speakers without a voice (audiobook_dialogue.go)
 	if a.lfMakeReferences(p, func() { a.startLf(p, what) }) { // stories_dialogue_refs.go (#83)
 		return
 	}
