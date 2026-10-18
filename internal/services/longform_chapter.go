@@ -30,6 +30,9 @@ func (cr chapterRenderer) once(ctx context.Context, job jobs.Job, p *ChapterPara
 	r := cr.r
 	dialoguePath := ""
 	var unavailable *core.TakeNotice
+	if p.book() && !hasBlocks(p.Lines) {
+		p.Production.Dialogue = false // a book's chapter without dialogue passages
+	}
 	if p.Production.Dialogue && p.Production.DialogueModel != "" && r.engine != nil {
 		var err error
 		if dialoguePath, err = r.modelReady(ctx, p.Production.DialogueModel); err != nil {

@@ -29,6 +29,16 @@ func blockGap(prev, cur LineSpec) (float64, bool) {
 	return TurnGap(g, prev, cur), true
 }
 
+// hasBlocks reports whether lines have a dialogue passage's.
+func hasBlocks(lines []LineSpec) bool {
+	for _, l := range lines {
+		if l.Block > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // bookDialogueGroups are the segments of a chapter's dialogue blocks,
 // with each one's seed offset: the block and the segment's place in it,
 // so a block's preview (a chapter of that block alone) and the book's
