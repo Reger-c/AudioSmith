@@ -366,3 +366,28 @@ func TestDialogueTwoPass(t *testing.T) {
 		t.Errorf("cancelled: %v", err)
 	}
 }
+
+// The longform cache drops a dialogue line's sidecars with age, and its
+// codes with its file.
+func TestPruneDialogueSidecars(t *testing.T) {
+	r := &renderer{cacheDir: t.TempDir()}
+	dir := r.longformChunkDir()
+	os.MkdirAll(dir, 0o755)
+	old := time.Now().Add(-longformKeep - time.Hour)
+	for _, n := range []string{"a-dlg2-0.wav.codes", "a-dlg2-1.wav.fail", "a-dlg2-0.wav.segfail", "notes.txt", "b-dlg2-0.wav.codes"} {
+		p := filepath.Join(dir, n)
+		os.WriteFile(p, []byte("x"), 0o644)
+		if n != "b-dlg2-0.wav.codes" {
+			os.Chtimes(p, old, old)
+		}
+	}
+	r.pruneLongformChunks()
+	var left []string
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		left = append(left, e.Name())
+	}
+	if got := strings.Join(left, " "); got != "b-dlg2-0.wav.codes notes.txt" {
+		t.Errorf("left %s", got)
+	}
+}
