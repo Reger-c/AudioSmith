@@ -251,8 +251,8 @@
     {
       "id": "soulx-podcast-1.7b-8bit",
       "label": "SoulX-Podcast 1.7B",
-      "name": "Whole-dialogue voices",
-      "summary": "Speaks a story's dialogue scene by scene, each line hearing the lines before it, in the characters' cloned voices. Chinese and English; needs 16 GB of memory.",
+      "name": "Dialogue · Light",
+      "summary": "Speaks a story's dialogue a scene at a time, each line hearing the lines before it, in the characters' cloned voices; up to four characters. Chinese and English.",
       "tags": ["chinese", "english", "clone"],
       "family": "soulx_podcast",
       "repo": "actnowai/SoulX-Podcast-1.7B-MLX-8bit",
@@ -303,8 +303,8 @@
     {
       "id": "moss-ttsd-v1.0-8bit",
       "label": "MOSS-TTSD v1.0",
-      "name": "Whole-dialogue recordings",
-      "summary": "Speaks a story's dialogue scene by scene as one recording, up to five characters in their cloned voices, with natural pauses between them. Chinese and English; needs 24 GB of memory.",
+      "name": "Dialogue · One take",
+      "summary": "Speaks each scene of a story's dialogue as one recording, up to five characters in their cloned voices, with natural pauses between them. Chinese and English.",
       "tags": ["chinese", "english", "clone"],
       "family": "moss_ttsd",
       "repo": "actnowai/MOSS-TTSD-v1.0-MLX-8bit",

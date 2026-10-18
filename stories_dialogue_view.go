@@ -17,6 +17,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
@@ -129,6 +130,41 @@ func dialogueBlockedOn(gb int, d *services.LongformDoc, e catalog.Entry) string 
 	return ""
 }
 
+// macMemoryGB is this Mac's memory in GB, 0 while it is not known yet (the
+// system information loads in the background).
+func (a *app) macMemoryGB() int {
+	if a.sys == nil {
+		a.loadSysInfo()
+		return 0
+	}
+	return a.sys.MemoryGB()
+}
+
+// storyDialoguePick is the Stories model picker's whole-dialogue section
+// (model_picker_dialogue.go, thread #84), nil for an audiobook or without
+// dialogue models. It shares the story's switch and model with the
+// Performance section: choosing one there turns it on here, and back.
+func (a *app) storyDialoguePick(p *lfPage) *pickerDialogue {
+	all := dialogueEntries()
+	if len(all) == 0 || p.kind != core.ProjectStory {
+		return nil
+	}
+	d := &p.doc
+	gb := a.macMemoryGB()
+	e, _, blocked := dialogueChoice(gb, d)
+	return &pickerDialogue{
+		Models: all,
+		Why:    func(x catalog.Entry) string { return dialogueBlockedOn(gb, d, x) },
+		On:     d.Production.Dialogue && blocked == "",
+		Cur:    e,
+		Pick: func(x catalog.Entry) {
+			d.Production.Dialogue, d.Production.DialogueModel = true, x.Repo
+			p.open["scene"] = true // Performance: the references, the download
+		},
+		Off: func() { d.Production.Dialogue = false },
+	}
+}
+
 // storyDialogue is the whole-dialogue row of the Performance section.
 func (a *app) storyDialogue(c *ui.Context, p *lfPage, locked bool) {
 	if len(dialogueEntries()) == 0 {
@@ -137,13 +173,7 @@ func (a *app) storyDialogue(c *ui.Context, p *lfPage, locked bool) {
 	t := c.Theme()
 	k := tok(t)
 	d := &p.doc
-	gb := 0
-	if a.sys == nil {
-		a.loadSysInfo()
-	} else {
-		gb = a.sys.MemoryGB()
-	}
-	e, choices, blocked := dialogueChoice(gb, d)
+	e, choices, blocked := dialogueChoice(a.macMemoryGB(), d)
 	on := d.Production.Dialogue && blocked == ""
 	title := i18n.T("Whole dialogue")
 	formRow(c, "perf-dialogue-row", title, i18n.T("The characters' lines are spoken by %s a scene at a time, each line hearing the lines before it, so they answer each other; narration stays on the story's model. Each character is cloned from their voice's reference (a cloned voice's clip, a designed voice's reference, else a short sample in that voice). Lines it does not say clearly are made again, then on the story's model. Slower than real time.", modelRef(e)), func() {
@@ -155,14 +185,15 @@ func (a *app) storyDialogue(c *ui.Context, p *lfPage, locked bool) {
 		}
 	})
 	if on && len(choices) > 1 {
-		labels := make([]string, len(choices))
-		for i, x := range choices {
-			labels[i] = x.Label
-		}
-		cur := e.Label
-		fieldInfo(c, i18n.T("Dialogue model"), i18n.T("%s is light (16 GB of memory) and quick; %s is larger (24 GB), up to five voices, and speaks each scene as one recording.", choices[0].Label, choices[1].Label), func() {
-			if ui.Select(c.Key("perf-dialogue-model"), &cur, labels).Label(i18n.T("Dialogue model")).Disabled(locked).Changed() {
-				if i := slices.Index(labels, cur); i >= 0 {
+		// By their friendly names, as the model picker (thread #84).
+		fieldInfo(c, i18n.T("Dialogue model"), i18n.T("%s is light (16 GB of memory) and quick; %s is larger (24 GB), up to five voices, and speaks each scene as one recording.", modelRef(choices[0]), modelRef(choices[1])), func() {
+			names := make([]string, len(choices))
+			for i, x := range choices {
+				names[i] = x.DisplayName()
+			}
+			cur := e.DisplayName()
+			if ui.Select(c.Key("perf-dialogue-model"), &cur, names).Label(i18n.T("Dialogue model")).Tooltip(modelTip(e)).Disabled(locked).Changed() {
+				if i := slices.Index(names, cur); i >= 0 {
 					e = choices[i]
 					d.Production.DialogueModel = e.Repo
 				}
@@ -185,4 +216,14 @@ func (a *app) storyDialogue(c *ui.Context, p *lfPage, locked bool) {
 			}
 		})
 	}
+}
+
+// storyModelSummary is the Setup section's summary: the story's model, or
+// with whole dialogue on the dialogue model and the story's.
+func (a *app) storyModelSummary(p *lfPage) string {
+	name := entryFor(p.doc.Model).DisplayName()
+	if dl := a.storyDialoguePick(p); dl != nil && dl.On {
+		return dl.Cur.DisplayName() + " + " + name
+	}
+	return name
 }

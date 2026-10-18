@@ -33,7 +33,7 @@ func (a *app) storiesPage(c *ui.Context) {
 			a.lfRenderPanel(c, p)
 		})
 		a.lfInspector(c, p, inline, shown, func() {
-			a.lfSection(c, p, "setup", i18n.T("Setup"), entryFor(p.doc.Model).DisplayName(), func() { a.lfSetup(c, p, locked) })
+			a.lfSection(c, p, "setup", i18n.T("Setup"), a.storyModelSummary(p), func() { a.lfSetup(c, p, locked) })
 			a.lfSection(c, p, "cast", i18n.T("Cast"), lfCount(len(p.doc.Cast)), func() { a.storyCast(c, p, locked) })
 			a.lfSection(c, p, "scene", i18n.X("story", "Performance"), personaSummary(&p.doc), func() { a.storyPerformance(c, p, locked) }) // stories_perf_view.go
 			a.lfAdvanced(c, p, locked)                                                                                                      // longform_advanced.go
