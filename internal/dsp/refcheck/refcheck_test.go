@@ -216,21 +216,21 @@ func TestTidy(t *testing.T) {
 // at words, avoiding long pauses.
 func TestPickWindow(t *testing.T) {
 	// 30 s: talk 1–6, a 3 s pause, 9–20 with short pauses, 22–29.
-	speech := []dsp.Range{{1, 6}, {9, 12}, {12.3, 15}, {15.4, 20}, {22, 29}}
+	speech := []dsp.Range{{Start: 1, End: 6}, {Start: 9, End: 12}, {Start: 12.3, End: 15}, {Start: 15.4, End: 20}, {Start: 22, End: 29}}
 	w, ok := PickWindow(speech, 30, 10, 14)
 	if !ok || math.Abs(w.Start-8.85) > 0.01 || w.Len() < 10 || w.Len() > 15 {
 		t.Errorf("window %+v %v", w, ok)
 	}
 	// One unbroken stretch: nothing fits, the caller decides.
-	if _, ok := PickWindow([]dsp.Range{{1, 29}}, 30, 10, 14); ok {
+	if _, ok := PickWindow([]dsp.Range{{Start: 1, End: 29}}, 30, 10, 14); ok {
 		t.Error("unbroken stretch fitted")
 	}
 	// Too little speech.
-	if _, ok := PickWindow([]dsp.Range{{1, 3}, {4, 6}}, 30, 10, 14); ok {
+	if _, ok := PickWindow([]dsp.Range{{Start: 1, End: 3}, {Start: 4, End: 6}}, 30, 10, 14); ok {
 		t.Error("short speech fitted")
 	}
 	// A long pause inside costs: the window without it wins.
-	speech = []dsp.Range{{0.5, 6}, {9.5, 13}, {13.4, 20}, {20.3, 24}}
+	speech = []dsp.Range{{Start: 0.5, End: 6}, {Start: 9.5, End: 13}, {Start: 13.4, End: 20}, {Start: 20.3, End: 24}}
 	w, _ = PickWindow(speech, 25, 10, 14)
 	if w.Start < 9 {
 		t.Errorf("window over the pause %+v", w)

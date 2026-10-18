@@ -46,7 +46,7 @@ func (a *app) storyDialogueRefs(c *ui.Context, p *lfPage, locked bool) {
 		caption(c, summary).SingleLine()
 	}, func() {
 		for _, m := range cast {
-			ui.Row(c.Key("dref-"+m.ID)).Gap(px(t, sp2)).AlignItems(ui.Start).Children(func() {
+			ui.Row(c.Key("dref-" + m.ID)).Gap(px(t, sp2)).AlignItems(ui.Start).Children(func() {
 				ui.Text(c, m.Name).FontSize(px(t, fsCaption)).FontWeight(600).Width(px(t, 96)).SingleLine().Ellipsis("…").Shrink(0)
 				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
 					a.dialogueRefStatus(c, m.Voice, locked)

@@ -116,7 +116,7 @@ type VoiceFiles struct {
 	// voice whose design changed).
 	Original        string
 	RemoveReference bool
-	Sample    string // audio file: a rendered sample (designed voices)
+	Sample          string // audio file: a rendered sample (designed voices)
 	// Portrait is the new portrait, a PNG (already cropped to 256×256);
 	// RemovePortrait deletes the current one.
 	Portrait       []byte
