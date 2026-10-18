@@ -346,7 +346,17 @@ func (s *Dubs) renderWork(ctx context.Context, sc *stageCtx, work []dubWork, dd 
 			}
 		}
 	} else {
+		done := 0
 		seg := func(ctx context.Context, g int) ([]int, error) {
+			// The stretch's request reports within the progress.
+			dd.jobs[which[g]].report = func(pr jobs.Progress) {
+				stage := "generating"
+				if pr.Stage == "loading" {
+					stage = "loading"
+				}
+				f := (float64(done) + max(pr.Fraction, 0)*float64(len(groups[g]))) / float64(len(work))
+				sc.progress(stage, min(f, 1), fmt.Sprintf("%d/%d", done+1, len(work)))
+			}
 			return dd.make(ctx, which[g], groups[g], ids, func(wi int, path string) error {
 				w := work[wi]
 				r, made, err := fitLine(sc, p, w.i, w.key, w.take.Text, path, dir)
@@ -358,8 +368,9 @@ func (s *Dubs) renderWork(ctx context.Context, sc *stageCtx, work []dubWork, dd 
 			})
 		}
 		line := func(ctx context.Context, wi int) error { return one(ctx, work[wi]) }
-		progress := func(done, total int) {
-			sc.progress("generating", float64(done)/float64(total), fmt.Sprintf("%d/%d", min(done+1, total), total))
+		progress := func(n, total int) {
+			done = n
+			sc.progress("generating", float64(n)/float64(total), fmt.Sprintf("%d/%d", min(n+1, total), total))
 		}
 		if err := dialogueTwoPass(ctx, len(work), groups, seg, line, progress); err != nil {
 			flush()
