@@ -78,7 +78,7 @@ final class Synthesizer: @unchecked Sendable {
         case is Qwen3TTSModel:
             caps += ["stream", "sampling", "language"]
             let l = repo.lowercased()
-            if l.contains("base") { caps += ["clone", "voicePrompt"] }
+            if l.contains("base") { caps += ["clone", "cloneAudioOnly", "voicePrompt"] }
             if l.contains("voicedesign") { caps += ["design", "voiceStyle", "instruct"] }
             if l.contains("customvoice") { caps += ["voiceStyle", "instruct"] }
         case is ChatterboxModel:

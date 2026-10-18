@@ -152,6 +152,8 @@ func dubWarningText(code string) string {
 		return i18n.T("Some lines could not be translated: retry them, or write them.")
 	case services.DubWarnLinesFailed:
 		return i18n.T("Some lines could not be generated: they stay silent.")
+	case services.DubWarnLinesUnclear:
+		return i18n.T("Some lines may not say their text in their language, even when made again: listen to the flagged ones and redo or recast them.")
 	case services.WarnNoWordTimes:
 		return i18n.T("Word timings are missing: karaoke subtitles spread the words evenly.")
 	}

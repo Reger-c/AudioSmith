@@ -53,6 +53,9 @@ type Engine struct {
 	// Heard replaces what a check (stt.transcribe of a dubbed track's
 	// line) hears: by the line's expected text.
 	Heard map[string]string
+	// HeardOnce is Heard for the first time a line is heard only (a
+	// check that a line made again passes).
+	HeardOnce map[string]string
 	// Fail makes a method fail with this code.
 	Fail  map[string]string
 	Calls []Call
@@ -66,7 +69,7 @@ type Call struct {
 
 // New makes a fake with every method.
 func New() *Engine {
-	return &Engine{Missing: map[string]bool{}, Probes: map[string]proto.ProbeResult{}, Heard: map[string]string{}, Fail: map[string]string{}}
+	return &Engine{Missing: map[string]bool{}, Probes: map[string]proto.ProbeResult{}, Heard: map[string]string{}, HeardOnce: map[string]string{}, Fail: map[string]string{}}
 }
 
 // Count is how many times method was called.
@@ -357,8 +360,15 @@ func (e *Engine) transcribe(p proto.TranscribeParams) (proto.TranscribeResult, e
 	if said, err := os.ReadFile(p.Audio + ".txt"); err == nil {
 		// A rendered line (its text beside it): heard as said, or as Heard says.
 		got := string(said)
-		if h, ok := heard[got]; ok {
+		e.mu.Lock()
+		once, ok := e.HeardOnce[got]
+		delete(e.HeardOnce, got)
+		e.mu.Unlock()
+		if h, ok2 := heard[got]; ok2 {
 			got = h
+		}
+		if ok {
+			got = once
 		}
 		res.Text = got
 		res.Segments = []proto.Segment{{Start: 0, End: b.Seconds(), Text: got}}

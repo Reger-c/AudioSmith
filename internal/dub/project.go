@@ -356,6 +356,10 @@ type Render struct {
 	Err  string  `json:"error,omitempty"`
 	// Text is what was said (for QC and subtitles of the dub).
 	Text string `json:"text,omitempty"`
+	// Spoken is what the synthesize stage's check heard, for a line it
+	// checked (a clone in another language than its speaker's clip,
+	// thread #90); a line that is not Spoken.OK() is flagged.
+	Spoken *Spoken `json:"spoken,omitempty"`
 }
 
 // QCReport is a second-pass check of a track.

@@ -115,4 +115,4 @@ func (c *Catalog) UsesRepo(repo string) bool {
 }
 
 var knownCaps = []Capability{CapSpeed, CapSampling, CapClone, CapVoiceStyle, CapLanguage, CapInstruct, CapDesign, CapSeed, CapDuration, CapStream, CapWordTimes,
-	CapVoicePrompt, CapSteps, CapGuidance, CapNonVerbal, CapTranslate, CapSpeakers, CapDialogue}
+	CapVoicePrompt, CapSteps, CapGuidance, CapNonVerbal, CapTranslate, CapSpeakers, CapDialogue, CapCloneAudioOnly}

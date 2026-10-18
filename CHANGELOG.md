@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Dub: foreign-language videos dubbed into Chinese speak Chinese
+- Dubbing a Japanese or Korean video into Chinese with the default clone model (Qwen3-TTS Base) made many lines in the source language or garbled: given the speaker's clip and its transcript, the model went on in the clip's language (a Japanese test: 9 of 14 lines). Lines in another language than their speaker's clip are now cloned from the clip alone, from its voice print, and come out in the line's language as much like the speaker: in tests from Japanese, Korean, French and English into Chinese and from Chinese into English, 0.4–7 % character errors instead of up to 42 %, and as or more like the speaker. Dubs in the video's own language are made as before.
+- Those lines are also heard again after they are made: a line that is not in its language, or does not say its text, is made once more and the better take kept; one that still fails is marked "Wrong language" or "Verify" in the line list and the step says so, instead of being kept silently.
+- Qwen3-TTS Base, given a clip without its transcript, now clones that voice; it used to speak in no particular voice.
+
 ### Model pickers fit the window; dialogue models in the Stories picker
 - The model picker's list no longer runs past the bottom of the window with "Show all models" open (the Stories inspector, small windows): it opens below its button, or above it when there is little room below, at most as tall as the room there, and its list scrolls to the last model under the search field. Voice pickers follow the same rule.
 - The Stories model picker has a section "Whole dialogue (multi-speaker models)" with the two dialogue models, now named "Dialogue · Light" (SoulX-Podcast 1.7B) and "Dialogue · One take" (MOSS-TTSD v1.0), with the memory they need and their download size. Choosing one turns whole dialogue on with it (the Performance switch follows); the story's model then reads the narration and the lines the dialogue model does not say clearly, as the button says ("Narration and fallback: …"). Macs with too little memory, and stories in other languages, see them greyed out with the reason.

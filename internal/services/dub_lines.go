@@ -57,11 +57,25 @@ func (s *Dubs) voiceFor(ctx context.Context, p *dub.Project, seg dub.Segment, l 
 		// reference: the line clones its speaker (or fails, saying why).
 		auto, w := s.autoVoice(p, seg)
 		if auto.RefAudio != "" {
-			return auto, warn
+			return crossLingualClone(p, seg, l, caps, auto), warn
 		}
 		return auto, w
 	}
-	return v, warn
+	return crossLingualClone(p, seg, l, caps, v), warn
+}
+
+// crossLingualClone is v for a line in another language than its
+// speaker's clip (thread #90): given the clip's transcript, Qwen3-TTS
+// Base goes on in the clip's language (a Japanese clip had 9 of 14
+// Chinese lines spoken in Japanese or garbled); from the clip alone (its
+// speaker embedding) it speaks the line's language, as like the speaker.
+// So the speaker's own clip is sent without its transcript to a model
+// that clones that way.
+func crossLingualClone(p *dub.Project, seg dub.Segment, l string, caps DubModelCaps, v dub.VoiceSpec) dub.VoiceSpec {
+	if v.Auto && v.RefText != "" && caps.CloneAudioOnly && p.CrossLingual(seg, l) {
+		v.RefText = ""
+	}
+	return v
 }
 
 // autoVoice is the clone of segment seg's own speaker (Auto).
@@ -254,6 +268,10 @@ func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 		return sc.save(ctx, func(q *dub.Project) { q.PutTrack(mergeTrack(q.Track(l), track, keys, l)) })
 	}
 	rendered := map[string]dub.Render{}
+	// The lines checked once all are made (dub_check.go): kept out of
+	// the flushed batches until then.
+	var checks []checkedLine
+	checked := map[string]dub.Render{}
 	failed := 0
 	flush := func() error {
 		if len(rendered) == 0 {
@@ -293,6 +311,10 @@ func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 			}
 			failed++
 			r = dub.Render{Key: w.key, Start: seg.Start, Err: err.Error(), Text: w.take.Text}
+		} else if needsCheck(p, seg, l, w.take) {
+			checks = append(checks, checkedLine{w.i, w.key, w.take})
+			checked[seg.ID] = r
+			continue
 		}
 		rendered[seg.ID] = r
 		if len(rendered) >= 10 {
@@ -303,6 +325,16 @@ func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 	}
 	if err := flush(); err != nil {
 		return err
+	}
+	if len(checks) > 0 {
+		err := s.checkLines(ctx, sc, l, dir, caps, checks, checked)
+		rendered = checked
+		if ferr := flush(); err == nil {
+			err = ferr
+		}
+		if err != nil {
+			return err
+		}
 	}
 	if failed > 0 {
 		sc.warn(DubWarnLinesFailed)

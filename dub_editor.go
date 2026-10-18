@@ -210,6 +210,14 @@ func (a *app) dubBadges(s dub.Segment) [][2]string {
 	if rendered && strings.TrimSpace(p.TextFor(s, l)) != "" && (r.Text != p.TextFor(s, l) || r.Start != s.Start) {
 		out = append(out, [2]string{i18n.T("Changed"), "accent"})
 	}
+	if sp := r.Spoken; rendered && sp != nil && !sp.OK() {
+		// The synthesize stage's check (thread #90).
+		if sp.Foreign != "" {
+			out = append(out, [2]string{i18n.T("Wrong language"), "warning"})
+		} else {
+			out = append(out, [2]string{i18n.T("Verify"), "warning"})
+		}
+	}
 	if qc := t.QC; qc != nil && !t.QCStale() {
 		for _, q := range qc.Lines {
 			if q.ID == s.ID && q.Flagged {

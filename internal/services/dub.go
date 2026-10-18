@@ -163,6 +163,10 @@ type DubModelCaps struct {
 	// with a voice that carries no reference (the default voice, a
 	// design) clone their speaker instead.
 	NeedsReference bool
+	// CloneAudioOnly: clones from the reference audio without its
+	// transcript (catalog.CapCloneAudioOnly): how a line in another
+	// language than its speaker's clip is cloned.
+	CloneAudioOnly bool
 	// Languages maps BCP-47 codes to the model's language values
 	// ("zh" → "Chinese"); nil = it takes codes, or has no language.
 	Languages map[string]string

@@ -72,6 +72,12 @@ const (
 	// stories' 「整场对话」 mode. Such models clone every speaker from a
 	// reference clip and its transcript.
 	CapDialogue Capability = "dialogue"
+	// CapCloneAudioOnly: clones from the reference audio alone, without
+	// its transcript (Qwen3-TTS Base: the clip's speaker embedding,
+	// upstream's x_vector_only_mode). A dub line in another language than
+	// its speaker's clip is cloned this way (thread #90): given the
+	// transcript, the model goes on in the clip's language.
+	CapCloneAudioOnly Capability = "cloneAudioOnly"
 )
 
 // Catalog is a versioned list of entries.
