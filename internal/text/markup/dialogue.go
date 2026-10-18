@@ -349,11 +349,11 @@ func blockLine(src string, a, b int) (DialogueLine, bool) {
 			return l, true
 		}
 	}
-	name, dir, body, ok := autocast.Speaker(s)
+	name, dir, body, ok := speaker(s)
 	empty := false
 	if !ok {
 		// "伊内丝：" (the template, not filled in yet): a turn without words.
-		if n, d, bd, ok2 := autocast.Speaker(s + "x"); ok2 && bd == len(s) {
+		if n, d, bd, ok2 := speaker(s + "x"); ok2 && bd == len(s) {
 			name, dir, body, ok, empty = n, d, bd, true, true
 		}
 	}
@@ -388,6 +388,35 @@ func blockLine(src string, a, b int) (DialogueLine, bool) {
 	}
 	l.Text = unquote(src, words)
 	return l, true
+}
+
+// speaker reads a block line's speaker as autocast does, and also a name
+// in lower case ("ines: …"): in a block, a name and a colon start a turn.
+func speaker(s string) (name, dir string, body int, ok bool) {
+	if name, dir, body, ok = autocast.Speaker(s); ok {
+		return
+	}
+	i := strings.IndexAny(s, ":：")
+	if i <= 0 || unicode.IsSpace(rune(s[i-1])) || utf8.RuneCountInString(s[:i]) > 16 || len(strings.Fields(s[:i])) > 2 {
+		return "", "", 0, false
+	}
+	head := []rune(s[:i])
+	for k := range head {
+		if k == 0 || unicode.IsSpace(head[k-1]) {
+			head[k] = unicode.ToUpper(head[k])
+		}
+	}
+	if len(string(head)) != i { // a letter whose capital is longer
+		return "", "", 0, false
+	}
+	if _, dir, body, ok = autocast.Speaker(string(head) + s[i:]); !ok {
+		return "", "", 0, false
+	}
+	name = strings.TrimSpace(s[:i])
+	if p := strings.IndexAny(name, "(（"); p > 0 {
+		name = strings.TrimSpace(name[:p])
+	}
+	return name, dir, body, true
 }
 
 // pauseOnly is the length of a line of [pause] tags only, else -1.

@@ -1,6 +1,7 @@
 package markup
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hehehai/AudioSmith/internal/text"
@@ -60,5 +61,22 @@ func FuzzDialogueBlocks(f *testing.F) {
 				t.Fatalf("diag %+v", d)
 			}
 		}
+	})
+}
+
+func FuzzWrapDialogue(f *testing.F) {
+	for _, s := range []string{"“你来了。”妈妈放下碗，轻声说，“饭在锅里。”", "[voice:A]x\n\n[voice:default]y", `"Hi," said Ann. "Go."`, "甲：一\n乙：二\n\n“谁？”"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		if strings.Contains(s, "对话") || strings.Contains(strings.ToLower(s), "dialogue") || strings.Contains(s, "#") {
+			return // the Insert menu does not wrap markers or headings
+		}
+		w := WrapDialogue(s, WrapOptions{Open: "[对话]", Close: "[/对话]", Colon: "："})
+		blocks, _ := DialogueBlocks(w.Text)
+		if len(blocks) != 1 || !blocks[0].Closed() {
+			t.Fatalf("%q → %q: %d blocks", s, w.Text, len(blocks))
+		}
+		UnwrapDialogue(w.Text, blocks[0], "")
 	})
 }

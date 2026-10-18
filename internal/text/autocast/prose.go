@@ -2,6 +2,7 @@ package autocast
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -239,6 +240,8 @@ func zhSpeaker(s string) (string, bool) {
 	switch {
 	case zhPronouns[s]:
 		return "", true
+	case slices.Contains(zhAdverbs, s):
+		return "", false // "妈妈放下碗，轻声说": the adverb is no name
 	case utf8.RuneCountInString(s) > 4 || s == "":
 		return "", false
 	case strings.HasSuffix(s, "知") || strings.HasSuffix(s, "难") || strings.HasSuffix(s, "味"):
