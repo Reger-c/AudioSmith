@@ -69,7 +69,8 @@ type VoiceService interface {
 	Save(ctx context.Context, v Voice) (Voice, error)
 	// SaveFiles is Save that first copies files into the voice's directory.
 	// A new reference clears the lock and a verified consent (the new clip
-	// may be another speaker).
+	// may be another speaker), except a designed voice's (rendered from
+	// the voice itself).
 	SaveFiles(ctx context.Context, v Voice, f VoiceFiles) (Voice, error)
 	Delete(ctx context.Context, id string) error
 	// Import reads a .asvoice (or VoiceStudio .ovsvoice) package into a new
@@ -83,6 +84,12 @@ type VoiceService interface {
 	// the voice's sample, its seed the voice's seed.
 	Lock(ctx context.Context, id, takeID string) (Voice, error)
 	Unlock(ctx context.Context, id string) (Voice, error)
+	// CleanReference makes a cleaned copy of the voice's reference (the
+	// file at path, seconds long) its reference, keeping the current one
+	// as RefOriginal; RevertReference undoes it. Neither touches the lock
+	// or the consent: the speaker is the same.
+	CleanReference(ctx context.Context, id, path string, seconds float64, q *RefQuality) (Voice, error)
+	RevertReference(ctx context.Context, id string) (Voice, error)
 	// SetConsent stores a recording of the user reading the consent
 	// statement: the voice becomes Verified. RevokeConsent removes it.
 	SetConsent(ctx context.Context, id string, c ConsentRecording) (Voice, error)
@@ -104,7 +111,12 @@ type VoiceQuery struct {
 // leave the voice's files as they are.
 type VoiceFiles struct {
 	Reference string // audio file (absolute path): the new clone reference
-	Sample    string // audio file: a rendered sample (designed voices)
+	// Original is the new reference before it was cleaned (Reference is
+	// the cleaned one); RemoveReference removes the reference (a designed
+	// voice whose design changed).
+	Original        string
+	RemoveReference bool
+	Sample          string // audio file: a rendered sample (designed voices)
 	// Portrait is the new portrait, a PNG (already cropped to 256×256);
 	// RemovePortrait deletes the current one.
 	Portrait       []byte

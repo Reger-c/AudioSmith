@@ -211,8 +211,13 @@ type Language struct {
 // VoiceOption is a built-in speaker.
 type VoiceOption struct {
 	ID       string `json:"id"`                 // what the voice parameter takes
-	Language string `json:"language,omitempty"` // BCP-47
-	Gender   string `json:"gender,omitempty"`   // "female", "male"
+	Language string `json:"language,omitempty"` // BCP-47: the only language it speaks (Kokoro's)
+	// Native is the language a multilingual speaker is native in (BCP-47;
+	// Qwen3-TTS CustomVoice's, from its model card): what it sounds best
+	// in, while it speaks the model's other languages too, so the text
+	// pipeline does not assume it (Language does).
+	Native string `json:"native,omitempty"`
+	Gender string `json:"gender,omitempty"` // "female", "male"
 	// Hidden speakers are not offered by pickers (Kokoro's Chinese
 	// voices: unintelligible, thread #41) but still work when named.
 	Hidden bool `json:"hidden,omitempty"`

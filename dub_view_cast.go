@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp/refcheck"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
@@ -66,6 +67,12 @@ func (a *app) dubCastPanel(c *ui.Context) {
 					}
 				}
 			})
+			if r, ok := p.References[sp]; ok && refcheck.GradeOf(r.Hints, refcheck.UseClone) == refcheck.Poor { // the reference checker (#83)
+				ui.Row(c.Key("ref-check")).Gap(px(t, 6)).Children(func() {
+					iconMark(c, icons.DangerTriangle, t.Warning, "")
+					caption(c, dubRefWarning(r.Hints)).TextColor(t.Warning).Grow(1).MinWidth(0)
+				})
+			}
 			if _, ok := p.References[sp]; !ok && p.Stage(dub.StageReferences, "").Status == dub.StatusDone {
 				ui.Row(c).Gap(px(t, 6)).Children(func() {
 					iconMark(c, icons.DangerTriangle, t.Warning, "")
@@ -335,4 +342,16 @@ func dubAnyTranslated(p *dub.Project) bool {
 		}
 	}
 	return false
+}
+
+// dubRefWarning says why a speaker's own voice sample is poor (it comes
+// from the source: nothing to record again).
+func dubRefWarning(hints []string) string {
+	switch {
+	case slices.Contains(hints, refcheck.CodeVeryNoisy):
+		return i18n.T("Their voice sample is very noisy: the clone may carry the noise. Cast a saved voice if it does.")
+	case slices.Contains(hints, refcheck.CodeClipping):
+		return i18n.T("Their voice sample is distorted: the clone may be too. Cast a saved voice if it is.")
+	}
+	return i18n.T("Their voice sample is short: the clone may sound unlike them. Cast a saved voice if it does.")
 }

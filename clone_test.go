@@ -6,8 +6,10 @@ package main
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,9 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp/dsptest"
+	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
+	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
@@ -107,6 +112,19 @@ func TestCloneFlowUpload(t *testing.T) {
 	}
 	if secs, err := decodeWAV(a.voicePath(&v, v.RefAudio), filepath.Join(t.TempDir(), "x.wav")); err != nil || secs > 15.1 {
 		t.Errorf("reference %v %v", secs, err)
+	}
+	// A clean file is not denoised; its part kept is tidied (−18 LUFS,
+	// edges trimmed), the original kept for Undo, the check saved.
+	for _, r := range eng.sent {
+		if r.Cmd == proto.MethodEnhanceRun || r.Spec.Kind == proto.MethodEnhanceRun {
+			t.Error("a clean clip was denoised")
+		}
+	}
+	if b, _, err := wav.ReadFile(a.voicePath(&v, v.RefAudio)); err != nil || math.Abs(loudness.Integrated(b)+18) > 0.3 {
+		t.Errorf("reference not evened out: %v", err)
+	}
+	if v.RefOriginal == "" || v.RefCheck == nil || v.RefCheck.Grade == "" || !slices.Contains(v.RefCheck.Cleaned, "tidied") {
+		t.Errorf("original %q, check %+v", v.RefOriginal, v.RefCheck)
 	}
 	if a.router.Path() != "/voices" || a.edit == nil || a.edit.id != v.ID {
 		t.Errorf("after save: %s %+v", a.router.Path(), a.edit)
@@ -316,22 +334,31 @@ func TestCloneRecordAndUseOnce(t *testing.T) {
 		t.Errorf("capture params %+v", start)
 	}
 	writeSpeech(start.Output.Path, 6, []span{{0.3, 5.7}})
+	addNoise(t, start.Output.Path, -40) // a fan
 	tt.Click("Stop recording")
 	tt.Frame()
 	s := &a.clone
 	if !s.hasClip() || s.srcName != "Recording" || s.busy == "" {
 		t.Fatalf("after recording: %+v", s)
 	}
-	// A recording is cleaned, then transcribed.
+	// A noisy recording is cleaned, then transcribed.
 	answerEnhance(t, eng)
 	answerTranscribe(t, eng, "Recorded words.")
-	if !s.cleaned || s.transcript != "Recorded words." {
+	if !s.cleaned || !s.noisy || s.transcript != "Recorded words." {
 		t.Fatalf("cleaned/transcribed: %+v", s)
 	}
 	tt.Frame()
+	if !tt.HasText("Cleaned up: noise removed, silences trimmed, loudness evened out") ||
+		!tt.HasText("There was background noise: it was removed automatically. For a better result, record again somewhere quiet.") {
+		t.Errorf("cleaning: %q", tt.Texts())
+	}
 	tt.Click("Undo")
-	if s.cleaned || s.original != "" {
+	if s.cleaned || s.original != "" || s.tidy {
 		t.Error("undo clean")
+	}
+	tt.Frame()
+	if !tt.HasText("Clean up") {
+		t.Errorf("after undo: %q", tt.Texts())
 	}
 
 	// Use it once in the Studio: the model switches to one that clones.
@@ -399,8 +426,21 @@ func TestReplaceReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := a.findVoice(v.ID)
-	if got == nil || got.Locked || got.Verified() || got.RefText != a.clone.transcript || got.RefSeconds < 6.9 {
+	if got == nil || got.Locked || got.Verified() || got.RefText != a.clone.transcript || got.RefSeconds < 6.5 || got.RefOriginal == "" {
 		t.Fatalf("after replace %+v", got)
 	}
 	_ = eng
+}
+
+// addNoise adds white noise at dBFS to a WAV.
+func addNoise(t *testing.T, path string, dBFS float64) {
+	t.Helper()
+	b, _, err := wav.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsptest.Add(b, dsptest.Noise(b.Rate, b.Channels, dBFS, b.Seconds(), 5), 0)
+	if err := wav.WriteFile(path, b, wav.PCM16, wav.Options{}); err != nil {
+		t.Fatal(err)
+	}
 }

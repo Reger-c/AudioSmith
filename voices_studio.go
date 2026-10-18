@@ -107,7 +107,7 @@ func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 		if canDesign(e) {
 			return true, ""
 		}
-		if v.Sample != "" && e.Has(catalog.CapClone) {
+		if (v.Sample != "" || v.RefAudio != "") && e.Has(catalog.CapClone) {
 			return true, ""
 		}
 		if e.Has(catalog.CapClone) {
@@ -119,12 +119,15 @@ func voiceUsable(v *core.Voice, e catalog.Entry) (bool, string) {
 }
 
 // voiceHasReference reports whether fillVoice gives a clone of v a
-// reference clip: a cloned voice's reference, or the sample of a locked
-// or designed voice (what models that only clone can speak with).
+// reference clip: a cloned voice's reference, a designed voice's reference
+// or sample, or a locked voice's take (what models that only clone can
+// speak with).
 func voiceHasReference(v *core.Voice) bool {
 	switch {
 	case v.Kind == core.VoiceBuiltin:
 		return false
+	case v.Kind == core.VoiceDesigned && v.RefAudio != "":
+		return true
 	case v.Sample != "" && (v.Locked || v.Kind == core.VoiceDesigned):
 		return true
 	case v.Kind == core.VoiceCloned:
@@ -217,8 +220,11 @@ func (a *app) fillVoice(t *core.Take, v *core.Voice, e catalog.Entry) {
 		if s := styleFor(e, v.Style); s != "" {
 			t.Voice = s
 		}
-	case v.Kind == core.VoiceDesigned: // its sample, cloned
+	case v.Kind == core.VoiceDesigned: // its reference (else its sample), cloned
 		t.RefAudio, t.RefText = a.voicePath(v, v.Sample), v.SampleText
+		if v.RefAudio != "" {
+			t.RefAudio, t.RefText = a.voicePath(v, v.RefAudio), v.RefText
+		}
 		t.Seed = v.Seed
 	default:
 		t.RefAudio, t.RefText = a.voicePath(v, v.RefAudio), v.RefText

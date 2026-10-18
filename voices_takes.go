@@ -54,12 +54,13 @@ func (a *app) voiceJob(purpose, voiceID string) *voiceJob {
 }
 
 // voiceGenerate queues a take for a voice page through TakeService, as
-// the Studio does: retry runs again after the licence dialog accepts.
-func (a *app) voiceGenerate(purpose, voiceID string, t core.Take, retry func()) {
+// the Studio does, and returns its id: retry runs again after the licence
+// dialog accepts ("" then).
+func (a *app) voiceGenerate(purpose, voiceID string, t core.Take, retry func()) string {
 	e := entryFor(t.Model)
 	if licence.Required(e) != nil && !licence.Covers(a.accepted, e) {
 		a.askLicence(e, retry)
-		return
+		return ""
 	}
 	for id, j := range a.voiceJobs { // one at a time per purpose and voice
 		if j.purpose == purpose && j.voiceID == voiceID && !j.running() {
@@ -92,8 +93,18 @@ func (a *app) voiceGenerate(purpose, voiceID string, t core.Take, retry func()) 
 			default:
 				j.err = err.Error()
 			}
+			a.voiceJobFailed(j)
 		})
 	})
+	return t.ID
+}
+
+// voiceJobFailed tells a reference being made that one of its takes
+// failed.
+func (a *app) voiceJobFailed(j *voiceJob) {
+	if j.purpose == "reference" && j.err != "" {
+		a.refTakeFailed(j.voiceID, j.takeID, j.err)
+	}
 }
 
 // voiceJobUpdated follows the jobs of the voice pages' takes.
@@ -120,6 +131,7 @@ func (a *app) voiceJobUpdated(u jobs.Job) {
 			j.needDownload = &e
 		}
 	}
+	a.voiceJobFailed(j)
 }
 
 // voiceTakeCreated finishes a voice page's take: a sample is attached to
@@ -133,8 +145,8 @@ func (a *app) voiceTakeCreated(t core.Take) {
 	switch j.purpose {
 	case "sample":
 		a.attachSample(j.voiceID, t)
-	case "portable":
-		a.portableTakeCreated(t) // voice_portable.go
+	case "reference":
+		a.refTakeCreated(j.voiceID, t) // voice_reference.go
 	default:
 		a.play(&t)
 	}

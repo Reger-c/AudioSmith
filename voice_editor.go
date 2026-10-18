@@ -203,6 +203,7 @@ func (a *app) voiceEditor(c *ui.Context) {
 			})
 		})
 		a.editorAudio(c, v)
+		a.editorReference(c, v) // voice_editor_ref.go (#83)
 		a.editorFields(c, v)
 		a.editorTry(c, v)
 		a.editorLock(c, v)

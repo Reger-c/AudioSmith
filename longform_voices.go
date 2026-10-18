@@ -105,6 +105,11 @@ func lfResolverOf(d *services.LongformDoc, all []core.Voice, fill func(*core.Tak
 			return "", t, false
 		}
 		fill(&t, v, e)
+		if t.RefAudio == "" && v.Kind == core.VoiceDesigned && v.RefAudio != "" {
+			// Spoken by a model that designs it; whole dialogue clones it
+			// from its reference (thread #83).
+			t.CloneRef, t.CloneRefText = path(*v, v.RefAudio), v.RefText
+		}
 		if e.Has(catalog.CapVoicePrompt) && v.Kind == core.VoiceCloned && !v.Locked && v.Prompts[e.Repo] != "" {
 			t.VoicePrompt = path(*v, v.Prompts[e.Repo])
 		}

@@ -46,7 +46,10 @@ type apiBackend struct {
 	// fillVoice, which reads only the library).
 	fill func(t *core.Take, v *core.Voice, e catalog.Entry)
 	// ffmpeg is the optional ffmpeg in use (M7a: MP3, Opus, FLAC).
-	ffmpeg      func() *ffmpeg.Tool
+	ffmpeg func() *ffmpeg.Tool
+	// cleanRef checks and cleans a new clone's reference afterwards, as an
+	// import's (#83: voice_editor_ref.go); nil in tests.
+	cleanRef    func(core.Voice)
 	studioParts // thread #35: api_studio*.go
 }
 
@@ -56,7 +59,8 @@ var _ api.Backend = (*apiBackend)(nil)
 // connectEngine and openLLM.
 func (a *app) newAPIBackend(dataDir string) *apiBackend {
 	b := &apiBackend{lib: a.lib, tr: a.trSvc, router: a.llmRouter, version: a.version, data: dataDir,
-		tmp: filepath.Join(dataDir, "api-tmp"), fill: a.fillVoice, ffmpeg: a.mediaTool}
+		tmp: filepath.Join(dataDir, "api-tmp"), fill: a.fillVoice, ffmpeg: a.mediaTool,
+		cleanRef: func(v core.Voice) { a.post(func() { a.cleanImportedReference(v) }) }}
 	if a.eng != nil {
 		b.sup = a.eng.sup
 	}
@@ -140,7 +144,11 @@ func (b *apiBackend) Voice(ctx context.Context, id string) (core.Voice, error) {
 }
 
 func (b *apiBackend) SaveVoice(ctx context.Context, v core.Voice, f core.VoiceFiles) (core.Voice, error) {
-	return b.lib.svc.Voices.SaveFiles(ctx, v, f)
+	saved, err := b.lib.svc.Voices.SaveFiles(ctx, v, f)
+	if err == nil && f.Reference != "" && f.Original == "" && b.cleanRef != nil {
+		b.cleanRef(saved)
+	}
+	return saved, err
 }
 
 func (b *apiBackend) DeleteVoice(ctx context.Context, id string) error {

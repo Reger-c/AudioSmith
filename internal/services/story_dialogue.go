@@ -15,9 +15,10 @@ package services
 // pacing's gaps (and the emotion's, E).
 //
 // Each speaker is cloned from a reference: a cloned voice's own clip and
-// transcript, else the voice says the portable line (about 10 s) on the
-// story's model first, evened out to −18 LUFS (a "portable sample", as
-// voice_portable.go makes them). Each line is then checked: the recognizer
+// transcript, a designed voice's reference (Take.CloneRef, thread #83),
+// else the voice says a reference text (about 12 s, PortableLine) on the
+// story's model first. Every reference is tidied as the voice pages tidy
+// them (refcheck.Tidy: edges trimmed, long pauses shortened, −18 LUFS). Each line is then checked: the recognizer
 // must hear it (error rate ≤ cutMaxCER) and it must last a plausible time
 // for its text (no runaway "singing", no cut-off end). A line that fails is
 // made again by the dialogue model with the same context (the lines before
@@ -40,13 +41,14 @@ import (
 	"strings"
 
 	"github.com/hehehai/AudioSmith/internal/core"
-	"github.com/hehehai/AudioSmith/internal/dsp/loudness"
+	"github.com/hehehai/AudioSmith/internal/dsp/refcheck"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/text"
 	"github.com/hehehai/AudioSmith/internal/text/plan"
+	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
 // Segment limits (SoulX-Podcast's; dialogueLimitsFor), and how long a
@@ -58,21 +60,18 @@ const (
 	dialogueMaxChars    = 1200
 	dialogueAsideCJK    = 24
 	dialogueAsideChars  = 80
-	dialogueVersion     = "dlg1"
+	dialogueVersion     = "dlg2"
 	// A line lasts within dialogueMinRatio–dialogueMaxRatio of text.Estimate.
 	dialogueMinRatio = 0.3
 	dialogueMaxRatio = 3.0
-	// dialogueRefLUFS is the references' loudness.
-	dialogueRefLUFS = -18
 )
 
-// PortableLine is what a voice says to become a reference clip (about
-// 10 s), in its language: varied sounds, calm, without pauses.
+// PortableLine is what a voice says to become a reference clip when there
+// is no time to pick among takes (about 12 s), in its language: the first
+// of the adult reference texts (voicedesign.ReferenceTexts), lively
+// everyday narration rather than a sentence read about the recording.
 func PortableLine(lang string) string {
-	if strings.HasPrefix(lang, "zh") {
-		return "这是一段用来克隆音色的参考录音。我会用平稳自然的语气，把这几句话清楚地读完，让每个字的声音都能被听见。"
-	}
-	return "This is a reference recording for cloning a voice. I will read these few sentences in a calm and natural way, so that every sound comes through clearly."
+	return vd.ReferenceTexts(lang, vd.RegisterAdult)[0]
 }
 
 // dialogueRef is a speaker's reference: a clip and its exact transcript,
@@ -81,6 +80,7 @@ type dialogueRef struct {
 	audio, text string
 	chunk       *renderChunk // the portable line on the story's model; nil: audio as it is
 	key         string       // identifies the clip for the segment's key
+	tidy        string       // where audio is tidied to (a voice's clip); "": audio is the chunk's
 }
 
 // dialogueSeg is one segment: its lines (chapter indices), each line's
@@ -293,18 +293,25 @@ func spokenText(pl plan.Plan) string {
 }
 
 // dialogueRef is the reference of line li's voice: a cloned voice's clip
-// and transcript, else the portable line on the story's model.
+// and transcript, a designed voice's reference, else the portable line on
+// the story's model.
 func (cr chapterRenderer) dialogueRef(p *ChapterParams, li int,
 	take func(int, SpanSpec, string) (core.Take, *int64, map[string]string, error), planOf func(core.Take, string) plan.Plan,
 	info ModelInfo, modelPath string) (dialogueRef, error) {
 	sp := p.Lines[li].Spans[0]
 	v := p.Voices[sp.Voice]
-	if v.RefAudio != "" && strings.TrimSpace(v.RefText) != "" {
-		key := v.RefAudio
-		if fi, err := os.Stat(v.RefAudio); err == nil {
-			key = fmt.Sprintf("%s|%d|%d", v.RefAudio, fi.Size(), fi.ModTime().Unix())
+	audio, text := v.RefAudio, strings.TrimSpace(v.RefText)
+	if audio == "" || text == "" {
+		audio, text = v.CloneRef, strings.TrimSpace(v.CloneRefText)
+	}
+	if audio != "" && text != "" {
+		key := audio
+		if fi, err := os.Stat(audio); err == nil {
+			key = fmt.Sprintf("%s|%d|%d", audio, fi.Size(), fi.ModTime().Unix())
 		}
-		return dialogueRef{audio: v.RefAudio, text: strings.TrimSpace(v.RefText), key: key}, nil
+		h := sha256.Sum256([]byte(key))
+		tidy := filepath.Join(cr.r.longformChunkDir(), "ref-"+hex.EncodeToString(h[:12])+".wav")
+		return dialogueRef{audio: audio, text: text, key: key, tidy: tidy}, nil
 	}
 	lang := p.Lang
 	if lang == "" {
@@ -358,15 +365,22 @@ func (cr chapterRenderer) dialogueRun(ctx context.Context, st *renderState, i, n
 	// The references.
 	speakers := make([]proto.DialogueSpeaker, len(seg.refs))
 	for k, ref := range seg.refs {
+		audio := ref.audio
 		if ref.chunk != nil {
 			if _, _, err := st.synthesize(ctx, i, n, *ref.chunk); err != nil {
 				return err
 			}
-			if err := levelReference(ref.chunk.path, ref.audio); err != nil {
+			if err := tidyReference(ref.chunk.path, ref.audio); err != nil {
 				return &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 			}
+		} else if ref.tidy != "" {
+			if err := tidyReference(ref.audio, ref.tidy); err == nil {
+				audio = ref.tidy
+			} else {
+				r.logf("chapter %s: reference %s used as it is: %v", st.job.ID, filepath.Base(ref.audio), err)
+			}
 		}
-		speakers[k] = proto.DialogueSpeaker{ID: fmt.Sprintf("s%d", k), RefAudio: ref.audio, RefText: ref.text}
+		speakers[k] = proto.DialogueSpeaker{ID: fmt.Sprintf("s%d", k), RefAudio: audio, RefText: ref.text}
 	}
 	turns := make([]proto.DialogueTurn, len(seg.lines))
 	for k := range seg.lines {
@@ -482,8 +496,10 @@ func (cr chapterRenderer) dialogueCheck(ctx context.Context, st *renderState, se
 	return nil
 }
 
-// levelReference writes src evened out to dialogueRefLUFS as dst (once).
-func levelReference(src, dst string) error {
+// tidyReference writes src tidied (refcheck.Tidy: edges trimmed, long
+// pauses shortened, −18 LUFS) as dst (once). Every reference of a scene
+// is then as loud as the others: the models copy a reference's loudness.
+func tidyReference(src, dst string) error {
 	if fi, err := os.Stat(dst); err == nil && fi.Size() > 44 {
 		return nil
 	}
@@ -491,7 +507,7 @@ func levelReference(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	out, _ := loudness.Normalize(b, loudness.Target{ID: "reference", Integrated: dialogueRefLUFS, TruePeak: -1.5}, loudness.NormalizeOptions{})
+	out, _ := refcheck.Tidy(b, nil)
 	tmp := dst + ".tmp.wav"
 	if err := wav.WriteFile(tmp, out, wav.Float32, wav.Options{}); err != nil {
 		return err

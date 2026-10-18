@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp/dsptest"
+	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/dub/dubtest"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
@@ -224,8 +226,8 @@ func TestDubPipelineEndToEnd(t *testing.T) {
 	if len(p.References) != 2 || !fileExists(e.dubs.Path(p.ID, p.References["S1"].File)) {
 		t.Errorf("references %+v", p.References)
 	}
-	if p.References["S1"].Enhanced {
-		t.Error("separated voices are not enhanced again")
+	if r := p.References["S1"]; r.Enhanced || !r.Tidied || r.Grade == "" {
+		t.Errorf("a clean reference is tidied, not denoised: %+v", r)
 	}
 	for _, l := range []string{"es", "fr"} {
 		if done, total := p.Translated(l); done != 6 || total != 6 {
@@ -353,6 +355,15 @@ func TestDubWithoutSeparationOrDiarization(t *testing.T) {
 	e := newDubEnv(t, 4)
 	e.eng.Missing[dub.MethodSeparate] = true
 	e.eng.Missing[dub.MethodDiarize] = true
+	// A noisy source: its references are denoised (thread #83: only then).
+	src, _, err := wav.ReadFile(e.src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsptest.Add(src, dsptest.Noise(src.Rate, src.Channels, -32, src.Seconds(), 3), 0)
+	if err := wav.WriteFile(e.src, src, wav.PCM16, wav.Options{}); err != nil {
+		t.Fatal(err)
+	}
 	p := e.create(t, nil)
 	p = e.run(t, p.ID, RunRequest{Through: dub.StageMix})
 	if st := p.Stage(dub.StageSeparate, ""); st.Status != dub.StatusSkipped || st.Code != DubWarnNoSeparation {
@@ -364,8 +375,8 @@ func TestDubWithoutSeparationOrDiarization(t *testing.T) {
 	if labels := p.SpeakerLabels(); !slices.Equal(labels, []string{"S1"}) {
 		t.Errorf("speakers %v", labels)
 	}
-	if !p.References["S1"].Enhanced {
-		t.Error("reference not cleaned without separation")
+	if r := p.References["S1"]; !r.Enhanced || !r.Tidied || !slices.Contains(r.Hints, "noisy") {
+		t.Errorf("noisy reference not cleaned: %+v", r)
 	}
 	tr := p.Track("es")
 	if tr.Background != dub.BackgroundDucked || tr.File == "" {

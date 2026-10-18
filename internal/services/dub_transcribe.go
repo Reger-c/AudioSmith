@@ -13,10 +13,12 @@ import (
 	"strings"
 
 	"github.com/hehehai/AudioSmith/internal/dsp"
+	"github.com/hehehai/AudioSmith/internal/dsp/refcheck"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/text"
 	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
@@ -190,7 +192,8 @@ func glossaryPrompt(g translate.Glossary) string {
 	return strings.Join(terms, ", ")
 }
 
-// references picks each speaker's clone reference and cleans it.
+// references picks each speaker's clone reference, checks it, denoises it
+// when it is noisy and tidies it.
 func (s *Dubs) references(ctx context.Context, sc *stageCtx) error {
 	p := sc.p
 	m := s.cfg.Models()
@@ -220,7 +223,19 @@ func (s *Dubs) references(ctx context.Context, sc *stageCtx) error {
 			return err
 		}
 		ref := dub.Reference{File: name, Start: c.Start, End: c.End, Text: c.Text, Score: c.Score}
-		if p.Media.Vocals == "" && m.Enhance != "" {
+		// Checked (thread #83): denoised only when noisy (the source's music
+		// and effects, a noisy room), then tidied like every reference.
+		b, _, err := wav.ReadFile(sc.path(name))
+		if err != nil {
+			return err
+		}
+		w, ch := text.Count(c.Text)
+		rep := refcheck.Measure(b, refcheck.Options{Units: max(w, ch), CJK: ch > w, CER: -1})
+		ref.Grade = string(rep.Grade(refcheck.UseClone))
+		for _, h := range rep.Hints(refcheck.UseClone) {
+			ref.Hints = append(ref.Hints, h.Code)
+		}
+		if rep.Noisy() && m.Enhance != "" {
 			clean := filepath.Join("refs", dub.SafeName(sp)+".clean.wav")
 			ep := proto.EnhanceParams{Model: m.Enhance, Audio: sc.path(name), Output: proto.Output{Path: sc.path(clean), Format: "wav", Bits: 16}}
 			var er proto.EnhanceResult
@@ -238,6 +253,10 @@ func (s *Dubs) references(ctx context.Context, sc *stageCtx) error {
 			default:
 				return err
 			}
+		}
+		tidy := filepath.Join("refs", dub.SafeName(sp)+".ref.wav")
+		if err := tidyReference(sc.path(ref.File), sc.path(tidy)); err == nil {
+			ref.File, ref.Tidied = tidy, true
 		}
 		refs[sp] = ref
 	}

@@ -89,6 +89,7 @@ func (a *app) cloneSources(c *ui.Context) {
 			a.micControls(c, &s.mic, func(path string) { a.cloneLoad(path, i18n.T("Recording"), true) })
 		})
 	})
+	a.recordingTips(c)
 	if s.err != "" {
 		ui.Text(c, s.err).TextColor(t.Danger).FontSize(px(t, fsCaption)).Selectable()
 	}
@@ -148,7 +149,8 @@ func (a *app) micControls(c *ui.Context, m *micState, done func(path string)) {
 	}
 }
 
-// cloneClip is the loaded clip: waveform, trimmer, length advice, noise.
+// cloneClip is the loaded clip: waveform, trimmer, length advice, its
+// quality and cleaning.
 func (a *app) cloneClip(c *ui.Context) {
 	t := c.Theme()
 	s := &a.clone
@@ -181,8 +183,8 @@ func (a *app) cloneClip(c *ui.Context) {
 				}
 			}
 			ui.Text(c, i18n.T("%.1f–%.1f s · %.1f s kept", s.selLo, s.selHi, s.sel().Len())).FontSize(px(t, fsCaption)).SingleLine().Grow(1)
-			if ghostButton(c.Key("clone-best"), i18n.T("Best part")).Tooltip(i18n.T("Keep the 15 seconds with the most speech")).Clicked() {
-				w := bestWindow(s.speech, s.seconds, refIdealHigh)
+			if ghostButton(c.Key("clone-best"), i18n.T("Best part")).Tooltip(i18n.T("Keep the best 10–14 seconds of speech")).Clicked() {
+				w := refWindow(s.speech, s.seconds)
 				s.selLo, s.selHi = w.Start, w.End
 			}
 			if ghostButton(c.Key("clone-all"), i18n.T("Keep all")).Clicked() {
@@ -198,25 +200,7 @@ func (a *app) cloneClip(c *ui.Context) {
 		default:
 			caption(c, note)
 		}
-		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
-			switch {
-			case s.busy != "":
-				ui.Spinner(c)
-				ui.Text(c, s.busy).FontSize(px(t, fsCaption))
-			case s.cleaned:
-				statusMark(c, icons.CheckCircle, t.Success, i18n.T("Noise cleaned"))
-				if ghostButton(c.Key("clone-unclean"), i18n.T("Undo")).Clicked() {
-					a.cloneUndoClean()
-				}
-			default:
-				if ghostIconButton(c.Key("clone-clean"), icons.MagicStick3, i18n.T("Clean reference noise")).Label(i18n.T("Clean reference noise")).Tooltip(i18n.T("Remove background noise and room echo")).Clicked() {
-					a.cloneClean(false)
-				}
-				if s.cleanErr != "" {
-					ui.Text(c, i18n.T("Could not clean the clip: %s", s.cleanErr)).FontSize(px(t, fsCaption)).TextColor(t.Danger).Grow(1).MinWidth(0)
-				}
-			}
-		})
+		a.cloneCleanup(c) // clone_check.go: quality, cleaning, Undo
 	})
 }
 

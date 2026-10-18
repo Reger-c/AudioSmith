@@ -29,6 +29,7 @@ import (
 // File names inside a voice's directory:
 //
 //	reference.<ext>  the clone reference (as given: wav, flac, mp3, m4a…)
+//	original.<ext>   the reference before it was cleaned (Undo)
 //	sample.<ext>     a rendered sample (designed voices, imports' preview)
 //	locked.wav       the locked take's audio (Lock)
 //	consent.<ext>    the consent recording
@@ -109,7 +110,7 @@ func validVoice(v *core.Voice) error {
 // keepFiles copies the fields that name files (and the lock and consent
 // that go with them) from the stored profile old into v.
 func keepFiles(v *core.Voice, old core.Voice) {
-	v.RefAudio, v.RefSeconds = old.RefAudio, old.RefSeconds
+	v.RefAudio, v.RefSeconds, v.RefOriginal, v.RefCheck = old.RefAudio, old.RefSeconds, old.RefOriginal, old.RefCheck
 	v.Sample, v.SampleText = old.Sample, old.SampleText
 	v.Portrait, v.Consent, v.Prompts = old.Portrait, old.Consent, maps.Clone(old.Prompts)
 	v.Locked, v.LockTake = old.Locked, old.LockTake
@@ -141,7 +142,7 @@ func (s *Voices) SaveFiles(ctx context.Context, v core.Voice, f core.VoiceFiles)
 	}
 	// What describes a new file comes with it.
 	if f.Reference != "" {
-		v.RefSeconds = in.RefSeconds
+		v.RefSeconds, v.RefCheck = in.RefSeconds, in.RefCheck
 	}
 	if f.Sample != "" {
 		v.SampleText = in.SampleText
@@ -158,19 +159,31 @@ func (s *Voices) SaveFiles(ctx context.Context, v core.Voice, f core.VoiceFiles)
 		return name, nil
 	}
 	err := func() error {
+		if f.RemoveReference && f.Reference == "" {
+			obsolete = append(obsolete, v.RefAudio, v.RefOriginal)
+			v.RefAudio, v.RefOriginal, v.RefSeconds, v.RefCheck = "", "", 0, nil
+			if v.Kind == core.VoiceDesigned {
+				v.RefText = ""
+			}
+		}
 		if f.Reference != "" {
 			name, err := put(f.Reference, "reference")
 			if err != nil {
 				return err
 			}
-			obsolete = append(obsolete, v.RefAudio)
-			v.RefAudio = name
+			obsolete = append(obsolete, v.RefAudio, v.RefOriginal)
+			v.RefAudio, v.RefOriginal = name, ""
+			if f.Original != "" {
+				if v.RefOriginal, err = put(f.Original, "original"); err != nil {
+					return err
+				}
+			}
 			// A new clip may be another speaker: what vouched for the old
-			// one goes.
-			if v.Locked {
+			// one goes (a designed voice's is rendered from itself).
+			if v.Locked && v.Kind != core.VoiceDesigned {
 				obsolete = append(obsolete, lockSample(&v)...)
 			}
-			if v.Consent.State != core.ConsentNone {
+			if v.Consent.State != core.ConsentNone && v.Kind != core.VoiceDesigned {
 				obsolete = append(obsolete, v.Consent.Recording)
 				v.Consent = core.VoiceConsent{}
 			}
@@ -235,7 +248,7 @@ func (s *Voices) SaveFiles(ctx context.Context, v core.Voice, f core.VoiceFiles)
 
 // fileNames lists the files a profile names.
 func fileNames(v core.Voice) []string {
-	out := []string{v.RefAudio, v.Sample, v.Portrait, v.Consent.Recording}
+	out := []string{v.RefAudio, v.RefOriginal, v.Sample, v.Portrait, v.Consent.Recording}
 	for _, p := range v.Prompts {
 		out = append(out, p)
 	}
@@ -324,6 +337,58 @@ func (s *Voices) Lock(ctx context.Context, id, takeID string) (core.Voice, error
 		v.Sample, v.SampleText, v.CreatedWith = lockedName, t.Text, t.Model
 		return obsolete, nil
 	})
+}
+
+// CleanReference makes the cleaned clip at path the voice's reference;
+// the current one becomes RefOriginal (its cached prompts go).
+func (s *Voices) CleanReference(ctx context.Context, id, path string, seconds float64, q *core.RefQuality) (core.Voice, error) {
+	return s.update(ctx, id, func(v *core.Voice) ([]string, error) {
+		if v.RefAudio == "" || v.RefOriginal != "" {
+			return nil, fmt.Errorf("voice %s: no reference to clean: %w", id, core.ErrInvalid)
+		}
+		name := "cleaned.wav"
+		if err := copyInto(ctx, path, s.FilePath(*v, name)); err != nil {
+			return nil, err
+		}
+		var obsolete []string
+		for _, p := range v.Prompts {
+			obsolete = append(obsolete, p)
+		}
+		v.RefOriginal, v.RefAudio, v.Prompts = v.RefAudio, name, nil
+		v.RefSeconds, v.RefCheck = seconds, q
+		return obsolete, nil
+	})
+}
+
+// RevertReference undoes the automatic cleaning of a voice's reference:
+// the original becomes the reference again (its cached prompts go).
+func (s *Voices) RevertReference(ctx context.Context, id string) (core.Voice, error) {
+	return s.update(ctx, id, func(v *core.Voice) ([]string, error) {
+		if v.RefOriginal == "" {
+			return nil, fmt.Errorf("voice %s: no original reference: %w", id, core.ErrInvalid)
+		}
+		obsolete := []string{v.RefAudio}
+		for _, p := range v.Prompts {
+			obsolete = append(obsolete, p)
+		}
+		v.RefAudio, v.RefOriginal, v.Prompts = v.RefOriginal, "", nil
+		if v.RefCheck != nil {
+			q := *v.RefCheck
+			v.RefSeconds = firstPositive(q.OriginalSeconds, v.RefSeconds)
+			q.Cleaned, q.OriginalSeconds = nil, 0
+			v.RefCheck = &q
+		}
+		return obsolete, nil
+	})
+}
+
+func firstPositive(xs ...float64) float64 {
+	for _, x := range xs {
+		if x > 0 {
+			return x
+		}
+	}
+	return 0
 }
 
 func (s *Voices) Unlock(ctx context.Context, id string) (core.Voice, error) {

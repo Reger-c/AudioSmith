@@ -17,6 +17,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/audio"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp/refcheck"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 )
@@ -46,6 +47,15 @@ type cloneState struct {
 	err        string
 	cleaned    bool
 	cleanErr   string
+	// The reference checker (clone_check.go): the last report and what it
+	// was of; noisy: the clip as loaded was noisy (so it was denoised);
+	// tidy: the part kept is tidied (edges, long pauses, loudness).
+	check    *refcheck.Report
+	checkKey string
+	checking bool
+	noisy    bool
+	tidy     bool
+	tipsOpen bool
 
 	transcript string
 	autoText   string // the machine transcript last put in transcript
@@ -151,6 +161,7 @@ func (a *app) cloneLoad(src, name string, recorded bool) {
 	gen := s.gen
 	s.busy, s.err, s.srcName = i18n.T("Reading the clip…"), "", name
 	s.work, s.original, s.peaks, s.speech, s.cleaned, s.cleanErr = "", "", nil, nil, false, ""
+	s.check, s.checkKey, s.noisy, s.tidy = nil, "", false, true
 	s.asr, s.asrErr = "", ""
 	if s.transcript == s.autoText { // a new clip: a machine transcript of the old one goes
 		s.transcript = ""
@@ -175,25 +186,20 @@ func (a *app) cloneLoad(src, name string, recorded bool) {
 				}
 				s.busy = ""
 				s.work, s.seconds, s.speech, s.peaks = out, secs, speech, peaks
-				s.auto = bestWindow(speech, secs, refIdealHigh)
+				s.auto = refWindow(speech, secs)
 				s.selLo, s.selHi = s.auto.Start, s.auto.End
-				a.cloneRefine(gen, recorded)
+				a.cloneRefine(gen)
 			})
 		})
 	})
 }
 
 // cloneRefine asks the engine's VAD where the speech is (keeping a part
-// the user chose), then cleans a recording and transcribes.
-func (a *app) cloneRefine(gen int, recorded bool) {
+// the user chose), then checks the clip: it is denoised when noisy, then
+// transcribed (clone_check.go).
+func (a *app) cloneRefine(gen int) {
 	s := &a.clone
-	next := func() {
-		if recorded {
-			a.cloneClean(true)
-			return
-		}
-		a.cloneTranscribe()
-	}
+	next := func() { a.cloneFirstCheck(gen) }
 	if s.seconds <= refIdealHigh {
 		next() // all of it is kept: no need to look for the best part
 		return
@@ -205,7 +211,7 @@ func (a *app) cloneRefine(gen int, recorded bool) {
 		if err == nil && len(speech) > 0 {
 			s.speech = speech
 			if s.sel() == s.auto {
-				s.auto = bestWindow(speech, s.seconds, refIdealHigh)
+				s.auto = refWindow(speech, s.seconds)
 				s.selLo, s.selHi = s.auto.Start, s.auto.End
 			}
 		}
@@ -268,22 +274,32 @@ func (a *app) cloneUndoClean() {
 	})
 }
 
-// cloneSelection writes the kept part to a file of its own and calls
-// done with it on the main thread (the whole clip when all of it is kept).
+// cloneSelection writes the kept part to a file of its own, tidied unless
+// the user undid it, and calls done with it on the main thread (the
+// whole clip when all of it is kept).
 func (a *app) cloneSelection(done func(path string, seconds float64, err error)) {
 	s := &a.clone
-	work, sel, total := s.work, s.sel(), s.seconds
-	out := a.workPath("ref")
+	work, sel, total, out := s.work, s.sel(), s.seconds, a.workPath("ref")
+	var speech []span
+	if s.tidy {
+		speech = append([]span{}, s.speech...)
+	}
 	a.background(func() {
-		var err error
-		secs := total
-		if sel.Start <= 0.05 && sel.End >= total-0.05 {
-			err = copyWAV(work, out)
-		} else {
-			secs, err = cutWAV(work, out, sel)
+		secs, err := cutPart(work, out, sel, total)
+		if err == nil && speech != nil {
+			secs, err = tidyWAV(out, sel, speech)
 		}
 		a.post(func() { done(out, secs, err) })
 	})
+}
+
+// cutPart writes the part sel of a WAV of total seconds to out (a copy
+// when it is all of it).
+func cutPart(work, out string, sel span, total float64) (float64, error) {
+	if sel.Start <= 0.05 && sel.End >= total-0.05 {
+		return total, copyWAV(work, out)
+	}
+	return cutWAV(work, out, sel)
 }
 
 // copyWAV copies a file.

@@ -27,6 +27,12 @@ type Voice struct {
 	RefAudio   string    `json:"refAudio,omitempty"` // clone reference: file name in the voice directory
 	RefText    string    `json:"refText,omitempty"`  // what the reference says ("" = let the engine listen)
 	RefSeconds float64   `json:"refSeconds,omitempty"`
+	// RefOriginal is the reference before it was cleaned automatically
+	// (denoised, its silences trimmed, evened out; thread #83): a file
+	// name, kept so the cleaning can be undone. RefCheck is what the
+	// reference checker found (of the reference as given).
+	RefOriginal string      `json:"refOriginal,omitempty"`
+	RefCheck    *RefQuality `json:"refCheck,omitempty"`
 	// Style is a delivery hint ("whisper", "calm and slow") sent as the
 	// instruction of engines that take one; tag engines get it reduced to
 	// their vocabulary.
@@ -59,6 +65,17 @@ type Voice struct {
 	Tags      []string  `json:"tags,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// RefQuality is what the reference checker (dsp/refcheck) found in a
+// voice's reference: its grade ("good", "ok", "poor"), its hints' codes,
+// what the automatic cleaning did ("denoised", "tidied") and how long the
+// original was.
+type RefQuality struct {
+	Grade           string   `json:"grade,omitempty"`
+	Hints           []string `json:"hints,omitempty"`
+	Cleaned         []string `json:"cleaned,omitempty"`
+	OriginalSeconds float64  `json:"originalSeconds,omitempty"`
 }
 
 // Verified reports whether the profile has a consent recording made here.

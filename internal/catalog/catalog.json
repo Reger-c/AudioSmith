@@ -88,13 +88,13 @@
         {"code": "ru", "value": "Russian"}
       ],
       "voices": [
-        {"id": "Vivian"},
-        {"id": "Serena"},
-        {"id": "Uncle_Fu"},
-        {"id": "Dylan"},
-        {"id": "Eric"},
-        {"id": "Ryan"},
-        {"id": "Aiden"}
+        {"id": "Vivian", "native": "zh", "gender": "female"},
+        {"id": "Serena", "native": "zh", "gender": "female"},
+        {"id": "Uncle_Fu", "native": "zh", "gender": "male"},
+        {"id": "Dylan", "native": "zh", "gender": "male"},
+        {"id": "Eric", "native": "zh", "gender": "male"},
+        {"id": "Ryan", "native": "en", "gender": "male"},
+        {"id": "Aiden", "native": "en", "gender": "male"}
       ],
       "capabilities": ["sampling", "voiceStyle", "instruct", "language", "stream"],
       "sampleRate": 24000,

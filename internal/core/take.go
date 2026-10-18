@@ -35,6 +35,12 @@ type Take struct {
 	// from a line's emotion intensity); 0 = the model's.
 	Exaggeration float64 `json:"exaggeration,omitempty"`
 	VoicePrompt  string  `json:"voicePrompt,omitempty"` // tts.encodeVoice file of the clone reference (absolute path)
+	// CloneRef and CloneRefText are the voice's reference for a model that
+	// clones it while this recipe does not (a designed voice spoken by a
+	// model that designs): Stories' whole dialogue clones from them. Never
+	// sent with the recipe.
+	CloneRef     string `json:"cloneRef,omitempty"`
+	CloneRefText string `json:"cloneRefText,omitempty"`
 
 	// Relations (M1+). Empty for MVP takes.
 	VoiceID   string `json:"voiceId,omitempty"`   // Voice profile it was spoken with

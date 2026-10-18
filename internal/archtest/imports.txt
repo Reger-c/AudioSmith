@@ -56,6 +56,10 @@ dsp/mix                  dsp/resample
 dsp/qc                   dsp
 dsp/qc                   dsp/loudness
 
+dsp/refcheck             dsp
+dsp/refcheck             dsp/analysis
+dsp/refcheck             dsp/loudness
+
 dsp/resample             dsp
 dsp/resample             dsp/filter
 
@@ -129,6 +133,7 @@ services                 dsp/edit
 services                 dsp/loudness
 services                 dsp/master
 services                 dsp/qc
+services                 dsp/refcheck
 services                 dsp/resample
 services                 dsp/stretch
 services                 dsp/wav

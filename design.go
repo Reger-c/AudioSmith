@@ -170,7 +170,8 @@ func (a *app) designGenerate() {
 // designSave saves the draft as a designed voice (or updates the linked
 // one). Its sample is the last preview when that is of this very recipe;
 // otherwise one is rendered when the engine is ready, else on the first
-// preview.
+// preview. Its reference (voice_reference.go) is made after it, or when it
+// is first needed.
 func (a *app) designSave() {
 	d := &a.design
 	name := strings.TrimSpace(d.saveName)
@@ -183,12 +184,14 @@ func (a *app) designSave() {
 	attrs, _ := json.Marshal(r.Attrs)
 	v := core.Voice{Name: name, Kind: core.VoiceDesigned, Design: strings.TrimSpace(d.description), DesignAttrs: attrs,
 		Seed: r.Seed, Language: d.speechLang(), CreatedWith: e.Repo}
+	var files core.VoiceFiles
 	if old := a.findVoice(d.linked); old != nil && old.Name == name {
 		cur := *old
 		cur.Design, cur.DesignAttrs, cur.Seed, cur.Language, cur.CreatedWith = v.Design, v.DesignAttrs, v.Seed, v.Language, v.CreatedWith
+		// Another design: its reference was of the old one.
+		files.RemoveReference = voiceRecipe(old).Key() != voiceRecipe(&cur).Key() || old.CreatedWith != cur.CreatedWith
 		v = cur
 	}
-	var files core.VoiceFiles
 	j := a.voiceJob("design", "")
 	if j != nil && j.take != nil && j.take.Model == e.Repo && j.take.Seed == r.Seed && a.designTakeKey(j.take) == a.designKey() {
 		files.Sample = a.takeStore.AudioPath(*j.take)
@@ -207,6 +210,11 @@ func (a *app) designSave() {
 			a.toast(i18n.T("Voice profile saved"))
 			if saved.Sample == "" && ready {
 				a.renderSample(&saved)
+			}
+			// Its reference for clone and dialogue models (#83): made now,
+			// or when it is first needed.
+			if needsReference(&saved) && ready {
+				a.makeReference(&saved, nil)
 			}
 		})
 	})
