@@ -276,6 +276,11 @@ func (b *apiBackend) longformJSON(ctx context.Context, p core.Project, d service
 		}
 		out.Scene, out.Pacing, out.Continuity = d.Scene, apiPacing(d.Production.Pacing), storyContinuity(d.Model)
 		out.Dialogue = d.Production.Dialogue
+		if d.Production.Dialogue {
+			if e, _, why := dialogueChoice(readSysInfo().MemoryGB(), &d); why == "" {
+				out.DialogueModel = dialogueModelName(e)
+			}
+		}
 	} else {
 		for _, n := range services.VoiceNames(d.Script) {
 			ref := d.VoiceCast[n]

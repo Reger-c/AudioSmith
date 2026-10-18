@@ -458,7 +458,7 @@ The port matches the PyTorch reference: on the same 16 kHz input and message, th
 
 ## 5.6 Dialogue models
 
-Types: [`dialogue.go`](../internal/engine/proto/dialogue.go) (Go), [`WireDialogue.swift`](../engine/Sources/AudioSmithProtocol/WireDialogue.swift). Fixture: `dialogue.jsonl`. Thread #80.
+Types: [`dialogue.go`](../internal/engine/proto/dialogue.go) (Go), [`WireDialogue.swift`](../engine/Sources/AudioSmithProtocol/WireDialogue.swift). Fixture: `dialogue.jsonl`. Threads #80 (SoulX-Podcast), #82 (MOSS-TTSD).
 
 ### `tts.dialogue` (job, gpu) → `tts.turn` …
 
@@ -477,21 +477,23 @@ A whole conversation in one job: each turn is spoken hearing the turns before it
 
 | Param | Meaning |
 |---|---|
-| `speakers` | Up to the model's limit (SoulX-Podcast: 4; more fails with `unsupported`, `data.capability:"speakers"`). Each has a unique `id`, a reference clip (any format AVFoundation reads; SoulX: 1–30 s) and its **exact transcript** (`refText`, required). |
+| `speakers` | Up to the model's limit (SoulX-Podcast: 4, MOSS-TTSD: 5; more fails with `unsupported`, `data.capability:"speakers"`). Each has a unique `id`, a reference clip (any format AVFoundation reads; 1–30 s) and its **exact transcript** (`refText`, required). |
 | `turns` | In order; `speaker` names a speaker id. A turn with `codes` (from an earlier result of the same model and speakers) is **context only**: heard, not spoken again, no file. |
 | `outputDir` | Absolute; the app owns it. Per-turn files are `turn-<index, 3 digits>.wav`; a one-track model writes `dialogue.wav`. |
 | `bits` | 16 (default), 24, or 32 (float). |
-| `seed`, `temperature`, `topP`, `topK`, `repetitionPenalty`, `maxTokens` (per turn), `steps` (flow matching) | Unset: the model's defaults. SoulX-Podcast samples exactly as upstream does with transformers 4.57.1: repetition penalty 1.25 on the current turn's tokens → temperature 0.6 → top-k 100 → top-p 0.9, repetition-aware sampling (window 25, ratio 0.2), 8 to 3,000 tokens a turn, logits limited to the speech tokens and their end token; 15 flow steps. |
+| `seed`, `temperature`, `topP`, `topK`, `repetitionPenalty`, `maxTokens` (per turn; one-track: in all), `steps` (flow matching) | Unset: the model's defaults. SoulX-Podcast samples exactly as upstream does with transformers 4.57.1: repetition penalty 1.25 on the current turn's tokens → temperature 0.6 → top-k 100 → top-p 0.9, repetition-aware sampling (window 25, ratio 0.2), 8 to 3,000 tokens a turn, logits limited to the speech tokens and their end token; 15 flow steps. MOSS-TTSD samples as the official `generate()`: audio temperature 1.1 → repetition penalty 1.1 (codes already in the sequence, prompt included) → top-k 50 → top-p 0.9; the text channel 1.1 / 50 / 0.9 without penalty; at most twice the text's estimated length plus 10 s, never over 2,000 frames (160 s). |
 
 Two kinds of model:
 - **Per-turn** (SoulX-Podcast, family `soulx_podcast`): each generated turn is its own file, announced by `tts.turn` as soon as it is written (before the response, as every notification). `result.turns` lists the generated turns with `output`, `frames`, `audioSeconds`, the turn's `codes` (speech tokens, 0–6560) and `seconds` (its generation time). **Redoing one turn**: send the same speakers, the turns before it with their `codes`, and the turn itself without; only it is generated, with the same context.
-- **One-track** (MOSS-TTSD, later): the whole dialogue in one file, `result.mixed` (`output`, `frames`, `audioSeconds`), and every turn with `index`, `speaker` and `text`; the app cuts the track at the turns (`stt.align`, as character tracks are cut).
+- **One-track** (MOSS-TTSD, family `moss_ttsd`): the whole dialogue in one file, `dialogue.wav`: `result.mixed` (`output`, `frames`, `audioSeconds`, and `codes`/`codebooks`: the track's codec frames, 16 codes each, flattened; the first frame comes just before the audio, frame k + 1 lies under samples [k × 1920, (k + 1) × 1920), 12.5 frames a second), and every spoken turn with `index`, `speaker` and `text` (as the model read it, normalized); no `tts.turn`. The app cuts the track at the turns (`stt.align`, as character tracks are cut). **Redoing one turn**: the same speakers, the turns before it with their slice of `mixed.codes` as `codes` (the first one from frame 0), the turn itself without; context turns must all come before the turns to speak, and only those are in the new track.
 
 Errors: a model that is not a dialogue model fails with `unsupported`, `data.capability:"dialogue"`; a missing `refText`, an unknown speaker, an empty turn or every turn with codes with `bad_request`; a missing reference with `file_not_found`.
 
-`models.load` with `task:"dialogue"` loads a dialogue model ahead; its result's capabilities are `dialogue`, `clone`, `seed`, `sampling`, `steps`.
+`models.load` with `task:"dialogue"` loads a dialogue model ahead; its result's capabilities are `dialogue`, `clone`, `seed`, `sampling` and (SoulX-Podcast) `steps`.
 
 **SoulX-Podcast in the engine** ([`SoulX.swift`](../engine/Sources/AudioSmithEngine/SoulX.swift), [`Dialogue.swift`](../engine/Sources/AudioSmithEngine/Dialogue.swift), [`AudioSmithDialogue`](../engine/Sources/AudioSmithDialogue)): the Qwen3-1.7B language model (8-bit, mlx-swift-lm) writes a turn's speech tokens after the reference blocks and the earlier turns, keeping its KV cache across turns and rebuilding the context as upstream does (more than 10 blocks or 6,192 tokens: the references, the texts of two earlier turns, the last two turns with their speech); CosyVoice2's flow matching (fresh noise per turn) and HiFT (mlx-audio-swift's S3Gen types, patch 0006) make the turn's waveform from its tokens and the speaker's reference tokens, mel and CAM++ x-vector. The S3 tokenizer is the auxiliary repo `mlx-community/S3TokenizerV2`. Checked against the official PyTorch code stage by stage (`audiosmith-engine --soulx-check`, scripts/soulx/parity.sh). M4 (24 GB): 0.7× real time, 39 speech tokens a second, 4.3 GB MLX peak.
+
+**MOSS-TTSD in the engine** ([`MossTTSD.swift`](../engine/Sources/AudioSmithEngine/MossTTSD.swift), [`MossCodec.swift`](../engine/Sources/AudioSmithEngine/MossCodec.swift), [`MossDialogue.swift`](../engine/Sources/AudioSmithEngine/MossDialogue.swift), `AudioSmithDialogue`'s `MossTTSD*`): the TTSD Space's voice-clone-and-continuation mode. Each speaker's clip (loudness-normalized as the official processor does) is encoded alone into the user message's `Reference(s)`, all clips back to back once more as the start of the assistant's audio; the text is every transcript as `[Sn]` then the turns, through the Space's `normalize_text`. A Qwen3-8B backbone (8-bit, own code on MLX) writes rows of a text token and 16 codebooks with the delay pattern; MOSS-Audio-Tokenizer (8-bit, own code) decodes the new frames in 8-second streamed chunks with the prompt's frames as left context, trimmed as the official processor trims. Checked against the official PyTorch code (`audiosmith-engine --moss-check codec|tiny|lm`, scripts/mossttsd/parity.sh): prompt rows identical, the generation loop identical on a tiny random model, logits KL 6·10⁻¹¹ with the same weights, codec codes identical. M4 (24 GB): 0.8× real time, 11 frames a second, 12.2 GB MLX peak.
 
 ## 6. Notifications (engine → app)
 

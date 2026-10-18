@@ -19,7 +19,8 @@ package main
 // (cv06, vd17), AUDIOSMITH_EMO_VARIANTS variants (default v1,A,AE,AEF).
 // Thread #80 adds the letters D (whole dialogue on the catalogue's
 // dialogue model), T (its emotion tags) and 0 (no director: the story as
-// written), e.g. AED, AEDT, 0D.
+// written), e.g. AED, AEDT, 0D; thread #82 the letter M (whole dialogue on
+// MOSS-TTSD), e.g. AEM.
 
 import (
 	"context"
@@ -267,9 +268,12 @@ func expDirected(t *testing.T, doc services.LongformDoc, dir, v string) services
 		applyEmotions(&d, em, false)
 	}
 	// "A" then the parts on top: E (emotion gaps), F (character tracks),
-	// D (whole dialogue), T (its emotion tags); "#n" adds n to the seed.
-	if strings.Contains(flags, "D") {
+	// D (whole dialogue), M (on MOSS-TTSD), T (its emotion tags); "#n" adds n to the seed.
+	if strings.Contains(flags, "D") || strings.Contains(flags, "M") {
 		e, _ := dialogueEntry()
+		if strings.Contains(flags, "M") {
+			e, _ = dialogueByName("moss")
+		}
 		d.Production.Dialogue, d.Production.DialogueModel = true, e.Repo
 		d.Production.DialogueTags = strings.Contains(flags, "T")
 	}

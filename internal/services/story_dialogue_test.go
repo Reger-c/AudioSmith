@@ -89,14 +89,14 @@ func TestDialogueGroups(t *testing.T) {
 		l("a", "a", "一。"), l("b", "b", "二。"), l("c", "c", "三。"), l("d", "d", "四。"), l("e", "e", "五。"), // a fifth voice starts another
 		l("kid", "kid", "[pause 500ms] 嗯。"), // pause markup: line by line
 	}
-	if got := fmt.Sprint(dialogueGroups(lines)); got != "[[1 3 4] [6 7 8 9] [10]]" {
+	if got := fmt.Sprint(dialogueGroups(lines, dialogueLimitsFor("soulx_podcast"))); got != "[[1 3 4] [6 7 8 9] [10]]" {
 		t.Errorf("groups %s", got)
 	}
 	var many []LineSpec
 	for i := range 20 {
 		many = append(many, l("kid", "kid", fmt.Sprintf("第%d句。", i)))
 	}
-	if g := dialogueGroups(many); len(g) != 2 || len(g[0]) != dialogueMaxTurns {
+	if g := dialogueGroups(many, dialogueLimitsFor("soulx_podcast")); len(g) != 2 || len(g[0]) != dialogueMaxTurns {
 		t.Errorf("turn limit: %v", g)
 	}
 	if dialogueTag(LineSpec{Emotion: EmotionHappy, Intensity: 2}) != "<|laughter|>" || dialogueTag(LineSpec{Emotion: EmotionSad, Intensity: 1}) != "" {

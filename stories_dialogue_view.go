@@ -1,12 +1,14 @@
 package main
 
 // The stories' 「整场对话」 (whole dialogue) switch, thread #80: a dialogue
-// model (catalogue capability "dialogue", SoulX-Podcast) speaks the
-// characters' lines a scene at a time, each line hearing the lines before
-// it; narration stays on the story's model (services/story_dialogue.go).
-// Shown under Performance; explained and off where it cannot run: a Mac
-// with less memory than the model needs, or a story in a language it does
-// not speak.
+// model (catalogue capability "dialogue": SoulX-Podcast, or MOSS-TTSD,
+// thread #82) speaks the characters' lines a scene at a time, each line
+// hearing the lines before it; narration stays on the story's model
+// (services/story_dialogue.go). Shown under Performance; explained and off
+// where it cannot run: a Mac with less memory than the model needs, or a
+// story in a language it does not speak. Where more than one dialogue
+// model can run, a menu (with the switch on) picks one (SoulX-Podcast first: the default);
+// models this Mac has too little memory for are not offered.
 
 import (
 	"slices"
@@ -21,14 +23,72 @@ import (
 	"github.com/hehehai/AudioSmith/internal/services"
 )
 
-// dialogueEntry is the catalogue's dialogue model.
+// dialogueEntry is the catalogue's first (default) dialogue model.
 func dialogueEntry() (catalog.Entry, bool) {
+	es := dialogueEntries()
+	if len(es) == 0 {
+		return catalog.Entry{}, false
+	}
+	return es[0], true
+}
+
+// dialogueEntries are the catalogue's dialogue models, in its order.
+func dialogueEntries() []catalog.Entry {
+	var out []catalog.Entry
 	for _, e := range catalog.Builtin().Entries {
 		if e.Has(catalog.CapDialogue) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// dialogueModelName is a dialogue model's short name in the API: soulx or
+// moss (its catalogue id otherwise).
+func dialogueModelName(e catalog.Entry) string {
+	switch e.Family {
+	case "soulx_podcast":
+		return "soulx"
+	case services.FamilyMossTTSD:
+		return "moss"
+	}
+	return e.ID
+}
+
+// dialogueByName is the dialogue model an API name (soulx, moss, a
+// catalogue id or repo) names.
+func dialogueByName(name string) (catalog.Entry, bool) {
+	for _, e := range dialogueEntries() {
+		if strings.EqualFold(name, dialogueModelName(e)) || name == e.ID || name == e.Repo {
 			return e, true
 		}
 	}
 	return catalog.Entry{}, false
+}
+
+// dialogueChoice is the dialogue model a story uses on a Mac of gb GB
+// (0: unknown): its own when it can run here, else the first that can;
+// with the models it may pick from, and why none can ("" when one can).
+func dialogueChoice(gb int, d *services.LongformDoc) (catalog.Entry, []catalog.Entry, string) {
+	all := dialogueEntries()
+	if len(all) == 0 {
+		return catalog.Entry{}, nil, i18n.T("This version of AudioSmith has no dialogue model.")
+	}
+	var ok []catalog.Entry
+	for _, e := range all {
+		if dialogueBlockedOn(gb, d, e) == "" {
+			ok = append(ok, e)
+		}
+	}
+	if len(ok) == 0 {
+		return all[0], nil, dialogueBlockedOn(gb, d, all[0])
+	}
+	for _, e := range ok {
+		if e.Repo == d.Production.DialogueModel || e.ID == d.Production.DialogueModel {
+			return e, ok, ""
+		}
+	}
+	return ok[0], ok, ""
 }
 
 // storyLanguage is a story's language: its own, else what its text looks
@@ -56,19 +116,8 @@ func storyLanguage(d *services.LongformDoc) string {
 	return "en"
 }
 
-// dialogueBlocked says why a story cannot use whole dialogue on this Mac,
-// "" when it can.
-func (a *app) dialogueBlocked(d *services.LongformDoc, e catalog.Entry) string {
-	gb := 0
-	if a.sys == nil {
-		a.loadSysInfo()
-	} else {
-		gb = a.sys.MemoryGB()
-	}
-	return dialogueBlockedOn(gb, d, e)
-}
-
-// dialogueBlockedOn is dialogueBlocked on a Mac of gb GB (0: unknown).
+// dialogueBlockedOn says why a story cannot use dialogue model e on a Mac
+// of gb GB (0: unknown), "" when it can.
 func dialogueBlockedOn(gb int, d *services.LongformDoc, e catalog.Entry) string {
 	if gb > 0 && float64(gb) < e.MinMemoryGB {
 		return i18n.T("Needs %g GB of memory; this Mac has %d GB.", e.MinMemoryGB, gb)
@@ -82,14 +131,19 @@ func dialogueBlockedOn(gb int, d *services.LongformDoc, e catalog.Entry) string 
 
 // storyDialogue is the whole-dialogue row of the Performance section.
 func (a *app) storyDialogue(c *ui.Context, p *lfPage, locked bool) {
-	e, ok := dialogueEntry()
-	if !ok {
+	if len(dialogueEntries()) == 0 {
 		return
 	}
 	t := c.Theme()
 	k := tok(t)
 	d := &p.doc
-	blocked := a.dialogueBlocked(d, e)
+	gb := 0
+	if a.sys == nil {
+		a.loadSysInfo()
+	} else {
+		gb = a.sys.MemoryGB()
+	}
+	e, choices, blocked := dialogueChoice(gb, d)
 	on := d.Production.Dialogue && blocked == ""
 	title := i18n.T("Whole dialogue")
 	formRow(c, "perf-dialogue-row", title, i18n.T("The characters' lines are spoken by %s a scene at a time, each line hearing the lines before it, so they answer each other; narration stays on the story's model. Each character is cloned from their voice (a cloned voice's clip, else a short sample in that voice). Lines it does not say clearly are made again, then on the story's model. Slower than real time.", modelRef(e)), func() {
@@ -100,6 +154,21 @@ func (a *app) storyDialogue(c *ui.Context, p *lfPage, locked bool) {
 			}
 		}
 	})
+	if on && len(choices) > 1 {
+		labels := make([]string, len(choices))
+		for i, x := range choices {
+			labels[i] = x.Label
+		}
+		cur := e.Label
+		fieldInfo(c, i18n.T("Dialogue model"), i18n.T("%s is light (16 GB of memory) and quick; %s is larger (24 GB), up to five voices, and speaks each scene as one recording.", choices[0].Label, choices[1].Label), func() {
+			if ui.Select(c.Key("perf-dialogue-model"), &cur, labels).Label(i18n.T("Dialogue model")).Disabled(locked).Changed() {
+				if i := slices.Index(labels, cur); i >= 0 {
+					e = choices[i]
+					d.Production.DialogueModel = e.Repo
+				}
+			}
+		})
+	}
 	switch m := a.model(e); {
 	case blocked != "":
 		caption(c.Key("perf-dialogue-why"), blocked).TextColor(k.Text3)

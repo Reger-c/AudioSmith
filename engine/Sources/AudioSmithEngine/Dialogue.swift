@@ -6,20 +6,23 @@ import Foundation
 // tts.dialogue (docs/protocol-v2.md §5.6): a conversation in one job on a
 // dialogue model. SoulX-Podcast writes the turns one by one, each hearing
 // the ones before it, and each turn is its own file (tts.turn as it is
-// written). Turns that carry codes from an earlier result are context only:
-// the app redoes a single turn by sending the turns before it with their
-// codes and the turn itself without.
+// written). MOSS-TTSD speaks them all in one track (MossDialogue.swift).
+// Turns that carry codes from an earlier result are context only: the app
+// redoes a single turn by sending the turns before it with their codes and
+// the turn itself without.
 
 extension Synthesizer {
     /// Model families of dialogue models (catalog.Entry.Family).
-    static let dialogueFamilies = ["soulx_podcast"]
+    static let dialogueFamilies = ["soulx_podcast", "moss_ttsd"]
 
     func dialogue(_ p: DialogueParams, job: String, offline: Bool, auxPaths: [String: String]?) async throws -> DialogueResult {
         guard !p.model.isEmpty else { throw EngineError.badRequest("Missing model") }
         guard p.outputDir.hasPrefix("/") else { throw EngineError.badRequest("outputDir must be an absolute path") }
         guard !p.speakers.isEmpty else { throw EngineError.badRequest("No speakers") }
-        guard p.speakers.count <= SoulXPrompt.maxSpeakers else {
-            throw EngineError.unsupported("\(shortName(p.model)) takes at most \(SoulXPrompt.maxSpeakers) speakers", capability: "speakers")
+        let moss = try isMossDialogue(p.model, path: p.modelPath, offline: offline)
+        let maxSpeakers = moss ? MossTTSDTokens.maxSpeakers : SoulXPrompt.maxSpeakers
+        guard p.speakers.count <= maxSpeakers else {
+            throw EngineError.unsupported("\(shortName(p.model)) takes at most \(maxSpeakers) speakers", capability: "speakers")
         }
         var index: [String: Int] = [:]
         for (i, s) in p.speakers.enumerated() {
@@ -37,6 +40,9 @@ extension Synthesizer {
         guard p.turns.contains(where: { $0.codes == nil }) else { throw EngineError.badRequest("Every turn has codes: nothing to generate") }
         let bits = p.bits ?? 16
         guard [16, 24, 32].contains(bits) else { throw EngineError.badRequest("bits must be 16, 24 or 32") }
+        if moss {
+            return try await mossDialogue(p, index: index, bits: bits, job: job, offline: offline)
+        }
 
         let model = try await acquireDialogue(p.model, path: p.modelPath, job: job, offline: offline, auxPaths: auxPaths)
         defer { store.release(p.model) }
@@ -139,12 +145,33 @@ extension Synthesizer {
     /// models.load with task "dialogue".
     func loadDialogue(_ p: LoadParams, job: String, offline: Bool, auxPaths: [String: String]?) async throws -> LoadResult {
         let started = Date()
+        if try isMossDialogue(p.model, path: p.path, offline: offline) {
+            _ = try await acquireMoss(p.model, path: p.path, job: job, offline: offline)
+            defer { store.release(p.model) }
+            let bytes = store.loaded().first { $0.model == p.model }?.bytes
+            return LoadResult(model: p.model, task: "dialogue", sampleRate: MossTTSDModel.sampleRate,
+                              seconds: Date().timeIntervalSince(started), bytes: (bytes ?? 0) > 0 ? bytes : nil,
+                              capabilities: ["dialogue", "clone", "seed", "sampling"])
+        }
         _ = try await acquireDialogue(p.model, path: p.path, job: job, offline: offline, auxPaths: auxPaths)
         defer { store.release(p.model) }
         let bytes = store.loaded().first { $0.model == p.model }?.bytes
         return LoadResult(model: p.model, task: "dialogue", sampleRate: SoulXModel.sampleRate,
                           seconds: Date().timeIntervalSince(started), bytes: (bytes ?? 0) > 0 ? bytes : nil,
                           capabilities: ["dialogue", "clone", "seed", "sampling", "steps"])
+    }
+
+    /// Whether model is MOSS-TTSD (else SoulX-Podcast); fails when it is
+    /// not downloaded or not a dialogue model.
+    func isMossDialogue(_ model: String, path: String?, offline: Bool) throws -> Bool {
+        guard let dir = try modelDirectory(model, path: path, offline: offline) else {
+            throw EngineError.notDownloaded(model: model, missing: ["config.json"])
+        }
+        if MossTTSDModel.isModel(dir) { return true }
+        guard SoulXModel.isModel(dir) else {
+            throw EngineError.unsupported("\(shortName(model)) cannot speak dialogues", capability: "dialogue")
+        }
+        return false
     }
 
     /// The dialogue model, loaded (stage "loading") when it is not resident.
