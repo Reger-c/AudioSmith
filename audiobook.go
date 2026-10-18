@@ -19,7 +19,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/doc"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/services"
-	"github.com/hehehai/AudioSmith/internal/text"
 	"github.com/hehehai/AudioSmith/internal/text/markup"
 )
 
@@ -29,7 +28,7 @@ const maxBookBytes = 64 << 20
 // newManuscriptEditor is the Audiobook's editor.
 func newManuscriptEditor() *editor.State {
 	buf := editor.NewBuffer("")
-	buf.SetLanguage(manuscriptLanguage)
+	buf.SetLanguage(manuscriptLanguage(&speakerSlots{}))
 	return &editor.State{
 		Buffer:          buf,
 		SoftWrap:        true,
@@ -45,32 +44,16 @@ func newManuscriptEditor() *editor.State {
 }
 
 // manuscriptLanguage highlights the markup of a manuscript: Studio's
-// tags (tagKind), "# " chapter headings, and [voice:] as valid.
-var manuscriptLanguage = &editor.Language{
-	Name:      "AudioSmith manuscript",
-	Tokenizer: editor.TokenizerFunc(tokenizeManuscript),
-}
-
-func tokenizeManuscript(line string, state uint64, tokens []editor.Token) ([]editor.Token, uint64) {
-	if text.IsHeading(line) {
-		return append(tokens, editor.Token{End: len(line), Kind: editor.TokenHeading}), state
+// tags (tagKind), "# " chapter headings, [voice:] as valid, and dialogue
+// passages, each speaker's name in the colour of its slot
+// (audiobook_dialogue_editor.go).
+func manuscriptLanguage(slots *speakerSlots) *editor.Language {
+	return &editor.Language{
+		Name: "AudioSmith manuscript",
+		Tokenizer: editor.TokenizerFunc(func(line string, state uint64, tokens []editor.Token) ([]editor.Token, uint64) {
+			return tokenizeManuscriptWith(slots, line, state, tokens)
+		}),
 	}
-	pos := 0
-	for _, sp := range text.Tags(line) {
-		if sp.Start > pos {
-			tokens = append(tokens, editor.Token{End: sp.Start, Kind: editor.TokenText})
-		}
-		kind := tagKind(sp.Of(line))
-		if kind == editor.TokenInvalid { // [voice:…]: valid here
-			kind = editor.TokenVariable
-		}
-		tokens = append(tokens, editor.Token{End: sp.End, Kind: kind})
-		pos = sp.End
-	}
-	if pos < len(line) {
-		tokens = append(tokens, editor.Token{End: len(line), Kind: editor.TokenText})
-	}
-	return tokens, state
 }
 
 // syncManuscript reconciles the document's script and the editor.
@@ -246,13 +229,24 @@ func (a *app) loadSample(p *lfPage) {
 	}
 }
 
-// bookCast are the names the manuscript casts with [voice:NAME].
-func bookCast(p *lfPage) []string { return castNamesOf(p.doc.Script) }
+// bookCast are the names the manuscript casts with [voice:NAME] and in
+// its dialogue passages (audiobook_dialogue.go).
+func bookCast(p *lfPage) []string {
+	if p.cast == nil || p.castRev != p.scriptRev {
+		p.cast, p.castRev = castNamesOf(p.doc.Script), p.scriptRev
+	}
+	return p.cast
+}
 
 func castNamesOf(script string) []string {
-	var out []string
+	out := []string{}
 	for _, n := range markup.Parse(script, nil).VoiceNames() {
 		if !strings.EqualFold(n, "default") && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	for _, n := range services.DialogueNames(script) {
+		if !slices.ContainsFunc(out, func(o string) bool { return markup.NameKey(o) == markup.NameKey(n) }) {
 			out = append(out, n)
 		}
 	}

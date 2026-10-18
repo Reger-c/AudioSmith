@@ -47,6 +47,10 @@ type BatchSettings struct {
 	Quality        translate.Quality   `json:"quality,omitempty"`
 	Timing         dub.Timing          `json:"timing,omitempty"`
 	Formality      translate.Formality `json:"formality,omitempty"`
+	// Dialogue: dub.DialogueOff dubs every line line by line; "" (and
+	// dub.DialogueAuto) speaks conversations with the dialogue model
+	// where it can, as a new project does (thread #89).
+	Dialogue string `json:"dialogue,omitempty"`
 }
 
 // DefaultBatchSettings are the batch queue's first settings.
@@ -148,6 +152,9 @@ func (s *Dubs) Enqueue(ctx context.Context, paths []string, bs BatchSettings) ([
 			p.Settings.Timing = bs.Timing
 		}
 		p.Settings.Formality = bs.Formality
+		if bs.Dialogue == dub.DialogueOff {
+			p.Settings.Dialogue = dub.DialogueOff
+		}
 		if bs.Voice != "" {
 			// One voice for every speaker: cast once the speakers are known
 			// (the synthesize stage reads the cast); "*" stands for them.

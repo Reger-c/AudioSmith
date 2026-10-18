@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -37,6 +38,9 @@ func (a *app) audiobookPage(c *ui.Context) {
 		a.lfInspector(c, p, inline, shown, func() {
 			a.lfSection(c, p, "setup", i18n.T("Setup"), entryFor(p.doc.Model).DisplayName(), func() { a.lfSetup(c, p, locked) })
 			a.lfSection(c, p, "cast", i18n.T("Cast"), lfCount(len(bookCast(p))), func() { a.bookCastCard(c, p, locked) })
+			if len(p.blocks) > 0 { // audiobook_dialogue_view.go
+				a.lfSection(c, p, "dialogue", i18n.T("Dialogue passages"), lfCount(len(p.blocks)), func() { a.bookDialogueCard(c, p, locked) })
+			}
 			a.lfSection(c, p, "plan", i18n.T("Chapters"), lfCount(len(p.spec.Chapters)), func() { a.chapterPlan(c, p) })
 			a.lfSection(c, p, "book", i18n.T("Cover & details"), "", func() { a.lfBookCard(c, p, locked) })
 			a.lfAdvanced(c, p, locked) // longform_advanced.go: production, stems, pronunciations
@@ -112,6 +116,9 @@ func (a *app) manuscriptToolbar(c *ui.Context, p *lfPage, locked bool) {
 			if m.Item(i18n.T("Voice")).Chosen() {
 				a.insertVoice(p)
 			}
+			if m.Item(i18n.T("Dialogue passage")).Chosen() {
+				a.insertDialogue(p) // audiobook_dialogue.go
+			}
 			m.Separator()
 			for _, s := range []struct{ label, tag string }{
 				{i18n.T("Slow"), markup.Slow}, {i18n.T("Fast"), markup.Fast},
@@ -164,6 +171,7 @@ func (a *app) manuscriptView(c *ui.Context, p *lfPage, locked bool) {
 				caption(c, i18n.T("Importing…"))
 			})
 		}
+		a.manuscriptDeco(c, p) // audiobook_dialogue_editor.go
 		editor.View(c.Key("ms"), st).Grow(1).MinHeight(0)
 	})
 }
@@ -174,6 +182,12 @@ func manuscriptTheme(t *ui.Theme) *editor.Theme {
 	th := scriptTheme(t)
 	th.Tokens[editor.TokenHeading].Color = tok(t).Text
 	th.Tokens[editor.TokenHeading].Bold = true
+	// Dialogue passages (audiobook_dialogue_editor.go).
+	th.Tokens[tokenMarker] = editor.TokenStyle{Color: tok(t).AccentInk, Bold: true}
+	th.Tokens[tokenDirection] = editor.TokenStyle{Color: tok(t).Text3, Italic: true}
+	for i, col := range speakerColors(t) {
+		th.Tokens[speakerKinds[i]] = editor.TokenStyle{Color: col, Bold: true}
+	}
 	return th
 }
 
@@ -186,6 +200,9 @@ func (a *app) manuscriptStats(c *ui.Context, p *lfPage) {
 	}
 	if st.Chars > 0 {
 		parts = append(parts, i18n.N(st.Chars, "%d character", "%d characters", st.Chars))
+	}
+	if n := len(p.blocks); n > 0 {
+		parts = append(parts, i18n.N(n, "%d dialogue passage", "%d dialogue passages", n))
 	}
 	parts = append(parts, i18n.T("%s est. runtime", clockRuntime(st.Seconds)))
 	s := strings.Join(parts, " · ")
@@ -215,7 +232,9 @@ func (a *app) manuscriptWarnings(c *ui.Context, p *lfPage) {
 	var warn []services.Problem
 	for _, pr := range p.problems {
 		switch pr.Code {
-		case services.ProblemUnknownVoice, services.ProblemEmptyChapter, services.ProblemUnknownTag, services.ProblemMissingVoice:
+		case services.ProblemUnknownVoice, services.ProblemEmptyChapter, services.ProblemUnknownTag, services.ProblemMissingVoice,
+			services.ProblemDialogueUnclosed, services.ProblemDialogueNested, services.ProblemDialogueStrayClose, services.ProblemDialogueEmpty,
+			services.ProblemDialogueUnknown:
 			warn = append(warn, pr)
 		}
 	}
@@ -266,10 +285,15 @@ func (a *app) bookCastCard(c *ui.Context, p *lfPage, locked bool) {
 		p.doc.VoiceCast = map[string]string{}
 	}
 	e := entryFor(p.doc.Model)
+	inPassage := services.DialogueNames(p.doc.Script)
 	for _, n := range names {
 		ref := p.doc.VoiceCast[n]
-		ui.Field(c, n, func() {
-			a.lfVoiceSelect(c, "ab-cast-"+n, &ref, e, i18n.T("Narrator voice"), locked)
+		label, none := n, i18n.T("Narrator voice")
+		if slices.Contains(inPassage, n) { // a speaker of a dialogue passage
+			label, none = n+" · "+i18n.X("cast mark", "dialogue"), i18n.T("Its own voice, given at generation")
+		}
+		ui.Field(c, label, func() {
+			a.lfVoiceSelect(c, "ab-cast-"+n, &ref, e, none, locked)
 		})
 		if ref != p.doc.VoiceCast[n] {
 			p.doc.VoiceCast[n] = ref

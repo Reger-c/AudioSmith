@@ -289,11 +289,14 @@ func TestStoryPerformanceAPI(t *testing.T) {
 		t.Errorf("on again: %q", p.DialogueModel)
 	}
 
-	// Audiobooks have no performance.
+	// Audiobooks have no performance, but the dialogue model for their blocks.
 	var b api.LongformJSON
 	e.must(t, "create_audiobook", map[string]any{"text": "# One\n\nHello."}, &b)
 	e.fails(t, "update_longform", map[string]any{"project_id": b.ID, "scene": "x"}, api.CodeInvalid)
-	e.fails(t, "update_longform", map[string]any{"project_id": b.ID, "dialogue": true}, api.CodeInvalid)
+	e.must(t, "update_longform", map[string]any{"project_id": b.ID, "dialogue": true}, &b)
+	if !b.Dialogue {
+		t.Error("an audiobook's dialogue")
+	}
 	_ = core.ProjectStory
 	_ = translate.CodeNoLLM
 }

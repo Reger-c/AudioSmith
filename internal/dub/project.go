@@ -141,6 +141,10 @@ type Segment struct {
 	Lang string `json:"lang,omitempty"`
 	// Locked keeps the timing: automatic clean-up does not move it.
 	Locked bool `json:"locked,omitempty"`
+	// NoDialogue keeps the line out of the dialogue model's
+	// conversations (「这一句不用多人对话」): it is made line by line and
+	// ends the stretch it was in (dialogue.go).
+	NoDialogue bool `json:"noDialogue,omitempty"`
 	// Parts records the speakers of merged lines, so splitting restores
 	// them: the speaker from rune Offset of Text on.
 	Parts []Part `json:"parts,omitempty"`
@@ -240,6 +244,14 @@ type Settings struct {
 	// they can be checked before the next stage.
 	Review bool `json:"review"`
 
+	// Dialogue: DialogueAuto speaks the conversations of a track in
+	// Chinese or English with a dialogue model where it can (new projects,
+	// thread #89); DialogueOff or "" (projects made before it) line by
+	// line. DialogueModel is the model's repo ("": the first the app offers,
+	// SoulX-Podcast).
+	Dialogue      string `json:"dialogue,omitempty"`
+	DialogueModel string `json:"dialogueModel,omitempty"`
+
 	Export ExportPrefs `json:"export"`
 }
 
@@ -329,6 +341,9 @@ type Track struct {
 	// Lines are the rendered lines, by segment id.
 	Lines map[string]Render `json:"lines,omitempty"`
 	QC    *QCReport         `json:"qc,omitempty"`
+	// DialogueTakes count the times a dialogue stretch was made again
+	// whole (「整段重录」: another seed), by its first line's id.
+	DialogueTakes map[string]int `json:"dialogueTakes,omitempty"`
 }
 
 // How a track's background was made.
@@ -360,7 +375,34 @@ type Render struct {
 	// checked (a clone in another language than its speaker's clip,
 	// thread #90); a line that is not Spoken.OK() is flagged.
 	Spoken *Spoken `json:"spoken,omitempty"`
+
+	// Dialogue is the dialogue stretch the line belongs to (Stretch.N,
+	// from 1; 0: none). Via is how it was made: ViaDialogue (by the
+	// dialogue model), ViaFallback (by the dub's model after the dialogue
+	// model did not make it: FallbackReason, a services.Dialogue* reason),
+	// "" (by the dub's model, as every line before thread #89).
+	Dialogue       int    `json:"dialogue,omitempty"`
+	Via            string `json:"via,omitempty"`
+	FallbackReason string `json:"fallbackReason,omitempty"`
+	// Flag: a line made on the dub's model in place of the dialogue
+	// model's failed the same check (FlagHeard: the recognizer heard
+	// Heard; FlagLength: far shorter or longer than its text). It is kept
+	// and shown with a warning, to listen to.
+	Flag  string `json:"flag,omitempty"`
+	Heard string `json:"heard,omitempty"`
 }
+
+// How a line was made (Render.Via).
+const (
+	ViaDialogue = "dialogue"
+	ViaFallback = "fallback"
+)
+
+// Why a fallback line is flagged (Render.Flag).
+const (
+	FlagHeard  = "heard"
+	FlagLength = "length"
+)
 
 // QCReport is a second-pass check of a track.
 type QCReport struct {

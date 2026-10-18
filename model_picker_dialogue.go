@@ -26,6 +26,32 @@ type pickerDialogue struct {
 	Cur    catalog.Entry              // the one it uses, or would use
 	Pick   func(catalog.Entry)        // turn it on with this one
 	Off    func()                     // turn it off: every line on the story's model
+	// The section's words where they are not a story's (the dub, thread
+	// #89; "": the story's): its heading and ⓘ, the off row's note, the
+	// heading of the speech models and what the button says of the
+	// picker's own model.
+	Head, Tip, OffLabel, OffNote, RestHead string
+	RestFor                                func(model string) string
+}
+
+// pickerDialogueTexts are a picker's dialogue section's words.
+type pickerDialogueTexts struct {
+	head, tip, offLabel, offNote, restHead string
+	restFor                                func(string) string
+}
+
+// texts are the section's words, the story's where dl leaves them.
+func (dl *pickerDialogue) texts() pickerDialogueTexts {
+	if dl.Head != "" {
+		return pickerDialogueTexts{dl.Head, dl.Tip, dl.OffLabel, dl.OffNote, dl.RestHead, dl.RestFor}
+	}
+	return pickerDialogueTexts{
+		head:     i18n.T("Whole dialogue (multi-speaker models)"),
+		tip:      i18n.T("A dialogue model speaks the characters' lines a scene at a time, each line hearing the lines before it, so they answer each other. Narration, and lines it does not say clearly, stay on the story's model."),
+		offLabel: i18n.T("Turn whole dialogue off"), offNote: i18n.T("Every line on the story's model"),
+		restHead: i18n.T("Narration and fallback · Recommended"),
+		restFor:  func(m string) string { return i18n.T("Narration and fallback: %s", m) },
+	}
 }
 
 // pickerDialogueRows builds the section, or with find only the models
@@ -42,9 +68,10 @@ func (a *app) pickerDialogueRows(c *ui.Context, key string, dl *pickerDialogue, 
 	if len(shown) == 0 {
 		return 0
 	}
+	tx := dl.texts()
 	ui.Row(c.Key(key+"-dialogue-head")).Gap(px(t, 6)).AlignItems(ui.Center).Padding(px(t, 4), px(t, sp2), px(t, 2)).Children(func() {
-		ui.Text(c, i18n.T("Whole dialogue (multi-speaker models)")).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Shrink(1).MinWidth(0)
-		infoTip(c.Key(key+"-dialogue-tip"), i18n.T("A dialogue model speaks the characters' lines a scene at a time, each line hearing the lines before it, so they answer each other. Narration, and lines it does not say clearly, stay on the story's model."))
+		ui.Text(c, tx.head).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Shrink(1).MinWidth(0)
+		infoTip(c.Key(key+"-dialogue-tip"), tx.tip)
 	})
 	var cur catalog.Entry
 	if dl.On {
@@ -64,7 +91,7 @@ func (a *app) pickerDialogueRows(c *ui.Context, key string, dl *pickerDialogue, 
 		})
 	}
 	if dl.On && find == "" {
-		label := i18n.T("Turn whole dialogue off")
+		label := tx.offLabel
 		b := ui.ButtonBase(c.Key(key+"-dialogue-off")).Padding(px(t, 6), px(t, sp2)).Radius(px(t, radiusControl)).Gap(px(t, sp2)).AlignItems(ui.Center).Label(label)
 		if b.Hovered() {
 			b.Background(k.Hover)
@@ -77,7 +104,7 @@ func (a *app) pickerDialogueRows(c *ui.Context, key string, dl *pickerDialogue, 
 			ui.Icon(c, icons.CloseCircle.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Text2).Shrink(0)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 1)).Children(func() {
 				ui.Text(c, label).FontSize(px(t, fsCaption)).TextColor(k.Text2).SingleLine().Ellipsis("…").MinWidth(0)
-				ui.Text(c, i18n.T("Every line on the story's model")).FontSize(px(t, fsMicro)).TextColor(k.Text3).SingleLine().Ellipsis("…").MinWidth(0)
+				ui.Text(c, tx.offNote).FontSize(px(t, fsMicro)).TextColor(k.Text3).SingleLine().Ellipsis("…").MinWidth(0)
 			})
 		})
 	}

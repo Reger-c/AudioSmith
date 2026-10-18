@@ -98,10 +98,10 @@ func skillTools() []skillTool {
 		}, After: i18n.T("Returns files: the path written.")},
 		{Name: "create_audiobook", Lead: i18n.T("an Audiobook project from a book or a manuscript."), Args: []skillArg{
 			arg(i18n.T("Absolute path of the book: EPUB, TXT, Markdown or DOCX; its headings become chapters, its title, author and language are kept."), "path"),
-			arg(i18n.T("Or the manuscript itself: %s lines start chapters, %s switches to a character's voice until the next switch or chapter.", "`# Title`", "`[voice:NAME]`"), "text"),
+			arg(i18n.T("Or the manuscript itself: %s lines start chapters, %s switches to a character's voice until the next switch or chapter, and %s … %s holds a dialogue block of %s lines (see update_longform's script).", "`# Title`", "`[voice:NAME]`", "`[dialogue]`", "`[/dialogue]`", "`Name: line`"), "text"),
 			arg(i18n.T("A speech model id (list_models); empty: AudioSmith's default."), "model"),
 			arg(i18n.T("The narrator: a saved voice's name or id, or a built-in speaker of the model; empty: the first voice that fits the model."), "voice"),
-			arg(i18n.T("The voices of the [voice:NAME] names: an object NAME → voice."), "cast"),
+			arg(i18n.T("The voices of the [voice:NAME] names and the dialogue blocks' speakers: an object NAME → voice."), "cast"),
 			arg(i18n.T("The title; empty: the book's. The text's language (BCP-47); empty: the book's, else automatic."), "title", "language"),
 			arg(i18n.T("wav (default), or m4b to make an M4B audiobook with chapters and cover as well."), "format"),
 		}, After: i18n.T("Returns the project: project_id, chapters, cast, problems (blocking ones stop a render) and the estimated length. It is saved in Projects and opens on the Audiobook page.")},
@@ -113,7 +113,7 @@ func skillTools() []skillTool {
 			arg(i18n.T("Character name → voice; characters left out get voices in turn, the ones nobody plays first."), "cast"),
 			arg(i18n.T("The narrator (lines without a character), the model, the title, the language and the format, as for create_audiobook."), "voice", "model", "title", "language", "format"),
 		}, After: i18n.T("Returns the project with its lines (ids), cast and problems.")},
-		{Name: "get_longform", Lead: i18n.T("a story or audiobook project: chapters, cast and voices, problems, the last render and its files."), Args: []skillArg{
+		{Name: "get_longform", Lead: i18n.T("a story or audiobook project: chapters, cast and voices, problems, the last render and its files; an audiobook's script (up to 100 KB) and its dialogue_blocks (chapter, index, speakers, lines, uncast, mode dialogue or per_line and why)."), Args: []skillArg{
 			must(i18n.T("The project (create_audiobook, create_story, or list_projects with category story or audiobook)."), "project_id"),
 		}},
 		{Name: "update_longform", Lead: i18n.T("set a story's or audiobook's voices and settings; what you leave out stays."), Args: []skillArg{
@@ -129,13 +129,15 @@ func skillTools() []skillTool {
 			arg(i18n.T("Book details for the M4B's tags; cover is the absolute path of a PNG or JPEG (≤ 8 MB)."), "author", "narrator", "year", "genre", "description", "cover"),
 			arg(i18n.T("Stories' performance, never spoken: the scene (where, who, the mood), character → persona (%s), line id → emotion (%s: steady, happy, hurt…), line id → its intensity 0–3 and line id → a direction in your own words (%s). Models that take instructions (%s and %s) hear a short instruction made from them; get_longform's continuity says what the model does with them.", "`seven, lively, coaxing`", "`pleading`", "`softly`", skillModel(idCustomVoice), skillModel(idVoiceDesign)), "scene", "personas", "emotions", "intensities", "directions"),
 			arg(i18n.T("Stories: the gaps between lines: dialogue (tight turns, the default of new stories), reading, relaxed or fixed (one gap); merge_turns says a character's consecutive lines in one go, even_out_voices levels each character (both default true)."), "pacing", "merge_turns", "even_out_voices"),
-			arg(i18n.T("Stories: true speaks the characters' lines with a dialogue model (Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the story's model. dialogue_model picks it: soulx (%s, the default; 16 GB of memory) or moss (%s; 24 GB, up to five voices, a scene as one recording).", skillModel("soulx-podcast-1.7b-8bit"), skillModel("moss-ttsd-v1.0-8bit")), "dialogue", "dialogue_model"),
+			arg(i18n.T("Audiobooks: the whole manuscript, replacing it. A dialogue block is a scene the dialogue model speaks together, each line hearing the ones before it: %s on its own line, then one %s line per turn (%s is narration, a line without a name too; a whole line in parentheses is a stage direction, not read; %s adds a pause), then %s. %s also works. The block's names are the book's cast; nobody cast gets a voice of their own when it renders.", "`[dialogue]`", "`Name: line`", "`Narrator: …`", "`[pause 1s]`", "`[/dialogue]`", "`[对话]` … `[/对话]`"), "script"),
+			arg(i18n.T("True speaks the characters' lines (a story's, or an audiobook's dialogue blocks: on by default once it has some) with a dialogue model (Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the project's model, and a block is read line by line without it. dialogue_model picks it: soulx (%s, the default; 16 GB of memory) or moss (%s; 24 GB, up to five voices, a scene as one recording).", skillModel("soulx-podcast-1.7b-8bit"), skillModel("moss-ttsd-v1.0-8bit")), "dialogue", "dialogue_model"),
 			arg(i18n.T("Stories: %s or %s runs the AI director: the writing-help language model reads the story and plans its emotions, a baseline per character and an emotion, intensity and turn per line, mostly steady (only what is empty, or replacing all but what you set). Takes up to a minute or two; %s if no language model is set up.", "`fill`", "`all`", "`llm_unavailable`"), "direct"),
 		}},
 		{Name: "render_longform", Lead: i18n.T("render a story or audiobook in the background."), Args: []skillArg{
 			must(i18n.T("The project; it must have no blocking problems (get_longform)."), "project_id"),
 			arg(i18n.T("Chapter numbers (1-based) to render, for a book of those only; empty: everything."), "chapters"),
-		}, After: i18n.T("Returns a job_id (longform:<render id>) at once. Only one book or story renders at a time (busy). Follow it with get_job; when it succeeds its files are the M4B (if format m4b), the book's WAV and the chapters.")},
+			arg(i18n.T("Audiobooks: %s previews that dialogue block only (get_longform's dialogue_blocks): a short render to listen to, no book.", "`{chapter, index}`"), "dialogue_block"),
+		}, After: i18n.T("Returns a job_id (longform:<render id>) at once. Only one book or story renders at a time (busy). Follow it with get_job; when it succeeds its files are the M4B (if format m4b), the book's WAV and the chapters. Dialogue speakers nobody was cast as get voices of their own, saved in the cast and listed in the job's result as voices_given.")},
 		{Name: "export_longform", Lead: i18n.T("save a finished render where the user wants it."), Args: []skillArg{
 			must(i18n.T("The project; its last render is exported."), "project_id"),
 			arg(i18n.T("Or one of its renders (render_longform's job without longform:)."), "render_id"),
@@ -150,6 +152,7 @@ func skillTools() []skillTool {
 			arg(i18n.T("How far to run now: transcript (stop to review the lines), translation, dub (default: everything) or none."), "through"),
 			arg(i18n.T("One voice for every speaker (a saved voice's name or id); empty: each speaker's own voice, cloned from the source."), "voice"),
 			arg(i18n.T("The speech model; empty: the dubbing default. How many people speak (0: detected). Keep music and effects (default true). A title (default: the file's name)."), "model", "speakers", "keep_background", "title"),
+			arg(i18n.T("Multi-speaker dialogue: auto (the default) records the conversations of a Chinese or English track with the dialogue model, each line hearing the one before it (slower; the rest line by line), off line by line; the dialogue model: soulx (the only one for dubs yet)."), "dialogue", "dialogue_model"),
 		}, After: i18n.T("Returns the dub (dub_id) and its job_id (dub:<dub_id>). Translation uses the translator of AudioSmith's settings (local or cloud, as the user chose): if none is set up, the error is dub.no_translator.")},
 		{Name: "get_dub", Lead: i18n.T("a dub: stages, speakers and their voices, tracks (files), and its lines with their translations."), Args: []skillArg{
 			must(i18n.T("The dub."), "dub_id"),
@@ -160,7 +163,8 @@ func skillTools() []skillTool {
 			must(i18n.T("The dub."), "dub_id"),
 			arg(i18n.T("Line edits: objects with id and any of text (the source; its translations are made again), translation with language, speaker, voice."), "segments"),
 			arg(i18n.T("Speaker label (S1, S2…) or * → voice (a saved voice's name or id; default: cloned from the source); speaker label → display name."), "cast", "names"),
-		}, After: i18n.T("Then run_dub makes only the changed lines again.")},
+			arg(i18n.T("Multi-speaker dialogue (auto or off) and its model (soulx); a line's no_dialogue: true makes it line by line."), "dialogue", "dialogue_model"),
+		}, After: i18n.T("Then run_dub makes only the changed lines again: an edited conversation line alone, after the lines before it. get_dub lists the conversations (dialogue_stretches) and says how each line was made (made_by; flag: listen to it).")},
 		{Name: "run_dub", Lead: i18n.T("run a dub's pipeline (again)."), Args: []skillArg{
 			must(i18n.T("The dub."), "dub_id"),
 			arg(i18n.T("transcript, translation, dub (default) or verify (listen again and flag lines that came out wrong)."), "through"),
@@ -178,7 +182,7 @@ func skillTools() []skillTool {
 		}, After: i18n.T("Returns a job_id; when it succeeds its files hold the path written.")},
 		{Name: "batch_dub", Lead: i18n.T("dub several files with the Batch queue: one dub each, at background priority, without review stops."), Args: []skillArg{
 			arg(i18n.T("Absolute paths of videos or audio files, or a folder (its files, not its subfolders)."), "paths", "folder"),
-			arg(i18n.T("Override the Batch page's settings for these files only (nothing is saved): target languages, source language, one voice, model, keep music."), "target_languages", "source_language", "voice", "model", "keep_background"),
+			arg(i18n.T("Override the Batch page's settings for these files only (nothing is saved): target languages, source language, one voice, model, keep music, multi-speaker dialogue (auto or off)."), "target_languages", "source_language", "voice", "model", "keep_background", "dialogue"),
 		}, After: i18n.T("Returns added (each with its dub_id and job_id) and errors (files it could not take).")},
 		{Name: "list_batch", Lead: i18n.T("the Batch queue, its settings and its watch folder (read only: the user sets up watch folders in the app). No arguments.")},
 		{Name: "list_projects", Lead: i18n.T("AudioSmith's project library, as on its Projects page, newest first."), Args: []skillArg{

@@ -116,7 +116,8 @@ func TestGroupDub(t *testing.T) {
 }
 
 // An audiobook: lines outside blocks never group; narration inside a
-// block, however long, does not end it; two blocks never join.
+// block, however long, does not end it; two blocks never join; a block of
+// one voice is read line by line.
 func TestGroupBook(t *testing.T) {
 	in := func(b int, it Item) Item { it.Block = b; return it }
 	items := []Item{
@@ -128,7 +129,7 @@ func TestGroupBook(t *testing.T) {
 		turn("A", "又在外面。"),
 		in(3, turn("A", "一个人的块。")),
 	}
-	if got := fmt.Sprint(Group(items, LimitsFor("soulx_podcast"), BookRules)); got != "[[2 3 5] [6 7] [9]]" {
+	if got := fmt.Sprint(Group(items, LimitsFor("soulx_podcast"), BookRules)); got != "[[2 3 5] [6 7]]" {
 		t.Errorf("book groups %s", got)
 	}
 }

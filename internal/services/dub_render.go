@@ -99,7 +99,7 @@ func (s *Dubs) translate(ctx context.Context, sc *stageCtx) error {
 		req := translate.Request{
 			Source: p.SourceLanguage(), Target: l, Quality: p.Settings.Quality, Glossary: glossary,
 			Style: p.Settings.Style, Formality: p.Settings.Formality, Context: p.Title,
-			SuggestShorter: p.Settings.SuggestShorter, Speed: p.Settings.Speed,
+			SuggestShorter: p.Settings.SuggestShorter, Speed: s.dialogueSpeed(p, l),
 		}
 		done := start
 		total := len(idx)

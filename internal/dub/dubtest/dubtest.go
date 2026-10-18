@@ -17,6 +17,9 @@
 //	vad.detect        the energy VAD
 //	enhance.run       a copy
 //	tts.synthesize    a 220 Hz tone, 0.07 s per character (Duration when given), 24 kHz mono
+//	tts.dialogue      per turn to speak, a 330 Hz tone as long as text.Estimate in OutputDir
+//	                  (turn-NNN.wav, its text beside it as for stt.transcribe; Garble[text] times
+//	                  "garbled" instead) and codes; context turns (with codes) are not spoken
 //	media.mux/encode/transcode/thumbnail  files describing what they were asked
 //
 // Methods in Missing answer method_not_found, as an engine without them.
@@ -40,6 +43,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/text"
 )
 
 // Engine is the fake. Goroutine-safe.
@@ -56,6 +60,9 @@ type Engine struct {
 	// HeardOnce is Heard for the first time a line is heard only (a
 	// check that a line made again passes).
 	HeardOnce map[string]string
+	// Garble makes tts.dialogue garble a turn saying text this many
+	// times (the recognizer then hears "garbled").
+	Garble map[string]int
 	// Fail makes a method fail with this code.
 	Fail  map[string]string
 	Calls []Call
@@ -69,7 +76,8 @@ type Call struct {
 
 // New makes a fake with every method.
 func New() *Engine {
-	return &Engine{Missing: map[string]bool{}, Probes: map[string]proto.ProbeResult{}, Heard: map[string]string{}, HeardOnce: map[string]string{}, Fail: map[string]string{}}
+	return &Engine{Missing: map[string]bool{}, Probes: map[string]proto.ProbeResult{}, Heard: map[string]string{}, HeardOnce: map[string]string{}, Fail: map[string]string{},
+		Garble: map[string]int{}}
 }
 
 // Count is how many times method was called.
@@ -258,6 +266,10 @@ func (e *Engine) run(method string, raw json.RawMessage) (any, error) {
 		seed := int64(7)
 		return proto.SynthesizeResult{Output: p.Output.Path, Model: p.Model, SampleRate: 24000, Channels: 1,
 			Frames: int64(b.Frames()), AudioSeconds: b.Seconds(), Seconds: 0.01, RTF: 100, Seed: &seed}, nil
+	case proto.MethodTTSDialogue:
+		var p proto.DialogueParams
+		json.Unmarshal(raw, &p)
+		return e.dialogue(p)
 	case dub.MethodMux:
 		var p dub.MuxParams
 		json.Unmarshal(raw, &p)
@@ -299,6 +311,44 @@ func (e *Engine) run(method string, raw json.RawMessage) (any, error) {
 		return res, nil
 	}
 	return nil, &jobs.Error{Code: proto.CodeMethodNotFound, Message: "unknown method " + method}
+}
+
+// dialogue speaks a tts.dialogue's turns (those without codes).
+func (e *Engine) dialogue(p proto.DialogueParams) (proto.DialogueResult, error) {
+	if len(p.Speakers) == 0 || len(p.Turns) == 0 {
+		return proto.DialogueResult{}, &jobs.Error{Code: proto.CodeBadRequest, Message: "no speakers or turns"}
+	}
+	for _, sp := range p.Speakers {
+		if _, err := os.Stat(sp.RefAudio); err != nil || strings.TrimSpace(sp.RefText) == "" {
+			return proto.DialogueResult{}, &jobs.Error{Code: proto.CodeBadRequest, Message: "speaker " + sp.ID + ": no reference"}
+		}
+	}
+	res := proto.DialogueResult{Model: p.Model, SampleRate: 24000, Channels: 1, Seed: p.Seed}
+	for i, t := range p.Turns {
+		if len(t.Codes) > 0 {
+			continue
+		}
+		secs := max(text.Estimate(text.Count(t.Text)).Seconds(), 0.3)
+		b := Tone(24000, 1, secs, 330, 0.3)
+		path := filepath.Join(p.OutputDir, fmt.Sprintf("turn-%03d.wav", i))
+		if err := write(proto.Output{Path: path, Bits: 32}, b); err != nil {
+			return res, err
+		}
+		said := t.Text
+		e.mu.Lock()
+		if e.Garble[t.Text] > 0 {
+			e.Garble[t.Text]--
+			said = "garbled"
+		}
+		e.mu.Unlock()
+		if err := writeFile(path+".txt", []byte(said)); err != nil {
+			return res, err
+		}
+		res.Turns = append(res.Turns, proto.DialogueTurnOut{Index: i, Speaker: t.Speaker, Output: path, Frames: int64(b.Frames()),
+			AudioSeconds: b.Seconds(), Codes: []int{i + 1, utf8.RuneCountInString(t.Text)}})
+		res.AudioSeconds += b.Seconds()
+	}
+	return res, nil
 }
 
 func (e *Engine) probe(path string) (proto.ProbeResult, error) {

@@ -14,6 +14,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/llm"
 	"github.com/hehehai/AudioSmith/internal/services"
+	"github.com/hehehai/AudioSmith/internal/text/markup"
 	"github.com/hehehai/AudioSmith/internal/translate"
 )
 
@@ -22,8 +23,11 @@ import (
 func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *services.LongformDoc, req api.LongformUpdate, voices []core.Voice) error {
 	story := p.Kind == core.ProjectStory
 	if !story && (req.Scene != nil || len(req.Personas) > 0 || len(req.Directions) > 0 || len(req.Emotions) > 0 || len(req.Intensities) > 0 || req.Pacing != "" ||
-		req.Merge != nil || req.Level != nil || req.Dialogue != nil || req.DialogueModel != "" || req.Direct != "") {
+		req.Merge != nil || req.Level != nil || req.Direct != "") {
 		return errBadRequest("scene", "scene, personas, directions, pacing and direct are for stories.")
+	}
+	if err := setDialogue(d, req); err != nil { // api_studio_longform_dialogue.go
+		return err
 	}
 	if !story {
 		return nil
@@ -98,26 +102,6 @@ func (b *apiBackend) updatePerformance(ctx context.Context, p core.Project, d *s
 	if req.Level != nil {
 		d.Production.NoLevel = !*req.Level
 	}
-	if req.DialogueModel != "" {
-		e, ok := dialogueByName(req.DialogueModel)
-		if !ok {
-			return errBadRequest("dialogue_model", "dialogue_model is soulx or moss.")
-		}
-		if why := dialogueBlockedOn(readSysInfo().MemoryGB(), d, e); why != "" {
-			return errBadRequest("dialogue_model", "%s", why)
-		}
-		d.Production.DialogueModel = e.Repo
-	}
-	if req.Dialogue != nil {
-		d.Production.Dialogue = *req.Dialogue
-		if *req.Dialogue {
-			e, _, why := dialogueChoice(readSysInfo().MemoryGB(), d)
-			if why != "" {
-				return errBadRequest("dialogue", "%s", why)
-			}
-			d.Production.DialogueModel = e.Repo
-		}
-	}
 	switch req.Direct {
 	case "":
 		return nil
@@ -174,15 +158,24 @@ func (b *apiBackend) UpdateLongform(ctx context.Context, req api.LongformUpdate)
 			return api.LongformJSON{}, err
 		}
 	}
+	if req.Script != nil && p.Kind != core.ProjectAudiobook {
+		return api.LongformJSON{}, errBadRequest("script", "script is for audiobooks; a story's lines change in AudioSmith (or make a new story).")
+	}
 	if p.Kind == core.ProjectAudiobook {
 		if len(req.Lines) > 0 {
 			return api.LongformJSON{}, errBadRequest("line_voices", "line_voices are for stories; an audiobook switches voices with [voice:NAME] in its text.")
 		}
-		names := services.VoiceNames(d.Script)
+		if req.Script != nil {
+			if strings.TrimSpace(*req.Script) == "" {
+				return api.LongformJSON{}, errBadRequest("script", "The manuscript is empty.")
+			}
+			d.Script = *req.Script
+		}
+		names := services.CastNames(d.Script)
 		for name, v := range req.Cast {
-			i := slices.IndexFunc(names, func(n string) bool { return strings.EqualFold(n, name) })
+			i := slices.IndexFunc(names, func(n string) bool { return markup.NameKey(n) == markup.NameKey(name) })
 			if i < 0 {
-				return api.LongformJSON{}, errBadRequest("cast", "The manuscript has no [voice:%s]; its names are: %s.", name, strings.Join(names, ", "))
+				return api.LongformJSON{}, errBadRequest("cast", "The manuscript has no [voice:%s] nor a dialogue speaker %s; its names are: %s.", name, name, strings.Join(names, ", "))
 			}
 			r, err := ref(v, "cast")
 			if err != nil {
@@ -261,6 +254,7 @@ func (b *apiBackend) UpdateLongform(ctx context.Context, req api.LongformUpdate)
 	if err := b.updatePerformance(ctx, p, &d, req, voices); err != nil {
 		return api.LongformJSON{}, err
 	}
+	bookDialogueDefault(&d)
 	saved, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d)
 	if err != nil {
 		return api.LongformJSON{}, err

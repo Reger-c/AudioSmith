@@ -156,3 +156,13 @@ func (s *Dubs) uncheckable(ctx context.Context, err error) error {
 	s.cfg.Logf("dub: line check skipped: %v", err)
 	return nil
 }
+
+// has reports whether line id is in one of the track's conversations
+// (nil: no dialogue model).
+func (dd *dubDialogue) has(id string) bool {
+	if dd == nil {
+		return false
+	}
+	_, ok := dd.byID[id]
+	return ok
+}

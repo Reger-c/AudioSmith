@@ -212,7 +212,9 @@ func fatal(err error) bool {
 }
 
 // synthesize renders the lines of one language that are stale (or the
-// ones asked for), fits each to its slot, and records them in the track.
+// ones asked for), fits each to its slot, and records them in the track;
+// the conversations of a track the dialogue model speaks first
+// (dub_dialogue.go).
 func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 	p := sc.p
 	l := sc.params.Lang
@@ -228,16 +230,8 @@ func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 	if err := os.MkdirAll(sc.path(dir), 0o755); err != nil {
 		return err
 	}
-	type todo struct {
-		i    int
-		key  string
-		take core.Take
-	}
-	var work []todo
-	keys := map[string]string{}
-	track := p.Track(l)
-	track.Lang = l
-	for i, seg := range p.Segments {
+	voices := map[string]dub.VoiceSpec{}
+	for _, seg := range p.Segments {
 		if strings.TrimSpace(p.TextFor(seg, l)) == "" {
 			continue
 		}
@@ -245,7 +239,22 @@ func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 		if warn != "" {
 			sc.warn(warn)
 		}
-		key := p.Fingerprint(seg, l, v)
+		voices[seg.ID] = v
+	}
+	dd, err := s.dubDialogue(ctx, sc, voices, caps)
+	if err != nil {
+		return err
+	}
+	var work []dubWork
+	keys := map[string]string{}
+	track := p.Track(l)
+	track.Lang = l
+	for i, seg := range p.Segments {
+		v, ok := voices[seg.ID]
+		if !ok {
+			continue
+		}
+		key := dd.key(seg.ID, p.Fingerprint(seg, l, v))
 		keys[seg.ID] = key
 		r, ok := track.Lines[seg.ID]
 		fresh := ok && r.Key == key && r.Err == "" && r.File != "" && fileExists(sc.path(r.File))
@@ -262,11 +271,25 @@ func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 				return err
 			}
 		}
-		work = append(work, todo{i, key, LineTake(p, seg, l, v, caps)})
+		work = append(work, dubWork{i, key, LineTake(p, seg, l, v, caps)})
 	}
 	if len(work) == 0 {
 		return sc.save(ctx, func(q *dub.Project) { q.PutTrack(mergeTrack(q.Track(l), track, keys, l)) })
 	}
+	return s.renderWork(ctx, sc, work, dd, dir)
+}
+
+// dubWork is a line to render: its index, key and recipe.
+type dubWork struct {
+	i    int
+	key  string
+	take core.Take
+}
+
+// renderWork renders the work of a synthesize stage, saving every ten
+// lines: line by line, or with a dialogue model its stretches first.
+func (s *Dubs) renderWork(ctx context.Context, sc *stageCtx, work []dubWork, dd *dubDialogue, dir string) error {
+	p, l := sc.p, sc.params.Lang
 	rendered := map[string]dub.Render{}
 	// The lines checked once all are made (dub_check.go): kept out of
 	// the flushed batches until then.
@@ -292,13 +315,16 @@ func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 			q.PutTrack(t)
 		})
 	}
-	for n, w := range work {
-		if err := ctx.Err(); err != nil {
-			flush()
-			return err
+	put := func(id string, r dub.Render) error {
+		rendered[id] = r
+		if len(rendered) >= 10 {
+			return flush()
 		}
+		return nil
+	}
+	// one renders work line w on the dub's model.
+	one := func(ctx context.Context, w dubWork) error {
 		seg := p.Segments[w.i]
-		sc.progress("generating", float64(n)/float64(len(work)), fmt.Sprintf("%d/%d", n+1, len(work)))
 		r, err := s.renderLine(ctx, sc, p, w.i, l, w.key, w.take, dir)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -311,23 +337,76 @@ func (s *Dubs) synthesize(ctx context.Context, sc *stageCtx) error {
 			}
 			failed++
 			r = dub.Render{Key: w.key, Start: seg.Start, Err: err.Error(), Text: w.take.Text}
-		} else if needsCheck(p, seg, l, w.take) {
+		} else if needsCheck(p, seg, l, w.take) && !dd.has(seg.ID) {
+			// Checked once all are made (a conversation's line is
+			// checked as its fallback, dd.mark).
 			checks = append(checks, checkedLine{w.i, w.key, w.take})
 			checked[seg.ID] = r
-			continue
+			return nil
 		}
-		rendered[seg.ID] = r
-		if len(rendered) >= 10 {
-			if err := flush(); err != nil {
+		if dd != nil {
+			dd.mark(ctx, &r, seg.ID)
+		}
+		return put(seg.ID, r)
+	}
+	ids := make([]string, len(work))
+	for wi, w := range work {
+		ids[wi] = p.Segments[w.i].ID
+	}
+	var groups [][]int
+	var which []int
+	if dd != nil {
+		groups, which = dd.groups(ids)
+	}
+	if len(groups) == 0 {
+		for n, w := range work {
+			if err := ctx.Err(); err != nil {
+				flush()
+				return err
+			}
+			sc.progress("generating", float64(n)/float64(len(work)), fmt.Sprintf("%d/%d", n+1, len(work)))
+			if err := one(ctx, w); err != nil {
 				return err
 			}
 		}
+	} else {
+		done := 0
+		seg := func(ctx context.Context, g int) ([]int, error) {
+			// The stretch's request reports within the progress.
+			dd.jobs[which[g]].report = func(pr jobs.Progress) {
+				stage := "generating"
+				if pr.Stage == "loading" {
+					stage = "loading"
+				}
+				f := (float64(done) + max(pr.Fraction, 0)*float64(len(groups[g]))) / float64(len(work))
+				sc.progress(stage, min(f, 1), fmt.Sprintf("%d/%d", done+1, len(work)))
+			}
+			return dd.make(ctx, which[g], groups[g], ids, func(wi int, path string) error {
+				w := work[wi]
+				r, made, err := fitLine(sc, p, w.i, w.key, w.take.Text, path, dir)
+				if err != nil {
+					return err
+				}
+				dd.made(&r, ids[wi], made)
+				return put(ids[wi], r)
+			})
+		}
+		line := func(ctx context.Context, wi int) error { return one(ctx, work[wi]) }
+		progress := func(n, total int) {
+			done = n
+			sc.progress("generating", float64(n)/float64(total), fmt.Sprintf("%d/%d", min(n+1, total), total))
+		}
+		if err := dialogueTwoPass(ctx, len(work), groups, seg, line, progress); err != nil {
+			flush()
+			return err
+		}
+		dd.prune()
 	}
 	if err := flush(); err != nil {
 		return err
 	}
 	if len(checks) > 0 {
-		err := s.checkLines(ctx, sc, l, dir, caps, checks, checked)
+		err := s.checkLines(ctx, sc, l, dir, s.cfg.Caps(p.Settings.Model), checks, checked)
 		rendered = checked
 		if ferr := flush(); err == nil {
 			err = ferr
@@ -373,14 +452,33 @@ func (s *Dubs) renderLine(ctx context.Context, sc *stageCtx, p *dub.Project, i i
 	if _, err := s.cfg.Render.render.Run(ctx, sub, func(jobs.Progress) {}, nil); err != nil {
 		return dub.Render{}, err
 	}
+	r, made, err := fitLine(sc, p, i, key, t.Text, raw, dir)
+	if err != nil {
+		return dub.Render{}, err
+	}
+	speed := t.Speed
+	if speed <= 0 {
+		speed = 1
+	}
+	if t.Duration == 0 {
+		translate.DefaultPredictor.Calibrate(t.Text, dub.LangFor(seg, l), made, speed)
+	}
+	return r, nil
+}
+
+// fitLine fits the audio a model made for line i (raw) to its slot,
+// brings it to LineLoudness and writes it in dir as said (text); it
+// returns its render and the seconds of speech the model made.
+func fitLine(sc *stageCtx, p *dub.Project, i int, key, text, raw, dir string) (dub.Render, float64, error) {
+	seg := p.Segments[i]
 	buf, _, err := wav.ReadFile(raw)
 	if err != nil {
-		return dub.Render{}, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
+		return dub.Render{}, 0, &jobs.Error{Code: CodeRenderFailed, Message: err.Error()}
 	}
 	buf = dsp.Remix(buf, 1)
 	trimmed := edit.Trim(buf, edit.TrimOptions{})
 	if trimmed.Frames() == 0 {
-		return dub.Render{}, &jobs.Error{Code: NoticeChunkSilent, Message: "The model made no sound for this line."}
+		return dub.Render{}, 0, &jobs.Error{Code: NoticeChunkSilent, Message: "The model made no sound for this line."}
 	}
 	plan := dub.Plan(dub.FitIn{Rendered: trimmed.Seconds(), Slot: seg.Duration(), Room: dub.Room(p.Segments, i, p.Source.Duration), Timing: p.Settings.Timing})
 	out := trimmed
@@ -395,18 +493,11 @@ func (s *Dubs) renderLine(ctx context.Context, sc *stageCtx, p *dub.Project, i i
 	if lufs := loudness.Integrated(out); !math.IsInf(lufs, 0) && !math.IsNaN(lufs) && lufs > -70 {
 		dsp.Gain(out.Samples, float32(dsp.Amp(min(max(LineLoudness-lufs, -12), 12))))
 	}
-	speed := t.Speed
-	if speed <= 0 {
-		speed = 1
-	}
-	if t.Duration == 0 {
-		translate.DefaultPredictor.Calibrate(t.Text, dub.LangFor(seg, l), trimmed.Seconds(), speed)
-	}
 	name := filepath.Join(dir, seg.ID+"-"+key[:10]+".wav")
 	if err := writeWAVFloat(sc.path(name), out); err != nil {
-		return dub.Render{}, err
+		return dub.Render{}, 0, err
 	}
-	os.WriteFile(sc.path(name)+".txt", []byte(t.Text), 0o644)
+	os.WriteFile(sc.path(name)+".txt", []byte(text), 0o644)
 	// Older renders of the line go.
 	if old, _ := filepath.Glob(sc.path(filepath.Join(dir, seg.ID+"-*.wav"))); len(old) > 1 {
 		for _, f := range old {
@@ -417,7 +508,7 @@ func (s *Dubs) renderLine(ctx context.Context, sc *stageCtx, p *dub.Project, i i
 		}
 	}
 	return dub.Render{Key: key, File: name, Raw: round3(trimmed.Seconds()), Length: round3(out.Seconds()), Ratio: plan.Ratio,
-		Start: seg.Start, Verdict: plan.Verdict, Over: plan.Over, Text: t.Text}, nil
+		Start: seg.Start, Verdict: plan.Verdict, Over: plan.Over, Text: text}, trimmed.Seconds(), nil
 }
 
 // writeWAVFloat writes b as 32-bit float through a temporary file.

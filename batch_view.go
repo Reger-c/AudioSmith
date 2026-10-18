@@ -171,6 +171,17 @@ func (a *app) batchSetup(c *ui.Context) {
 	if dubSwitch(c, "batch-bg", i18n.T("Keep background (music and effects)"), "", &keep, false) {
 		a.batchSetSettings(func(s *services.BatchSettings) { s.KeepBackground = keep })
 	}
+	if es := dubDialogueEntries(); len(es) > 0 { // thread #89: on unless turned off, as a new dub
+		on := s.Dialogue != dub.DialogueOff
+		info := i18n.T("Conversations in Chinese and English tracks are recorded together by %s, each line hearing the one before it (slower); other lines line by line.", modelRef(es[0]))
+		if dubSwitch(c, "batch-dialogue", i18n.T("Multi-speaker dialogue"), info, &on, false) {
+			v := dub.DialogueOff
+			if on {
+				v = ""
+			}
+			a.batchSetSettings(func(s *services.BatchSettings) { s.Dialogue = v })
+		}
+	}
 	if ok, name := a.dubTranslatorReady(dub.Settings{Translator: s.Translator}); ok {
 		caption(c, i18n.T("Translator: %s", name)).TextColor(k.Text3)
 	} else {

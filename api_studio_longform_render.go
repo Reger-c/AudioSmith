@@ -33,6 +33,7 @@ func (b *apiBackend) RenderLongform(ctx context.Context, req api.LongformRender)
 	if err != nil {
 		return api.JobJSON{}, err
 	}
+	given := b.castBookUncast(p, &d, voices) // api_studio_longform_dialogue.go
 	spec, probs := b.compileFor(&d, voices)
 	var blocking []api.ProblemJSON
 	for _, pr := range probs {
@@ -46,6 +47,23 @@ func (b *apiBackend) RenderLongform(ctx context.Context, req api.LongformRender)
 	}
 	if err := b.modelReady(ctx, entryFor(d.Model)); err != nil {
 		return api.JobJSON{}, err
+	}
+	if p.Kind == core.ProjectAudiobook && specHasBlocks(&spec) {
+		e, why := b.bookDialogueModel(&d)
+		spec.Production.Dialogue = why == ""
+		if why == "" {
+			spec.Production.DialogueModel = e.Repo
+		}
+	}
+	if blk := req.DialogueBlock; blk != nil {
+		if p.Kind != core.ProjectAudiobook || len(req.Chapters) > 0 {
+			return api.JobJSON{}, errBadRequest("dialogue_block", "dialogue_block previews a block of an audiobook, without chapters.")
+		}
+		ch, ok := blockSpec(&spec, blockWhat(services.DialogueBlockInfo{Chapter: blk.Chapter - 1, Index: blk.Index}))
+		if !ok {
+			return api.JobJSON{}, errBadRequest("dialogue_block", "Chapter %d has no dialogue block %d (get_longform lists them).", blk.Chapter, blk.Index)
+		}
+		spec.Chapters, spec.Audition = []services.ChapterSpec{ch}, true
 	}
 	if len(req.Chapters) > 0 {
 		var chs []services.ChapterSpec
@@ -68,12 +86,22 @@ func (b *apiBackend) RenderLongform(ctx context.Context, req api.LongformRender)
 		}
 		return api.JobJSON{}, err
 	}
-	// The project remembers its last render, as the page does.
+	if spec.Audition {
+		if len(given) > 0 {
+			if _, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d); err != nil {
+				return api.JobJSON{}, err
+			}
+		}
+		j, err := b.renderTask(ctx, r.ID)
+		return withGiven(j, given), err
+	}
+	// The project remembers its last render (and the voices given), as the page does.
 	d.Render = r.ID
 	if _, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d); err != nil {
 		return api.JobJSON{}, err
 	}
-	return b.renderTask(ctx, r.ID)
+	j, err := b.renderTask(ctx, r.ID)
+	return withGiven(j, given), err
 }
 
 // renderTask is a render's job: "longform:<render id>".

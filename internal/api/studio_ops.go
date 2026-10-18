@@ -226,8 +226,8 @@ func (s *Server) EditDub(ctx context.Context, req DubEdit) (DubJSON, error) {
 	if strings.TrimSpace(req.ID) == "" {
 		return DubJSON{}, errInvalid("dub_id", "dub_id is empty.")
 	}
-	if len(req.Segments) == 0 && len(req.Cast) == 0 && len(req.Names) == 0 {
-		return DubJSON{}, errInvalid("segments", "Nothing to change: give segments, cast or names.")
+	if len(req.Segments) == 0 && len(req.Cast) == 0 && len(req.Names) == 0 && req.Dialogue == "" && req.DialogueModel == "" {
+		return DubJSON{}, errInvalid("segments", "Nothing to change: give segments, cast, names or dialogue.")
 	}
 	return st.EditDub(ctx, req)
 }

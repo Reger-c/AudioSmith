@@ -122,6 +122,11 @@ type VoiceSpec struct {
 	Speed       float64 `json:"speed,omitempty"`
 	// Auto: clone the speaker's own reference (filled by the pipeline).
 	Auto bool `json:"auto,omitempty"`
+	// CloneRef and CloneRefText are a designed voice's reference, for the
+	// dialogue model, which clones (thread #83); not part of the key: the
+	// dub's model does not use them.
+	CloneRef     string `json:"cloneRef,omitempty"`
+	CloneRefText string `json:"cloneRefText,omitempty"`
 }
 
 func (v VoiceSpec) key() string {

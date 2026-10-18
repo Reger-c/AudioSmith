@@ -156,6 +156,12 @@ func dubWarningText(code string) string {
 		return i18n.T("Some lines may not say their text in their language, even when made again: listen to the flagged ones and redo or recast them.")
 	case services.WarnNoWordTimes:
 		return i18n.T("Word timings are missing: karaoke subtitles spread the words evenly.")
+	case services.DubWarnDialogueUnavailable:
+		return i18n.T("The multi-speaker dialogue model is not downloaded (or this Mac has too little memory for it): every line was made line by line.")
+	case services.DubWarnDialogueFallback:
+		return i18n.T("Some conversation lines were made line by line: the dialogue model did not say them clearly.")
+	case services.DubWarnLinesFlagged:
+		return i18n.T("Some lines made line by line were not heard clearly either: listen to the lines marked Listen.")
 	}
 	return code
 }
