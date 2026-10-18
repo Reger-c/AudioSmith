@@ -16,6 +16,15 @@
 - Both are still checked against their pinned SHA-256 before use: a file that does not match is fetched again from the other source, so the mirror cannot change what you get.
 - Settings → Network → Download from now covers models and tools: Automatic (the fastest of the official sites and mirrors), Official sites only (huggingface.co, github.com), Mirrors only (hf-mirror.com, mirror.actnow.dev), or Custom (Hugging Face URLs; tools then come from either). Test the connection also reaches mirror.actnow.dev.
 
+### Stories: whole dialogue (整场对话)
+- A new switch under Performance, "Whole dialogue": the characters' lines are spoken by a dialogue model (SoulX-Podcast 1.7B, Apache-2.0) a scene at a time, so each line hears the lines before it and answers them. Narration stays on the story's model.
+- Each character is cloned from their voice: a cloned voice's own clip, or a short sample the voice reads first.
+- Every line is checked: one the model does not say clearly is made again with the same context, then on the story's model.
+- Up to four characters per scene. Needs 16 GB of memory (the switch says so on smaller Macs) and a 2.4 GB download; Chinese and English stories. On an M4 it runs at about 0.7× real time.
+
+### Chinese numbers, phone numbers and units
+- Chinese text now reads phone numbers digit by digit (138-0013-8000, 010-12345678, 拨打10086), ranges (3-5天 → 三到五天, 1-2个 → 一到两个, 10%-20%), scores (3:2 → 三比二), dates with dots (2024.03.05) and units (5km → 五公里, 3.5kg, 100m², 60km/h, 220V, 128GB). Words with digits (MP3, iPhone15, COVID-19) and other languages are unchanged.
+
 ## 0.4.0-beta.6
 
 AudioSmith joins the ActNow family: it works together with the other ActNow apps on this Mac (Dicta, Auralink, Pik, VoxtNew). The apps share one copy of each model, some settings, and, if you agree, API keys, and they don't get in each other's way. AudioSmith names another app only when a released version of it is installed; with no other ActNow app, nothing on screen changes.
