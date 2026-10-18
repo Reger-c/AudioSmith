@@ -275,6 +275,7 @@ func (b *apiBackend) longformJSON(ctx context.Context, p core.Project, d service
 				Emotion: l.Emotion, Turn: l.Turn})
 		}
 		out.Scene, out.Pacing, out.Continuity = d.Scene, apiPacing(d.Production.Pacing), storyContinuity(d.Model)
+		out.Dialogue = d.Production.Dialogue
 	} else {
 		for _, n := range services.VoiceNames(d.Script) {
 			ref := d.VoiceCast[n]

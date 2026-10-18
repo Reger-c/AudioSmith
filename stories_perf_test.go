@@ -248,10 +248,22 @@ func TestStoryPerformanceAPI(t *testing.T) {
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "all"}, api.CodeDirectorFailed)
 	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "direct": "maybe"}, api.CodeInvalid)
 
+	// Whole dialogue (thread #80): on and off; the dialogue model is set.
+	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "dialogue": true}, &p)
+	if _, d, err := e.b.loadLongform(t.Context(), p.ID); err != nil || !p.Dialogue || !d.Production.Dialogue || d.Production.DialogueModel != "actnowai/SoulX-Podcast-1.7B-MLX-8bit" {
+		t.Fatalf("dialogue %v %+v %v", p.Dialogue, d.Production, err)
+	}
+	var off api.LongformJSON
+	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "dialogue": false}, &off)
+	if off.Dialogue {
+		t.Error("dialogue still on")
+	}
+
 	// Audiobooks have no performance.
 	var b api.LongformJSON
 	e.must(t, "create_audiobook", map[string]any{"text": "# One\n\nHello."}, &b)
 	e.fails(t, "update_longform", map[string]any{"project_id": b.ID, "scene": "x"}, api.CodeInvalid)
+	e.fails(t, "update_longform", map[string]any{"project_id": b.ID, "dialogue": true}, api.CodeInvalid)
 	_ = core.ProjectStory
 	_ = translate.CodeNoLLM
 }

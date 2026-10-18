@@ -17,7 +17,7 @@ wait_free() {
 }
 while true; do
   wait_free || exit 3
-  until mkdir /tmp/as-gpu.lock 2>/dev/null; do sleep 20; done
+  until mkdir /tmp/as-gpu.lock 2>/dev/null; do sleep 2; done
   echo "c80 soulx $$ $(date +%T)" > /tmp/as-gpu.lock/owner
   if [[ "$(free_pct)" -ge 50 ]]; then break; fi
   rm -rf /tmp/as-gpu.lock

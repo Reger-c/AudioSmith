@@ -59,9 +59,18 @@ func storyLanguage(d *services.LongformDoc) string {
 // dialogueBlocked says why a story cannot use whole dialogue on this Mac,
 // "" when it can.
 func (a *app) dialogueBlocked(d *services.LongformDoc, e catalog.Entry) string {
+	gb := 0
 	if a.sys == nil {
 		a.loadSysInfo()
-	} else if gb := a.sys.MemoryGB(); gb > 0 && float64(gb) < e.MinMemoryGB {
+	} else {
+		gb = a.sys.MemoryGB()
+	}
+	return dialogueBlockedOn(gb, d, e)
+}
+
+// dialogueBlockedOn is dialogueBlocked on a Mac of gb GB (0: unknown).
+func dialogueBlockedOn(gb int, d *services.LongformDoc, e catalog.Entry) string {
+	if gb > 0 && float64(gb) < e.MinMemoryGB {
 		return i18n.T("Needs %g GB of memory; this Mac has %d GB.", e.MinMemoryGB, gb)
 	}
 	lang := strings.ToLower(storyLanguage(d))
