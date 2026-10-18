@@ -55,7 +55,9 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         // The dialogue models' logic without MLX (SoulX-Podcast's prompts,
-        // history window and sampler, thread #80), so the tests can check it.
+        // history window and sampler, thread #80; MOSS-TTSD's text, prompt
+        // rows, delay-pattern state and sampler, thread #82), so the tests
+        // can check it.
         .target(
             name: "AudioSmithDialogue",
             path: "Sources/AudioSmithDialogue",

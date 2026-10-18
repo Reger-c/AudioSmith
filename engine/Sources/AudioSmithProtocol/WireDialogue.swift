@@ -88,11 +88,19 @@ public struct DialogueMixed: Codable, Sendable {
     public var output: String
     public var frames: Int64
     public var audioSeconds: Double
+    /// MOSS-TTSD: the track's codec frames, 16 codes each, flattened; the
+    /// first frame comes just before the audio, frame k + 1 lies under its
+    /// samples [k × 1920, (k + 1) × 1920) (12.5 frames a second). A turn
+    /// redone after earlier ones sends their frames as its context.
+    public var codes: [Int]?
+    public var codebooks: Int?
 
-    public init(output: String, frames: Int64, audioSeconds: Double) {
+    public init(output: String, frames: Int64, audioSeconds: Double, codes: [Int]? = nil, codebooks: Int? = nil) {
         self.output = output
         self.frames = frames
         self.audioSeconds = audioSeconds
+        self.codes = codes
+        self.codebooks = codebooks
     }
 }
 
