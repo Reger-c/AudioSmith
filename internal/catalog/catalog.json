@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "entries": [
     {
       "id": "kokoro-82m-bf16",
@@ -244,6 +244,58 @@
       "minMemoryGB": 3,
       "quantization": "8bit",
       "licence": {"id": "mit", "name": "MIT", "url": "https://huggingface.co/ResembleAI/chatterbox-turbo", "commercial": true, "verified": true},
+      "aux": [
+        {"repo": "mlx-community/S3TokenizerV2", "revision": "e0c9886f0e1c35ae85b1f27277416fb19fc72bec", "licence": "apache-2.0"}
+      ]
+    },
+    {
+      "id": "soulx-podcast-1.7b-8bit",
+      "label": "SoulX-Podcast 1.7B",
+      "name": "Whole-dialogue voices",
+      "summary": "Speaks a story's dialogue scene by scene, each line hearing the lines before it, in the characters' cloned voices. Chinese and English; needs 16 GB of memory.",
+      "tags": ["chinese", "english", "clone"],
+      "family": "soulx_podcast",
+      "repo": "actnowai/SoulX-Podcast-1.7B-MLX-8bit",
+      "revision": "a29890e3934561aa36dedbb5e0365a2e6670601f",
+      "tasks": ["tts"],
+      "about": "A dialogue model: up to four speakers, each cloned from a reference clip and its transcript, speak a scene turn by turn, so every line answers the one before it. Used by Stories' whole-dialogue mode; narration stays on the story's model.",
+      "languages": [
+        {"code": "zh"},
+        {"code": "en"}
+      ],
+      "capabilities": ["dialogue", "clone", "seed", "sampling", "steps"],
+      "sampleRate": 24000,
+      "rtf": 0.7,
+      "size": 2425254910,
+      "files": [
+        {"path": "config.json", "size": 988},
+        {"path": "model.safetensors", "size": 1844739563, "sha256": "4b755fd3cb648067162b5381519f51ee8192df34b0bd69097f6adc456d8bb65d"},
+        {"path": "model.safetensors.index.json", "size": 49772},
+        {"path": "s3gen.safetensors", "size": 561565284, "sha256": "39e2d85f02cedbeed0e5e764215fecc2f40eb56f3db816b97e16ab478ce223ed"},
+        {"path": "tokenizer.json", "size": 12874401, "sha256": "89775a37a9816a290ea861b4fa452492a0b99a73396ad86663ca443073df6edd"},
+        {"path": "tokenizer_config.json", "size": 1378973},
+        {"path": "vocab.json", "size": 2776833},
+        {"path": "merges.txt", "size": 1671853},
+        {"path": "added_tokens.json", "size": 177957},
+        {"path": "special_tokens_map.json", "size": 625},
+        {"path": "generation_config.json", "size": 202},
+        {"path": "soulxpodcast_config.json", "size": 735},
+        {"path": "conversion.json", "size": 197},
+        {"path": "README.md", "size": 4517},
+        {"path": "NOTICE", "size": 1647},
+        {"path": "LICENSE", "size": 11363}
+      ],
+      "minMemoryGB": 16,
+      "quantization": "8bit",
+      "hidden": true,
+      "licence": {
+        "id": "apache-2.0",
+        "name": "Apache 2.0",
+        "url": "https://huggingface.co/Soul-AILab/SoulX-Podcast-1.7B",
+        "commercial": true,
+        "verified": true,
+        "note": "Soul-AILab/SoulX-Podcast-1.7B's model card (revision 7d381e3, checked 2026-10-18) and repository licence: Apache-2.0 for code and weights, with a usage disclaimer against unauthorized cloning and impersonation. Its flow, HiFT and CAM++ weights are byte-identical to FunAudioLLM/CosyVoice2-0.5B (Apache-2.0). actnowai's repo is AudioSmith's conversion (scripts/soulx/convert.py: 8-bit language model, s3gen.safetensors) with LICENSE and NOTICE."
+      },
       "aux": [
         {"repo": "mlx-community/S3TokenizerV2", "revision": "e0c9886f0e1c35ae85b1f27277416fb19fc72bec", "licence": "apache-2.0"}
       ]

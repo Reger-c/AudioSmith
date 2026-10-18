@@ -67,6 +67,11 @@ const (
 	// CapSpeakers: STT tells speakers apart, labelling each segment
 	// (proto.Segment.Speaker; MOSS-Transcribe-Diarize, thread #48).
 	CapSpeakers Capability = "speakers"
+	// CapDialogue: speaks a whole dialogue in one job, each line hearing
+	// the ones before it (tts.dialogue; SoulX-Podcast, thread #80): the
+	// stories' 「整场对话」 mode. Such models clone every speaker from a
+	// reference clip and its transcript.
+	CapDialogue Capability = "dialogue"
 )
 
 // Catalog is a versioned list of entries.
