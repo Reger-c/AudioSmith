@@ -138,8 +138,9 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 	if dl := o.Dialogue; dl != nil && dl.On {
 		// Whole dialogue: the dialogue model, then the story's own model,
 		// which reads the narration and the lines it does not say clearly.
-		label, about, rec = dl.Cur.DisplayName(), i18n.T("Narration and fallback: %s", cur.DisplayName()), false
-		tip = modelTip(dl.Cur) + "\n" + i18n.T("Narration and fallback: %s", modelTip(cur))
+		restFor := dl.texts().restFor
+		label, about, rec = dl.Cur.DisplayName(), restFor(cur.DisplayName()), false
+		tip = modelTip(dl.Cur) + "\n" + restFor(modelTip(cur))
 	}
 	btn := ui.ButtonBase(c.Key(key)).Padding(px(t, 6), px(t, 10)).Gap(px(t, sp2)).Radius(px(t, radiusControl)).
 		Background(t.Surface).Border(1, t.Border).AlignItems(ui.Center).Label(i18n.T("Model")).Tooltip(tip).Disabled(o.Locked)
@@ -240,7 +241,7 @@ func (a *app) pickerList(c *ui.Context, key string, w catalog.Workflow, cur cata
 			if len(recs) > 0 {
 				head := i18n.T("Recommended")
 				if o.Dialogue != nil && o.Dialogue.On {
-					head = i18n.T("Narration and fallback · Recommended")
+					head = o.Dialogue.texts().restHead
 				}
 				ui.Text(c, head).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Padding(px(t, 4), px(t, sp2), px(t, 2))
 				for _, e := range recs {

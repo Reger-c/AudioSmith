@@ -210,6 +210,19 @@ func (a *app) dubAuditionLine(id string) {
 		return
 	}
 	q, l := p.Clone(), a.dubLang
+	// A conversation line already recorded plays as it is; one not yet is
+	// heard on the dub's model, which is not what generating records.
+	heard, inDialogue := a.dubDialogueHeard(id, l)
+	if heard != "" {
+		a.dubStopPlayer()
+		if err := a.pl.Toggle("dubline:"+id, heard); err != nil {
+			a.toast(i18n.T("Cannot play: %v", err))
+		}
+		return
+	}
+	if inDialogue {
+		a.toast(i18n.T("This line is in a conversation: generating records it with the lines around it. Until then you hear it alone."))
+	}
 	svc, render := a.dubSvc, a.lib.svc.Render
 	a.dubAudition = dubAuditionState{seg: id, busy: true}
 	a.async(func() {

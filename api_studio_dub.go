@@ -156,6 +156,9 @@ func (b *apiBackend) CreateDub(ctx context.Context, req api.DubCreate) (out api.
 		}
 	}
 	p.Speakers = req.Speakers
+	if err := applyDubDialogue(&p.Settings, req.Dialogue, req.DialogueModel); err != nil {
+		return api.DubJSON{}, err
+	}
 	if req.KeepBackground != nil {
 		p.Settings.KeepBackground = *req.KeepBackground
 	}
@@ -225,18 +228,19 @@ func (b *apiBackend) Dub(ctx context.Context, q api.DubQuery) (api.DubJSON, erro
 		}
 		out.Tracks[l] = tj
 	}
-	if q.Segments != nil && !*q.Segments {
-		return out, nil
-	}
 	l := q.Language
 	if l == "" && len(p.Targets) > 0 {
 		l = p.Targets[0]
+	}
+	if q.Segments != nil && !*q.Segments {
+		b.dubDialogueJSON(&out, p, l)
+		return out, nil
 	}
 	out.Language = l
 	t := p.Track(l)
 	for _, s := range p.Segments {
 		sj := api.DubSegmentJSON{ID: s.ID, Start: round2(s.Start), End: round2(s.End), Speaker: s.Speaker, Text: s.Text,
-			Voice: label(s.Voice)}
+			Voice: label(s.Voice), NoDialogue: s.NoDialogue}
 		if l != "" {
 			sj.Translation = p.TextFor(s, l)
 			if ln := s.Lines[dub.LangFor(s, l)]; ln.Err != "" {
@@ -251,6 +255,7 @@ func (b *apiBackend) Dub(ctx context.Context, q api.DubQuery) (api.DubJSON, erro
 		}
 		out.Segments = append(out.Segments, sj)
 	}
+	b.dubDialogueJSON(&out, p, l)
 	return out, nil
 }
 

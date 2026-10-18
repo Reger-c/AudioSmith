@@ -98,6 +98,13 @@ func (p *Project) DialogueStretches(lang string, lim dialogue.Limits) []Stretch 
 	return p.stretches(lang, lim, false)
 }
 
+// DialoguePreview are lang's stretches as they will be: the source text
+// stands in for the lines not translated yet (the Cast step, before the
+// translation).
+func (p *Project) DialoguePreview(lang string, lim dialogue.Limits) []Stretch {
+	return p.stretches(lang, lim, true)
+}
+
 // DialogueShare is the share of lang's lines (those with source text)
 // that the dialogue model would speak, the source text standing in for
 // the lines not translated yet (the translation's fit, before there is
@@ -113,7 +120,7 @@ func (p *Project) DialogueShare(lang string, lim dialogue.Limits) float64 {
 		return 0
 	}
 	n := 0
-	for _, st := range p.stretches(lang, lim, true) {
+	for _, st := range p.DialoguePreview(lang, lim) {
 		n += len(st.IDs)
 	}
 	return float64(n) / float64(total)

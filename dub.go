@@ -99,6 +99,7 @@ type dubState struct {
 	dubVideo    dubVideoState
 	dubNotice   string     // a one-time message under the toolbar ("Imported 12 cues…")
 	dubSide     panelState // the step's panel: beside the workspace, or a drawer
+	dubDlgNow   dubDlg     // the dialogue model as the line list shows it (dub_view_dialogue.go)
 	dubNarrow   bool       // the workspace is narrow: toolbars show icons, rows fold actions
 
 	ytdlp ytdlpState
