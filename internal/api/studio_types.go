@@ -194,15 +194,18 @@ type LongformJSON struct {
 	// Stories: the scene, the pacing (dialogue, reading, relaxed or
 	// fixed) and what the model does with scene, personas and directions
 	// (continuity: instruct, intensity or lines).
-	Scene      string        `json:"scene,omitempty"`
-	Pacing     string        `json:"pacing,omitempty"`
-	Continuity string        `json:"continuity,omitempty"`
-	Words      int           `json:"words"`
-	Estimate   float64       `json:"estimated_seconds"`
-	Problems   []ProblemJSON `json:"problems,omitempty"`
-	Book       BookJSON      `json:"book"`
-	Render     *RenderJSON   `json:"last_render,omitempty"`
-	Updated    time.Time     `json:"updated_at"`
+	Scene      string `json:"scene,omitempty"`
+	Pacing     string `json:"pacing,omitempty"`
+	Continuity string `json:"continuity,omitempty"`
+	// Dialogue: the characters' lines are spoken by the dialogue model,
+	// a scene at a time (whole dialogue).
+	Dialogue bool          `json:"dialogue,omitempty"`
+	Words    int           `json:"words"`
+	Estimate float64       `json:"estimated_seconds"`
+	Problems []ProblemJSON `json:"problems,omitempty"`
+	Book     BookJSON      `json:"book"`
+	Render   *RenderJSON   `json:"last_render,omitempty"`
+	Updated  time.Time     `json:"updated_at"`
 	// Warning: the request named a removed model; its replacement is used.
 	Warning string `json:"warning,omitempty"`
 }
@@ -235,6 +238,7 @@ type LongformUpdate struct {
 	Pacing      string            `json:"pacing,omitempty" jsonschema:"Stories: gaps between lines: dialogue (tight turns), reading, relaxed, or fixed (one gap for every line)."`
 	Merge       *bool             `json:"merge_turns,omitempty" jsonschema:"Stories, with a pacing: say consecutive lines of one character in one go (default true)."`
 	Level       *bool             `json:"even_out_voices,omitempty" jsonschema:"Stories, with a pacing: bring each character's lines toward one loudness (default true)."`
+	Dialogue    *bool             `json:"dialogue,omitempty" jsonschema:"Stories: true speaks the characters' lines with the dialogue model (SoulX-Podcast, a 2.4 GB download; 16 GB of memory; Chinese and English) a scene at a time, each line hearing the lines before it; narration stays on the story's model."`
 	Direct      string            `json:"direct,omitempty" jsonschema:"Stories: run the AI director (the writing-help language model reads the story and plans its emotions: a baseline per character, an emotion, intensity and turn per line) after the other changes: fill (only what is empty) or all (replace what you did not set). Takes up to a minute or two."`
 }
 

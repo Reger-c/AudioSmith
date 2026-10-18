@@ -92,12 +92,20 @@ func foldPronouns(s string) string {
 // call runs one engine request other than tts.synthesize for a render
 // (the tracks' alignment and check), with the model's local snapshot.
 func (r *renderer) call(ctx context.Context, job jobs.Job, method, model string, params any, out any) error {
+	return r.callProgress(ctx, job, method, model, params, out, nil)
+}
+
+// callProgress is call with the request's progress (nil: none); a
+// tts.dialogue's modelPath, when set, is kept.
+func (r *renderer) callProgress(ctx context.Context, job jobs.Job, method, model string, params any, out any, report func(jobs.Progress)) error {
 	ex := r.engine(method)
 	if ex == nil {
 		return &jobs.Error{Code: CodeEngineUnavailable, Message: "The engine is not connected.", Retryable: true}
 	}
 	dir := ""
-	if r.modelPath != nil {
+	if p, ok := params.(*proto.DialogueParams); ok && p.ModelPath != "" {
+		dir = p.ModelPath
+	} else if r.modelPath != nil {
 		d, err := r.modelPath(ctx, model)
 		if err != nil {
 			return err
@@ -109,13 +117,18 @@ func (r *renderer) call(ctx context.Context, job jobs.Job, method, model string,
 		p.Model, p.ModelPath = model, dir
 	case *proto.TranscribeParams:
 		p.Model, p.ModelPath = model, dir
+	case *proto.DialogueParams:
+		p.Model, p.ModelPath = model, dir
 	}
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 	sub := jobs.Job{ID: job.ID + "." + filepath.Base(method), Spec: jobs.Spec{Kind: method, Lane: jobs.LaneGPU, Params: raw, Owner: job.Owner}}
-	res, err := ex.Run(ctx, sub, func(jobs.Progress) {}, nil)
+	if report == nil {
+		report = func(jobs.Progress) {}
+	}
+	res, err := ex.Run(ctx, sub, report, nil)
 	if err != nil {
 		return err
 	}

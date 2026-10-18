@@ -86,6 +86,7 @@ func (a *app) storyPerformance(c *ui.Context, p *lfPage, locked bool) {
 			}
 		}
 	})
+	a.storyDialogue(c, p, locked) // stories_dialogue_view.go
 	// Scene and the AI director: only for models that hear them.
 	if level == services.ContinuityLines {
 		return

@@ -183,6 +183,14 @@ type Production struct {
 	// one synthesis per stretch of one feeling, cut apart with the forced
 	// aligner and put back in the dialogue (story_track.go).
 	NoTracks bool `json:"noTracks,omitempty"`
+	// Dialogue speaks a story's character lines with DialogueModel (a
+	// repo of catalogue capability "dialogue"), a scene at a time, each
+	// line hearing the lines before it (story_dialogue.go); narration
+	// stays on the story's model. DialogueTags puts a line's emotion into
+	// the dialogue model's text as a non-verbal tag (an experiment, off).
+	Dialogue      bool   `json:"dialogue,omitempty"`
+	DialogueModel string `json:"dialogueModel,omitempty"`
+	DialogueTags  bool   `json:"dialogueTags,omitempty"`
 }
 
 // DefaultProduction are the production settings of a new project.

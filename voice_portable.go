@@ -26,15 +26,6 @@ type portableJob struct {
 	name, lang, origin string
 }
 
-// portableLine is the line a portable copy says (about 10 s), in its
-// language: varied sounds, calm, without pauses, for a clean reference.
-func portableLine(lang string) string {
-	if strings.HasPrefix(lang, "zh") {
-		return "这是一段用来克隆音色的参考录音。我会用平稳自然的语气，把这几句话清楚地读完，让每个字的声音都能被听见。"
-	}
-	return "This is a reference recording for cloning a voice. I will read these few sentences in a calm and natural way, so that every sound comes through clearly."
-}
-
 // canMakePortable reports whether v can be made portable: a built-in
 // speaker or a designed voice (a cloned voice already is).
 func canMakePortable(v *core.Voice) bool {
@@ -104,7 +95,7 @@ func (a *app) makeSpeakerPortable(e catalog.Entry, speaker string) {
 
 // renderPortable renders the portable line with recipe t, evened out.
 func (a *app) renderPortable(pj portableJob, t core.Take, retry func()) {
-	t.Text = portableLine(pj.lang)
+	t.Text = services.PortableLine(pj.lang)
 	t.Render = &core.TakeRender{Bits: 24, Master: services.MasterDefault}
 	if a.portableJobs == nil {
 		a.portableJobs = map[string]portableJob{}

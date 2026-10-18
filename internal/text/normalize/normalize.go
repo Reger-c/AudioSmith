@@ -7,7 +7,9 @@
 // Bracketed markup ("[pause 1s]", "[[word|say]]") is never touched. Forms
 // it is unsure about (numbers glued to Latin letters such as "MP3", version
 // numbers, phone numbers with dashes, IP addresses) are left as written for
-// the engine's own front end.
+// the engine's own front end, except in Chinese, where phone numbers,
+// hyphen ranges, scores, dotted dates and metric units are read too
+// (lang_zh_pre.go): most Chinese models cannot read them at all.
 //
 // Languages: zh, en, ja, ko, es, fr, de. Adding one means writing a
 // Language value (see lang_en.go for the shape) and calling Register from

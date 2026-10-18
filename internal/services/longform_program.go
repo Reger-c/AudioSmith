@@ -176,11 +176,21 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 		}
 		tracked = t
 	}
+	// Whole dialogue: the characters' lines by segment, their tracks (or
+	// own steps) as the fallback.
+	dialogued := map[int]*dialogueStep{}
+	if p.Production.Dialogue && p.Production.DialogueModel != "" && r.engine != nil {
+		d, err := cr.dialogues(p, take, planOf, lineSteps, tracked, info, modelPath, r.model(p.Production.DialogueModel))
+		if err != nil {
+			return nil, "", nil, err
+		}
+		dialogued = d
+	}
 	// The merged turns, by their first line: of lines not in a track.
 	merged := map[int][]int{}
 	if paced && !p.Production.NoMerge {
 		for _, g := range mergeGroups(p.Lines, info, p.Production.VaryRepeats) {
-			if !slices.ContainsFunc(g, func(li int) bool { return tracked[li] != nil }) {
+			if !slices.ContainsFunc(g, func(li int) bool { return tracked[li] != nil || dialogued[li] != nil }) {
 				merged[g[0]] = g
 			}
 		}
@@ -190,6 +200,11 @@ func (cr chapterRenderer) program(ctx context.Context, p *ChapterParams, info Mo
 			gap := gapBefore(li)
 			steps = append(steps, chapterStep{silence: gap, line: li})
 			fmt.Fprintf(h, "gap %g\x00", gap)
+		}
+		if ds, ok := dialogued[li]; ok {
+			steps = append(steps, chapterStep{chunk: ds.chunk, line: li, dialogue: ds})
+			fmt.Fprintf(h, "dialogue %s %d\x00", ds.seg.key, ds.k)
+			continue
 		}
 		if ts, ok := tracked[li]; ok {
 			steps = append(steps, chapterStep{chunk: ts.chunk, brk: ts.seg.brk, line: li, track: ts})

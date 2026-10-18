@@ -88,8 +88,10 @@ type Language struct {
 	Temperature func(words string, unit byte) string
 	// Abbrevs are expanded where they appear as whole words.
 	Abbrevs []Abbrev
+	// Pre rules run before the shared rules (forms those would misread);
 	// Extra rules run after the shared date/time/money/percent rules and
 	// before abbreviations and plain numbers.
+	Pre   []Rule
 	Extra []Rule
 
 	rules []Rule
@@ -196,7 +198,7 @@ const sp = `[ \t\x{00a0}\x{202f}]` // a space inside a written form
 
 func (l *Language) compile() {
 	num := `(` + l.NumPattern() + `)`
-	var rules []Rule
+	rules := append([]Rule(nil), l.Pre...)
 	add := func(re string, fn func(s string, m []int) (string, bool)) {
 		rules = append(rules, Rule{Re: regexp.MustCompile(re), Fn: fn})
 	}

@@ -1,5 +1,6 @@
 import AudioSmithProtocol
 import Foundation
+@preconcurrency import MLX
 
 let engineVersion = "0.3.0"
 /// The MLX the engine is built with (Package.resolved pins mlx-swift).
@@ -65,8 +66,29 @@ enum Main {
         }
 
         signal(SIGPIPE, SIG_IGN)
+        // Developer checks of the SoulX-Podcast port (SoulXCheck.swift).
+        if args.first == "--soulx-dump-params", args.count > 1 {
+            do { try SoulXCheck.dumpParams(args[1]) } catch { log("\(error)"); exit(1) }
+            return
+        }
+        if args.first == "--soulx-check" {
+            do { exit(try await SoulXCheck.run(Array(args.dropFirst()))) } catch { log("\(errorMessage(error))"); exit(1) }
+        }
         let out = Writer()
         let server = Server(role: role, out: out)
+        // `--dialogue request.json`: one tts.dialogue (its params as JSON), printed like a job.
+        if args.first == "--dialogue", args.count > 1, let synth = server.synth {
+            do {
+                let p = try JSONDecoder().decode(DialogueParams.self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+                let aux = try? JSONDecoder().decode(AuxParams.self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+                out.result("once", try await synth.dialogue(p, job: "once", offline: false, auxPaths: aux?.auxPaths))
+                log(String(format: "MLX peak memory %.2f GB", Double(MLX.Memory.peakMemory) / 1e9))
+                exit(0)
+            } catch {
+                out.fail("once", rpcError(error))
+                exit(1)
+            }
+        }
         if !args.isEmpty {
             guard let synth = server.synth else {
                 log("one-shot synthesis runs only as --role gpu")

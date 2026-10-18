@@ -1,0 +1,172 @@
+diff --git a/Sources/MLXAudioCodecs/S3Gen/FlowMatching.swift b/Sources/MLXAudioCodecs/S3Gen/FlowMatching.swift
+index 145f379..0f76055 100644
+--- a/Sources/MLXAudioCodecs/S3Gen/FlowMatching.swift
++++ b/Sources/MLXAudioCodecs/S3Gen/FlowMatching.swift
+@@ -661,8 +661,9 @@ class CausalConditionalCFM: Module {
+         // mx.random.normal(key=mx.random.key(0)). Using the wrong method gives
+         // completely different starting noise for the ODE solver.
+         if !meanflow {
+-            MLXRandom.seed(0)
+-            self.randNoise = MLXRandom.normal([1, Self.melChannels, 50 * 300])
++            // AudioSmith patch: the same values from a state of its own, so
++            // loading the model no longer reseeds MLX's global generator.
++            self.randNoise = MLXRandom.normal([1, Self.melChannels, 50 * 300], key: MLXRandom.RandomState(seed: 0))
+             eval(self.randNoise!)
+         } else {
+             self.randNoise = nil
+@@ -771,10 +772,13 @@ class CausalConditionalCFM: Module {
+         return x
+     }
+ 
++    /// noise (Regular only, (1, 80, T)) replaces the fixed noise table:
++    /// CosyVoice2 and SoulX-Podcast draw fresh noise for every call
++    /// (`torch.randn_like(mu)`). AudioSmith patch.
+     func callAsFunction(
+         mu: MLXArray, mask: MLXArray, nTimesteps: Int,
+         spks: MLXArray? = nil, cond: MLXArray? = nil,
+-        noisedMels: MLXArray? = nil
++        noisedMels: MLXArray? = nil, noise: MLXArray? = nil
+     ) -> MLXArray {
+         let z: MLXArray
+ 
+@@ -794,7 +798,7 @@ class CausalConditionalCFM: Module {
+             // Python: `z = self.rand_noise[:, :, :T] * temperature`
+             // Temperature is always 1.0 for CausalConditionalCFM.
+             let T = mu.dim(2)
+-            z = randNoise![0..., 0..., ..<T]
++            z = noise.map { $0[0..., 0..., ..<T] } ?? randNoise![0..., 0..., ..<T]
+         }
+ 
+         // Time schedule: cosine for Regular, linear for Turbo (meanflow)
+@@ -844,7 +848,8 @@ public class CausalMaskedDiffWithXvec: Module {
+         decoderInChannels: Int = 320,
+         encoderConfig: [String: Any]? = nil,
+         decoderConfig: [String: Any]? = nil,
+-        meanflow: Bool = true
++        meanflow: Bool = true,
++        hiftUseInterpolation: Bool = false
+     ) {
+         self.outputSize = outputSize
+         self.vocabSize = vocabSize
+@@ -868,7 +873,8 @@ public class CausalMaskedDiffWithXvec: Module {
+             meanflow: meanflow)
+ 
+         // HiFi-GAN vocoder (weight key: mel2wav)
+-        self._vocoderModule.wrappedValue = HiFTGenerator()
++        // hiftUseInterpolation: CosyVoice2's 24 kHz source (SineGen2).
++        self._vocoderModule.wrappedValue = HiFTGenerator(useInterpolation: hiftUseInterpolation)
+ 
+         // CAMPPlus speaker encoder (x-vector extraction)
+         self._speakerEncoder.wrappedValue = CAMPPlus()
+@@ -879,6 +885,13 @@ public class CausalMaskedDiffWithXvec: Module {
+         return vocoderModule(mel)
+     }
+ 
++    /// The vocoder's sine source without random phase or noise, for parity
++    /// tests. AudioSmith patch.
++    public var deterministicVocoderSource: Bool {
++        get { vocoderModule.mSource.lSinGen.deterministic }
++        set { vocoderModule.mSource.lSinGen.deterministic = newValue }
++    }
++
+     /// Flow matching inference: speech tokens → mel spectrogram.
+     ///
+     /// - Parameters:
+@@ -897,7 +910,8 @@ public class CausalMaskedDiffWithXvec: Module {
+         promptFeat: MLXArray,
+         embedding: MLXArray,
+         nTimesteps: Int = 10,
+-        streaming: Bool = false
++        streaming: Bool = false,
++        noise: MLXArray? = nil
+     ) -> MLXArray {
+         // 1. L2-normalize speaker embedding before projection
+         let norm = MLX.sqrt((embedding * embedding).sum(axis: 1, keepDims: true))
+@@ -963,7 +977,7 @@ public class CausalMaskedDiffWithXvec: Module {
+ 
+         let mel = decoder(
+             mu: mu, mask: decoderMask, nTimesteps: nTimesteps,
+-            spks: spkEmb, cond: conds, noisedMels: noisedMels)
++            spks: spkEmb, cond: conds, noisedMels: noisedMels, noise: noise)
+ 
+         // 8. Extract only the generated portion (skip prompt mel region)
+         if promptMelLen > 0 && promptMelLen < totalMelLen {
+diff --git a/Sources/MLXAudioCodecs/S3Gen/HiFTGenerator.swift b/Sources/MLXAudioCodecs/S3Gen/HiFTGenerator.swift
+index 89e3fe0..416c008 100644
+--- a/Sources/MLXAudioCodecs/S3Gen/HiFTGenerator.swift
++++ b/Sources/MLXAudioCodecs/S3Gen/HiFTGenerator.swift
+@@ -205,6 +205,9 @@ class SineGen: Module {
+     let voicedThreshold: Float
+     let useInterpolation: Bool
+     let upsampleScale: Int
++    /// No random phase or noise (parity tests against a reference with the
++    /// same switch). AudioSmith patch.
++    var deterministic = false
+ 
+     init(
+         sampRate: Int, harmonicNum: Int = 0,
+@@ -221,14 +224,22 @@ class SineGen: Module {
+         self.upsampleScale = upsampleScale
+     }
+ 
++    /// Linear resampling along the last axis as torch's
++    /// `F.interpolate(mode: "linear", align_corners: False)` with the scale
++    /// factor newSize / currentSize (CosyVoice2's SineGen2), which maps
++    /// output sample i to input position (i + 0.5) / scale - 0.5, clamped
++    /// at 0. AudioSmith patch: it was align_corners=True, which shifts the
++    /// phase of the sine source.
+     private func linearInterpolate1DToSize(_ x: MLXArray, newSize: Int) -> MLXArray {
+         let currentSize = x.dim(-1)
+         if newSize == currentSize {
+             return x
+         }
+ 
+-        let newPositions = MLX.linspace(Float32(0), Float32(currentSize - 1), count: newSize)
+-        let indicesLow = floor(newPositions).asType(.int32)
++        let scale = Float(currentSize) / Float(newSize)
++        let newPositions = MLX.maximum(
++            (MLXArray(0 ..< Int32(newSize)).asType(.float32) + 0.5) * scale - 0.5, MLXArray(Float(0)))
++        let indicesLow = MLX.minimum(floor(newPositions).asType(.int32), MLXArray(Int32(currentSize - 1)))
+         let indicesHigh = MLX.minimum(indicesLow + 1, MLXArray(Int32(currentSize - 1)))
+         let weights = newPositions.asType(x.dtype) - indicesLow.asType(x.dtype)
+ 
+@@ -243,7 +254,7 @@ class SineGen: Module {
+         let h = f0Values.dim(2)
+ 
+         var radValues = (f0Values / Float(samplingRate)) % 1
+-        var randIni = MLXRandom.uniform(0.0 ..< 1.0, [b, h])
++        var randIni = deterministic ? MLXArray.zeros([b, h]) : MLXRandom.uniform(0.0 ..< 1.0, [b, h])
+         randIni = MLX.concatenated(
+             [MLXArray.zeros([b, 1]).asType(randIni.dtype), randIni[0..., 1...]],
+             axis: 1
+@@ -280,7 +291,7 @@ class SineGen: Module {
+             let fMat = f0 * harmonicMult / Float(samplingRate)
+             let thetaMat = 2.0 * Float.pi * (MLX.cumsum(fMat, axis: -1) % 1.0)
+ 
+-            var phaseVec = MLXRandom.uniform(
++            var phaseVec = deterministic ? MLXArray.zeros([B, harmonicNum + 1, 1]) : MLXRandom.uniform(
+                 low: -Float.pi, high: Float.pi,
+                 [B, harmonicNum + 1, 1])
+             let phaseMask = (MLXArray(0 ... harmonicNum).reshaped(1, -1, 1) .> 0).asType(.float32)
+@@ -293,7 +304,7 @@ class SineGen: Module {
+ 
+         // Noise
+         let noiseAmp = uv * noiseStd + (1.0 - uv) * sineAmp / 3.0
+-        let noise = noiseAmp * MLXRandom.normal(sineWaves.shape)
++        let noise = deterministic ? MLXArray.zeros(sineWaves.shape) : noiseAmp * MLXRandom.normal(sineWaves.shape)
+ 
+         let noisySineWaves = sineWaves * uv + noise
+ 
+@@ -669,8 +680,10 @@ class HiFTGenerator: Module {
+             h = xs! / Float(numKernels)
+         }
+ 
+-        // Final processing
+-        h = leakyRelu(h, negativeSlope: lreluSlope)
++        // Final processing. CosyVoice2's hifigan.py calls F.leaky_relu(x)
++        // here, whose slope is 0.01, not lrelu_slope (0.1) as between the
++        // upsampling layers. AudioSmith patch.
++        h = leakyRelu(h, negativeSlope: 0.01)
+         h = h.transposed(0, 2, 1)  // (B, T, C)
+         h = convPost(h)  // Conv1d in (B, T, C)
+         h = h.transposed(0, 2, 1)  // (B, nFft+2, T)

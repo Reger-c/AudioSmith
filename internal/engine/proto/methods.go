@@ -374,6 +374,10 @@ func ParamsFor(method string) any {
 		return new(WatermarkDetectParams)
 	case MethodLLMToken:
 		return new(LLMTokenParams)
+	case MethodTTSDialogue:
+		return new(DialogueParams)
+	case MethodTTSTurn:
+		return new(TurnParams)
 	case MethodHello:
 		return new(HelloParams)
 	case MethodStats, MethodFlush, MethodShutdown, MethodModelsLoaded:
@@ -427,6 +431,8 @@ func ResultFor(method string) any {
 		return new(TranscodeResult)
 	case MethodLLMGenerate:
 		return new(LLMGenerateResult)
+	case MethodTTSDialogue:
+		return new(DialogueResult)
 	case MethodWatermarkEmbed:
 		return new(WatermarkEmbedResult)
 	case MethodWatermarkDetect:
@@ -464,7 +470,7 @@ func IsJob(method string) bool {
 		MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
 		MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
 		MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode,
-		MethodLLMGenerate, MethodWatermarkEmbed, MethodWatermarkDetect:
+		MethodLLMGenerate, MethodWatermarkEmbed, MethodWatermarkDetect, MethodTTSDialogue:
 		return true
 	}
 	return false
@@ -476,5 +482,5 @@ var JobMethods = []string{
 	MethodSTTTranscribe, MethodSTTAlign, MethodVADDetect, MethodEnhanceRun,
 	MethodMediaDecode, MethodMediaEncode, MethodCaptureStart,
 	MethodSeparateRun, MethodDiarizeRun, MethodMediaMux, MethodMediaThumbnail, MethodMediaTranscode,
-	MethodLLMGenerate, MethodWatermarkEmbed, MethodWatermarkDetect,
+	MethodLLMGenerate, MethodWatermarkEmbed, MethodWatermarkDetect, MethodTTSDialogue,
 }

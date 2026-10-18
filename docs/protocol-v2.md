@@ -64,7 +64,7 @@ Unknown members must be ignored by both sides, so optional fields can be added w
    - The app refuses an engine whose `result.protocol` ≠ 2 or whose `result.role` differs from the role it spawned. It shows "Engine version mismatch: rebuild audiosmith-engine" and does not restart it.
    - The handshake has a 30 s timeout. The first launch compiles Metal shaders.
 2. **Two kinds of request.**
-   - **Job requests** (`models.load`, `tts.synthesize`, `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.decode`, `capture.start`; `proto.JobMethods`) run long, may send notifications, and can be cancelled.
+   - **Job requests** (`models.load`, `tts.synthesize`, `tts.encodeVoice`, `tts.dialogue`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.decode`, `capture.start`; `proto.JobMethods`) run long, may send notifications, and can be cancelled.
    - **Control requests** (all others) answer promptly, even while jobs run, and cannot be cancelled.
 3. **Concurrency.** The engine runs at most `hello.result.concurrency` jobs at once (`gpu` 1, `listen` 2, `media` 2). Another job request gets `busy`, which is retryable.
    - The Go scheduler is the only queue: it never sends more jobs than the engine can run.
@@ -108,7 +108,7 @@ Every field is listed in [`methods.go`](../internal/engine/proto/methods.go). Th
 - `methods` lists the requests this build and role implement. The app hides features whose methods are missing.
 - `families` are the model families it can load. They match `catalog.Entry.Family`. The M0 engine reports `kokoro`, `kitten`, `qwen3_tts`, `qwen3`, `marvis`, `soprano`, `omnivoice`, `chatterbox`, `pocket_tts`, `llama_tts`, `fish_speech`, `echo_tts`, `irodori_tts`, `moss_tts`, `moss_tts_nano`, `indextts`, `spark`, `breeze` (role `gpu`; other roles report none).
 - Roles: every role implements `engine.hello`, `engine.stats`, `engine.flush`, `engine.shutdown` and `job.cancel`. On top of those (`proto.RoleOf`):
-  - `gpu`: `models.*`, `tts.synthesize`, `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run` — everything that runs an MLX model;
+  - `gpu`: `models.*`, `tts.synthesize`, `tts.encodeVoice`, `tts.dialogue`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run` — everything that runs an MLX model;
   - `media`: `media.probe`, `media.decode` — AVFoundation, no MLX; concurrency 2;
   - `listen`: `capture.devices`, `capture.start`, `capture.stop` — the microphone; and, for dictation, `stt.transcribe` and `models.load`/`unload`/`loaded` with **one resident speech-to-text model of its own** (concurrency 2: a recording and a transcription), so dictation never waits behind a gpu render. The app runs those as the job kinds `proto.KindFor(proto.RoleListen, method)` (`"listen:stt.transcribe"`, `"listen:models.load"`) on `jobs.LaneListen`; `services.TranscribeRequest.Role = proto.RoleListen` does it for a transcript.
   A method sent to another role is answered `method_not_found`.
@@ -456,6 +456,43 @@ Mac, `TestWatermarkEngine`; Kokoro, Qwen3-TTS CustomVoice and OmniVoice takes, 1
 
 The port matches the PyTorch reference: on the same 16 kHz input and message, the two watermarks correlate at 1.00000 with a relative difference under 10⁻⁵, at the same SNR (24.9 dB). Each side's detector finds the other's mark, with the exact message.
 
+## 5.6 Dialogue models
+
+Types: [`dialogue.go`](../internal/engine/proto/dialogue.go) (Go), [`WireDialogue.swift`](../engine/Sources/AudioSmithProtocol/WireDialogue.swift). Fixture: `dialogue.jsonl`. Thread #80.
+
+### `tts.dialogue` (job, gpu) → `tts.turn` …
+
+A whole conversation in one job: each turn is spoken hearing the turns before it, in voices cloned from one reference per speaker.
+
+```json
+→ {"id":"01JF…","method":"tts.dialogue","params":{"model":"actnowai/SoulX-Podcast-1.7B-MLX-8bit","modelPath":"/…",
+   "speakers":[{"id":"child","refAudio":"/…/child.wav","refText":"今天放学的时候，我在路上看见一只小鸟。"},{"id":"mom","refAudio":"/…/mom.wav","refText":"今天晚上我们早点吃饭，好不好？"}],
+   "turns":[{"speaker":"child","text":"妈妈，我想领养一只小猫，可以吗？"},{"speaker":"mom","text":"领养是好事，你能一直照顾它吗？"}],
+   "outputDir":"/…/renders/01JF0R/dialogue-0","seed":2}}
+← job.progress {stage:"loading"} … {stage:"encoding"} … {stage:"generating", fraction, audioSeconds}
+← {"method":"tts.turn","params":{"job":"01JF…","index":0,"speaker":"child","output":"/…/turn-000.wav","frames":63360,"audioSeconds":2.64,"sampleRate":24000}} …
+← {"id":"01JF…","result":{"model":"…","sampleRate":24000,"channels":1,"turns":[{"index":0,"speaker":"child","output":"/…/turn-000.wav","frames":63360,"audioSeconds":2.64,"codes":[4114,1897,…],"seconds":3.7},…],
+   "audioSeconds":6.56,"seconds":9.4,"rtf":0.7,"seed":2}}
+```
+
+| Param | Meaning |
+|---|---|
+| `speakers` | Up to the model's limit (SoulX-Podcast: 4; more fails with `unsupported`, `data.capability:"speakers"`). Each has a unique `id`, a reference clip (any format AVFoundation reads; SoulX: 1–30 s) and its **exact transcript** (`refText`, required). |
+| `turns` | In order; `speaker` names a speaker id. A turn with `codes` (from an earlier result of the same model and speakers) is **context only**: heard, not spoken again, no file. |
+| `outputDir` | Absolute; the app owns it. Per-turn files are `turn-<index, 3 digits>.wav`; a one-track model writes `dialogue.wav`. |
+| `bits` | 16 (default), 24, or 32 (float). |
+| `seed`, `temperature`, `topP`, `topK`, `repetitionPenalty`, `maxTokens` (per turn), `steps` (flow matching) | Unset: the model's defaults. SoulX-Podcast samples exactly as upstream does with transformers 4.57.1: repetition penalty 1.25 on the current turn's tokens → temperature 0.6 → top-k 100 → top-p 0.9, repetition-aware sampling (window 25, ratio 0.2), 8 to 3,000 tokens a turn, logits limited to the speech tokens and their end token; 15 flow steps. |
+
+Two kinds of model:
+- **Per-turn** (SoulX-Podcast, family `soulx_podcast`): each generated turn is its own file, announced by `tts.turn` as soon as it is written (before the response, as every notification). `result.turns` lists the generated turns with `output`, `frames`, `audioSeconds`, the turn's `codes` (speech tokens, 0–6560) and `seconds` (its generation time). **Redoing one turn**: send the same speakers, the turns before it with their `codes`, and the turn itself without; only it is generated, with the same context.
+- **One-track** (MOSS-TTSD, later): the whole dialogue in one file, `result.mixed` (`output`, `frames`, `audioSeconds`), and every turn with `index`, `speaker` and `text`; the app cuts the track at the turns (`stt.align`, as character tracks are cut).
+
+Errors: a model that is not a dialogue model fails with `unsupported`, `data.capability:"dialogue"`; a missing `refText`, an unknown speaker, an empty turn or every turn with codes with `bad_request`; a missing reference with `file_not_found`.
+
+`models.load` with `task:"dialogue"` loads a dialogue model ahead; its result's capabilities are `dialogue`, `clone`, `seed`, `sampling`, `steps`.
+
+**SoulX-Podcast in the engine** ([`SoulX.swift`](../engine/Sources/AudioSmithEngine/SoulX.swift), [`Dialogue.swift`](../engine/Sources/AudioSmithEngine/Dialogue.swift), [`AudioSmithDialogue`](../engine/Sources/AudioSmithDialogue)): the Qwen3-1.7B language model (8-bit, mlx-swift-lm) writes a turn's speech tokens after the reference blocks and the earlier turns, keeping its KV cache across turns and rebuilding the context as upstream does (more than 10 blocks or 6,192 tokens: the references, the texts of two earlier turns, the last two turns with their speech); CosyVoice2's flow matching (fresh noise per turn) and HiFT (mlx-audio-swift's S3Gen types, patch 0006) make the turn's waveform from its tokens and the speaker's reference tokens, mel and CAM++ x-vector. The S3 tokenizer is the auxiliary repo `mlx-community/S3TokenizerV2`. Checked against the official PyTorch code stage by stage (`audiosmith-engine --soulx-check`, scripts/soulx/parity.sh). M4 (24 GB): 0.7× real time, 39 speech tokens a second, 4.3 GB MLX peak.
+
 ## 6. Notifications (engine → app)
 
 | Method | Params | Notes |
@@ -465,6 +502,7 @@ The port matches the PyTorch reference: on the same 16 kHz input and message, th
 | `log` | `level`, `message`, `job?` | Structured log line for the Logs panel. `level` is `debug`, `info`, `warning` or `error`. It may name any job. |
 | `capture.level` | `job`, `seconds`, `rms`, `peak`, `clipped?` | The input meter of a `capture.start` job, about 20 per second (§5.2). |
 | `llm.token` | `job`, `text` | The next piece of an `llm.generate` reply with `stream` (§5.4). |
+| `tts.turn` | `job`, `index`, `speaker`, `output`, `frames`, `audioSeconds`, `sampleRate` | A `tts.dialogue` turn's file is written (§5.6). |
 
 At 24 kHz mono, PCM16 in base64 is about 64 KB/s. If profiling ever shows that to be costly, a binary side channel (an fd 3 pipe) can be added in a later minor change.
 
@@ -509,7 +547,7 @@ These names are taken; `proto.Reserved` lists them. An engine that does not impl
 | Media | `media.timePitch`, `media.ocr`, `doc.extractText` | media | later |
 | Capture | `capture.pcm` (raw input for streaming ASR) | listen | M2 |
 
-M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2); M3 `media.encode`; M4 `separate.run`, `diarize.run`, `media.mux`, `media.thumbnail` and `media.transcode` (§5.3); `llm.generate` (§5.4); `watermark.embed` and `watermark.detect` (§5.5).
+M1 implemented `tts.encodeVoice`, `stt.transcribe`, `stt.align`, `vad.detect`, `enhance.run`, `media.probe`, `media.decode` and `capture.devices/start/stop/level` (§5.2); M3 `media.encode`; M4 `separate.run`, `diarize.run`, `media.mux`, `media.thumbnail` and `media.transcode` (§5.3); `llm.generate` (§5.4); `watermark.embed` and `watermark.detect` (§5.5); `tts.dialogue` (§5.6).
 
 ## 9. Versions and compatibility
 

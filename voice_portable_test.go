@@ -29,7 +29,7 @@ func TestPortableSpeaker(t *testing.T) {
 			v = &a.voices[i]
 		}
 	}
-	if v == nil || v.Name != "Serena (approximate)" || v.Kind != core.VoiceCloned || v.RefAudio == "" || v.RefText != portableLine("en") {
+	if v == nil || v.Name != "Serena (approximate)" || v.Kind != core.VoiceCloned || v.RefAudio == "" || v.RefText != services.PortableLine("en") {
 		t.Fatalf("portable voice %+v", v)
 	}
 	base := entry(t, "qwen3-tts-1.7b-base-8bit")

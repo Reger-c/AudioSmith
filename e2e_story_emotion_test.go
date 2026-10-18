@@ -17,6 +17,9 @@ package main
 // A story file: {"name", "title", "cast": [{"name", "voice"}], "lines": [{"speaker", "text"}]}
 // (voice: a CustomVoice speaker). AUDIOSMITH_EMO_MODELS picks models
 // (cv06, vd17), AUDIOSMITH_EMO_VARIANTS variants (default v1,A,AE,AEF).
+// Thread #80 adds the letters D (whole dialogue on the catalogue's
+// dialogue model), T (its emotion tags) and 0 (no director: the story as
+// written), e.g. AED, AEDT, 0D.
 
 import (
 	"context"
@@ -45,7 +48,9 @@ import (
 type expStory struct {
 	Name  string `json:"name"`
 	Title string `json:"title"`
-	Cast  []struct {
+	// Narrator is the CustomVoice speaker of lines whose speaker is not cast.
+	Narrator string `json:"narrator,omitempty"`
+	Cast     []struct {
 		Name  string `json:"name"`
 		Voice string `json:"voice"`
 	} `json:"cast"`
@@ -90,6 +95,10 @@ type expManifest struct {
 	Turns, TurnsUnsplit   int
 	Tracks, TrackLines    int
 	TracksFailed          int
+	Dialogues             int
+	DialogueLines         int
+	DialogueRedone        int
+	DialogueFailed        int
 	Lines                 []expLine
 }
 
@@ -169,6 +178,9 @@ func TestStoryEmotionExp(t *testing.T) {
 func expDoc(s expStory) services.LongformDoc {
 	doc := services.NewLongformDoc(core.ProjectStory, "")
 	doc.Title, doc.Seed = s.Title, 20261017
+	if s.Narrator != "" {
+		doc.Voice = services.SpeakerRef + s.Narrator
+	}
 	ids := map[string]string{}
 	for i, c := range s.Cast {
 		id := fmt.Sprintf("c%d", i+1)
@@ -248,12 +260,19 @@ func expDirected(t *testing.T, doc services.LongformDoc, dir, v string) services
 		applyDirection(&d, dv, false)
 		return d
 	}
-	var em translate.StoryEmotions
-	read("director-v2.json", &em)
-	applyEmotions(&d, em, false)
-	// "A" then the parts on top: E (emotion gaps), F (character tracks);
-	// "#n" adds n to the seed.
 	flags, seed, _ := strings.Cut(v, "#")
+	if !strings.Contains(flags, "0") {
+		var em translate.StoryEmotions
+		read("director-v2.json", &em)
+		applyEmotions(&d, em, false)
+	}
+	// "A" then the parts on top: E (emotion gaps), F (character tracks),
+	// D (whole dialogue), T (its emotion tags); "#n" adds n to the seed.
+	if strings.Contains(flags, "D") {
+		e, _ := dialogueEntry()
+		d.Production.Dialogue, d.Production.DialogueModel = true, e.Repo
+		d.Production.DialogueTags = strings.Contains(flags, "T")
+	}
 	d.Production.NoEmotionGaps = !strings.Contains(flags, "E")
 	d.Production.NoTracks = !strings.Contains(flags, "F")
 	if seed != "" {
@@ -337,7 +356,8 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 			b, _ := json.MarshalIndent(res, "", " ")
 			os.WriteFile(wavPath+".json", b, 0o644)
 			man := expManifest{Story: filepath.Base(dir), Model: m, Variant: v, Seconds: math.Round(took*10) / 10, AudioSeconds: res.AudioSeconds,
-				Cached: res.Cached, Chunks: res.Chunks, Turns: res.Turns, TurnsUnsplit: res.TurnsUnsplit, Tracks: res.Tracks, TrackLines: res.TrackLines, TracksFailed: res.TracksFailed}
+				Cached: res.Cached, Chunks: res.Chunks, Turns: res.Turns, TurnsUnsplit: res.TurnsUnsplit, Tracks: res.Tracks, TrackLines: res.TrackLines, TracksFailed: res.TracksFailed,
+				Dialogues: res.Dialogues, DialogueLines: res.DialogueLines, DialogueRedone: res.DialogueRedone, DialogueFailed: res.DialogueFailed}
 			man.Lines = expLines(t, ctx, h.sup, a.lib, wavPath, vdir, res, spec)
 			b, _ = json.MarshalIndent(man, "", " ")
 			os.WriteFile(filepath.Join(dir, name+".manifest.json"), b, 0o644)
@@ -345,9 +365,9 @@ func expRender(t *testing.T, ctx context.Context, a *app, h *engineHost, doc ser
 			for _, l := range man.Lines {
 				cer += l.CER
 			}
-			t.Logf("%s/%s: %.1f s audio in %.0f s; turns %d (unsplit %d); tracks %d of %d lines (failed %d); mean CER %.3f",
+			t.Logf("%s/%s: %.1f s audio in %.0f s; turns %d (unsplit %d); tracks %d of %d lines (failed %d); dialogue %d segments, %d lines (redone %d, failed %d); mean CER %.3f",
 				filepath.Base(dir), name, res.AudioSeconds, took, res.Turns, res.TurnsUnsplit, res.Tracks, res.TrackLines, res.TracksFailed,
-				cer/float64(len(man.Lines)))
+				res.Dialogues, res.DialogueLines, res.DialogueRedone, res.DialogueFailed, cer/float64(len(man.Lines)))
 		}
 	}
 }
