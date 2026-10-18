@@ -33,6 +33,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/services"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
@@ -58,6 +59,10 @@ func TestReferencesAB(t *testing.T) {
 	if bin == "" {
 		t.Fatal("no engine: set AUDIOSMITH_ENGINE")
 	}
+	// A Chinese user: built-in speakers without a language of their own
+	// (CustomVoice's) get Chinese reference texts, as in the app.
+	i18n.SetLocale("zh-Hans")
+	defer i18n.SetLocale("en")
 	lib := openTestLibrary(t)
 	h := &engineHost{bin: bin, logDir: t.TempDir()}
 	a := newApp(h, lib)
