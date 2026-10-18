@@ -76,6 +76,23 @@ func TestStoryPerformanceUI(t *testing.T) {
 			t.Errorf("no %q: %q", s, tt.Texts())
 		}
 	}
+	// Whole dialogue on a Mac that fits both dialogue models: a menu picks one (thread #82).
+	if tt.HasText("Dialogue model") {
+		t.Error("a dialogue model menu with whole dialogue off")
+	}
+	a.sys = &sysInfo{Memory: 32 << 30}
+	p.doc.Production.Dialogue, p.doc.Production.DialogueModel = true, "actnowai/MOSS-TTSD-v1.0-MLX-8bit"
+	tt.Frame()
+	if !tt.HasText("Dialogue model") || !tt.HasText("MOSS-TTSD v1.0") {
+		t.Errorf("no dialogue model menu: %q", tt.Texts())
+	}
+	a.sys = &sysInfo{Memory: 16 << 30}
+	tt.Frame()
+	if tt.HasText("Dialogue model") {
+		t.Error("MOSS-TTSD offered on a 16 GB Mac")
+	}
+	p.doc.Production.Dialogue, p.doc.Production.DialogueModel = false, ""
+	tt.Frame()
 
 	// No language model: the director says what to set up.
 	a.llmReg.Register(localProvider, nil)
@@ -253,10 +270,23 @@ func TestStoryPerformanceAPI(t *testing.T) {
 	if _, d, err := e.b.loadLongform(t.Context(), p.ID); err != nil || !p.Dialogue || !d.Production.Dialogue || d.Production.DialogueModel != "actnowai/SoulX-Podcast-1.7B-MLX-8bit" {
 		t.Fatalf("dialogue %v %+v %v", p.Dialogue, d.Production, err)
 	}
+	// MOSS-TTSD (thread #82) by name, on a Mac with 32 GB; the choice is kept when it is turned on again.
+	savedSys := readSysInfo
+	t.Cleanup(func() { readSysInfo = savedSys })
+	readSysInfo = func() sysInfo { return sysInfo{Memory: 32 << 30} }
+	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "dialogue_model": "moss"}, &p)
+	if _, d, _ := e.b.loadLongform(t.Context(), p.ID); p.DialogueModel != "moss" || d.Production.DialogueModel != "actnowai/MOSS-TTSD-v1.0-MLX-8bit" {
+		t.Fatalf("dialogue model %q %+v", p.DialogueModel, d.Production)
+	}
+	e.fails(t, "update_longform", map[string]any{"project_id": p.ID, "dialogue_model": "fish"}, api.CodeInvalid)
 	var off api.LongformJSON
 	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "dialogue": false}, &off)
-	if off.Dialogue {
+	if off.Dialogue || off.DialogueModel != "" {
 		t.Error("dialogue still on")
+	}
+	e.must(t, "update_longform", map[string]any{"project_id": p.ID, "dialogue": true}, &p)
+	if p.DialogueModel != "moss" {
+		t.Errorf("on again: %q", p.DialogueModel)
 	}
 
 	// Audiobooks have no performance.
@@ -266,4 +296,33 @@ func TestStoryPerformanceAPI(t *testing.T) {
 	e.fails(t, "update_longform", map[string]any{"project_id": b.ID, "dialogue": true}, api.CodeInvalid)
 	_ = core.ProjectStory
 	_ = translate.CodeNoLLM
+}
+
+// The dialogue models a Mac may use (thread #82): MOSS-TTSD needs 24 GB.
+func TestDialogueChoice(t *testing.T) {
+	d := services.NewLongformDoc(core.ProjectStory, "")
+	d.Language = "zh"
+	name := func(es []catalog.Entry) string {
+		var out []string
+		for _, e := range es {
+			out = append(out, dialogueModelName(e))
+		}
+		return strings.Join(out, ",")
+	}
+	if e, ok, why := dialogueChoice(16, &d); why != "" || name(ok) != "soulx" || dialogueModelName(e) != "soulx" {
+		t.Errorf("16 GB: %s %s %q", e.ID, name(ok), why)
+	}
+	d.Production.DialogueModel = "actnowai/MOSS-TTSD-v1.0-MLX-8bit"
+	if e, ok, why := dialogueChoice(24, &d); why != "" || name(ok) != "soulx,moss" || dialogueModelName(e) != "moss" {
+		t.Errorf("24 GB: %s %s %q", e.ID, name(ok), why)
+	}
+	if e, _, _ := dialogueChoice(16, &d); dialogueModelName(e) != "soulx" {
+		t.Errorf("16 GB with moss chosen: %s", e.ID)
+	}
+	if _, ok, why := dialogueChoice(8, &d); len(ok) != 0 || why == "" {
+		t.Errorf("8 GB: %v %q", name(ok), why)
+	}
+	if e, ok := dialogueByName("MOSS"); !ok || e.Family != services.FamilyMossTTSD {
+		t.Errorf("by name: %+v", e)
+	}
 }

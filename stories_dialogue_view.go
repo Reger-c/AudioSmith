@@ -116,7 +116,8 @@ func storyLanguage(d *services.LongformDoc) string {
 	return "en"
 }
 
-// dialogueBlockedOn is dialogueBlocked on a Mac of gb GB (0: unknown).
+// dialogueBlockedOn says why a story cannot use dialogue model e on a Mac
+// of gb GB (0: unknown), "" when it can.
 func dialogueBlockedOn(gb int, d *services.LongformDoc, e catalog.Entry) string {
 	if gb > 0 && float64(gb) < e.MinMemoryGB {
 		return i18n.T("Needs %g GB of memory; this Mac has %d GB.", e.MinMemoryGB, gb)
