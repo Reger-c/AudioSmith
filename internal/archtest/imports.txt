@@ -69,6 +69,7 @@ dsp/stretch              dsp
 
 dsp/wav                  dsp
 
+dub                      dialogue
 dub                      doc/subtitle
 dub                      dsp
 dub                      dsp/analysis

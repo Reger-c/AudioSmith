@@ -85,7 +85,7 @@ func (p *Project) RetargetedLang(l string) string {
 func DefaultSettings() Settings {
 	return Settings{
 		Translator: "llm", Quality: translate.Fast, Timing: TimingSmart, KeepBackground: true,
-		VoiceMatch: MatchConsistent, Review: true,
+		VoiceMatch: MatchConsistent, Review: true, Dialogue: DialogueAuto,
 		Export: ExportPrefs{Bits: 24},
 	}
 }
@@ -311,6 +311,7 @@ func (p *Project) Clone() *Project {
 		q.Tracks = make(map[string]Track, len(p.Tracks))
 		for k, t := range p.Tracks {
 			t.Lines = maps.Clone(t.Lines)
+			t.DialogueTakes = maps.Clone(t.DialogueTakes)
 			if t.QC != nil {
 				qc := *t.QC
 				qc.Lines = slices.Clone(qc.Lines)
