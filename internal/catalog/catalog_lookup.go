@@ -105,6 +105,24 @@ func (e Entry) VoiceIDs() []string {
 	return ids
 }
 
+// SpeakerLanguage is the language of built-in speaker id (BCP-47 base,
+// "zh", "en"): the one it speaks, else its native one; "" when unknown.
+func (e Entry) SpeakerLanguage(id string) string {
+	for _, v := range e.Voices {
+		if v.ID == id {
+			return BaseLanguage(firstNonEmpty(v.Language, v.Native))
+		}
+	}
+	return ""
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
 // AllVoiceIDs lists every built-in speaker, hidden ones too: what a
 // request may name.
 func (e Entry) AllVoiceIDs() []string {

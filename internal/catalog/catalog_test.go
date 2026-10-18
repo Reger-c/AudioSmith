@@ -522,3 +522,27 @@ func TestSpeakersModel(t *testing.T) {
 		t.Error("languages")
 	}
 }
+
+// TestSpeakerLanguage (#83): a built-in speaker's language is the one it
+// speaks (Kokoro's), else its native one (Qwen3-TTS CustomVoice's, from
+// the model card); unknown otherwise. Native languages do not reach the
+// text pipeline's per-voice languages (they speak the others too).
+func TestSpeakerLanguage(t *testing.T) {
+	c := Builtin()
+	cv, _ := c.ByID("qwen3-tts-0.6b-customvoice-8bit")
+	kok, _ := c.ByID("kokoro-82m-bf16")
+	for _, x := range []struct {
+		e        Entry
+		id, want string
+	}{{cv, "Vivian", "zh"}, {cv, "Serena", "zh"}, {cv, "Uncle_Fu", "zh"}, {cv, "Dylan", "zh"}, {cv, "Eric", "zh"},
+		{cv, "Ryan", "en"}, {cv, "Aiden", "en"}, {kok, "af_heart", "en"}, {cv, "Nobody", ""}} {
+		if got := x.e.SpeakerLanguage(x.id); got != x.want {
+			t.Errorf("%s: %q, want %q", x.id, got, x.want)
+		}
+	}
+	for _, v := range cv.Voices {
+		if v.Language != "" || v.Native == "" || v.Gender == "" {
+			t.Errorf("%+v", v)
+		}
+	}
+}

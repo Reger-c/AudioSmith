@@ -71,13 +71,15 @@ func TestPortableSpeaker(t *testing.T) {
 	from := len(eng.sent)
 	a.makeSpeakerPortable(cv, "Serena")
 	rs := refRenders(t, eng, from)
-	texts := vd.ReferenceTexts("en", vd.RegisterAdult)
+	// Serena is a Chinese speaker (the catalogue's "native"): Chinese
+	// texts, whatever the UI's language (English here).
+	texts := vd.ReferenceTexts("zh", vd.RegisterAdult)
 	if len(rs) != refCandidates {
 		t.Fatalf("%d renders", len(rs))
 	}
 	for i, r := range rs {
 		p := renderOf(t, r)
-		if p.Take.Model != cv.Repo || p.Take.Voice != "Serena, "+vd.ConversationalStyle("en") || p.Take.Text != texts[i] || p.Take.Render == nil {
+		if p.Take.Model != cv.Repo || p.Take.Voice != "Serena, "+vd.ConversationalStyle("zh") || p.Take.Text != texts[i] || p.Take.Render == nil {
 			t.Fatalf("render %d %+v", i, p.Take)
 		}
 	}
@@ -85,7 +87,7 @@ func TestPortableSpeaker(t *testing.T) {
 	finishWith(t, eng, rs[0], func(p string) { writeTalk(t, p, 0.4, 180, 260) })
 	finishWith(t, eng, rs[1], func(p string) { writeTalk(t, p, 0.6, 180, 230, 280, 200, 250) })
 	finishWith(t, eng, rs[2], func(p string) { writeTalk(t, p, 0.4, 180, 230, 280, 200, 250) })
-	for i, heard := range []string{texts[0], texts[1], "Something else entirely."} {
+	for i, heard := range []string{texts[0], texts[1], "完全不同的一句话。"} {
 		if got := answerTranscribe(t, eng, heard); !strings.Contains(got.Audio, "refcand") {
 			t.Errorf("heard %d: %s", i, got.Audio)
 		}
@@ -116,6 +118,19 @@ func TestPortableSpeaker(t *testing.T) {
 	takes, _ := a.lib.svc.Takes.List(context.Background(), core.TakeQuery{})
 	if len(takes) != 0 {
 		t.Errorf("candidates kept: %d takes", len(takes))
+	}
+	// Ryan is an English speaker; a saved built-in voice without a
+	// language takes its speaker's.
+	from = len(eng.sent)
+	a.makeSpeakerPortable(cv, "Ryan")
+	if p := renderOf(t, refRenders(t, eng, from)[0]); p.Take.Text != vd.ReferenceTexts("en", vd.RegisterAdult)[0] || p.Take.Language != "English" {
+		t.Errorf("Ryan: %q %q", p.Take.Text, p.Take.Language)
+	}
+	sv := addVoice(t, a, core.Voice{Name: "Vivian", Kind: core.VoiceBuiltin, Model: cv.Repo, Speaker: "Vivian"}, 0)
+	from = len(eng.sent)
+	a.makePortable(&sv)
+	if p := renderOf(t, refRenders(t, eng, from)[0]); p.Take.Text != texts[0] || p.Take.Language != "Chinese" {
+		t.Errorf("saved Vivian: %q %q", p.Take.Text, p.Take.Language)
 	}
 }
 

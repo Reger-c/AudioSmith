@@ -66,6 +66,8 @@ func (a *app) makePortable(v *core.Voice) {
 		return
 	}
 	e := entryFor(v.Model)
+	lang = firstOf(lang, e.SpeakerLanguage(v.Speaker), catalog.BaseLanguage(i18n.Locale()))
+	pj.lang = lang
 	t := core.Take{Model: e.Repo, Voice: v.Speaker, Language: modelLanguage(e, lang)}
 	id := v.ID
 	a.makePortableRef(pj, t, func() {
@@ -77,15 +79,7 @@ func (a *app) makePortable(v *core.Voice) {
 
 // makeSpeakerPortable makes model e's built-in speaker portable.
 func (a *app) makeSpeakerPortable(e catalog.Entry, speaker string) {
-	lang := ""
-	for _, v := range e.Voices {
-		if v.ID == speaker {
-			lang = catalog.BaseLanguage(v.Language)
-		}
-	}
-	if lang == "" {
-		lang = catalog.BaseLanguage(i18n.Locale())
-	}
+	lang := firstOf(e.SpeakerLanguage(speaker), catalog.BaseLanguage(i18n.Locale())) // the speaker's own, else the UI's
 	t := core.Take{Model: e.Repo, Voice: speaker, Language: modelLanguage(e, lang)}
 	a.makePortableRef(portableJob{name: speaker, lang: lang, origin: "speaker:" + e.ID + ":" + speaker}, t, func() {
 		a.makeSpeakerPortable(e, speaker)
