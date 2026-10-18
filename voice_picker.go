@@ -150,22 +150,20 @@ func (a *app) voicePicker(c *ui.Context, key, cur string, opts []voiceOption, o 
 	}
 	var played *voicePreview // the row whose ▶ was pressed
 	ui.PopoverBase(c, b, &open, func(panel ui.Element) {
-		panel.Margin(px(t, 4), 0, 0, 0).Padding(px(t, 4)).Radius(px(t, radiusControl+2)).Background(t.Background).Border(1, t.Border).
-			Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18)).MinWidth(b.Bounds().W)
 		_, h := c.Size()
+		r := b.Bounds()
+		// At most the room below the trigger, or above it when that is
+		// cramped (popover_fit.go): MyGo shows a short list below and a
+		// longer one above where it fits there; it never runs past the
+		// window, and the list scrolls in what the panel leaves it.
+		room, _ := popoverRoom(t, r, h, px(t, 160))
+		panel.Margin(px(t, 4), 0, 0, 0).Padding(px(t, 4)).Radius(px(t, radiusControl+2)).Background(t.Background).Border(1, t.Border).
+			Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18)).MinWidth(r.W).MaxHeight(room)
 		width := o.width
 		if width == 0 {
 			width = 280
 		}
-		r := b.Bounds()
-		// The room below the trigger (less the panel's margin, padding and
-		// some air), or above it when that is too little: the panel then
-		// opens above.
-		maxH := min(h*0.6, h-(r.Y+r.H)-px(t, 32))
-		if maxH < px(t, 160) {
-			maxH = max(px(t, 160), min(h*0.6, r.Y-px(t, 48)))
-		}
-		ui.Scroll(c.Key(key + "-scroll")).MaxHeight(maxH).Children(func() {
+		ui.Scroll(c.Key(key + "-scroll")).MaxHeight(h * 0.6).MinHeight(0).Shrink(1).Children(func() {
 			ui.Column(c.Key(key + "-list")).MinWidth(px(t, width)).Gap(px(t, 1)).Children(func() {
 				group, divided := "", false
 				for i := range opts {

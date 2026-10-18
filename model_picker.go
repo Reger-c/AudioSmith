@@ -35,6 +35,9 @@ type pickerOpts struct {
 	// Only, when set, is the list (Design: the models that design);
 	// otherwise every speech model is offered.
 	Only []catalog.Entry
+	// Dialogue, when set (Stories), adds the whole-dialogue models
+	// (model_picker_dialogue.go).
+	Dialogue *pickerDialogue
 }
 
 // whyNotFor says why model e cannot do workflow w ("" = it can).
@@ -131,9 +134,15 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 	isRec := func(e catalog.Entry) bool {
 		return slices.ContainsFunc(recs, func(x catalog.Entry) bool { return x.ID == e.ID })
 	}
-	label := cur.DisplayName()
+	label, about, tip, rec := cur.DisplayName(), cur.Description(), modelTip(cur), isRec(cur)
+	if dl := o.Dialogue; dl != nil && dl.On {
+		// Whole dialogue: the dialogue model, then the story's own model,
+		// which reads the narration and the lines it does not say clearly.
+		label, about, rec = dl.Cur.DisplayName(), i18n.T("Narration and fallback: %s", cur.DisplayName()), false
+		tip = modelTip(dl.Cur) + "\n" + i18n.T("Narration and fallback: %s", modelTip(cur))
+	}
 	btn := ui.ButtonBase(c.Key(key)).Padding(px(t, 6), px(t, 10)).Gap(px(t, sp2)).Radius(px(t, radiusControl)).
-		Background(t.Surface).Border(1, t.Border).AlignItems(ui.Center).Label(i18n.T("Model")).Tooltip(modelTip(cur)).Disabled(o.Locked)
+		Background(t.Surface).Border(1, t.Border).AlignItems(ui.Center).Label(i18n.T("Model")).Tooltip(tip).Disabled(o.Locked)
 	if btn.Hovered() && !o.Locked {
 		btn.Background(t.SurfaceHover)
 	}
@@ -141,13 +150,13 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 		ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 1)).Children(func() {
 			ui.Row(c).Wrap().GapX(px(t, 6)).GapY(px(t, 2)).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
-				if isRec(cur) {
+				if rec {
 					ui.Text(c, i18n.T("Recommended")).FontSize(px(t, fsMicro)).TextColor(k.AccentInk).Padding(px(t, 1), px(t, 5)).
 						Radius(px(t, 4)).Background(k.AccentSoft).SingleLine().Shrink(0)
 				}
 			})
-			if b := cur.Description(); b != "" {
-				ui.Text(c, b).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Ellipsis("…").MinWidth(0)
+			if about != "" {
+				ui.Text(c, about).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Ellipsis("…").MinWidth(0)
 			}
 		})
 		ui.Icon(c, icons.AltArrowDown.Linear).Size(px(t, 14), px(t, 14)).TextColor(k.Text2).Shrink(0)
@@ -157,7 +166,7 @@ func (a *app) modelPicker(c *ui.Context, key string, w catalog.Workflow, cur cat
 		a.pickerFind[key] = ""
 	}
 	open := a.pickerOpen[key]
-	ui.Popover(c, btn, &open, func() {
+	fitPopover(c, btn, &open, 0, func() { // popover_fit.go: never past the window
 		a.pickerList(c, key, w, cur, recs, set, o)
 	})
 	a.pickerOpen[key] = a.pickerOpen[key] && open && !o.Locked // closed by a pick, outside, Escape
@@ -197,11 +206,13 @@ func (a *app) pickerList(c *ui.Context, key string, w catalog.Workflow, cur cata
 	})
 	_, h := c.Size()
 	find := a.pickerFind[key]
-	ui.Row(c.Key(key+"-find")).Width(px(t, 340)).Padding(px(t, 6), px(t, 6), 0).Children(func() {
+	ui.Row(c.Key(key+"-find")).Width(px(t, 340)).Shrink(0).Padding(px(t, 6), px(t, 6), 0).Children(func() {
 		searchField(c, key+"-search", &find, i18n.T("Search models"), 0).Label(i18n.T("Search models"))
 	})
 	a.pickerFind[key] = find
-	ui.Scroll(c.Key(key + "-scroll")).MaxHeight(max(px(t, 220), h*0.7-px(t, 40))).Children(func() {
+	// The list scrolls under the search field, in what the panel leaves it
+	// (the room beside the button, fitPopover).
+	ui.Scroll(c.Key(key + "-scroll")).MaxHeight(max(px(t, 220), h*0.7-px(t, 40))).MinHeight(0).Shrink(1).Children(func() {
 		ui.Column(c.Key(key + "-list")).Width(px(t, 340)).Gap(px(t, 2)).Padding(px(t, 6)).Children(func() {
 			if strings.TrimSpace(find) != "" {
 				// Searching: every match in one list, friendly or technical.
@@ -218,16 +229,27 @@ func (a *app) pickerList(c *ui.Context, key string, w catalog.Workflow, cur cata
 					}
 					a.pickerRow(c, e, cur, e.Description(), firstOf(why, note), why == "", pick)
 				}
+				if o.Dialogue != nil {
+					n += a.pickerDialogueRows(c, key, o.Dialogue, find, func() { a.pickerOpen[key] = false })
+				}
 				if n == 0 {
 					ui.Text(c, i18n.T("No model matches")).FontSize(px(t, fsCaption)).TextColor(k.Text3).Padding(px(t, 6), px(t, sp2))
 				}
 				return
 			}
 			if len(recs) > 0 {
-				ui.Text(c, i18n.T("Recommended")).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Padding(px(t, 4), px(t, sp2), px(t, 2))
+				head := i18n.T("Recommended")
+				if o.Dialogue != nil && o.Dialogue.On {
+					head = i18n.T("Narration and fallback · Recommended")
+				}
+				ui.Text(c, head).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.Text3).Padding(px(t, 4), px(t, sp2), px(t, 2))
 				for _, e := range recs {
 					a.pickerRow(c, e, cur, e.Description(), "", true, pick)
 				}
+			}
+			if o.Dialogue != nil {
+				ui.Divider(c)
+				a.pickerDialogueRows(c, key, o.Dialogue, "", func() { a.pickerOpen[key] = false })
 			}
 			if len(others) == 0 && !o.Custom {
 				return
@@ -278,10 +300,17 @@ func (a *app) pickerList(c *ui.Context, key string, w catalog.Workflow, cur cata
 // right ✓ for the chosen one or the download size of one not
 // downloaded. Its tooltip names it technically.
 func (a *app) pickerRow(c *ui.Context, e, cur catalog.Entry, about, note string, usable bool, pick func(catalog.Entry)) {
+	chosen := e.ID == cur.ID && (e.ID != "custom" || cur.ID == "custom")
+	a.pickerRowX(c, e, chosen, about, note, "", usable, pick)
+}
+
+// pickerRowX is pickerRow with chosen given, and facts (a dialogue
+// model's memory and technical name) as its last line instead of the
+// speed and quality hint.
+func (a *app) pickerRowX(c *ui.Context, e catalog.Entry, chosen bool, about, note, facts string, usable bool, pick func(catalog.Entry)) {
 	t := c.Theme()
 	k := tok(t)
 	name := e.DisplayName()
-	chosen := e.ID == cur.ID && (e.ID != "custom" || cur.ID == "custom")
 	b := ui.ButtonBase(c.Key("pm-"+e.ID)).Padding(px(t, 6), px(t, sp2)).Radius(px(t, radiusControl)).Gap(px(t, sp2)).
 		AlignItems(ui.Center).Label(name).Tooltip(modelTip(e)).Disabled(!usable)
 	switch {
@@ -315,7 +344,9 @@ func (a *app) pickerRow(c *ui.Context, e, cur catalog.Entry, about, note string,
 			if line != "" {
 				ui.Text(c, line).FontSize(px(t, fsMicro)).TextColor(lineCol).MaxLines(2).Ellipsis("…").MinWidth(0)
 			}
-			if p, ok := catalog.PresetFor(e.ID); ok && usable && note == "" {
+			if facts != "" {
+				ui.Text(c, facts).FontSize(px(t, fsMicro)).TextColor(k.Text3).SingleLine().Ellipsis("…").MinWidth(0)
+			} else if p, ok := catalog.PresetFor(e.ID); ok && usable && note == "" {
 				ui.Text(c, i18n.T("Speed %s · Quality %s", ratingDots(p.Speed), ratingDots(p.Quality))).FontSize(px(t, fsMicro)).TextColor(k.Text3).SingleLine()
 			}
 		})

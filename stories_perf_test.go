@@ -83,7 +83,7 @@ func TestStoryPerformanceUI(t *testing.T) {
 	a.sys = &sysInfo{Memory: 32 << 30}
 	p.doc.Production.Dialogue, p.doc.Production.DialogueModel = true, "actnowai/MOSS-TTSD-v1.0-MLX-8bit"
 	tt.Frame()
-	if !tt.HasText("Dialogue model") || !tt.HasText("MOSS-TTSD v1.0") {
+	if !tt.HasText("Dialogue model") || !tt.HasText("Dialogue · One take") {
 		t.Errorf("no dialogue model menu: %q", tt.Texts())
 	}
 	a.sys = &sysInfo{Memory: 16 << 30}

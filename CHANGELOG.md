@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Model pickers fit the window; dialogue models in the Stories picker
+- The model picker's list no longer runs past the bottom of the window with "Show all models" open (the Stories inspector, small windows): it opens below its button, or above it when there is little room below, at most as tall as the room there, and its list scrolls to the last model under the search field. Voice pickers follow the same rule.
+- The Stories model picker has a section "Whole dialogue (multi-speaker models)" with the two dialogue models, now named "Dialogue · Light" (SoulX-Podcast 1.7B) and "Dialogue · One take" (MOSS-TTSD v1.0), with the memory they need and their download size. Choosing one turns whole dialogue on with it (the Performance switch follows); the story's model then reads the narration and the lines the dialogue model does not say clearly, as the button says ("Narration and fallback: …"). Macs with too little memory, and stories in other languages, see them greyed out with the reason.
+
 ### Better voice references: checked, cleaned, and longer for designed voices
 - Clone and dialogue models copy a reference's noise, loudness, intonation and pace. AudioSmith now checks every reference where it comes in (Clone, an imported voice, Dub's speakers, Stories' whole dialogue) and says in one line how good it is ("Reference quality: good / fine / needs work") with at most two tips: too short, very noisy, distorted, a transcript that does not match, a flat delivery, or (for dialogue) a slow, read-aloud pace. Nothing is blocked.
 - References are cleaned automatically: background noise is removed only when there is some (DeepFilterNet; clean recordings are left alone), the silence before and after is trimmed, long pauses are shortened, and the loudness is evened out to −18 LUFS. The original is kept: Undo on Clone, "Use the original" in the voice's editor.
