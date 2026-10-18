@@ -136,6 +136,7 @@ func init() {
 			return w + "摄氏度"
 		},
 	}
+	l.Pre = zhPre(l) // lang_zh_pre.go
 	l.Extra = cjkExtra(l, regexp.MustCompile(`(\d{4})年`), func(y string) string { return zhYearDigits(y) + "年" },
 		func(num, den string) string { return den + "分之" + num }, func(w string) string { return "千分之" + w })
 	// A lone 2 before a measure word or a large unit is read 两: 2个 → 两个,
