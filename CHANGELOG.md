@@ -1,6 +1,38 @@
 # Changelog
 
-## Unreleased
+## 0.4.0-beta.5
+
+AudioSmith joins the ActNow family: it works together with the other ActNow apps on this Mac (Dicta, Auralink, Pik, VoxtNew). The apps share one copy of each model, some settings, and, if you agree, API keys, and they don't get in each other's way. AudioSmith names another app only when a released version of it is installed; with no other ActNow app, nothing on screen changes.
+
+### Downloads and updates move to actnow.dev
+- AudioSmith now has its home on our website: [actnow.dev/audiosmith](https://actnow.dev/audiosmith). Download it from [actnow.dev/download/audiosmith](https://actnow.dev/download/audiosmith) (free; the download needs a free account), and read every version's notes at [actnow.dev/audiosmith/changelog](https://actnow.dev/audiosmith/changelog). The source code stays on GitHub under the AGPL-3.0, and you can still build AudioSmith yourself.
+- Updates come from actnow.dev: the daily check reads the version file there, and with Receive beta updates on also the betas' one, and offers the newer version. Copies of 0.4.0-beta.4 and earlier update to this version from GitHub, one last time.
+- Settings → Diagnostics and about links to the website, the download page and the release notes.
+
+### Models shared with other ActNow apps
+- On first run, if another app (say Dicta) has already downloaded some of the models AudioSmith needs, the setup says so ("3 models are already on this Mac · Installed by Dicta · no download needed") and uses them. Only the rest is downloaded. Choose models… lets you pick them yourself on the Models page.
+- The Models page shows which models AudioSmith shares with other apps ("Shared with Dicta"), which ones another app has loaded right now ("Also loaded in Dicta"), and which ones another app installed ("Installed · from Dicta", with Use).
+- Deleting a model that another app also uses asks what to do. Remove from AudioSmith keeps the files on this Mac for that app. Delete for all apps deletes them; the other app then has to download the model again. Clean up and "Erase everything" keep what other apps use, and say which app uses it. A model another app deleted for all apps shows "Deleted in Dicta · Download again".
+- Settings → Storage shows how much space AudioSmith shares with other apps. It also offers to clean up models that only uninstalled apps used.
+- If you accepted a model's licence in another app, AudioSmith still shows the licence, says when you accepted it, and asks you to continue.
+- Kokoro's, Chatterbox's and Whisper's helper files now always load from the copy AudioSmith downloaded, at that version. Before, the engine could download them again on first use, or pick up another app's version.
+- Downloads coordinate with the other apps: a file another app is downloading is not fetched twice ("Downloading in Dicta…"), and a model is not deleted while another app downloads or uses it.
+- The engine no longer guesses which version of a model to load when several are on disk.
+
+### Settings shared with other ActNow apps
+- The interface language, proxy, download source and model folder are shared with the other ActNow apps. With another app installed, each of these settings says whether it applies to all ActNow apps, and you can keep a different one for AudioSmith only.
+- When another app keeps its models in a different folder, the Models page offers to move AudioSmith's models there. The move can be cancelled, and models the folder already has are not copied again.
+
+### API keys shared with other ActNow apps
+- API keys and the Hugging Face token can be shared with the other ActNow apps. With another app installed, a checkbox under the key ("Let other ActNow apps on this Mac use this key") chooses whether to share it.
+- AudioSmith offers a key saved in another app ("Use the DeepSeek key from Auralink"). It reads that key only after you click Use this key.
+- Removing a key that another app also uses asks whether to stop using it here or to delete it for all apps. If another app deletes a shared key, AudioSmith asks you for a key again. "Erase everything" never deletes another app's key.
+- The Hugging Face token is looked up in this order: `$HF_TOKEN`, the shared token, AudioSmith's own, the huggingface-cli token file.
+
+### Shortcuts and memory
+- If another ActNow app uses the same keys as the dictation shortcut, Settings → Dictation says so. The app that took the keys last shows the notice once, with Change shortcut, Open Auralink settings and Ignore. While you record a new shortcut, "Also used by Auralink (Transcribe)" warns you, but you can still save it.
+- The ActNow apps share one memory budget. Before AudioSmith loads a model, it unloads its own idle models first. If that is not enough, it asks the other apps to unload models that have been idle for a minute. It does the same when they ask, and never unloads a model a job is using.
+- Dictation's paste no longer overwrites the clipboard while another ActNow app is pasting.
 
 ### Dub: conversations recorded together (multi-speaker dialogue)
 - A new switch in the Dub page's Cast step, 「多人对话配音」 (Multi-speaker dialogue): the people of a conversation are recorded together by the dialogue model "Dialogue · Light" (SoulX-Podcast), each line hearing the one before it, so answers sound like answers. Each line is then fitted to its own time as before (Smart fit and the other timings) and placed where it was said, so the video's pauses and overlaps stay. Monologues, one person speaking alone and lines over 4 s apart stay line by line.
@@ -60,57 +92,20 @@
 ### Chinese numbers, phone numbers and units
 - Chinese text now reads phone numbers digit by digit (138-0013-8000, 010-12345678, 拨打10086), ranges (3-5天 → 三到五天, 1-2个 → 一到两个, 10%-20%), scores (3:2 → 三比二), dates with dots (2024.03.05) and units (5km → 五公里, 3.5kg, 100m², 60km/h, 220V, 128GB). Words with digits (MP3, iPhone15, COVID-19) and other languages are unchanged.
 
-## 0.4.0-beta.6
-
-AudioSmith joins the ActNow family: it works together with the other ActNow apps on this Mac (Dicta, Auralink, Pik, VoxtNew). The apps share one copy of each model, some settings, and, if you agree, API keys, and they don't get in each other's way. AudioSmith names another app only when a released version of it is installed; with no other ActNow app, nothing on screen changes.
-
-### Models shared with other ActNow apps
-- On first run, if another app (say Dicta) has already downloaded some of the models AudioSmith needs, the setup says so ("3 models are already on this Mac · Installed by Dicta · no download needed") and uses them. Only the rest is downloaded. Choose models… lets you pick them yourself on the Models page.
-- The Models page shows which models AudioSmith shares with other apps ("Shared with Dicta"), which ones another app has loaded right now ("Also loaded in Dicta"), and which ones another app installed ("Installed · from Dicta", with Use).
-- Deleting a model that another app also uses asks what to do. Remove from AudioSmith keeps the files on this Mac for that app. Delete for all apps deletes them; the other app then has to download the model again. Clean up and "Erase everything" keep what other apps use, and say which app uses it. A model another app deleted for all apps shows "Deleted in Dicta · Download again".
-- Settings → Storage shows how much space AudioSmith shares with other apps. It also offers to clean up models that only uninstalled apps used.
-- If you accepted a model's licence in another app, AudioSmith still shows the licence, says when you accepted it, and asks you to continue.
-- Kokoro's, Chatterbox's and Whisper's helper files now always load from the copy AudioSmith downloaded, at that version. Before, the engine could download them again on first use, or pick up another app's version.
-
-### Settings shared with other ActNow apps
-- The interface language, proxy, download source and model folder are shared with the other ActNow apps. With another app installed, each of these settings says whether it applies to all ActNow apps, and you can keep a different one for AudioSmith only.
-- When another app keeps its models in a different folder, the Models page offers to move AudioSmith's models there. The move can be cancelled, and models the folder already has are not copied again.
-
-### API keys shared with other ActNow apps
-- API keys and the Hugging Face token can be shared with the other ActNow apps. With another app installed, a checkbox under the key ("Let other ActNow apps on this Mac use this key") chooses whether to share it.
-- AudioSmith offers a key saved in another app ("Use the DeepSeek key from Auralink"). It reads that key only after you click Use this key.
-- Removing a key that another app also uses asks whether to stop using it here or to delete it for all apps. If another app deletes a shared key, AudioSmith asks you for a key again. "Erase everything" never deletes another app's key.
-- The Hugging Face token is looked up in this order: `$HF_TOKEN`, the shared token, AudioSmith's own, the huggingface-cli token file.
-
-### Shortcuts and memory
-- If another ActNow app uses the same keys as the dictation shortcut, Settings → Dictation says so. The app that took the keys last shows the notice once, with Change shortcut, Open Auralink settings and Ignore. While you record a new shortcut, "Also used by Auralink (Transcribe)" warns you, but you can still save it.
-- The ActNow apps share one memory budget. Before AudioSmith loads a model, it unloads its own idle models first. If that is not enough, it asks the other apps to unload models that have been idle for a minute. It does the same when they ask, and never unloads a model a job is using.
-- Dictation's paste no longer overwrites the clipboard while another ActNow app is pasting.
+### Dub: API keys for the online translators
+- The online translators (DeepL, Google, Microsoft) have an API key field in the Translate step's Advanced options. Before, the key had to be added to the Keychain by hand.
 
 ### Logs
 - Click a line in the logs (the page or the panel) to copy it. Shift-click, ⌘-click or drag to select several lines, as in Finder; ⌘A selects every line shown, Esc deselects, ⌘C copies. While lines are selected the header says how many, with Copy and Deselect. Right-click a line to copy it, the selected lines or every line shown.
-
-### Dubbing
-- The online translators (DeepL, Google, Microsoft) have an API key field in the Translate step's Advanced options. Before, the key had to be added to the Keychain by hand.
-
-### Fixes
-- The Dub page's button read "Generate dub%!(EXTRA int=1)" with one target language. It reads "Generate dub" again, and the Translate button got the same fix.
-- `HF_ENDPOINT` now overrides the download source chosen in Settings. Before, the setting won.
-
-## 0.4.0-beta.5
-
-### Downloads and updates move to actnow.dev
-- AudioSmith now has its home on our website: [actnow.dev/audiosmith](https://actnow.dev/audiosmith). Download it from [actnow.dev/download/audiosmith](https://actnow.dev/download/audiosmith) (free; the download needs a free account), and read every version's notes at [actnow.dev/audiosmith/changelog](https://actnow.dev/audiosmith/changelog). The source code stays on GitHub under the AGPL-3.0, and you can still build AudioSmith yourself.
-- Updates come from actnow.dev: the daily check reads the version file there, and with Receive beta updates on also the betas' one, and offers the newer version. Copies of 0.4.0-beta.4 and earlier update to this version from GitHub, one last time.
-- Settings → Diagnostics and about links to the website, the download page and the release notes.
-
-### Models shared with other ActNow apps
-- Clean up, Delete and Settings → Storage → "Erase everything" no longer delete the models Dicta or VoxtNew use while those apps are installed: Clean up lists them as "Kept: used by Dicta", and Delete says the files stay on this Mac.
-- Downloads coordinate with the other apps: a file another app is downloading is not fetched twice ("Downloading in Dicta…"), and a model is not deleted while another app downloads or uses it.
-- The engine no longer guesses which version of a model to load when several are on disk.
+- The newest line is at the top. Scrolled down to older lines, the list keeps its place as new lines come in, and "N new lines" at its top goes back up. Copied lines are in the log's order, the oldest first.
 
 ### New icon
 - AudioSmith has its own icon: a white anvil with a lime spark on a green-to-teal gradient, in the same style as the other ActNow apps (macOS 26 adds its Liquid Glass look). The menu bar icon is the anvil too; while dictation listens, a dot takes the spark's place.
+
+### Fixes
+- Models → Clean up could delete models another ActNow app uses, such as Dicta's language model (0.4.0-beta.1 to beta.4). It now keeps every model another installed ActNow app uses, and says which app.
+- The Dub page's button read "Generate dub%!(EXTRA int=1)" with one target language. It reads "Generate dub" again, and the Translate button got the same fix.
+- `HF_ENDPOINT` now overrides the download source chosen in Settings. Before, the setting won.
 
 ## 0.4.0-beta.4
 
