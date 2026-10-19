@@ -34,6 +34,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/text/plan"
+	"github.com/hehehai/actnowkit/models"
 )
 
 // Job kinds and owner of longform renders.
@@ -225,8 +226,32 @@ func (r *renderer) modelReady(ctx context.Context, model string) (string, error)
 }
 
 // longformChunkDir holds the chunks of longform renders: kept apart from
-// the Studio's cache, whose size cap would evict a long book's chunks.
-func (r *renderer) longformChunkDir() string { return filepath.Join(r.cacheDir, "longform", "chunks") }
+// the Studio's cache, whose size cap would evict a long book's chunks,
+// and out of ~/Library/Caches altogether (in the data folder): Resume
+// of a stopped or failed book depends on them, and cache cleaners (or
+// macOS short of space) empty Caches, which would cost hours of GPU work
+// again (family audit A7). Time Machine leaves them out: they can be
+// rendered again. Chunks of the old place are moved over once.
+func (r *renderer) longformChunkDir() string {
+	old := filepath.Join(r.cacheDir, "longform", "chunks")
+	if r.dataDir == "" {
+		return old
+	}
+	dir := filepath.Join(r.dataDir, "longform-chunks")
+	r.chunksDir.Do(func() {
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			if _, err := os.Stat(old); err == nil {
+				if err := os.Rename(old, dir); err != nil && r.logf != nil {
+					r.logf("longform: moving the chunks to %s: %v", dir, err)
+				}
+			}
+		}
+		if err := os.MkdirAll(dir, 0o755); err == nil {
+			_ = models.SetBackupExcluded(dir, true)
+		}
+	})
+	return dir
+}
 
 // Limits of the longform chunk cache: chunks unused for longformKeep are
 // deleted, and the oldest beyond longformCap.

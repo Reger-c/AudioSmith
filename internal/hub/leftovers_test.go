@@ -31,17 +31,15 @@ func fakeRepo(t *testing.T, cacheDir, repo string, size int) {
 }
 
 // TestLeftovers: the removed models' cleanup (thread #43) in a temporary
-// HOME's Hugging Face cache measures and deletes exactly the removed
+// family library measures and deletes exactly the removed
 // repos' directories and engine copies: kept models, the auxiliary repos
 // kept models share (Kokoro's G2P, Turbo's S3 tokenizer), look-alike
 // names and other folders stay.
 func TestLeftovers(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("HF_HUB_CACHE", "")
-	t.Setenv("HF_HOME", "")
+	fam := t.TempDir()
+	t.Setenv("ACTNOW_FAMILY_DIR", fam)
 	cache := CacheDir()
-	if cache != filepath.Join(home, ".cache", "huggingface", "hub") {
+	if cache != filepath.Join(fam, "models", "hub") {
 		t.Fatalf("cache %s", cache)
 	}
 	var removed []string
@@ -61,7 +59,7 @@ func TestLeftovers(t *testing.T) {
 	marvis := EngineCopy(cache, "Marvis-AI/marvis-tts-250m-v0.2-MLX-8bit")
 	os.MkdirAll(marvis, 0o755)
 	os.WriteFile(filepath.Join(marvis, "model.safetensors"), make([]byte, 40), 0o644)
-	other := filepath.Join(home, "notes.txt")
+	other := filepath.Join(fam, "notes.txt")
 	os.WriteFile(other, []byte("mine"), 0o644)
 
 	ls, err := Leftovers(cache, removed, noFamily)

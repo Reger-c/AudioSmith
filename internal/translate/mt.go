@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/llm"
+	"github.com/hehehai/actnowkit/redact"
 )
 
 // Online machine translation. Each service is a third-party network
@@ -294,7 +295,7 @@ func (m *mtTranslator) do(ctx context.Context, method, url string, header http.H
 		if ctx.Err() != nil {
 			return cancelled(ctx.Err())
 		}
-		e := newErr(CodeNetwork, "service", m.svc.id(), "detail", err.Error())
+		e := newErr(CodeNetwork, "service", m.svc.id(), "detail", redact.Text(err.Error())) // no key or token in a URL
 		e.Err = err
 		var ne net.Error
 		if !strings.Contains(err.Error(), "connection refused") || errors.As(err, &ne) && ne.Timeout() {
@@ -308,7 +309,7 @@ func (m *mtTranslator) do(ctx context.Context, method, url string, header http.H
 		if ctx.Err() != nil {
 			return cancelled(ctx.Err())
 		}
-		e := newErr(CodeNetwork, "service", m.svc.id(), "detail", err.Error())
+		e := newErr(CodeNetwork, "service", m.svc.id(), "detail", redact.Text(err.Error())) // no key or token in a URL
 		return &retryable{err: e}
 	}
 	if resp.StatusCode/100 != 2 {

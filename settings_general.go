@@ -69,7 +69,7 @@ func (a *app) modelSettings(c *ui.Context) {
 			a.chooseCacheDir()
 		}
 		if ui.Button(c.Key("cache-default"), i18n.T("Use the default")).Disabled(dir == "").
-			Tooltip(i18n.T("The Hugging Face cache the Python tools share")).Clicked() {
+			Tooltip(i18n.T("The ActNow model folder in Application Support")).Clicked() {
 			a.updateSettings(func(s *settings.Settings) { s.Models.CacheDir = "" })
 		}
 	})

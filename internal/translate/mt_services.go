@@ -156,8 +156,10 @@ func (g googleV2) call(ctx context.Context, m *mtTranslator, htmls []string, src
 			} `json:"translations"`
 		} `json:"data"`
 	}
-	u := m.base("https://translation.googleapis.com") + "/language/translate/v2?key=" + url.QueryEscape(key)
-	if err := m.do(ctx, http.MethodPost, u, nil, body, &out); err != nil {
+	// The key goes in a header, not the URL: Go's errors carry the URL,
+	// and they reach the logs (family audit S5).
+	u := m.base("https://translation.googleapis.com") + "/language/translate/v2"
+	if err := m.do(ctx, http.MethodPost, u, http.Header{"X-Goog-Api-Key": {key}}, body, &out); err != nil {
 		return nil, err
 	}
 	res := make([]string, len(out.Data.Translations))

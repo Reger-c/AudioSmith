@@ -180,10 +180,16 @@ func TestManifestVariants(t *testing.T) {
 }
 
 // tree lists the files under dir with their contents.
+// tree is the family directory's files and their contents, without the
+// model library inside it ($FAMILY/models/hub, spec v1.0.9): models and
+// their locks are not family files.
 func tree(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() && p == filepath.Join(dir, "models", "hub") {
+			return filepath.SkipDir
+		}
 		if err == nil && !d.IsDir() {
 			b, _ := os.ReadFile(p)
 			out[p] = string(b)

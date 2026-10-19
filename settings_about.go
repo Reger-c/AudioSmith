@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/store/sqlitestore"
+	"github.com/hehehai/actnowkit/redact"
 )
 
 // issuesURL is where bugs are reported.
@@ -251,13 +253,16 @@ func (a *app) runSelfCheck() {
 // redactedSettings is the settings as JSON without anything secret
 // (LLM provider headers can carry keys).
 func redactedSettings(s settings.Settings) []byte {
+	s.LLM.Providers = slices.Clone(s.LLM.Providers) // the app's own settings stay as they are
 	for i := range s.LLM.Providers {
+		h := map[string]string{}
 		for k := range s.LLM.Providers[i].Headers {
-			s.LLM.Providers[i].Headers[k] = "•••"
+			h[k] = "•••"
 		}
+		s.LLM.Providers[i].Headers = h
 	}
 	data, _ := json.MarshalIndent(s, "", "  ")
-	return data
+	return []byte(redact.Text(string(data))) // and a proxy's user:password@
 }
 
 // writeBundle writes the diagnostic bundle (a ZIP) to path.

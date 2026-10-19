@@ -465,7 +465,7 @@ func TestPacedStoryRender(t *testing.T) {
 	// Without pauses in the engine's audio, the turn is made line by line.
 	e.synth.pauses = false
 	e.synth.reset()
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	spec.Seed = 8
 	r, _ = e.svc.Longform.Start(ctx, spec)
 	_, body = e.wait(t, r.ID)
@@ -483,7 +483,7 @@ func TestPacedStoryRender(t *testing.T) {
 
 	// NoMerge: a call per line.
 	e.synth.reset()
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	spec.Seed = 9
 	spec.Production.NoMerge = true
 	r, _ = e.svc.Longform.Start(ctx, spec)

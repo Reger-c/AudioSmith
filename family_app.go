@@ -180,6 +180,8 @@ func (l *library) familyOptions(o *hub.Options) {
 	}
 	o.Family.BundleID = fam.BundleID
 	o.Family.Decider = fam.Decider(o.CacheDir)
+	o.Family.Changed = func() { _ = fam.Dir.Post(actnow.TopicModels) } // Verify removed bad blobs
+	o.Backup = fam.Backup                                              // Time Machine (spec §7.12)
 	o.Claimed = func(ctx context.Context, cacheDir string, d hub.Finished) error {
 		return fam.Claimed(ctx, cacheDir, family.ClaimOf(d.Entry, d.Repo, d.Commit, d.Files, d.Aux, models.OriginDownloaded))
 	}

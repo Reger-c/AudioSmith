@@ -255,7 +255,7 @@ func TestTrackRender(t *testing.T) {
 	}
 
 	// The recognizer hears the kid's second line wrong: that track is made line by line.
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	e.synth.reset()
 	heard = []string{"Can we get one today?", "Yes.", "Will you look after it every day?", "All right, then."}
 	res = run()
@@ -283,7 +283,7 @@ func TestTrackRender(t *testing.T) {
 		},
 	} {
 		f()
-		os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+		os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 		e.synth.reset()
 		if res = run(); res.Tracks+res.TracksFailed != 0 || len(e.synth.texts()) != 4 {
 			t.Errorf("line by line: %+v %q", res, e.synth.texts())

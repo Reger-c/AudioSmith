@@ -125,7 +125,7 @@ func TestBookDialogueRender(t *testing.T) {
 	}
 
 	// The dialogue model is not downloaded: line by line, with a warning.
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	e.synth.reset()
 	fd.calls = nil
 	r.modelPath = func(_ context.Context, m string) (string, error) {

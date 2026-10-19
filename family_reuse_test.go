@@ -341,7 +341,7 @@ func TestNoFamilyWordingFirstRun(t *testing.T) {
 	a.navigate("/settings/storage")
 	tt.Frame()
 	tt.Frame()
-	if !tt.HasText("Shared with other apps that use the Hugging Face cache. Change it in Settings → Models and downloads.") {
+	if !tt.HasText("Change it in Settings → Models and downloads.") || !tt.HasText("Models can be downloaded again, so Time Machine leaves them out.") {
 		t.Errorf("storage %q", tt.Texts())
 	}
 	noFamily("storage")

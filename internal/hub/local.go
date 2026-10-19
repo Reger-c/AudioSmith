@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
+	"github.com/hehehai/actnowkit/family"
 	"github.com/hehehai/actnowkit/models"
 )
 
@@ -77,69 +78,45 @@ func AuxSnapshots(cacheDir string, e catalog.Entry) map[string]string {
 }
 
 // statusOne is the status of one repo; weights asks for a weights file
-// when e lists no files.
+// when e lists no files. It is the family's "installed" check
+// (actnowkit models.Check, spec §7.5): the snapshot is there, every link
+// reaches its blob at the size it was verified with (models--*/.actnow/
+// blobs.json, written when a download finishes), the listed files are
+// there, a main repo has a weights file. Partial
+// downloads in blobs/ (another commit's, a tool's) do not make an
+// installed snapshot partial (family audit C4).
 func statusOne(cacheDir string, e catalog.Entry, weights bool) (Local, error) {
-	repoDir := RepoDir(cacheDir, e.Repo)
 	var l Local
-	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+	commit := commitOf(RepoDir(cacheDir, e.Repo), e)
+	if !models.ValidRepo(e.Repo) {
 		l.State = Missing
 		return l, nil
 	}
-	incomplete := false
-	if entries, err := os.ReadDir(filepath.Join(repoDir, "blobs")); err == nil {
-		for _, de := range entries {
-			if strings.Contains(de.Name(), ".incomplete") {
-				incomplete = true
-				if info, err := de.Info(); err == nil {
-					l.Bytes += info.Size()
-				}
-			}
-		}
-	}
-	commit := commitOf(repoDir, e)
-	snap := filepath.Join(repoDir, "snapshots", commit)
-	if commit == "" || !isDir(snap) {
-		if incomplete || nonEmpty(filepath.Join(repoDir, "blobs")) || nonEmpty(filepath.Join(repoDir, "snapshots")) {
+	if commit == "" {
+		// A branch never resolved here: something in the repo's folder is
+		// a download under way.
+		st := models.Check(cacheDir, models.Claim{Repo: e.Repo, Revision: strings.Repeat("0", 40), Aux: !weights})
+		l.State, l.Bytes = Missing, st.Incomplete
+		if st.State != models.Missing {
 			l.State = Partial
-		} else {
-			l.State = Missing
 		}
 		return l, nil
 	}
-	l.Snapshot = snap
-	hasWeights := false
-	present := map[string]bool{}
-	err := filepath.WalkDir(snap, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		rel, _ := filepath.Rel(snap, p)
-		rel = filepath.ToSlash(rel)
-		st, err := os.Stat(p) // follows the link to the blob
-		if err != nil {
-			l.Missing = append(l.Missing, rel)
-			return nil
-		}
-		present[rel] = true
-		l.Bytes += st.Size()
-		if slices.Contains(weightExts, strings.ToLower(filepath.Ext(rel))) {
-			hasWeights = true
-		}
-		return nil
-	})
-	if err != nil {
-		return l, err
-	}
+	c := models.Claim{Repo: e.Repo, Revision: commit, Aux: !weights}
 	for _, f := range e.Files {
-		if !present[f.Path] && !slices.Contains(l.Missing, f.Path) {
-			l.Missing = append(l.Missing, f.Path)
-		}
+		c.Files = append(c.Files, f.Path)
 	}
-	switch {
-	case len(l.Missing) > 0 || incomplete || weights && len(e.Files) == 0 && !hasWeights:
-		l.State = Partial
-	default:
+	st := models.Check(cacheDir, c)
+	l.Snapshot, l.Bytes = st.Snapshot, st.Bytes
+	l.Missing = append(st.Missing, st.Damaged...) // a truncated file is fetched again
+	switch st.State {
+	case models.Installed:
 		l.State = Downloaded
+	case models.Partial:
+		l.State = Partial
+		l.Bytes += st.Incomplete
+	default:
+		l.State = Missing
 	}
 	return l, nil
 }
@@ -182,8 +159,24 @@ func (c *Client) Verify(ctx context.Context, e catalog.Entry) ([]string, error) 
 	return bad, nil
 }
 
+// verifyOne verifies one repo holding its family lock shared (spec §7.4:
+// no app deletes it meanwhile); a bad blob is removed only under its blob
+// lock (one being downloaded or repaired is left alone), and the family is
+// told (TopicModels) so that the other apps see the model is incomplete
+// (family audit C5).
 func (c *Client) verifyOne(ctx context.Context, e catalog.Entry) ([]string, error) {
 	repoDir := RepoDir(c.opts.CacheDir, e.Repo)
+	held, err := models.LockRepo(ctx, c.opts.CacheDir, e.Repo, family.Shared, c.opts.Family.owner(models.OpVerify))
+	if err != nil && !noLocks(err) {
+		return nil, err
+	}
+	defer held.Release()
+	removed := false
+	defer func() {
+		if removed && c.opts.Family.Changed != nil {
+			c.opts.Family.Changed()
+		}
+	}()
 	commit := commitOf(repoDir, e)
 	if commit == "" {
 		return nil, fmt.Errorf("%s is not downloaded", e.Repo)
@@ -221,7 +214,18 @@ func (c *Client) verifyOne(ctx context.Context, e catalog.Entry) ([]string, erro
 		}
 		if !ok {
 			bad = append(bad, f.Path)
-			os.Remove(blob)
+			name := filepath.Base(blob)
+			if real, err := filepath.EvalSymlinks(filepath.Join(repoDir, "blobs")); err != nil || filepath.Dir(blob) != real {
+				continue // only a blob of this repo's blobs/
+			}
+			bl, err := models.TryLockBlob(c.opts.CacheDir, e.Repo, name, c.opts.Family.owner(models.OpVerify))
+			if err != nil && !noLocks(err) {
+				continue // being downloaded or repaired right now
+			}
+			if os.Remove(blob) == nil {
+				removed = true
+			}
+			bl.Release()
 		}
 	}
 	return bad, nil

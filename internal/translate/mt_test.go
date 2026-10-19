@@ -149,7 +149,8 @@ func TestGoogleV2Batches(t *testing.T) {
 	if len(f.reqs) != 2 || res.Segments[129].Text != "LINE 129 IT'S" {
 		t.Fatalf("%d requests, last %q", len(f.reqs), res.Segments[129].Text)
 	}
-	if f.reqs[0].URL.Query().Get("key") != "g key" || f.reqs[0].URL.Path != "/language/translate/v2" {
+	// The key in a header, never in the URL (it would reach error messages and logs).
+	if f.reqs[0].Header.Get("X-Goog-Api-Key") != "g key" || f.reqs[0].URL.RawQuery != "" || f.reqs[0].URL.Path != "/language/translate/v2" {
 		t.Fatal(f.reqs[0].URL)
 	}
 	var body map[string]any

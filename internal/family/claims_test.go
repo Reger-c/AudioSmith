@@ -191,20 +191,28 @@ func TestWatch(t *testing.T) {
 	mu.Unlock()
 	fx.Register("dev.hehehai.dicta")
 	fx.Family.Post(actnow.TopicModels)
+	// Both topics arrive (a peer that registers also writes its claims
+	// file, spec v1.0.9: in one batch or two).
+	all := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		var out []string
+		for _, ts := range heard {
+			out = append(out, ts...)
+		}
+		return out
+	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		mu.Lock()
-		n := len(heard)
-		mu.Unlock()
-		if n > 0 {
+		if got := all(); slices.Contains(got, actnow.TopicApps) && slices.Contains(got, actnow.TopicModels) {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if len(heard) != 1 || !slices.Contains(heard[0], actnow.TopicApps) || !slices.Contains(heard[0], actnow.TopicModels) {
+	if got := all(); !slices.Contains(got, actnow.TopicApps) || !slices.Contains(got, actnow.TopicModels) {
+		mu.Lock()
 		t.Errorf("heard %v", heard)
+		mu.Unlock()
 	}
 	if got := f.OthersForUI(); !slices.Equal(got, []string{"Dicta"}) {
 		t.Errorf("not rediscovered: %v", got)

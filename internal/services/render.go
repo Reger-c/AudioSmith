@@ -39,6 +39,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
@@ -190,6 +191,10 @@ type renderer struct {
 	replace   func(*core.Take) bool
 	pron      *Pronunciation
 	cacheDir  string
+	// dataDir is the app's data folder: the longform chunks live there
+	// (longformChunkDir); "" = the cache folder (tests).
+	dataDir   string
+	chunksDir sync.Once // the longform chunks moved out of the cache folder
 	bus       *core.Bus
 	logf      func(string, ...any)
 	// cacheMax caps the chunk cache, in bytes.

@@ -134,6 +134,16 @@ func (c *Client) fetchPlan(ctx context.Context, p *plan, progress func(Progress)
 	if err := writeRef(repoDir, p); err != nil {
 		return err
 	}
+	// The verified sizes, so that a truncated file is not taken for a
+	// model (spec §7.5), and Time Machine's mark (spec §7.12).
+	sizes := map[string]int64{}
+	for _, f := range p.files {
+		sizes[f.blob] = f.Size
+	}
+	if err := models.RecordBlobSizes(c.opts.CacheDir, p.repo, sizes); err != nil {
+		log.Printf("hub: sizes of %s: %v", p.repo, err)
+	}
+	_ = models.MarkRepoBackup(c.opts.CacheDir, p.repo, c.opts.Backup != nil && c.opts.Backup())
 	// Still holding the repo exclusively: claim it before anyone may
 	// delete it (spec §7.3).
 	if claimed := c.opts.Claimed; claimed != nil {

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Models move to the ActNow folder, out of Time Machine
+- Models are kept in ~/Library/Application Support/ActNow/models, shared with the other ActNow apps, instead of the Hugging Face cache (~/.cache/huggingface), which cleaning tools treat as a cache. Models already there are brought over at the first start without downloading them again (hard links: the cache stays as it is, for the tools that use it).
+- Time Machine leaves models out (they can be downloaded again); Settings → Storage → "Back up models with Time Machine" turns it back on for all ActNow apps.
+- A model file cut short (a disk error, a copy that stopped) is no longer taken for a downloaded model; downloading again repairs it. A download of another version left half-way no longer makes a downloaded model look incomplete. Checking a model's files waits for other ActNow apps working on it and tells them when a file was bad.
+- If the ActNow folder's model claims are deleted (a cleaning tool), AudioSmith claims its models again when it comes to the front, and keeps models another app may still use.
+
+### Audiobooks keep their rendered parts
+- The parts of an audiobook already rendered are kept in AudioSmith's data folder instead of ~/Library/Caches, which cleaning tools empty: Resume after a stop or a failure no longer renders hours of a book again. Those of earlier renders move over at the first start.
+- Temporary files of recordings and imports cut short are cleaned at start.
+
+### Keys stay out of logs
+- Google Translate (Basic)'s key is sent in a header, not in the address, so a network error no longer writes it into the log. Logs and the diagnostic bundle leave out keys, tokens and proxy passwords.
+
 ### Dub editor: ⌘Z and ⇧⌘Z undo and redo again
 - In the Dub page's line editor ⌘Z did nothing on the Mac (the Edit menu's Undo took the key before the editor saw it), and with menu keys that have ⇧ fixed (MyGo patch 0009) ⇧⌘Z would have done nothing either. Edit → Undo and Redo, and their keys, now undo and redo the editor's changes whether a line, the toolbar or the timeline was clicked last; while a line's text is being edited they undo its typing, as before.
 - Menu items with ⇧ in their keys show and take exactly those keys (⇧⌘Z is Redo, not also ⌘Z).

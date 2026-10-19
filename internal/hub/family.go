@@ -45,6 +45,9 @@ type Family struct {
 	BundleID string
 	// Decider decides deletes from the claims; nil = no family.
 	Decider Decider
+	// Changed, when set, tells the family the models changed (posts
+	// TopicModels): Verify calls it after removing bad blobs.
+	Changed func()
 }
 
 func (f Family) bundleID() string {

@@ -161,7 +161,7 @@ func TestDialogueRender(t *testing.T) {
 		t.Fatalf("calls %d, result %+v", len(fd.calls), res)
 	}
 	first, redo := fd.calls[0], fd.calls[1]
-	if len(first.Speakers) != 2 || !strings.Contains(first.Speakers[1].RefAudio, "/chunks/ref-") || first.Speakers[0].RefText != PortableLine("zh") || len(first.Turns) != 4 {
+	if len(first.Speakers) != 2 || !strings.Contains(first.Speakers[1].RefAudio, "/longform-chunks/ref-") || first.Speakers[0].RefText != PortableLine("zh") || len(first.Turns) != 4 {
 		t.Errorf("first call %+v", first)
 	}
 	// The clone's clip is tidied: evened out to −18 LUFS like the others.
@@ -190,7 +190,7 @@ func TestDialogueRender(t *testing.T) {
 	}
 
 	// Line d is never heard: made on the story's model.
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	e.synth.reset()
 	fd.calls = nil
 	fd.garble = func(_ int, text string) bool { return strings.HasPrefix(text, "那我们") }
@@ -200,7 +200,7 @@ func TestDialogueRender(t *testing.T) {
 	}
 
 	// The dialogue model fails: the segment's lines are made on the story's model.
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	e.synth.reset()
 	fd.calls, fd.garble, fd.fail = nil, nil, true
 	res = run()
@@ -210,7 +210,7 @@ func TestDialogueRender(t *testing.T) {
 
 	// A designed voice spoken by a model that designs it brings its own
 	// reference (Take.CloneRef): nothing to make on the story's model.
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	e.synth.reset()
 	fd.calls, fd.fail = nil, false
 	kidRef := filepath.Join(e.dir, "kid-reference.wav")
@@ -222,7 +222,7 @@ func TestDialogueRender(t *testing.T) {
 	}
 
 	// Off: as before.
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	e.synth.reset()
 	fd.calls, fd.fail = nil, false
 	spec.Production.Dialogue = false

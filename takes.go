@@ -99,6 +99,7 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 	} else if n > 0 {
 		log.Printf("history.json: imported %d takes", n)
 	}
+	go cleanPartFiles(dataDir, time.Hour) // writes a crash or a quit cut short (audit A13)
 	bus := core.NewBus()
 	logJobFailures(bus)
 	l := &library{
@@ -231,8 +232,8 @@ var hubToken = func(shared func() (string, error)) string {
 
 // modelCache is the model folder of the settings: AudioSmith's own, or
 // the family's while it follows it (written into Models.CacheDir by
-// family.Shared), which beat $HF_HUB_CACHE and $HF_HOME (spec §7.1);
-// else the default rules (hub.CacheDir).
+// family.Shared) (spec §7.1);
+// else the family's library (hub.CacheDir, spec v1.0.9).
 func modelCache(s settings.Settings) string {
 	if s.Models.CacheDir != "" {
 		return s.Models.CacheDir

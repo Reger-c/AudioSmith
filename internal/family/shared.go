@@ -39,8 +39,8 @@ type OwnSettings interface {
 // SharedOptions configure NewShared.
 type SharedOptions struct {
 	Own OwnSettings
-	// DefaultHub is the model folder of the default rules (hub.CacheDir:
-	// $HF_HUB_CACHE, $HF_HOME/hub, ~/.cache/huggingface/hub).
+	// DefaultHub is the default model folder (hub.CacheDir: the family's
+	// library, ~/Library/Application Support/ActNow/models/hub).
 	DefaultHub func() string
 	// HasModels reports whether AudioSmith has models in hub: then the
 	// default folder is "in use" at the migration (spec §9.4), and a new

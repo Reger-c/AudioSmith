@@ -31,27 +31,23 @@ package hub
 
 import (
 	"context"
+
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/hehehai/actnowkit/models"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
 )
 
-// CacheDir is where models live: the same rules as huggingface_hub
-// ($HF_HUB_CACHE, else $HF_HOME/hub, else ~/.cache/huggingface/hub).
-// Settings may override it later (settings.Models.CacheDir).
-func CacheDir() string {
-	if d := os.Getenv("HF_HUB_CACHE"); d != "" {
-		return d
-	}
-	if d := os.Getenv("HF_HOME"); d != "" {
-		return filepath.Join(d, "hub")
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".cache", "huggingface", "hub")
-}
+// CacheDir is where models live by default: the ActNow family's model
+// library, ~/Library/Application Support/ActNow/models/hub (family spec
+// v1.0.9, actnowkit models.DefaultHub; it follows ACTNOW_FAMILY_DIR).
+// $HF_HUB_CACHE, $HF_HOME and ~/.cache/huggingface/hub no longer choose
+// it: models there are imported (internal/family Import). Settings may
+// override it (settings.Models.CacheDir).
+func CacheDir() string { return models.DefaultHub() }
 
 // RepoDir is the cache directory of a repo id ("owner/name").
 func RepoDir(cacheDir, repo string) string {
@@ -135,6 +131,9 @@ type Options struct {
 	// for the ActNow family (spec §7.3, models.Store.ClaimLocked). Its
 	// error is logged; the download stands.
 	Claimed func(ctx context.Context, cacheDir string, d Finished) error
+	// Backup reports the family's models.backup when a download finishes:
+	// false (and nil) leaves the repo out of Time Machine (spec §7.12).
+	Backup func() bool
 }
 
 // Finished is a repo a download finished, for Options.Claimed.

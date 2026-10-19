@@ -178,6 +178,7 @@ func newLongform(cfg Config, t *Takes) *Longform {
 	if s.dataDir == "" {
 		s.dataDir = filepath.Dir(cfg.Store.Takes().AudioDir())
 	}
+	t.render.dataDir = s.dataDir // longform chunks live there (longformChunkDir)
 	if cfg.Scheduler != nil {
 		cfg.Scheduler.Register(KindChapter, chapterRenderer{t.render})
 		cfg.Scheduler.Register(KindAssemble, assembler{s})

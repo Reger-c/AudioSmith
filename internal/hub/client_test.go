@@ -273,7 +273,16 @@ func checkSnapshot(t *testing.T, c *Client, h *fakeHub) {
 			t.Errorf("left %s", b.Name())
 		}
 	}
-	if total := sumSizes(h.files); l.Bytes != total {
+	// Bytes on disk: files with the same content share a blob, counted once.
+	seen := map[string]bool{}
+	var total int64
+	for _, data := range h.files {
+		if !seen[string(data)] {
+			seen[string(data)] = true
+			total += int64(len(data))
+		}
+	}
+	if l.Bytes != total {
 		t.Errorf("status bytes %d, want %d", l.Bytes, total)
 	}
 }

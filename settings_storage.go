@@ -463,13 +463,31 @@ func (a *app) storageSettings(c *ui.Context) {
 	}
 
 	sectionTitle(c, i18n.T("Models"))
-	shared := i18n.T("Shared with other apps that use the Hugging Face cache. Change it in Settings → Models and downloads.")
+	shared := i18n.T("Change it in Settings → Models and downloads.")
 	if len(a.famOthers) > 0 {
 		shared = i18n.T("Shared by all ActNow apps. Change it in Settings → Models and downloads.") // spec §7.10.2
 	}
 	settingRow(c, "st-models", shortPath(modelCache(a.prefs)), shared, func() {
 		open("st-open-models", modelCache(a.prefs))
 	})
+	if fam := a.lib.fam; fam != nil {
+		// Time Machine (family spec §7.12): the family's models.backup,
+		// off by default.
+		on := fam.Backup()
+		hint := i18n.T("Models can be downloaded again, so Time Machine leaves them out.")
+		if len(a.famOthers) > 0 {
+			hint = i18n.T("Models can be downloaded again, so Time Machine leaves them out. Applies to all ActNow apps.")
+		}
+		settingRow(c, "st-models-backup", i18n.T("Back up models with Time Machine"), hint, func() {
+			if ui.Switch(c.Key("st-models-backup-switch"), &on).Changed() {
+				go func(on bool) {
+					if err := fam.SetBackup(context.Background(), on); err != nil {
+						log.Printf("family: Time Machine: %v", err)
+					}
+				}(on)
+			}
+		})
+	}
 	if r != nil {
 		muted(i18n.T("AudioSmith's models: %s of %s in the folder · free on its disk: %s", humanBytes(r.ours), humanBytes(r.modelsAll), humanBytes(r.freeModel)))
 		ui.Grid(c.Key("st-models-list")).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 90))).GapX(px(t, 12)).GapY(px(t, 4)).Children(func() {

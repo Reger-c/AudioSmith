@@ -287,7 +287,7 @@ func TestKeepSeparate(t *testing.T) {
 // The environment where the spec keeps it first (§9.3, §7.1):
 // $HF_ENDPOINT beats the download source; $HTTPS_PROXY counts only with
 // the proxy on automatic; the model folder of the settings (AudioSmith's
-// or the family's) beats $HF_HUB_CACHE.
+// or the family's) beats the default, and $HF_HUB_CACHE plays no part.
 func TestSharedEnvPrecedence(t *testing.T) {
 	s := settings.Defaults()
 	s.Models.Endpoints = []string{"https://hf-mirror.com"}
@@ -321,8 +321,11 @@ func TestSharedEnvPrecedence(t *testing.T) {
 			t.Errorf("proxy %q: %q %v, want %q", mode, got, err, want)
 		}
 	}
+	// $HF_HUB_CACHE no longer chooses the folder (spec v1.0.9): the
+	// default is the family's library.
+	t.Setenv("ACTNOW_FAMILY_DIR", "/fam")
 	t.Setenv("HF_HUB_CACHE", "/env/hub")
-	if got := modelCache(s); got != "/env/hub" {
+	if got := modelCache(s); got != "/fam/models/hub" {
 		t.Errorf("default folder %q", got)
 	}
 	s.Models.CacheDir = "/family/models"

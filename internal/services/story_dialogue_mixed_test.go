@@ -194,7 +194,7 @@ func TestDialogueOneTrack(t *testing.T) {
 		}
 	}
 	// The model skips line b: the track does not cut, so it is made again whole.
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	ft.calls, ft.garble = nil, nil
 	ft.skip = func(call int) bool { return call == 1 }
 	res = run()
@@ -202,7 +202,7 @@ func TestDialogueOneTrack(t *testing.T) {
 		t.Errorf("track again: %d calls, %+v", len(ft.calls), res)
 	}
 	// Always skipped: the segment goes to the story's model.
-	os.RemoveAll(filepath.Join(e.dir, "cache", "longform"))
+	os.RemoveAll(filepath.Join(e.dir, "longform-chunks")) // the longform chunks (data folder, audit A7)
 	e.synth.reset()
 	ft.calls = nil
 	ft.skip = func(int) bool { return true }

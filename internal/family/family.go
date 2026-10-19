@@ -32,6 +32,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	actnow "github.com/hehehai/actnowkit/family"
@@ -124,6 +125,9 @@ type Family struct {
 	watcher  *actnow.Watcher
 	watching chan struct{} // closed when the watcher's goroutine ended
 	onChange func(topics []string)
+	// wanted is Start's: the catalogue's claims in a folder (healClaims).
+	wanted func(hub string) []models.Claim
+	backup atomic.Bool // models.backup, as last read (library.go)
 }
 
 // New makes the Family; it touches no file.
@@ -181,6 +185,10 @@ func (f *Family) Start(ctx context.Context, in Inputs, wanted func(hub string) [
 	}
 	f.Dir.CleanAllTemps()
 	store := f.Store(in.Hub)
+	f.mu.Lock()
+	f.wanted = wanted
+	f.mu.Unlock()
+	f.importModels(ctx, store, wanted(in.Hub)) // the library moved (spec v1.0.9)
 	n, err := Migrate(ctx, store, wanted(in.Hub))
 	if err != nil {
 		f.setState(failed)
@@ -199,6 +207,7 @@ func (f *Family) Start(ctx context.Context, in Inputs, wanted func(hub string) [
 	werr := f.writeManifest(in)
 	f.Rediscover()
 	f.applyTombstones(store)
+	f.applyBackup()
 	f.watch()
 	return werr
 }
@@ -220,6 +229,7 @@ func (f *Family) Update(ctx context.Context, in Inputs, wanted func(hub string) 
 		f.mu.Lock()
 		f.switching = true
 		f.mu.Unlock()
+		f.importModels(ctx, f.Store(in.Hub), wanted(in.Hub))
 		n, err := Migrate(ctx, f.Store(in.Hub), wanted(in.Hub))
 		f.mu.Lock()
 		f.switching = false
@@ -234,6 +244,7 @@ func (f *Family) Update(ctx context.Context, in Inputs, wanted func(hub string) 
 			return err
 		}
 		f.logf("family: model folder now %s; claimed %d models there", in.Hub, n)
+		f.applyBackup()
 	}
 	return f.writeManifest(in)
 }
@@ -347,6 +358,7 @@ func (f *Family) OnChange(fn func(topics []string)) {
 // Reread is what a notification does, for when the app becomes active
 // (spec §5.4: notifications are hints, apps reread on activation).
 func (f *Family) Reread() {
+	f.healClaims(context.Background())
 	f.handle([]string{actnow.TopicApps, actnow.TopicModels, actnow.TopicSettings})
 }
 
@@ -363,6 +375,9 @@ func (f *Family) handle(topics []string) {
 	}
 	if st == ready && slices.Contains(topics, actnow.TopicModels) {
 		f.applyTombstones(f.Store(hub))
+	}
+	if st == ready && slices.Contains(topics, actnow.TopicSettings) {
+		f.applyBackup() // models.backup may have changed
 	}
 	if fn != nil {
 		fn(topics)
