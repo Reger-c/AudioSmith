@@ -50,6 +50,10 @@ type EngineBackend struct {
 	MapError func(error) error
 }
 
+// RepairTemperature is the least temperature of a sampled constrained
+// reply (Request.SampleConstrained) on the engine.
+const RepairTemperature = 0.7
+
 func (e *EngineBackend) id() string {
 	if e.ID == "" {
 		return "local"
@@ -79,7 +83,21 @@ func (e *EngineBackend) Chat(ctx context.Context, req Request) (Response, error)
 	p := GenerateParams{
 		Model: model, MaxTokens: req.MaxTokens, Temperature: req.Temperature,
 		TopP: req.TopP, Seed: req.Seed, Stop: req.Stop, Stream: req.OnDelta != nil,
-		JSON: req.Format == FormatJSON,
+		JSON: req.Format == FormatJSON, SampleConstrained: req.SampleConstrained && req.Format == FormatJSON,
+	}
+	if p.SampleConstrained {
+		// Sampled like a free reply, warm enough to leave the greedy
+		// answer (a skill's 0.1 is not), the same sample on a rerun.
+		if p.Temperature == nil || *p.Temperature < RepairTemperature {
+			p.Temperature = F64(RepairTemperature)
+		}
+		if p.TopP == nil {
+			p.TopP = F64(0.95)
+		}
+		if p.Seed == nil {
+			seed := int64(1)
+			p.Seed = &seed
+		}
 	}
 	for _, m := range msgs {
 		p.Messages = append(p.Messages, proto.LLMMessage{Role: string(m.Role), Content: m.Content})
