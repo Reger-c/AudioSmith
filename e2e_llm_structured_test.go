@@ -16,7 +16,8 @@ package main
 // engine variables (comma-separated, e.g. AUDIOSMITH_LLM_PRIME=0);
 // AUDIOSMITH_LLMS_ONLY runs some groups (translate, glossary, direction,
 // story, emotion, cleanup). The model is catalog.DefaultLLM (or
-// AUDIOSMITH_LLM), already downloaded: nothing is fetched. Output:
+// AUDIOSMITH_LLM), already downloaded in the family's model library or
+// the Hugging Face cache: nothing is fetched. Output:
 // calls.jsonl (each call: group, finish, tokens, whether the reply holds a
 // value its schema accepts), features.jsonl and summary.md.
 
@@ -33,6 +34,8 @@ import (
 	"testing"
 	"time"
 	"unicode"
+
+	"github.com/hehehai/actnowkit/models"
 
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
@@ -218,11 +221,22 @@ func TestLLMStructured(t *testing.T) {
 		t.Fatalf("no entry %s", id)
 	}
 	ctx := context.Background()
+	// The family's model library (hub.CacheDir) when it has the model,
+	// else the Hugging Face cache, which the app imports from at its start
+	// and a test does not (it would change the user's folders).
 	cacheDir := hub.CacheDir()
 	l, err := hub.New(hub.Options{CacheDir: cacheDir}).Status(ctx, e)
 	if err != nil || l.State != hub.Downloaded {
-		t.Skipf("%s is not downloaded (%v): this test fetches nothing", e.ID, err)
+		if env, _ := models.EnvHub(); env != "" && env != cacheDir {
+			if l2, err2 := hub.New(hub.Options{CacheDir: env}).Status(ctx, e); err2 == nil && l2.State == hub.Downloaded {
+				cacheDir, l, err = env, l2, nil
+			}
+		}
 	}
+	if err != nil || l.State != hub.Downloaded {
+		t.Skipf("%s is not downloaded in %s or the Hugging Face cache (%v): this test fetches nothing", e.ID, cacheDir, err)
+	}
+	t.Logf("models from %s", cacheDir)
 	snap := l.Snapshot
 	var env []string
 	if v := os.Getenv("AUDIOSMITH_LLMS_ENV"); v != "" {
