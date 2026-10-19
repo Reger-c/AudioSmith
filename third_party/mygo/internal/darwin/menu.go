@@ -252,6 +252,16 @@ func keyEquivalent(acc string) (string, uint) {
 		mods |= 1 << 17
 	}
 	if len(a.Key) == 1 {
+		// AppKit's way for Shift and a character key: the character Shift
+		// types (an upper case letter, "!" for 1 on a US keyboard) and no
+		// Shift in the mask. A lower case key with the Shift mask showed
+		// right but matched the key without Shift too (Cmd+J ran the item of
+		// Cmd+Shift+J), and Cmd+Shift+J as typed matched nothing.
+		if mods&(1<<17) != 0 {
+			if up, ok := shifted(a.Key); ok {
+				return up, mods &^ (1 << 17)
+			}
+		}
 		return a.Key, mods
 	}
 	named := map[string]rune{
@@ -270,6 +280,23 @@ func keyEquivalent(acc string) (string, uint) {
 		return string(rune(0xF704 + n - 1)), mods
 	}
 	return "", 0
+}
+
+// shiftedKeys are the characters Shift types with the keys of a US
+// keyboard that are not letters.
+var shiftedKeys = map[string]string{
+	"1": "!", "2": "@", "3": "#", "4": "$", "5": "%", "6": "^", "7": "&", "8": "*", "9": "(", "0": ")",
+	"-": "_", "=": "+", "[": "{", "]": "}", "\\": "|", ";": ":", "'": "\"", ",": "<", ".": ">", "/": "?", "`": "~",
+}
+
+// shifted is the character Shift types with key (a single character, as
+// accelerators name keys), ok false when Shift types nothing else.
+func shifted(key string) (string, bool) {
+	if c := key[0]; c >= 'a' && c <= 'z' {
+		return string(c - 'a' + 'A'), true
+	}
+	s, ok := shiftedKeys[key]
+	return s, ok
 }
 
 // Tray icons (NSStatusItem).
