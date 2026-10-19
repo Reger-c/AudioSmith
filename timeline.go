@@ -90,6 +90,9 @@ type tlEvents struct {
 	Nudge  func(id, edge string, delta float64)
 	Delete func(id string)
 	Play   func(id string)
+	// Command performs an Edit menu command (undo, redo) that came to
+	// the focused lane, and reports whether it did.
+	Command func(name string) bool
 }
 
 // span is the seconds the lane shows.
@@ -258,6 +261,9 @@ func timelineLane(c *ui.Context, key string, s *timelineState, m tlModel, ev tlE
 
 // timelineInput handles the lane's pointer and keys.
 func timelineInput(s *timelineState, m tlModel, ev tlEvents, e ui.InputEvent) bool {
+	if e.Kind == ui.InputCommand {
+		return ev.Command != nil && ev.Command(e.Text)
+	}
 	d := m.Duration
 	if s.width <= 0 || d <= 0 {
 		return false

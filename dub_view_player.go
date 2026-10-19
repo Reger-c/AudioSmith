@@ -96,8 +96,9 @@ func (a *app) dubTimeline(c *ui.Context) {
 	}
 	locked := a.dubLocked()
 	timelineLane(c, "dub-tl", &a.dubTL, m, tlEvents{
-		Seek:   a.dubSeek,
-		Select: func(id string) { a.dubCur = id; a.dubScrollTo(id) },
+		Seek:    a.dubSeek,
+		Select:  func(id string) { a.dubCur = id; a.dubScrollTo(id) },
+		Command: a.dubCommand,
 		Change: func(id string, start, end float64, clamp bool) {
 			if !locked {
 				a.dubSetTiming(id, start, end, clamp)

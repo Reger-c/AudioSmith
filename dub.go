@@ -75,6 +75,8 @@ type dubState struct {
 	dubBuf          string // the text being edited
 	dubOpen         string // the segment whose options are open
 	dubList2        ui.ListState
+	dubEdFocus      ui.Handle // the editor's own focus: the Edit menu's undo and redo come to it
+	dubSideFocus    ui.Handle // the step's panel (the editor leaves its focus alone)
 	dubOpenProjects bool // the projects popover
 
 	dubURL         string

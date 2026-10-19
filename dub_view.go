@@ -90,7 +90,7 @@ func (a *app) dubPage(c *ui.Context) {
 			})
 		}).ClipX()
 		a.dubSide.view(c, "dub-side", i18n.T("Step settings"), inline, shown, false, width, func() {
-			ui.Column(c).Padding(px(t, sp4), px(t, sp4), px(t, sp5)).Gap(px(t, sp3)).Children(func() { a.dubStepPanel(c) })
+			ui.Column(c).Padding(px(t, sp4), px(t, sp4), px(t, sp5)).Gap(px(t, sp3)).Bind(&a.dubSideFocus).Children(func() { a.dubStepPanel(c) })
 		})
 	})
 	ui.Box(c).Height(1).Background(k.Line).Shrink(0)
@@ -490,10 +490,24 @@ func (a *app) dubWorkspace(c *ui.Context) {
 		})
 		return
 	}
-	a.dubPlayerBar(c)
-	if p.Source.Duration > 0 {
-		a.dubTimeline(c)
+	// The editor takes the keyboard where nothing in it does (a click
+	// on a line, on empty room; once when it appears): on macOS the Edit
+	// menu takes ⌘Z and ⇧⌘Z before the window sees them and sends its
+	// undo and redo to the focused element (dubCommand). A text input in
+	// it, as a line's text, undoes its own typing. The toolbar's and the
+	// lines' buttons leave the focus where it is (KeepFocus).
+	ed := ui.Column(c.Key("dub-ed")).Grow(1).Gap(px(t, sp2)).Focusable().FocusRing(false).Bind(&a.dubEdFocus).Label(i18n.T("Dub editor"))
+	if !c.FocusWithin(a.dubSideFocus) {
+		ed.AutoFocus()
 	}
-	a.dubToolbar(c)
-	a.dubLines(c)
+	ed.HandleInput(func(ev ui.InputEvent) bool {
+		return ev.Kind == ui.InputCommand && a.dubCommand(ev.Text)
+	}).Children(func() {
+		a.dubPlayerBar(c)
+		if p.Source.Duration > 0 {
+			a.dubTimeline(c)
+		}
+		a.dubToolbar(c)
+		a.dubLines(c)
+	})
 }

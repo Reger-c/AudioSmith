@@ -28,7 +28,7 @@ func (a *app) dubToolbar(c *ui.Context) {
 	k := tok(t)
 	p := a.dub
 	locked := a.dubLocked()
-	ui.Row(c.Key("dub-toolbar")).Gap(px(t, sp1)).AlignItems(ui.Center).Shrink(0).Children(func() {
+	ui.Row(c.Key("dub-toolbar")).Gap(px(t, sp1)).AlignItems(ui.Center).Shrink(0).KeepFocus().Children(func() {
 		all := len(p.Segments) > 0 && len(a.dubSelected()) == len(p.Segments)
 		if ui.Checkbox(c.Key("dub-all"), &all, "").Label(i18n.T("All")).Tooltip(i18n.T("Select all lines")).Changed() {
 			a.dubSel = map[string]bool{}
@@ -248,7 +248,7 @@ func (a *app) dubRow(c *ui.Context, i int) (after func()) {
 		a.dubTL.sel = id
 	}
 	row.Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).KeepFocus().Children(func() {
 			sel := a.dubSel[id]
 			if ui.Checkbox(c.Key("sel"), &sel, "").Label(i18n.T("Select line %d", i+1)).Changed() {
 				if sel {
@@ -370,22 +370,25 @@ func (a *app) dubLineText(c *ui.Context, s dub.Segment, locked bool, after *func
 	t := c.Theme()
 	id := s.ID
 	if a.dubEdit == id {
+		// Done or not, the keyboard goes back to the editor (its undo).
+		commit := func() { a.dubCommitEdit(); a.dubEdFocus.Focus() }
+		cancel := func() { a.dubCancelEdit(); a.dubEdFocus.Focus() }
 		box := ui.TextArea(c.Key("edit"), &a.dubBuf).Lines(1, 6).AutoFocus().Label(i18n.T("Line text"))
 		if box.Shortcut(ui.Cmd, ui.KeyEnter) {
-			*after = a.dubCommitEdit
+			*after = commit
 		}
 		if box.Shortcut(0, ui.KeyEscape) {
-			*after = a.dubCancelEdit
+			*after = cancel
 		}
 		if box.Shortcut(ui.Cmd, ui.KeyD) {
 			*after = func() { a.dubSplit(id, -1) }
 		}
 		ui.Row(c).Gap(px(t, 6)).Children(func() {
 			if ui.Button(c.Key("edit-ok"), i18n.T("Done")).Tooltip("⌘↩").Clicked() {
-				*after = a.dubCommitEdit
+				*after = commit
 			}
 			if ghostButton(c.Key("edit-cancel"), i18n.T("Cancel")).Tooltip("Esc").Clicked() {
-				*after = a.dubCancelEdit
+				*after = cancel
 			}
 		})
 		return
@@ -503,7 +506,28 @@ func (a *app) dubLineOptions(c *ui.Context, s dub.Segment, locked bool, after *f
 	})
 }
 
-// dubShortcuts are the editor's keys.
+// dubCommand performs the Edit menu's undo or redo in the editor, and
+// reports whether it took the command: the editor's element or its
+// timeline has the focus (dubWorkspace), no line's text is being edited.
+func (a *app) dubCommand(name string) bool {
+	if a.dub == nil || len(a.dub.Segments) == 0 || a.dubEdit != "" {
+		return false
+	}
+	switch name {
+	case "undo":
+		a.dubUndo()
+	case "redo":
+		a.dubRedo()
+	default:
+		return false
+	}
+	return true
+}
+
+// dubShortcuts are the editor's keys. ⌘Z and ⇧⌘Z are here too for a
+// window without the Edit menu (tests): where the menu has Undo and
+// Redo, it takes the keys first and sends commands (dubCommand), so one
+// of the two runs, never both.
 func (a *app) dubShortcuts(c *ui.Context) {
 	p := a.dub
 	if p == nil || len(p.Segments) == 0 {

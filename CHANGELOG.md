@@ -34,6 +34,10 @@ AudioSmith joins the ActNow family: it works together with the other ActNow apps
 - The ActNow apps share one memory budget. Before AudioSmith loads a model, it unloads its own idle models first. If that is not enough, it asks the other apps to unload models that have been idle for a minute. It does the same when they ask, and never unloads a model a job is using.
 - Dictation's paste no longer overwrites the clipboard while another ActNow app is pasting.
 
+### Dub editor: ⌘Z and ⇧⌘Z undo and redo again
+- In the Dub page's line editor ⌘Z did nothing on the Mac (the Edit menu's Undo took the key before the editor saw it), and with menu keys that have ⇧ fixed (MyGo patch 0009) ⇧⌘Z would have done nothing either. Edit → Undo and Redo, and their keys, now undo and redo the editor's changes whether a line, the toolbar or the timeline was clicked last; while a line's text is being edited they undo its typing, as before.
+- Menu items with ⇧ in their keys show and take exactly those keys (⇧⌘Z is Redo, not also ⌘Z).
+
 ### Dub: conversations recorded together (multi-speaker dialogue)
 - A new switch in the Dub page's Cast step, 「多人对话配音」 (Multi-speaker dialogue): the people of a conversation are recorded together by the dialogue model "Dialogue · Light" (SoulX-Podcast), each line hearing the one before it, so answers sound like answers. Each line is then fitted to its own time as before (Smart fit and the other timings) and placed where it was said, so the video's pauses and overlaps stay. Monologues, one person speaking alone and lines over 4 s apart stay line by line.
 - On by default for new dubs into Chinese or English with two speakers or more; dubs made before keep their audio (off). Each speaker is cloned from about 12 s of their own lines, with what they say there, even from another language (an English or Japanese video dubbed into Chinese); a saved or designed voice from its own reference.
