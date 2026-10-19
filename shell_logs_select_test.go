@@ -103,7 +103,8 @@ func rowFill(t *testing.T, tt *ui.Tester, i int) color.RGBA {
 	return img.RGBAAt(int((r.X-4)*scale), int((r.Y+r.H/2)*scale))
 }
 
-// selectedLines are the messages of the lines selected, in order.
+// selectedLines are the messages of the lines selected, in the log's
+// order (the oldest first, as copies are), whatever order they show in.
 func selectedLines(a *app) []string {
 	var out []string
 	for _, e := range listselItems(a) {
@@ -114,7 +115,7 @@ func selectedLines(a *app) []string {
 
 func listselItems(a *app) []core.LogEntry {
 	var out []core.LogEntry
-	for _, e := range a.visibleLogs() {
+	for _, e := range slices.Backward(a.visibleLogs()) {
 		if a.logSel.m.IsSelected(e.Seq) {
 			out = append(out, e)
 		}
@@ -136,10 +137,11 @@ func clickLine(t *testing.T, tt *ui.Tester, mods ui.Modifiers, i int) {
 	logsSettle(tt)
 }
 
-// formatted is line i as Copy puts it on the clipboard.
+// formatted is lines i as Copy puts them on the clipboard: in the log's
+// order, the oldest first.
 func formatted(a *app, i ...int) string {
 	var out string
-	for _, e := range a.visibleLogs() {
+	for _, e := range slices.Backward(a.visibleLogs()) {
 		for _, n := range i {
 			if e.Message == fmt.Sprintf("line %d", n) {
 				out += logs.Format(e)
@@ -250,16 +252,20 @@ func TestLogsDrag(t *testing.T) {
 	if tt.Clipboard() != "" {
 		t.Errorf("a drag copied %q", tt.Clipboard())
 	}
-	// Upwards, past the first line: from the line pressed to the top.
-	x, y = lineAt(t, tt, 6)
+	// Upwards (to the newer lines), past the top: from the line pressed
+	// to the newest.
+	x, y = lineAt(t, tt, 3)
 	tt.Press(x, y)
-	_, y3 := lineAt(t, tt, 3)
-	tt.Move(x, y3)
+	_, y6 := lineAt(t, tt, 6)
+	if y6 >= y {
+		t.Fatalf("line 6 (%v) not above line 3 (%v): the newest are not first", y6, y)
+	}
+	tt.Move(x, y6)
 	logsSettle(tt)
 	wantSelected(t, a, "line 3", "line 4", "line 5", "line 6")
 	tt.Move(x, 0)
 	logsSettle(tt)
-	wantSelected(t, a, "line 1", "line 2", "line 3", "line 4", "line 5", "line 6")
+	wantSelected(t, a, "line 3", "line 4", "line 5", "line 6", "line 7", "line 8")
 	// Esc gives the drag up: the selection it started from comes back.
 	tt.Key(0, ui.KeyEscape)
 	logsSettle(tt)
@@ -435,14 +441,14 @@ func logsNear(a color.RGBA, c ui.Color) bool {
 
 func TestLogsDragScrolls(t *testing.T) {
 	a, tt := logsApp(t, 80)
-	x, y := lineAt(t, tt, 1)
+	x, y := lineAt(t, tt, 80) // the newest, at the top
 	h := float32(logsTesterHeight)
 	tt.Press(x, y)
 	tt.Move(x, y+20)
 	tt.Move(x, h-2) // at the window's bottom, under the log's edge
 	tt.Advance(2 * time.Second)
 	logsSettle(tt)
-	st := a.logSel.scroll[0]
+	st := a.logSel.views[logPage].scroll
 	if st.Y <= 0 {
 		t.Fatalf("no scroll: %+v", st)
 	}
@@ -456,8 +462,8 @@ func TestLogsDragScrolls(t *testing.T) {
 		t.Errorf("after the release %d lines, clipboard %q", got, tt.Clipboard())
 	}
 	sel := selectedLines(a)
-	if sel[0] != "line 1" {
-		t.Errorf("first selected %q", sel[0])
+	if sel[len(sel)-1] != "line 80" {
+		t.Errorf("newest selected %q", sel[len(sel)-1])
 	}
 }
 

@@ -6,6 +6,7 @@ package main
 // and selected as shell_logs_select.go says.
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -41,18 +42,19 @@ func logSourceLabel(s string) string {
 	return s
 }
 
-// visibleLogs are the lines the filters select, oldest first.
+// visibleLogs are the lines the filters select, the newest first: the
+// order the view shows (copies go back to the log's order, copyLogLines).
 func (a *app) visibleLogs() []core.LogEntry {
 	lines := a.logs.Tail(logLines*4, a.logsSource)
 	q := strings.ToLower(strings.TrimSpace(a.logsQuery))
 	var out []core.LogEntry
-	for _, e := range lines {
+	for _, e := range slices.Backward(lines) {
 		if q == "" || strings.Contains(strings.ToLower(e.Message), q) || strings.Contains(strings.ToLower(e.Source), q) {
 			out = append(out, e)
+			if len(out) == logLines {
+				break
+			}
 		}
-	}
-	if len(out) > logLines {
-		out = out[len(out)-logLines:]
 	}
 	return out
 }
@@ -116,33 +118,27 @@ func (a *app) logsView(c *ui.Context, panel bool) {
 		})
 		return
 	}
-	st := &a.logSel.scroll[0]
-	if panel {
-		st = &a.logSel.scroll[1]
-	}
-	sc := ui.Scroll(c.Key("logs-scroll")).TrackScroll(st).Grow(1).MinHeight(0)
-	view := sc.Bounds()
-	sc.Children(func() {
-		a.logRows(c, lines, view, st)
-	})
+	a.logRows(c, lines, viewOf(panel))
 }
 
-// logRows are the lines, which the pointer selects (shell_logs_select.go):
-// the line under it lit, the lines selected in the accent's tint. view is
-// where the scroll container st scrolls them shows, for a drag near its
-// edges.
-func (a *app) logRows(c *ui.Context, lines []core.LogEntry, view ui.Rect, st *ui.ScrollState) {
+// logRows are the lines, the newest first, in a list that keeps its place
+// as lines come (shell_logs_order.go) and that the pointer selects
+// (shell_logs_select.go): the line under it lit, the lines selected in the
+// accent's tint.
+func (a *app) logRows(c *ui.Context, lines []core.LogEntry, v logView) {
 	t := c.Theme()
 	k := tok(t)
 	s := &a.logSel
-	col := ui.Column(c.Key("logs-rows")).Padding(px(t, 5), px(t, sp3-4), px(t, 5), px(t, sp6-4)).Focusable().Label(i18n.T("Log lines"))
-	col.HandleInput(a.logsInput(c.Services(), lines))
-	a.logsKeys(c, col, lines)
-	origin := col.Bounds()
+	o := &s.views[v]
+	a.logsFollow(o, lines) // before the list: where it goes
+	// A drag at the list's edge scrolls it (before the list, which takes
+	// the offset as it is built).
+	edge := s.m.Dragging() && logsAutoScroll(t, s.drag.y, s.drag.h, &o.scroll)
 	pressing := s.m.Pressed()
 	s.spans = s.spans[:0]
-	col.Children(func() {
-		for _, e := range lines {
+	ui.Column(c.Key("logs-area")).Grow(1).MinHeight(0).Children(func() {
+		list := ui.List(c.Key("logs-rows"), &o.list, len(lines), func(i int) {
+			e := lines[i]
 			color := t.Text
 			switch e.Level {
 			case core.SeverityError:
@@ -152,7 +148,7 @@ func (a *app) logRows(c *ui.Context, lines []core.LogEntry, view ui.Rect, st *ui
 			case core.SeverityDebug:
 				color = k.Text3
 			}
-			row := ui.Row(c.Key(e.Seq)).Gap(px(t, 8)).Padding(px(t, 1), px(t, 4)).Radius(px(t, 4))
+			row := ui.Row(c).Gap(px(t, 8)).Padding(px(t, 1), px(t, 4)).Radius(px(t, 4))
 			// The hover waits while the pointer presses: a drag shows
 			// what it selects.
 			hovered := !pressing && row.Hovered()
@@ -164,8 +160,8 @@ func (a *app) logRows(c *ui.Context, lines []core.LogEntry, view ui.Rect, st *ui
 			case hovered:
 				row.Background(k.Hover)
 			}
-			if b := row.Bounds(); b.H > 0 {
-				s.spans = append(s.spans, logSpan{seq: e.Seq, top: b.Y - origin.Y, bottom: b.Y + b.H - origin.Y})
+			if b := row.Bounds(); b.H > 0 { // in the window, until the list's box is known
+				s.spans = append(s.spans, logSpan{seq: e.Seq, top: b.Y, bottom: b.Y + b.H})
 			}
 			a.logRowMenu(c, row, e, lines)
 			row.Children(func() {
@@ -174,15 +170,24 @@ func (a *app) logRows(c *ui.Context, lines []core.LogEntry, view ui.Rect, st *ui
 				// Not Selectable: the pointer chooses lines, not characters.
 				ui.Text(c, e.Message).Font("monospace").FontSize(px(t, 11)).TextColor(color).Grow(1).MinWidth(0)
 			})
+		})
+		list.TrackScroll(&o.scroll).Grow(1).MinHeight(0).Padding(px(t, 5), px(t, sp3-4), px(t, 5), px(t, sp6-4)).Focusable().Label(i18n.T("Log lines"))
+		// The rows' spans against the list's box, as on screen (the last
+		// frame's, as the rows'): the pointer's events come in its box.
+		origin := list.Bounds()
+		s.origin = origin
+		for i := range s.spans {
+			s.spans[i].top -= origin.Y
+			s.spans[i].bottom -= origin.Y
+		}
+		list.HandleInput(a.logsInput(c.Services(), lines))
+		a.logsKeys(c, list, lines)
+		a.newLinesPill(c, o, lines) // over the list's top
+		changed := a.logsResolve(c, list, lines)
+		if changed || edge {
+			c.AnimationFrame() // show the selection the events made
 		}
 	})
-	changed := a.logsResolve(c, col, lines)
-	if s.m.Dragging() && logsAutoScroll(t, col, view, st) {
-		changed = true
-	}
-	if changed {
-		c.AnimationFrame() // show the selection the events made
-	}
 }
 
 // mygoClipboard copies text through the window's services.

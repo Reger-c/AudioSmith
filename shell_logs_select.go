@@ -11,11 +11,16 @@ package main
 // clears the selection. The context menu (right-click, Control-click)
 // copies the line, the selection or every line shown.
 //
-// The rows' column takes the pointer (HandleInput) and keeps its events
-// for the next build, which reads where the rows were as the user acted
-// (Bounds: the frame on screen) once it has built them.
+// The rows' list takes the pointer (HandleInput) and keeps its events for
+// the next build, which reads where the rows were as the user acted
+// (Bounds: the frame on screen) once it has built them. The list shows the
+// newest line first (shell_logs_order.go); copies are in the log's order,
+// the oldest first.
 
 import (
+	"cmp"
+	"slices"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -29,13 +34,16 @@ type logSelection struct {
 	// events are the rows column's pointer events since the last build,
 	// in its box's coordinates.
 	events []logPointer
-	// spans are where the rows were in the column, as built last, and
-	// origin where the column was in the window.
+	// spans are where the rows were in the list's box (the rows it
+	// built, top to bottom), as built last, and origin where the list was
+	// in the window.
 	spans  []logSpan
 	origin ui.Rect
-	// scroll is the page's and the panel's scroll, which a drag near
-	// their edges moves.
-	scroll [2]ui.ScrollState
+	// views are the page's and the panel's lists (shell_logs_order.go).
+	views [2]logListView
+	// drag is where the pointer was in the list's box, and the box's
+	// height, while a drag selects: for logsAutoScroll in the next build.
+	drag struct{ y, h float32 }
 }
 
 type logPointer struct {
@@ -99,7 +107,7 @@ func entrySeq(e core.LogEntry) uint64 { return e.Seq }
 
 // logsResolve runs the pointer's events against the rows just built
 // (s.spans) and reports whether the selection may have changed: the view
-// then builds once more to show it. col is the rows column, for where the
+// then builds once more to show it. col is the rows' list, for where the
 // pointer is now while it presses (the log scrolled under it).
 func (a *app) logsResolve(c *ui.Context, col ui.Element, lines []core.LogEntry) bool {
 	s := &a.logSel
@@ -152,6 +160,7 @@ func (a *app) logsResolve(c *ui.Context, col ui.Element, lines []core.LogEntry) 
 		x, y, _ := col.PointerPosition()
 		seq, ok := s.hit(y, true)
 		changed = s.m.Move(x, y, seq, ok, order) || changed
+		s.drag.y, s.drag.h = y, col.Bounds().H
 	}
 	return changed
 }
@@ -175,23 +184,23 @@ func (s *logSelection) hit(y float32, clamp bool) (uint64, bool) {
 	return s.spans[n-1].seq, clamp
 }
 
-// logsAutoScroll scrolls st while a drag holds the pointer within 24 DIPs
-// of the edges of view (or past them), faster farther on, and reports
-// whether it scrolled: the next frames go on, and the drag's rows follow
-// the pointer (logsResolve).
-func logsAutoScroll(t *ui.Theme, col ui.Element, view ui.Rect, st *ui.ScrollState) bool {
-	if view.H <= 0 {
+// logsAutoScroll scrolls the list (its ScrollState st) while a drag holds
+// the pointer within 24 DIPs of its top or bottom edge (or past them),
+// faster farther on: y is the pointer in the list's box and h the box's
+// height, as the last frame had them (s.drag). It runs before the list is
+// built, which takes the offset; it reports whether the pointer is at an
+// edge, for frames to keep coming while it is.
+func logsAutoScroll(t *ui.Theme, y, h float32, st *ui.ScrollState) bool {
+	if h <= 0 {
 		return false
 	}
-	_, y, _ := col.PointerPosition()
-	y += col.Bounds().Y // in the window
 	edge := px(t, 24)
 	var dy float32
 	switch {
-	case y < view.Y+edge:
-		dy = y - (view.Y + edge)
-	case y > view.Y+view.H-edge:
-		dy = y - (view.Y + view.H - edge)
+	case y < edge:
+		dy = y - edge
+	case y > h-edge:
+		dy = y - (h - edge)
 	default:
 		return false
 	}
@@ -199,11 +208,7 @@ func logsAutoScroll(t *ui.Theme, col ui.Element, view ui.Rect, st *ui.ScrollStat
 	if dy < 0 {
 		step = -step
 	}
-	to := min(max(st.Y+step, 0), st.MaxY)
-	if to == st.Y {
-		return false
-	}
-	st.Y = to
+	st.Y = min(max(st.Y+step, 0), st.MaxY)
 	return true
 }
 
@@ -214,18 +219,19 @@ func abs32(v float32) float32 {
 	return v
 }
 
-// copyLogLines copies lines (as the log file has them), says how many,
-// and clears the selection.
+// copyLogLines copies lines as the log file has them, the oldest first
+// whatever order they show in, says how many, and clears the selection.
 func (a *app) copyLogLines(svc ui.Services, lines []core.LogEntry) {
 	if len(lines) == 0 {
 		return
 	}
+	lines = slices.SortedFunc(slices.Values(lines), func(x, y core.LogEntry) int { return cmp.Compare(x.Seq, y.Seq) })
 	svc.WriteClipboard(listsel.Text(lines, logs.Format))
 	a.toast(i18n.N(len(lines), "Copied %d line", "Copied %d lines", len(lines)))
 	a.logSel.m.Clear()
 }
 
-// logsKeys gives the rows column ⌘A, ⌘C and Esc while it has the focus
+// logsKeys gives the rows' list ⌘A, ⌘C and Esc while it has the focus
 // (on macOS the Edit menu takes ⌘A and ⌘C: logsInput).
 func (a *app) logsKeys(c *ui.Context, col ui.Element, lines []core.LogEntry) {
 	s := &a.logSel
