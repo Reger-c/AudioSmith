@@ -112,3 +112,8 @@ user-plus-rounded       # Clone
 
 # Transcription with speakers (thread #48).
 users-group-rounded     # Transcribe's Speakers option, speaker names
+
+# The sound picker (dictation_soundpicker.go): ▶ on a sound, the volume.
+turntable-music-note-line-duotone   # play a sound (a duotone variant: both Linear and Bold)
+volume-cross             # volume: muted
+volume-small             # volume: low

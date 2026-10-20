@@ -55,8 +55,11 @@ func (a *app) openDictSounds() {
 func (a *app) dictSoundPrefs() sounds.Prefs {
 	d := a.prefs.Dictation
 	v := d.SoundVolume
-	if v <= 0 {
+	switch {
+	case v == 0:
 		v = sounds.DefaultVolume
+	case v < 0:
+		v = 0 // muted
 	}
 	p := sounds.Prefs{On: d.Sounds, Volume: min(v, 100)}
 	p.Choose(dictStartEvent, d.StartSound)
@@ -81,15 +84,19 @@ func (a *app) playDictTarget(t sounds.Target) {
 	}
 }
 
-// dictPreview plays choice for ev (the picker's ▶, Try), sounds on or off.
+// dictPreview plays choice for ev (the picker's ▶, Try), sounds on or off,
+// cutting off the last preview; dictPlayer.Previewing says what plays.
 func (a *app) dictPreview(ev sounds.Event, choice string) {
-	t := sounds.Resolve(a.dictSoundCat, choice, ev.Fallback, a.dictSoundPrefs().Volume)
-	if t.Kind == sounds.KindCatalog {
-		a.dictPlayer.Preview(choice, ev.Fallback, a.dictSoundPrefs().Volume)
-		return
+	a.dictPlayer.Preview(choice, ev.Fallback, a.dictSoundPrefs().Volume)
+}
+
+// setDictSoundVolume keeps v (percent) as the sounds' volume; 0 is stored
+// as muted (-1), as 0 is unset.
+func (a *app) setDictSoundVolume(v int) {
+	if v <= 0 {
+		v = -1
 	}
-	a.dictPlayer.StopPreview()
-	a.playDictTarget(t)
+	a.updateSettings(func(s *settings.Settings) { s.Dictation.SoundVolume = min(v, 100) })
 }
 
 // chooseDictSound keeps choice as ev's sound.

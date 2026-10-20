@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Dictation's sounds to choose
-- Settings → Dictation → Sounds: the sound of listening starting, of it stopping and of an error are each chosen from the ActNow family's sound library (Tally, Wrap and Shrug by default), macOS's system sounds or none. A picker searches them, filters by group and tag and plays each with ▶; Try plays the choice; a slider sets the volume.
+- Settings → Dictation → Sounds: the sound of listening starting, of it stopping and of an error are each chosen from the ActNow family's sound library (Tally, Wrap and Shrug by default), macOS's system sounds or none. A compact picker searches them (names and tags), filters by type, plays each with ▶ (again to stop) and sets the volume in steps; Try plays the choice.
 - The sounds are React Bits Sound Lab's and come with the builds from actnow.dev and GitHub releases only: they are not in this repository or under its licence (NOTICE). A build from source plays the system sounds AudioSmith used before (Tink, Pop, Basso).
 
 ### Models move to the ActNow folder, out of Time Machine

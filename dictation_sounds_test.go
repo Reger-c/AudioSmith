@@ -96,3 +96,62 @@ func TestDictationSoundRows(t *testing.T) {
 		t.Error("the lines show while sounds are off")
 	}
 }
+
+// TestDictationSoundPanel: the panel's type menu and volume menu; ▶ in the
+// accent while its sound plays, a click then stops it.
+func TestDictationSoundPanel(t *testing.T) {
+	m := newM2Test(t)
+	a, tt := m.a, m.tt
+	rec := useTestSounds(t, a)
+	tt.SetSize(1000, 2400)
+	a.navigate("/settings/dictation")
+	tt.Frame()
+	if err := tt.Click("Start sound"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("Type"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.Menu(); !slices.Equal(got, []string{"All", "Suggested", "-", "Tap", "Media", "Notify", "-", "macOS"}) {
+		t.Errorf("type menu %q", got)
+	}
+	if err := tt.ChooseMenuItem("Notify"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Chime") || tt.HasText("Pebble") {
+		t.Errorf("Notify: %q", tt.Texts())
+	}
+	if err := tt.Click("Volume"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Mute"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.prefs.Dictation.SoundVolume != -1 || a.dictSoundPrefs().Volume != 0 {
+		t.Errorf("mute: %d", a.prefs.Dictation.SoundVolume)
+	}
+	if err := tt.Click("Volume"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("75%"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("Play Chime"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if ch, _ := a.dictPlayer.Previewing(); ch != "chime" || !tt.HasText("Stop Chime") {
+		t.Fatalf("playing %q", ch)
+	}
+	if err := tt.Click("Stop Chime"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := rec.Played(); !slices.Equal(got, []string{"chime@0.75", "stop chime"}) {
+		t.Errorf("played %q", got)
+	}
+}

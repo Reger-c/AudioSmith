@@ -123,8 +123,8 @@ func extract(tgz []byte, name string) ([]byte, error) {
 	}
 }
 
-// readNames reads the base names (without -linear or -bold); # starts a
-// comment.
+// readNames reads the base names (without -linear or -bold; or a whole
+// duotone variant's name, variants); # starts a comment.
 func readNames(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -158,6 +158,21 @@ func body(set *iconSet, name string) (string, error) {
 	return "", fmt.Errorf("gen: no icon %q in Solar %s", name, version)
 }
 
+// variants are an icon's Linear and Bold bodies: its -linear and -bold
+// variants, or, for the name of one variant ("…-line-duotone",
+// "…-bold-duotone"), that variant for both.
+func variants(set *iconSet, n string) (lin, bold string, err error) {
+	if strings.HasSuffix(n, "-line-duotone") || strings.HasSuffix(n, "-bold-duotone") {
+		lin, err = body(set, n)
+		return lin, lin, err
+	}
+	if lin, err = body(set, n+"-linear"); err != nil {
+		return "", "", err
+	}
+	bold, err = body(set, n+"-bold")
+	return lin, bold, err
+}
+
 // goName turns "user-speak-rounded" into "UserSpeakRounded".
 func goName(base string) string {
 	var b strings.Builder
@@ -179,11 +194,7 @@ func generate(set *iconSet, names []string) ([]byte, error) {
 	fmt.Fprintf(&b, "// SolarVersion is the version of @iconify-json/solar the icons come from.\nconst SolarVersion = %q\n\n", version)
 	fmt.Fprintf(&b, "var (\n")
 	for _, n := range names {
-		lin, err := body(set, n+"-linear")
-		if err != nil {
-			return nil, err
-		}
-		bold, err := body(set, n+"-bold")
+		lin, bold, err := variants(set, n)
 		if err != nil {
 			return nil, err
 		}

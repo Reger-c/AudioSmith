@@ -559,20 +559,20 @@ func (a *app) dictSoundRows(c *ui.Context) {
 			settingRow(c, "dict-sound-"+ev.ID, r.label, "", func() {
 				choice := prefs.Choice(ev)
 				soundPicker(c.Key("pick-"+ev.ID), soundPickerSpec{
-					Name:    r.name,
-					Event:   ev,
-					Choice:  choice,
-					Volume:  prefs.Volume,
-					Catalog: a.dictSoundCat,
-					System:  a.systemSounds(),
-					Label:   a.dictSoundLabel(ev),
-					Choose:  func(ch string) { a.chooseDictSound(ev, ch) },
-					Preview: func(ch string) { a.dictPreview(ev, ch) },
-					SetVolume: func(v int) {
-						a.updateSettings(func(s *settings.Settings) { s.Dictation.SoundVolume = max(1, v) })
-					},
+					Name:      r.name,
+					Event:     ev,
+					Choice:    choice,
+					Volume:    prefs.Volume,
+					Catalog:   a.dictSoundCat,
+					System:    a.systemSounds(),
+					Label:     a.dictSoundLabel(ev),
+					Choose:    func(ch string) { a.chooseDictSound(ev, ch) },
+					Preview:   func(ch string) { a.dictPreview(ev, ch) },
+					Stop:      a.dictPlayer.StopPreview,
+					Playing:   a.dictPlayer.Previewing,
+					SetVolume: a.setDictSoundVolume,
 				})
-				if iconButton(c.Key("try-"+ev.ID), icons.Play, r.try).Clicked() {
+				if iconButton(c.Key("try-"+ev.ID), icons.TurntableMusicNoteLineDuotone, r.try).Clicked() {
 					a.dictPreview(ev, choice)
 				}
 			})

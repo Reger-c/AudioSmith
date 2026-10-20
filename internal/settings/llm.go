@@ -89,7 +89,8 @@ type Dictation struct {
 	// starting and stopping and of an error, as choices of actnowkit's
 	// sounds package: "" the default (one of the ActNow family's sounds),
 	// "none", "system:<name>" for a macOS system sound, or a family
-	// sound's id. SoundVolume is their volume in percent (0: 70).
+	// sound's id. SoundVolume is their volume in percent (0: 70; negative:
+	// muted).
 	StartSound  string `json:"startSound,omitempty"`
 	StopSound   string `json:"stopSound,omitempty"`
 	ErrorSound  string `json:"errorSound,omitempty"`
