@@ -24,6 +24,17 @@ The models AudioSmith downloads are not part of it: each keeps its own
 licence, shown on the Models page (some, such as OmniVoice, allow
 non-commercial use only).
 
+The sounds of dictation in AudioSmith's official builds (from actnow.dev
+and its GitHub releases) are not part of this program either: they are
+React Bits Sound Lab's (https://reactbits.dev/tools/sound-lab), Copyright
+(c) 2026 David Haz, used under the React Bits licence (MIT + Commons
+Clause; THIRD-PARTY-NOTICES.txt), which allows them inside an app but not
+their redistribution on their own. They are not in this repository and not
+licensed under the AGPL: official builds fetch them from the ActNow
+family's private sound library (scripts/sync-sounds.sh) into
+Contents/Resources/sounds, and a build from this source plays system
+sounds instead.
+
 This product includes third-party material:
 
 Solar icon set

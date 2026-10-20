@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hehehai/actnowkit/sounds"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,6 +134,10 @@ func newM2Test(t *testing.T) *m2Test {
 	completeAux(t, a)
 	m := &m2Test{a: a, eng: eng, tt: tt, sys: dictation.NewFake(), keys: newFakeHotkeys()}
 	a.dictSys, a.dictClip, a.dictKeys = m.sys, m.sys, m.keys
+	// Dictation's sounds as a source build has them (none of the family's:
+	// system sounds, which m.sys records), whatever resources/sounds holds;
+	// useTestSounds gives the family's.
+	a.dictSoundCat, a.dictPlayer = nil, sounds.NewPlayer(nil, sounds.Silent{})
 	m.sys.OnHotkeyReleased(func() { a.post(a.dictReleased) })
 	a.applyDictShortcut()
 	a.recheckPermissions()

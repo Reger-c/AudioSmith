@@ -14,8 +14,8 @@ import (
 
 // extraComponents is the rest of what the app carries: the native
 // libraries of MyGo's plugins (SQLite), RapiDoc and the libraries in its
-// bundle, the Solar icons and the voice previews, in that order (each
-// group sorted). Each is listed when the package that embeds it is linked.
+// bundle, the Solar icons, the voice previews and the dictation sounds of
+// official builds, in that order (each group sorted). Each is listed when the package that embeds it is linked.
 func extraComponents(root string, linked map[string]bool) ([]component, error) {
 	var out []component
 	add := func(cs []component, err error) error {
@@ -27,6 +27,7 @@ func extraComponents(root string, linked map[string]bool) ([]component, error) {
 		func() ([]component, error) { return rapiDoc(root, linked) },
 		func() ([]component, error) { return solarIcons(root, linked) },
 		func() ([]component, error) { return voicePreviews(root, linked) },
+		func() ([]component, error) { return familySounds(root, linked) },
 	} {
 		if err := add(step()); err != nil {
 			return nil, err
@@ -229,4 +230,23 @@ func voicePreviews(root string, linked map[string]bool) ([]component, error) {
 		})
 	}
 	return out, nil
+}
+
+// familySounds are the dictation's sounds of official builds: React Bits
+// Sound Lab's, from the ActNow family's private library
+// (scripts/sync-sounds.sh), listed when actnowkit's sounds package (their
+// player) is linked. They are not in the repository.
+func familySounds(root string, linked map[string]bool) ([]component, error) {
+	if !linked["github.com/hehehai/actnowkit/sounds"] {
+		return nil, nil
+	}
+	body, err := readFile(root, "third_party/licenses/texts/React-Bits.md")
+	if err != nil {
+		return nil, err
+	}
+	return []component{{
+		name: "React Bits Sound Lab", version: "sounds exported 2026-10-20", url: "https://reactbits.dev/tools/sound-lab", spdx: "MIT WITH Commons-Clause",
+		notes: []string{"The sounds of dictation in official builds (Contents/Resources/sounds), from the ActNow family's private sound library: used inside the app, not redistributed on their own, and not in AudioSmith's source or under its licence. A build from source plays system sounds."},
+		texts: []text{{name: "LICENSE.md", body: body}},
+	}}, nil
 }

@@ -105,10 +105,11 @@ type dictationState struct {
 	dict    *dictSession // the current or last dictation; nil before the first
 	dictGen int
 
-	dictPill pillWindow
-	dictTray trayState
-	dictSet  dictSettingsForm // dictation_settings.go
-	perms    permissionsState // permissions.go
+	dictPill        pillWindow
+	dictTray        trayState
+	dictSet         dictSettingsForm // dictation_settings.go
+	dictSoundsState                  // dictation_sounds.go
+	perms           permissionsState // permissions.go
 
 	// dictSleep waits before the pill hides (tests replace it).
 	dictAfter func(d time.Duration, fn func())
@@ -153,6 +154,7 @@ func (a *app) openDictation() {
 			time.AfterFunc(d, func() { a.post(fn) })
 		}
 	}
+	a.openDictSounds() // dictation_sounds.go
 	a.loadDictSettingsForm()
 }
 

@@ -171,6 +171,21 @@ jobs:
             exit 1
           fi
 
+      - name: Fetch the family's cue sounds
+        # React Bits Sound Lab's audio, from the ActNow family's private
+        # library (never in this repository): with ACTNOW_SOUNDS_TOKEN (a
+        # read-only token of hehehai/actnow-sounds) the build carries them,
+        # without it the app plays system sounds.
+        env:
+          ACTNOW_SOUNDS_TOKEN: ${{ secrets.ACTNOW_SOUNDS_TOKEN }}
+        run: |
+          if [ -z "$ACTNOW_SOUNDS_TOKEN" ]; then
+            echo "::warning::no ACTNOW_SOUNDS_TOKEN: this build plays system sounds"
+            exit 0
+          fi
+          git clone -q --depth 1 "https://x-access-token:${ACTNOW_SOUNDS_TOKEN}@github.com/hehehai/actnow-sounds" "$RUNNER_TEMP/actnow-sounds"
+          ACTNOW_SOUNDS="$RUNNER_TEMP/actnow-sounds" scripts/sync-sounds.sh
+
       - name: Import the certificate and the notary credentials
         if: env.SIGN == 'true'
         env:

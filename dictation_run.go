@@ -38,9 +38,7 @@ func (a *app) dictStart(target dictation.Target, hold bool) {
 		return
 	}
 	a.dictShow()
-	if a.prefs.Dictation.Sounds {
-		a.dictSys.PlaySound("Tink")
-	}
+	a.dictCue(dictStartEvent)
 	a.dictPreload()
 	if a.prefs.Dictation.Cleanup {
 		a.warmLocalLLM(llm.SkillDictationCleanup) // clean-up runs within 4 s: load the model while the user speaks
@@ -113,9 +111,7 @@ func (a *app) dictStop() {
 		return
 	}
 	s.phase, s.stage = dictTranscribing, i18n.T("Transcribing…")
-	if a.prefs.Dictation.Sounds {
-		a.dictSys.PlaySound("Pop")
-	}
+	a.dictCue(dictStopEvent)
 	a.dictRefresh()
 	rec := s.rec
 	a.stopRecording(rec, func(res proto.CaptureResult, err error) {
@@ -331,9 +327,7 @@ func (a *app) dictFail(s *dictSession, msg string) {
 		s.rec = nil
 		a.background(rec.Cancel)
 	}
-	if a.prefs.Dictation.Sounds {
-		a.dictSys.PlaySound("Basso")
-	}
+	a.dictCue(dictErrorEvent)
 	a.dictEnd(s, dictError, msg)
 }
 

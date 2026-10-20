@@ -91,6 +91,10 @@ if $engine || [[ ! -x resources/darwin-arm64/engine/audiosmith-engine ]]; then
   scripts/build-engine.sh Release
 fi
 
+# The family's cue sounds (never in this repository): fetched from the
+# private library; without access the build plays system sounds.
+scripts/sync-sounds.sh --optional || true
+
 backup="$(mktemp)"
 cp mygo.json "$backup"
 trap 'cp "$backup" mygo.json; rm -f "$backup"' EXIT

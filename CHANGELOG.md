@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Dictation's sounds to choose
+- Settings → Dictation → Sounds: the sound of listening starting, of it stopping and of an error are each chosen from the ActNow family's sound library (Tally, Wrap and Shrug by default), macOS's system sounds or none. A picker searches them, filters by group and tag and plays each with ▶; Try plays the choice; a slider sets the volume.
+- The sounds are React Bits Sound Lab's and come with the builds from actnow.dev and GitHub releases only: they are not in this repository or under its licence (NOTICE). A build from source plays the system sounds AudioSmith used before (Tink, Pop, Basso).
+
 ### Models move to the ActNow folder, out of Time Machine
 - Models are kept in ~/Library/Application Support/ActNow/models, shared with the other ActNow apps, instead of the Hugging Face cache (~/.cache/huggingface), which cleaning tools treat as a cache. Models already there are brought over at the first start without downloading them again (hard links: the cache stays as it is, for the tools that use it).
 - Time Machine leaves models out (they can be downloaded again); Settings → Storage → "Back up models with Time Machine" turns it back on for all ActNow apps.

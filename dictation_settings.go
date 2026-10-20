@@ -7,6 +7,7 @@ package main
 // the menu bar".
 
 import (
+	"github.com/hehehai/actnowkit/sounds"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -15,6 +16,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/dictation"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/lang"
 	"github.com/hehehai/AudioSmith/internal/llm"
 	"github.com/hehehai/AudioSmith/internal/settings"
@@ -426,12 +428,15 @@ func (a *app) dictationSettings(c *ui.Context) {
 			a.updateSettings(func(s *settings.Settings) { s.Dictation.Output = o })
 		}
 	})
-	settingRow(c, "dict-sounds", i18n.T("Sounds"), i18n.T("A sound when listening starts and stops."), func() {
+	settingRow(c, "dict-sounds", i18n.T("Sounds"), i18n.T("A sound when listening starts and stops, and when something goes wrong. Choosing a sound plays it."), func() {
 		if ui.Switch(c.Key("dict-sounds-switch"), &f.sounds).Label(i18n.T("Sounds")).Changed() {
 			on := f.sounds
 			a.updateSettings(func(s *settings.Settings) { s.Dictation.Sounds = on })
 		}
 	})
+	if f.sounds {
+		a.dictSoundRows(c)
+	}
 	settingRow(c, "dict-try", i18n.T("Try it"), i18n.T("Dictates here: the text is copied, since AudioSmith is in front."), func() {
 		label := i18n.T("Start dictation")
 		if s := a.dict; s != nil && (s.phase == dictStarting || s.phase == dictListening) {
@@ -532,4 +537,45 @@ func dictationGlyphs(acc string) string {
 		return ""
 	}
 	return dictation.GlyphsOf(acc)
+}
+
+// dictSoundRows are a line per sound of dictation under Sounds: its
+// picker (dictation_soundpicker.go) and Try.
+func (a *app) dictSoundRows(c *ui.Context) {
+	t := c.Theme()
+	rows := []struct {
+		ev          sounds.Event
+		label, name string
+		try         string
+	}{
+		{dictStartEvent, i18n.T("When listening starts"), i18n.T("Start sound"), i18n.T("Try the start sound")},
+		{dictStopEvent, i18n.T("When listening stops"), i18n.T("Stop sound"), i18n.T("Try the stop sound")},
+		{dictErrorEvent, i18n.T("When something goes wrong"), i18n.T("Error sound"), i18n.T("Try the error sound")},
+	}
+	prefs := a.dictSoundPrefs()
+	ui.Column(c.Key("dict-sound-rows")).Gap(px(t, 4)).Padding(0, 0, 0, px(t, 16)).Children(func() {
+		for _, r := range rows {
+			ev := r.ev
+			settingRow(c, "dict-sound-"+ev.ID, r.label, "", func() {
+				choice := prefs.Choice(ev)
+				soundPicker(c.Key("pick-"+ev.ID), soundPickerSpec{
+					Name:    r.name,
+					Event:   ev,
+					Choice:  choice,
+					Volume:  prefs.Volume,
+					Catalog: a.dictSoundCat,
+					System:  a.systemSounds(),
+					Label:   a.dictSoundLabel(ev),
+					Choose:  func(ch string) { a.chooseDictSound(ev, ch) },
+					Preview: func(ch string) { a.dictPreview(ev, ch) },
+					SetVolume: func(v int) {
+						a.updateSettings(func(s *settings.Settings) { s.Dictation.SoundVolume = max(1, v) })
+					},
+				})
+				if iconButton(c.Key("try-"+ev.ID), icons.Play, r.try).Clicked() {
+					a.dictPreview(ev, choice)
+				}
+			})
+		}
+	})
 }

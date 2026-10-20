@@ -85,7 +85,16 @@ type Dictation struct {
 	Vocabulary string `json:"vocabulary,omitempty"`
 	Output     string `json:"output"` // "paste" | "copy"
 	Sounds     bool   `json:"sounds"`
-	Device     string `json:"device,omitempty"` // capture device id; "" = the system's
+	// StartSound, StopSound and ErrorSound are the sounds of listening
+	// starting and stopping and of an error, as choices of actnowkit's
+	// sounds package: "" the default (one of the ActNow family's sounds),
+	// "none", "system:<name>" for a macOS system sound, or a family
+	// sound's id. SoundVolume is their volume in percent (0: 70).
+	StartSound  string `json:"startSound,omitempty"`
+	StopSound   string `json:"stopSound,omitempty"`
+	ErrorSound  string `json:"errorSound,omitempty"`
+	SoundVolume int    `json:"soundVolume,omitempty"`
+	Device      string `json:"device,omitempty"` // capture device id; "" = the system's
 	// EnabledAt is when the user last set the shortcut or turned
 	// dictation on (UTC; zero = before AudioSmith recorded it), for the
 	// ActNow family's shortcut conflicts (family.go).

@@ -12,6 +12,10 @@ mygo_windows_*.syso
 /resources/darwin-arm64/engine/
 /AudioSmith
 
+# The family's cue sounds (scripts/sync-sounds.sh): React Bits Sound Lab's
+# audio, used inside the app but never in this public repository
+/resources/sounds/
+
 # Release keys never belong in the repository (docs/release.md)
 *.p12
 *.p8
