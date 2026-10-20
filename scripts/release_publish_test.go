@@ -111,8 +111,9 @@ func publishRoot(t *testing.T, siteURL, manifestURL string) (root, log string) {
 	config := `{"name": "AudioSmith", "version": "0.4.0-beta.5", "macos": {"minimumSystemVersion": "15.0"},
 		"updates": {"publicKey": "k", "url": "` + siteURL + `/updates/audiosmith"}}`
 	root = fakeRoot(t, []string{"actnow.sh", "actnow-publish.sh", "release-publish.sh"}, map[string]string{
-		"mygo.json":    config,
-		"CHANGELOG.md": "# Changelog\n\n## 0.4.0-beta.5\n\n- Five.\n\n## 0.4.0-beta.4\n\n- Four.\n",
+		"mygo.json":            config,
+		"CHANGELOG.md":         "# Changelog\n\n## 0.4.0-beta.5\n\n- Five.\n\n## 0.4.0-beta.4\n\n- Four.\n",
+		"CHANGELOG.zh-Hans.md": "# 更新日志\n\n## 0.4.0-beta.5\n\n- 五。\n\n## 0.4.0-beta.4\n\n- 四。\n",
 		"build/darwin-arm64/AudioSmith 0.4.0-beta.5 arm64.dmg":                          "disk image",
 		"build/darwin-arm64/audiosmith-0.4.0-beta.5-darwin-arm64.tar.gz":                "archive",
 		"build/darwin-arm64/audiosmith-0.4.0-beta.4-to-0.4.0-beta.5-darwin-arm64.delta": "delta",
@@ -153,7 +154,15 @@ func TestReleasePublish(t *testing.T) {
 		env = append([]string{
 			"PATH=" + filepath.Join(root, "bin") + ":" + os.Getenv("PATH"), "LOG=" + log, "ACTNOW_URL=" + s.srv.URL,
 		}, env...)
-		return run(t, root, env, "bash", append([]string{"scripts/release-publish.sh"}, args...)...)
+		// The site's handler reads and writes under its lock: taking it
+		// before and after a run orders the test's reads and writes with
+		// the handler's (the race detector sees no edge through curl).
+		s.mu.Lock()
+		s.mu.Unlock() //nolint:staticcheck // an empty critical section on purpose
+		stdout, stderr, err := run(t, root, env, "bash", append([]string{"scripts/release-publish.sh"}, args...)...)
+		s.mu.Lock()
+		s.mu.Unlock() //nolint:staticcheck // an empty critical section on purpose
+		return stdout, stderr, err
 	}
 	token := []string{"ACTNOW_INGEST_TOKEN=" + testToken}
 	ghManifest := func(root string) map[string]any {
@@ -187,6 +196,10 @@ func TestReleasePublish(t *testing.T) {
 	}
 	if request["app"] != "audiosmith" || request["version"] != "0.4.0-beta.5" || request["channel"] != "beta" || request["minMacOS"] != "15.0" || request["notes"] != "- Five." || request["publish"] != nil {
 		t.Errorf("dry run: request %v", request)
+	}
+	// Both changelogs go to the site (it checks them; the app reads each language).
+	if cl, _ := request["changelogs"].(map[string]any); cl == nil || cl["en"] == nil || cl["zh-Hans"] == nil {
+		t.Errorf("dry run: changelogs %v", request["changelogs"])
 	}
 	if !strings.Contains(stderr, "dry run: nothing sent") {
 		t.Errorf("dry run says:\n%s", stderr)
@@ -302,7 +315,9 @@ func TestReleasePublish(t *testing.T) {
 	// The site refuses: no GitHub release, the site's reason shown.
 	os.Remove(log)
 	s.reset()
+	s.mu.Lock()
 	s.refuse = http.StatusConflict
+	s.mu.Unlock()
 	_, stderr, err = publish(root, log, token)
 	if calls := readLog(log); err == nil || !strings.Contains(stderr, "0.4.0-beta.5 is already published") || len(calls) != 1 {
 		t.Errorf("refused: %v, %s, calls %v", err, stderr, calls)
@@ -347,7 +362,7 @@ func TestActnowPublishVendored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "927302126c06d90c06681387d469be43145fc6f5a1fd1acce6635c92575cc47a"
+	const want = "d8e9c9a9a229c47697e9626568b859e7ad4aa04799ce3c8e57a4f0fdf6e3a2c3"
 	if got := sum(string(data)); got != want {
 		t.Errorf("scripts/actnow-publish.sh has sha256 %s, not %s: if scripts/vendor-actnow-publish.sh refreshed it, review the diff and update this test", got, want)
 	}

@@ -109,7 +109,7 @@ func newShellState() shellState {
 		lastSettings: "general",
 		logsHeight:   220,
 		prefs:        settings.Defaults(),
-		aboutState:   aboutState{updates: noUpdates{}},
+		aboutState:   aboutState{updates: &appUpdates{}},
 	}
 }
 
@@ -273,6 +273,8 @@ func (a *app) view(c *ui.Context) {
 		a.statusBar(c)
 	})
 	a.settingsDialog(c) // settings_dialog.go
+	a.updatePanel(c)    // updates_view.go: over Settings, whose About asks for it
+	a.historyDialog(c)
 	a.palette(c)
 	a.shortcutSheet(c)
 	a.onboarding(c) // M7a: the first-run wizard, under the licence dialog

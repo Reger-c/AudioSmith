@@ -11,7 +11,10 @@
 #   1. finds the build's files: *.dmg, *.tar.gz, *.delta, update-*.json
 #      (DMG names with spaces, as MyGo writes them, are sent with dashes)
 #   2. the version: --version, else the manifests' "version"
-#   3. the notes: this version's "## <version>" section of --changelog;
+#   3. the notes: this version's "## <version>" section of --changelog.
+#      With CHANGELOG.zh-Hans.md (given as a second --changelog, or found next
+#      to CHANGELOG.md) the Chinese notes come from it, and both whole files
+#      go to the site, which checks that their versions agree. With one file,
 #      English up to the first heading written in Chinese ("### 中文",
 #      "### 新增"…), the rest as notesZh
 #   4. POST /api/releases/sessions, upload each file (big ones in parts),
@@ -21,11 +24,13 @@
 # when an upload fails.
 #
 # Options:
-#   --app <slug>          pik | auralink | dicta | audiosmith | voxtnew (required)
+#   --app <slug>          pik | auralink | dicta | audiosmith | voxt | captioncraft | herenow | paralign | act (required)
 #   --channel <name>      stable | beta (default: beta for x.y.z-pre, else stable)
 #   --dir <path>          MyGo's output directory, e.g. build/darwin-arm64 (required;
 #                         searched two levels deep, so build/ works for several platforms)
-#   --changelog <file>    CHANGELOG.md to take the notes from (default: none)
+#   --changelog <file>    CHANGELOG.md to take the notes from (default: none); again for
+#                         CHANGELOG.zh-Hans.md (CHANGELOG.<locale>.md: only zh-Hans for now)
+#   --no-changelog-discovery  do not pick up CHANGELOG.zh-Hans.md next to CHANGELOG.md
 #   --notes-file <file>   English notes as a file instead (and --notes-zh-file)
 #   --version <x.y.z>     default: from update-*.json
 #   --date <YYYY-MM-DD>   release date (default: today on the site)
@@ -35,7 +40,8 @@
 #   --dry-run             check and print the session request, send nothing
 set -euo pipefail
 
-APP="" CHANNEL="" DIR="" CHANGELOG="" NOTES_FILE="" NOTES_ZH_FILE="" VERSION=""
+APP="" CHANNEL="" DIR="" CHANGELOG="" CHANGELOG_ZH="" NOTES_FILE="" NOTES_ZH_FILE="" VERSION=""
+DISCOVER_CHANGELOGS=1
 DATE="" MIN_MACOS="" PUBLISH="" DRY_RUN=0
 BASE_URL="${ACTNOW_URL:-https://actnow.dev}"
 
@@ -47,7 +53,14 @@ while [ $# -gt 0 ]; do
     --app) APP="$2"; shift 2 ;;
     --channel) CHANNEL="$2"; shift 2 ;;
     --dir) DIR="$2"; shift 2 ;;
-    --changelog) CHANGELOG="$2"; shift 2 ;;
+    --changelog)
+      case "$(basename "$2")" in
+        CHANGELOG.zh-Hans.md|*.zh-Hans.md) CHANGELOG_ZH="$2" ;;
+        CHANGELOG.*.md) die "$(basename "$2"): only CHANGELOG.md and CHANGELOG.zh-Hans.md are supported" ;;
+        *) CHANGELOG="$2" ;;
+      esac
+      shift 2 ;;
+    --no-changelog-discovery) DISCOVER_CHANGELOGS=0; shift ;;
     --notes-file) NOTES_FILE="$2"; shift 2 ;;
     --notes-zh-file) NOTES_ZH_FILE="$2"; shift 2 ;;
     --version) VERSION="${2#v}"; shift 2 ;;
@@ -117,10 +130,10 @@ while IFS= read -r -d '' manifest; do
 done < <(manifests)
 
 # ---- 3. notes -----------------------------------------------------------------
-NOTES="" NOTES_ZH=""
-if [ -n "$CHANGELOG" ]; then
-  [ -f "$CHANGELOG" ] || die "no changelog $CHANGELOG"
-  split="$(jq -Rs --arg v "$VERSION" '
+# section_of <file>: {en, zh} of this version's section (zh: the Chinese part
+# of a bilingual section, or null).
+section_of() {
+  jq -Rs --arg v "$VERSION" '
     def strip: sub("^\\s+"; "") | sub("\\s+$"; "");
     def headver: (if startswith("[") then .[1:] | split("]")[0] else . end) | sub("^v"; "");
     reduce (split("\n")[] | sub("\r$"; "")) as $l ({in: false, done: false, out: []};
@@ -133,15 +146,36 @@ if [ -n "$CHANGELOG" ]; then
     | ([$lines | to_entries[]
         | select((.value | test("^###?\\s")) and (.value | sub("^#+\\s*"; "") | test("\\p{Han}")))
         | .key] | first) as $i
-    | if $i == null then {en: ($lines | join("\n") | strip), zh: null}
+    | ($lines | join("\n") | strip) as $whole
+    | if $i == null then {en: $whole, zh: null, whole: $whole}
       else ($lines[$i] | sub("^#+\\s*"; "") | strip) as $h
         | {en: ($lines[:$i] | join("\n") | strip),
            zh: ((if ($h | test("^(中文|简体中文|繁體中文|Chinese|zh|zh-CN)$"; "i"))
-                 then $lines[$i + 1:] else $lines[$i:] end) | join("\n") | strip)}
-      end' "$CHANGELOG")"
-  NOTES="$(jq -r '.en' <<<"$split")"
-  NOTES_ZH="$(jq -r '.zh // empty' <<<"$split")"
+                 then $lines[$i + 1:] else $lines[$i:] end) | join("\n") | strip),
+           whole: $whole}
+      end' "$1"
+}
+NOTES="" NOTES_ZH=""
+if [ -n "$CHANGELOG" ]; then
+  [ -f "$CHANGELOG" ] || die "no changelog $CHANGELOG"
+  if [ -z "$CHANGELOG_ZH" ] && [ "$DISCOVER_CHANGELOGS" = 1 ]; then
+    sibling="$(dirname "$CHANGELOG")/$(basename "$CHANGELOG" .md).zh-Hans.md"
+    [ -f "$sibling" ] && CHANGELOG_ZH="$sibling" && log "changelog: also $sibling"
+  fi
+  split="$(section_of "$CHANGELOG")"
+  if [ -n "$CHANGELOG_ZH" ]; then
+    [ -f "$CHANGELOG_ZH" ] || die "no changelog $CHANGELOG_ZH"
+    # Two files: each is one language, whole.
+    NOTES="$(jq -r '.whole' <<<"$split")"
+    NOTES_ZH="$(section_of "$CHANGELOG_ZH" | jq -r '.whole')"
+    [ -n "$NOTES_ZH" ] || die "$CHANGELOG_ZH has no \"## $VERSION\" section (or it is empty)"
+  else
+    NOTES="$(jq -r '.en' <<<"$split")"
+    NOTES_ZH="$(jq -r '.zh // empty' <<<"$split")"
+  fi
   [ -n "$NOTES" ] || die "$CHANGELOG has no \"## $VERSION\" section (or it is empty)"
+elif [ -n "$CHANGELOG_ZH" ]; then
+  die "--changelog CHANGELOG.zh-Hans.md needs --changelog CHANGELOG.md too"
 fi
 [ -n "$NOTES_FILE" ] && NOTES="$(cat "$NOTES_FILE")"
 [ -n "$NOTES_ZH_FILE" ] && NOTES_ZH="$(cat "$NOTES_ZH_FILE")"
@@ -180,12 +214,15 @@ for file in "${FILES[@]}"; do
     '. + [{filename: $f, size: $s, sha256: $h} + (if $p != "" then {platform: $p} else {} end)]' <<<"$ARTIFACTS")"
 done
 
+CHANGELOG_EN_FILE="${CHANGELOG:-/dev/null}" CHANGELOG_ZH_FILE="${CHANGELOG_ZH:-/dev/null}"
 REQUEST="$(jq -n \
   --arg app "$APP" --arg version "$VERSION" --arg channel "$CHANNEL" \
   --arg notes "$NOTES" --arg notesZh "$NOTES_ZH" --arg date "$DATE" \
+  --arg hasZh "${CHANGELOG_ZH:+1}" --rawfile changelogEn "$CHANGELOG_EN_FILE" --rawfile changelogZh "$CHANGELOG_ZH_FILE" \
   --arg minMacOS "$MIN_MACOS" --arg publish "$PUBLISH" --argjson artifacts "$ARTIFACTS" '
   {app: $app, version: $version, channel: $channel, notes: $notes, artifacts: $artifacts}
   + (if $notesZh != "" then {notesZh: $notesZh} else {} end)
+  + (if $hasZh == "1" then {changelogs: {en: $changelogEn, "zh-Hans": $changelogZh}} else {} end)
   + (if $date != "" then {date: $date} else {} end)
   + (if $minMacOS != "" then {minMacOS: $minMacOS} else {} end)
   + (if $publish == "false" then {publish: false} else {} end)')"
@@ -193,7 +230,8 @@ REQUEST="$(jq -n \
 log "ActNow release: $APP $VERSION ($CHANNEL) → $BASE_URL"
 jq -r '.artifacts[] | "  \(.filename)  \(.size) bytes  \(.sha256[0:12])…"' <<<"$REQUEST" >&2
 if [ "$DRY_RUN" = 1 ]; then
-  jq '.notes |= (.[0:200] + (if length > 200 then "…" else "" end)) | if .notesZh then .notesZh |= .[0:200] else . end' <<<"$REQUEST"
+  jq '.notes |= (.[0:200] + (if length > 200 then "…" else "" end)) | if .notesZh then .notesZh |= .[0:200] else . end
+    | if .changelogs then .changelogs |= map_values("\(length) characters") else . end' <<<"$REQUEST"
   log "dry run: nothing sent"
   exit 0
 fi

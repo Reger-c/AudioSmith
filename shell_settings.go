@@ -111,7 +111,9 @@ func (a *app) settingsChanged(old, new settings.Settings) {
 		a.autoplay = new.Studio.Autoplay
 	}
 	if beta := betaUpdates(new, a.version); beta != betaUpdates(old, a.version) {
-		a.updates.SetPrereleases(beta) // updates.go (thread #52)
+		if a.updates.setPrereleases != nil {
+			a.updates.setPrereleases(beta) // updates.go (thread #52)
+		}
 	}
 	a.loadSettingsForm()
 }
@@ -158,7 +160,7 @@ func (a *app) applyLocale() {
 		tag = a.systemLocale
 	}
 	i18n.SetLocale(tag)
-	// MyGo's own strings (controls, dialogs, the update window), the text
+	// MyGo's own strings (controls, dialogs), the text
 	// engine's glyphs and AppKit's texts follow MyGo's language: give it
 	// the one chosen, or none to follow the system as we do.
 	if want := a.prefs.General.Language; a.hasMenu && (!a.appLocaleSet || want != a.appLocale) {

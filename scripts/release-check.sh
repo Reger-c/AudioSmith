@@ -3,7 +3,9 @@
 # scripts/release-local.sh: the version of mygo.json has its own section in
 # CHANGELOG.md, whose heading starts with exactly that version ("## 0.4.0",
 # "## 0.4.0-beta.1 — 2026-10-16", "## [0.4.0]"), as mygo build needs for the
-# release notes the update window shows; and with a tag, the tag is
+# release notes the update's manifest carries; CHANGELOG.zh-Hans.md has the
+# same versions (the Chinese notes the app and the site show); and with a
+# tag, the tag is
 # v<version>. It prints the version and whether it is a beta, as
 # VERSION=… and PRERELEASE=true|false lines (for $GITHUB_ENV).
 #
@@ -31,7 +33,14 @@ fi
 if ! awk -v v="$version" '
   $1 == "##" { h = $2; sub(/^\[/, "", h); sub(/\].*$/, "", h); sub(/^v/, "", h); if (h == v) found = 1 }
   END { exit !found }' CHANGELOG.md; then
-  fail "CHANGELOG.md has no \"## $version\" section, which the update window shows"
+  fail "CHANGELOG.md has no \"## $version\" section, which the update's manifest carries"
+fi
+# CHANGELOG.zh-Hans.md has the same versions, in Chinese: the site takes
+# both (actnow-publish.sh) and refuses a release whose files disagree.
+versions() { awk '$1 == "##" { h = $2; sub(/^\[/, "", h); sub(/\].*$/, "", h); sub(/^v/, "", h); if (h ~ /^[0-9]+\.[0-9]+\.[0-9]+/) print h }' "$1"; }
+[[ -f CHANGELOG.zh-Hans.md ]] || fail "no CHANGELOG.zh-Hans.md (the Chinese notes)"
+if [[ "$(versions CHANGELOG.md)" != "$(versions CHANGELOG.zh-Hans.md)" ]]; then
+  fail "CHANGELOG.zh-Hans.md's versions are not CHANGELOG.md's: $(diff <(versions CHANGELOG.md) <(versions CHANGELOG.zh-Hans.md) | grep '^[<>]' | tr '\n' ' ')"
 fi
 prerelease=false
 [[ "$version" == *-* ]] && prerelease=true

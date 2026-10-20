@@ -138,7 +138,11 @@ fi
 
 # 1. The website.
 if $website; then
-  bash scripts/actnow-publish.sh --app "$ACTNOW_APP" --dir "$OUT" --changelog CHANGELOG.md \
+  # Both changelogs: the site keeps the English and the Chinese notes and
+  # checks that their versions agree (the app shows them in its language).
+  zh=()
+  if [[ -f CHANGELOG.zh-Hans.md ]]; then zh=(--changelog CHANGELOG.zh-Hans.md); fi
+  bash scripts/actnow-publish.sh --app "$ACTNOW_APP" --dir "$OUT" --changelog CHANGELOG.md ${zh[@]+"${zh[@]}"} \
     --version "$version" ${min_macos:+--min-macos "$min_macos"} ${website_args[@]+"${website_args[@]}"}
 fi
 

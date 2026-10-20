@@ -146,7 +146,8 @@ func (a *app) navRail(c *ui.Context) {
 			}
 		})
 	})
-	ui.Column(c).AlignItems(ui.Center).Padding(px(t, 6), 0, px(t, 10)).Children(func() {
+	ui.Column(c).AlignItems(ui.Center).Gap(px(t, 2)).Padding(px(t, 6), 0, px(t, 10)).Children(func() {
+		a.updateRailButton(c) // updates_view.go
 		a.railButton(c, "rail/settings", icons.Settings, i18n.T("Settings"), i18n.T("Settings")+" (⌘,)", a.settingsOpen, "", func() { a.navigate("/settings") })
 	})
 }
@@ -246,6 +247,7 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 	a.saveClosedSections()
 	ui.Column(c).Shrink(0).Padding(px(t, 6), px(t, 10), px(t, 8)).BorderWidth(1, 0, 0, 0).BorderColor(k.Line).Children(func() {
+		a.updateEntry(c) // updates_view.go: an update to install, its download, the restart
 		b := ghostBase(c.Key("nav-settings")).Padding(px(t, 6), px(t, sp2)).Gap(px(t, sp2)).Justify(ui.Start).Label(i18n.T("Settings")).Tooltip(i18n.T("Settings") + " (⌘,)")
 		b.Children(func() {
 			ui.Icon(c, icons.Settings.Get(a.settingsOpen)).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)

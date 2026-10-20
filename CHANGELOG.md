@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Updates show in the window
+- MyGo's update window is gone: a new version shows as "Update available" at the foot of the sidebar (a dot on the icon rail's download button), and nothing pops up. Its panel shows the version's notes in AudioSmith's language from actnow.dev (in English where a version has no Chinese notes, marked so), Download and Install with the download's progress, and Restart to Finish the Update. A failed download says AudioSmith is unchanged and offers Try again.
+- Settings → Diagnostics and about → Software updates: Check for Updates…, the daily check, installing without asking (a version found by the daily check installs and waits for the restart) and beta updates as before, and Show Changelog…, every version's notes in AudioSmith's language. The choices made in the old update window carry over.
+- Releases send their notes in English and Chinese (CHANGELOG.md and CHANGELOG.zh-Hans.md), so actnow.dev's changelog page and the app show each in its language.
+
 ### Designed voices no longer say leftover reference text
 - Slow designed voices (Storyteller, Elder, Meditation guide, and a few gallery voices) were cut off half-way through their reference: Qwen3-TTS stopped at a length limit that slow speech reached (engine patch 0008 raises it from 0.48 s to 0.8 s per text token, and AudioSmith's own limit can now raise it as well as lower it). The reference was still saved with its whole text, so clones said the missing half before every line.
 - A reference made from a voice must now say its text: when the recognizer hears none of the three takes say it (or they were cut off), they are made once more; a kept take that says something else gets what it says as its text, or none is kept and the voice says why. Its text is never one the audio doesn't say.

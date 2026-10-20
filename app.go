@@ -114,6 +114,7 @@ func (a *app) quit() {
 	a.closeDubs()      // M4: dub.go
 	a.closeCalls()     // M6b: calls.go (thread #23)
 	a.closeFamily()    // family_app.go (thread #72)
+	a.closeUpdates()   // updates.go
 	// family_coord.go: OnWillQuit did it already; for quits without it.
 	a.quitFamilyRuntime()
 	a.eng.Stop()

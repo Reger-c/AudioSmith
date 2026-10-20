@@ -68,7 +68,8 @@ jobs:
 
       - name: Check the tag, the version and the changelog
         run: |
-          # The tag is v<version of mygo.json>, and CHANGELOG.md has the
+          # The tag is v<version of mygo.json>, CHANGELOG.md and
+          # CHANGELOG.zh-Hans.md have the same versions, and CHANGELOG.md has the
           # version's own section; VERSION and PRERELEASE (a beta) for the
           # steps below.
           if [ "$RELEASE" = true ]; then

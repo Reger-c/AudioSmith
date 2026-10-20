@@ -1,137 +1,337 @@
 package main
 
-// Software updates (thread #50): MyGo's updater plugin, with its window
-// drawn in native UI (plugins/updater/native), as MyGo's docs recommend
-// for apps without web pages. It checks AudioSmith's update feed on the
-// family website once a day, https://actnow.dev/updates/audiosmith (thread
-// #69; up to 0.4.0-beta.4 it read GitHub's releases), shows the version's
-// CHANGELOG.md section and installs the signed archive (or a delta),
-// checked against the public key `mygo build` links in from mygo.json's
-// updates.publicKey (scripts/release-config.sh).
+// Software updates: AudioSmith's own update UI on actnowkit's updates
+// package (thread #50 had MyGo's updater plugin and its window until
+// 0.4.0-beta.5; the ActNow project's licensing phase replaced them). MyGo
+// only provides the updater's API: mygo.Updater.Check reads AudioSmith's
+// update feed on the family website, https://actnow.dev/updates/audiosmith
+// (thread #69), and Update.Install downloads the signed archive (or a
+// delta), checks it against the public key `mygo build` links in from
+// mygo.json's updates.publicKey (scripts/release-config.sh), and swaps the
+// bundle (putting the old one back if that fails). actnowkit's
+// updates.Manager runs the state machine over it — idle → checking →
+// available → downloading → ready (restart to finish) or failed — and reads
+// each version's notes in AudioSmith's language from actnow.dev's
+// changelog API (English where a version has no translation).
+//
+// What the user sees (updates_view.go):
+//
+//   - nothing pops up: a check that finds a version shows "Update
+//     available" at the foot of the sidebar (a dot on the rail's download
+//     button);
+//   - the update panel: the version, its notes, Download and Install, the
+//     download's progress, Restart to Finish the Update; a failure says
+//     AudioSmith is unchanged and offers Try Again;
+//   - Settings → Diagnostics and about → Software updates: check now,
+//     check automatically (once a day), install without asking, the beta
+//     channel, the changelog's history.
 //
 // Builds without updates (no updates section: development builds, the
-// ad-hoc builds of scripts/mac.sh, `go test`) never check, and
-// mygo.Updater.Enabled() is false in them; "Check for Updates…" then says
-// why. docs/release.md tells how releases are signed and published.
-//
-// The app menu has "Check for Updates…" (shell_commands.go) and Settings →
-// Diagnostics and about a Software updates section (settings_about.go).
+// ad-hoc builds of scripts/mac.sh, `go test`) never check:
+// mygo.Updater.Enabled() is false in them and the Manager is Disabled.
+// docs/release.md tells how releases are signed and published.
 //
 // Beta channel (thread #52): betas are prereleases (0.4.0-beta.5). Their
-// files are in the feed's beta directory, …/updates/audiosmith/beta/,
-// whose manifest names the newest beta or release. With Settings → Receive
-// beta updates on, MyGo's updater (patches 0003 and 0008,
+// files are in the feed's beta directory, …/updates/audiosmith/beta/, whose
+// manifest names the newest beta or release. With Settings → Receive beta
+// updates on, MyGo's updater (patches 0003 and 0008,
 // mygo.Updater.SetPrereleases) reads it as well as the releases' and offers
-// the newer; the window and the daily check follow it. The setting
+// the newer; the changelog then lists betas too. The setting
 // (settings.Updates.Beta) defaults to on in a beta copy, off in a release.
 // Turning it off never goes back to an older version: a beta stays until a
 // release newer than it is out.
 
 import (
+	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/updater"
-	"github.com/egoist/mygo/plugins/updater/native"
+	"github.com/egoist/mygo/ui/markdown"
+	akup "github.com/hehehai/actnowkit/updates"
 
 	"github.com/hehehai/AudioSmith/internal/hub"
+	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
-// updateService is what AudioSmith uses of the updater plugin; tests use
-// noUpdates or a fake.
-type updateService interface {
-	// Enabled reports whether this build can update itself: built with
-	// updates, and installed where it can write (mygo.Updater.Enabled). It
-	// touches the disk: call it off the main thread, now and then.
-	Enabled() bool
-	// Check checks as the user asked: the plugin's window shows at once
-	// and says when AudioSmith is up to date, or why it can't update.
-	Check()
-	AutomaticChecks() bool
-	SetAutomaticChecks(on bool)
-	AutomaticDownloads() bool
-	SetAutomaticDownloads(on bool)
-	// LastCheck is when a check last succeeded, zero before.
-	LastCheck() time.Time
-	// OnChange calls fn on the main thread when a preference or the time
-	// of the last check changed.
-	OnChange(fn func())
-	// SetPrereleases chooses the channel: betas and releases, or releases
-	// only (mygo.Updater.SetPrereleases). AudioSmith keeps the choice
-	// (settings.Updates.Beta) and sets it at every launch.
-	SetPrereleases(on bool)
-	// SetHTTPClient is the client of checks and downloads (MyGo patch
-	// 0007): AudioSmith's, which follows Settings → Models' proxy and the
-	// macOS system proxy, which Go's default client ignores.
-	SetHTTPClient(c *http.Client)
+// updateSlug is AudioSmith on actnow.dev (feed, changelog API).
+const updateSlug = "audiosmith"
+
+// updateInterval is how often the automatic check runs.
+const updateInterval = 24 * time.Hour
+
+// updateManager is what AudioSmith uses of actnowkit's *updates.Manager.
+type updateManager interface {
+	State() akup.State
+	Subscribe(fn func(akup.State)) (unsubscribe func())
+	Check(ctx context.Context) akup.State
+	Install(ctx context.Context, acceptPaid bool) akup.State
+	Restart() error
+	Dismiss()
+	History(ctx context.Context) (*akup.History, error)
+	AutoCheck(ctx context.Context, interval time.Duration, enabled func() bool)
 }
 
-// updateInfo is what Settings shows of the updater, read off the main
-// thread (refreshUpdates).
-type updateInfo struct {
-	read       bool // read at least once
-	enabled    bool
-	auto       bool
-	download   bool
-	lastCheck  time.Time
-	refreshing bool
+// appUpdates is the updater as the window sees it.
+type appUpdates struct {
+	// live: the real updater (main), whose Manager connectUpdates makes
+	// over mygo.Updater once the version is known. Tests set mgr instead.
+	live bool
+	mgr  updateManager
+	// setPrereleases chooses the feed's channel (mygo.Updater.SetPrereleases;
+	// a recorder in tests, nil: none).
+	setPrereleases func(on bool)
+	connected      bool
+
+	// st is the manager's state, as last posted.
+	st akup.State
+	// panelOpen shows the update panel; userCheck: the running check was
+	// asked for (its answer shows in the panel, or as a toast).
+	panelOpen bool
+	userCheck bool
+	// autoTried is the version an automatic install was started for
+	// (Install without asking), so a failure is not retried in a loop.
+	autoTried string
+
+	// The changelog's history (Settings → About).
+	historyOpen bool
+	hist        *akup.History
+	histErr     string
+	histLoading bool
+
+	// md: the notes' Markdown views (their parse is kept between frames).
+	md markdown.Options
+
+	stop   context.CancelFunc
+	autoOn atomic.Bool // "check automatically", read by the manager's loop
 }
 
-// useUpdates uses the updater plugin; it runs in main, before App.Run.
-func useUpdates() updateService {
-	mygo.Use(native.New(updater.Options{
-		// Once a day (the plugin's default), the first time 10 s after
-		// launch when one is due. The window speaks the app's language
-		// (App.Locale, which applyLocale sets).
-		Interval: 24 * time.Hour,
-	}))
-	return pluginUpdates{}
+// useUpdates is the real updater; it runs in main, before App.Run.
+func useUpdates() *appUpdates {
+	return &appUpdates{live: true, setPrereleases: mygo.Updater.SetPrereleases}
 }
 
-// pluginUpdates is the updater plugin, once used.
-type pluginUpdates struct{}
-
-func (pluginUpdates) Enabled() bool                 { return mygo.Updater.Enabled() }
-func (pluginUpdates) Check()                        { updater.CheckForUpdates() }
-func (pluginUpdates) AutomaticChecks() bool         { return updater.AutomaticChecks() }
-func (pluginUpdates) SetAutomaticChecks(on bool)    { updater.SetAutomaticChecks(on) }
-func (pluginUpdates) AutomaticDownloads() bool      { return updater.AutomaticDownloads() }
-func (pluginUpdates) SetAutomaticDownloads(on bool) { updater.SetAutomaticDownloads(on) }
-func (pluginUpdates) LastCheck() time.Time          { return updater.LastCheck() }
-func (pluginUpdates) OnChange(fn func())            { updater.OnChange(fn) }
-func (pluginUpdates) SetPrereleases(on bool)        { mygo.Updater.SetPrereleases(on) }
-func (pluginUpdates) SetHTTPClient(c *http.Client)  { mygo.Updater.SetHTTPClient(c) }
-
-// noUpdates is a build without the plugin: tests, and the MCP relay.
-type noUpdates struct{}
-
-func (noUpdates) Enabled() bool              { return false }
-func (noUpdates) Check()                     {}
-func (noUpdates) AutomaticChecks() bool      { return false }
-func (noUpdates) SetAutomaticChecks(bool)    {}
-func (noUpdates) AutomaticDownloads() bool   { return false }
-func (noUpdates) SetAutomaticDownloads(bool) {}
-func (noUpdates) LastCheck() time.Time       { return time.Time{} }
-func (noUpdates) OnChange(func())            {}
-func (noUpdates) SetPrereleases(bool)        {}
-func (noUpdates) SetHTTPClient(*http.Client) {}
-
-// connectUpdates sets the channel and hears the updater's changes; it
-// runs once the window is open (a.version is known), before the plugin's
-// first check (10 s after launch at the soonest).
+// connectUpdates makes the update manager (the real one, once the version
+// is known), sets the channel and follows the manager's state; it runs
+// once the window is open (openWindow), and again in tests.
 func (a *app) connectUpdates() {
-	a.updates.SetPrereleases(betaUpdates(a.prefs, a.version))
-	if a.lib != nil {
-		set := a.lib.settings
-		a.updates.SetHTTPClient(updateHTTPClient(func() string { return set.Get().Models.Proxy }))
+	u := a.updates
+	if u.live && u.mgr == nil {
+		var client *http.Client
+		if a.lib != nil {
+			set := a.lib.settings
+			client = updateHTTPClient(func() string { return set.Get().Models.Proxy })
+			mygo.Updater.SetHTTPClient(client)
+		}
+		u.mgr = akup.New(akup.Config{
+			Updater: akup.Funcs{
+				EnabledFunc: mygo.Updater.Enabled,
+				CheckFunc: func(ctx context.Context) (*akup.Release, error) {
+					up, err := mygo.Updater.Check(ctx)
+					if err != nil || up == nil {
+						return nil, err
+					}
+					return &akup.Release{Version: up.Version, Notes: up.Notes, Date: up.Date, Install: up.Install}, nil
+				},
+			},
+			Current:  a.version,
+			History:  &akup.HistoryClient{App: updateSlug, HTTPClient: client},
+			Language: i18n.Locale,
+			Beta:     func() bool { return betaUpdates(a.prefs, a.version) },
+			Restart:  func() { a.post(mygo.App.Relaunch) },
+			Log:      func(s string) { log.Printf("updates: %s", s) },
+		})
+		a.keepUpdaterChoices()
 	}
-	a.updates.OnChange(func() { a.post(a.refreshUpdates) })
-	a.refreshUpdates()
+	if u.setPrereleases != nil {
+		u.setPrereleases(betaUpdates(a.prefs, a.version))
+	}
+	if u.mgr == nil || u.connected {
+		return
+	}
+	u.connected = true
+	u.st = u.mgr.State()
+	u.mgr.Subscribe(func(st akup.State) { a.post(func() { a.setUpdateState(st) }) })
+	if a.win != nil && u.enabled() {
+		ctx, cancel := context.WithCancel(context.Background())
+		u.stop = cancel
+		u.autoOn.Store(a.prefs.Updates.AutoCheckOn())
+		// The first check a little after launch, not with the window's
+		// first frames.
+		go func() {
+			select {
+			case <-time.After(10 * time.Second):
+				u.mgr.AutoCheck(ctx, updateInterval, u.autoOn.Load)
+			case <-ctx.Done():
+			}
+		}()
+	}
+}
+
+// closeUpdates ends the automatic checks (quit).
+func (a *app) closeUpdates() {
+	if a.updates.stop != nil {
+		a.updates.stop()
+		a.updates.stop = nil
+	}
+}
+
+// keepUpdaterChoices carries the daily check and "install without asking"
+// over from MyGo's updater plugin (its updater.json, up to 0.4.0-beta.5)
+// the first time.
+func (a *app) keepUpdaterChoices() {
+	if a.prefs.Updates.AutoCheck != nil || a.dataHome == "" {
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(a.dataHome, "updater.json"))
+	if err != nil {
+		return
+	}
+	var old struct {
+		AutomaticChecks    *bool `json:"automaticChecks"`
+		AutomaticDownloads bool  `json:"automaticDownloads"`
+	}
+	if json.Unmarshal(data, &old) != nil || old.AutomaticChecks == nil {
+		return
+	}
+	on, install := *old.AutomaticChecks, old.AutomaticDownloads
+	a.updateSettings(func(s *settings.Settings) {
+		s.Updates.AutoCheck = &on
+		s.Updates.AutoInstall = install
+	})
+}
+
+// enabled says whether this build can update itself.
+func (u *appUpdates) enabled() bool { return u.mgr != nil && u.st.Phase != akup.Disabled }
+
+// setUpdateState takes the manager's new state.
+func (a *app) setUpdateState(st akup.State) {
+	u := a.updates
+	prev := u.st
+	u.st = st
+	if !st.CheckedAt.IsZero() && !st.CheckedAt.Equal(prev.CheckedAt) && st.Phase != akup.Failed {
+		at := st.CheckedAt
+		a.updateSettings(func(s *settings.Settings) { s.Updates.LastCheck = at })
+	}
+	switch st.Phase {
+	case akup.Available:
+		if u.userCheck {
+			u.userCheck, u.panelOpen = false, true
+			return
+		}
+		// Install without asking: a version the daily check found
+		// downloads at once; the restart is the user's.
+		if a.prefs.Updates.AutoInstall && st.Release != nil && u.autoTried != st.Release.Version {
+			u.autoTried = st.Release.Version
+			log.Printf("updates: installing %s without asking (Settings → Diagnostics and about)", st.Release.Version)
+			a.installUpdate()
+		}
+	case akup.UpToDate:
+		if u.userCheck {
+			u.userCheck = false
+			if !u.panelOpen {
+				a.toast(i18n.T("AudioSmith is up to date (%s)", st.Current))
+			}
+		}
+	case akup.Failed:
+		if u.userCheck && st.Step == "check" && !u.panelOpen {
+			a.toast(i18n.T("Cannot check for updates: %s", updateErrText(st.Err)))
+		}
+		u.userCheck = false
+	}
+}
+
+// checkForUpdates checks now, as the user asked (menu, palette, Settings):
+// the panel opens with the answer.
+func (a *app) checkForUpdates() {
+	u := a.updates
+	log.Print("updates: check asked")
+	if u.mgr == nil {
+		u.panelOpen = true
+		return
+	}
+	switch u.st.Phase {
+	case akup.Available, akup.Downloading, akup.Ready, akup.Disabled:
+		u.panelOpen = true
+		return
+	case akup.Checking:
+		u.userCheck, u.panelOpen = true, true
+		return
+	}
+	u.userCheck, u.panelOpen = true, true
+	mgr := u.mgr
+	a.async(func() { mgr.Check(context.Background()) })
+}
+
+// installUpdate downloads and installs the available update.
+func (a *app) installUpdate() {
+	u := a.updates
+	if u.mgr == nil || u.st.Phase != akup.Available {
+		return
+	}
+	mgr := u.mgr
+	a.async(func() { mgr.Install(context.Background(), false) })
+}
+
+// restartForUpdate relaunches into the installed update.
+func (a *app) restartForUpdate() {
+	if u := a.updates; u.mgr != nil && u.st.Phase == akup.Ready {
+		if err := u.mgr.Restart(); err == nil {
+			return
+		}
+	}
+	if a.win != nil {
+		mygo.App.Relaunch()
+	}
+}
+
+// setAutoCheck changes whether updates are checked once a day; it is saved
+// in the settings.
+func (a *app) setAutoCheck(on bool) {
+	a.updates.autoOn.Store(on)
+	a.updateSettings(func(s *settings.Settings) { s.Updates.AutoCheck = &on })
+}
+
+// openHistory opens the changelog's history and reads it from actnow.dev.
+func (a *app) openHistory() {
+	u := a.updates
+	u.historyOpen = true
+	if u.mgr == nil || u.histLoading {
+		return
+	}
+	u.histLoading, u.histErr = true, ""
+	mgr := u.mgr
+	a.async(func() {
+		h, err := mgr.History(context.Background())
+		a.post(func() {
+			u.histLoading = false
+			if err != nil {
+				u.histErr = updateErrText(err)
+				return
+			}
+			u.hist = h
+		})
+	})
+}
+
+// updateErrText is an error for a sentence ("" for none).
+func updateErrText(err error) string {
+	if err == nil {
+		return ""
+	}
+	s := err.Error()
+	for _, p := range []string{"mygo: ", "updates: "} {
+		s = strings.TrimPrefix(s, p)
+	}
+	return s
 }
 
 // betaUpdates reports whether AudioSmith takes beta versions: as the user
@@ -150,7 +350,9 @@ func (a *app) setBetaUpdates(on bool) {
 		v := on
 		s.Updates.Beta = &v
 	})
-	a.updates.SetPrereleases(on)
+	if a.updates.setPrereleases != nil {
+		a.updates.setPrereleases(on)
+	}
 }
 
 // isPrerelease reports whether a version such as 0.4.0-beta.1 is a
@@ -159,26 +361,6 @@ func isPrerelease(version string) bool {
 	version, _, _ = strings.Cut(version, "+")
 	_, pre, _ := strings.Cut(version, "-")
 	return pre != ""
-}
-
-// refreshUpdates reads the updater's state in the background.
-func (a *app) refreshUpdates() {
-	if a.updInfo.refreshing {
-		return
-	}
-	a.updInfo.refreshing = true
-	u := a.updates
-	a.async(func() {
-		info := updateInfo{read: true, enabled: u.Enabled()}
-		info.auto, info.download, info.lastCheck = u.AutomaticChecks(), u.AutomaticDownloads(), u.LastCheck()
-		a.post(func() { a.updInfo = info })
-	})
-}
-
-// checkForUpdates checks as the user asked (menu, palette, Settings).
-func (a *app) checkForUpdates() {
-	log.Print("updates: check asked")
-	a.updates.Check()
 }
 
 // updateHTTPClient is the updater's HTTP client: through the proxy that

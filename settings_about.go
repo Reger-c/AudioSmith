@@ -81,9 +81,8 @@ type aboutState struct {
 	// noticesURL opens the third-party notices (thirdPartyNoticesURL).
 	noticesURL string
 
-	// Software updates (updates.go, thread #50).
-	updates updateService
-	updInfo updateInfo
+	// Software updates (updates.go).
+	updates *appUpdates
 }
 
 // selfCheck is one check's outcome.
@@ -473,62 +472,6 @@ func (a *app) aboutSettings(c *ui.Context) {
 			} else {
 				go mygo.Shell.OpenExternal(u)
 			}
-		}
-	})
-}
-
-// softwareUpdateSettings is the Software updates section (updates.go): when
-// AudioSmith last checked, Check for Updates…, and the updater's two
-// preferences, which builds that can't update themselves show off and
-// disabled.
-func (a *app) softwareUpdateSettings(c *ui.Context) {
-	if !a.updInfo.read {
-		a.refreshUpdates()
-	}
-	u := a.updInfo
-	sectionTitle(c, i18n.T("Software updates"))
-	note := i18n.T("Development builds and copies built on this Mac don't update themselves; copies from actnow.dev do.")
-	switch {
-	case !u.read:
-		note = ""
-	case u.enabled && u.lastCheck.IsZero():
-		note = i18n.T("Not checked yet.")
-	case u.enabled:
-		note = i18n.T("Last checked %s.", i18n.DateTime(u.lastCheck))
-	}
-	settingRowNote(c, "about-update", i18n.T("Check for updates"), note, func() {
-		if ui.Button(c.Key("about-update"), i18n.T("Check for Updates…")).Clicked() {
-			a.checkForUpdates()
-		}
-	})
-	auto := u.enabled && u.auto
-	settingRow(c, "about-update-auto", i18n.T("Automatic checks"), i18n.T("Once a day AudioSmith reads the version file of its newest version on actnow.dev, and offers a new version with its release notes. Nothing about you is sent."), func() {
-		if ui.Switch(c.Key("about-update-auto"), &auto).Label(i18n.T("Check once a day")).Disabled(!u.enabled).Changed() {
-			on := auto
-			a.updInfo.auto = on
-			a.updates.SetAutomaticChecks(on)
-		}
-	})
-	download := u.enabled && u.auto && u.download
-	settingRow(c, "about-update-download", i18n.T("Automatic installs"), i18n.T("A new version found by the daily check downloads and installs without asking, and runs the next time you open AudioSmith."), func() {
-		if ui.Switch(c.Key("about-update-download"), &download).Label(i18n.T("Install without asking")).Disabled(!u.enabled || !u.auto).Changed() {
-			on := download
-			a.updInfo.download = on
-			a.updates.SetAutomaticDownloads(on)
-		}
-	})
-	// The channel (thread #52, updates.go): betas are prereleases, in the
-	// website's beta feed.
-	beta := u.enabled && betaUpdates(a.prefs, a.version)
-	info := i18n.T("Betas get new features sooner but may be less stable. Turned off, AudioSmith only updates to releases.")
-	if isPrerelease(a.version) {
-		info = i18n.T("Betas get new features sooner but may be less stable. This copy is a beta: turned off, AudioSmith never goes back to an older version, and stays on this one until a release newer than it is out.")
-	}
-	// The info shows under the name, not in ⓘ: it says what turning it
-	// off does to a beta copy.
-	settingRowNote(c, "about-update-beta", i18n.T("Receive beta updates"), info, func() {
-		if ui.Switch(c.Key("about-update-beta"), &beta).Label(i18n.T("Beta updates")).Disabled(!u.enabled).Changed() {
-			a.setBetaUpdates(beta)
 		}
 	})
 }

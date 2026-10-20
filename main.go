@@ -12,8 +12,8 @@ import (
 	"log"
 
 	"github.com/egoist/mygo"
-	// MyGo's own strings (its controls, menus, dialogs, the update
-	// window's buttons) in Simplified Chinese; English is always linked.
+	// MyGo's own strings (its controls, menus, dialogs) in Simplified
+	// Chinese; English is always linked.
 	_ "github.com/egoist/mygo/locales/zh-Hans"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 )
@@ -57,7 +57,7 @@ func main() {
 	}
 	eng := newEngineProcess(resources, logDir) // enginelink.go
 	a := newApp(eng, lib)                      // app.go
-	a.updates = useUpdates()                   // updates.go: the updater plugin (thread #50)
+	a.updates = useUpdates()                   // updates.go: the in-app updater
 	a.dataHome = home                          // M7a: settings_storage.go
 	a.connectShell(logDir)                     // shell.go
 	a.connectFamily()                          // family_app.go (thread #72): the ActNow family (before the engine: its memory budget)

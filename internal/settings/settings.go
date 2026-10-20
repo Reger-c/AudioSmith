@@ -15,6 +15,7 @@ package settings
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 // Version is the schema version Defaults writes. Bump it when a field's
@@ -51,16 +52,29 @@ type Settings struct {
 	Family Family `json:"family,omitzero"`
 }
 
-// Updates: the update channel. The updater's other preferences (the
-// daily check, installing without asking) are MyGo's updater plugin's
-// own, in its updater.json.
+// Updates: the in-app updater's preferences (updates.go). Up to
+// 0.4.0-beta.5 the daily check and installing without asking were MyGo's
+// updater plugin's, in its updater.json; the first launch after it carries
+// them over (keepUpdaterChoices).
 type Updates struct {
+	// AutoCheck checks once a day; nil until chosen (or carried over):
+	// on (AutoCheckOn).
+	AutoCheck *bool `json:"autoCheck,omitempty"`
+	// AutoInstall downloads and installs a version the daily check found
+	// without asking; it runs after the next restart.
+	AutoInstall bool `json:"autoInstall,omitempty"`
+	// LastCheck is when a check last answered.
+	LastCheck time.Time `json:"lastCheck,omitzero"`
 	// Beta takes beta versions (prereleases such as 0.4.0-beta.1)
 	// as well as releases. Nil until the user chooses: then a beta copy
 	// takes betas and a release copy releases only (the app's
 	// betaUpdates).
 	Beta *bool `json:"beta,omitempty"`
 }
+
+// AutoCheckOn says whether updates are checked once a day (on unless the
+// user turned it off).
+func (u Updates) AutoCheckOn() bool { return u.AutoCheck == nil || *u.AutoCheck }
 
 // General: language and app behaviour.
 type General struct {

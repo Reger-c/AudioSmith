@@ -8,7 +8,7 @@ English: [release.md](release.md)
 2. 用 `go tool mygo build` 打包应用：用你的 **Developer ID** 签名，开启 hardened runtime，带上应用的 entitlements（[`entitlements.plist`](../entitlements.plist)：麦克风）和引擎的 entitlements（[`engine/Support/engine.entitlements`](../engine/Support/engine.entitlements)），做成磁盘映像（DMG），交给 Apple **公证**并把公证票据钉（staple）进去；
 3. 生成用你的更新密钥签名的**更新文件**：`audiosmith-<版本>-darwin-arm64.tar.gz`、相对最近最多三个版本的增量包（delta），以及 `update-darwin-arm64.json`（更新清单，更新说明取自 `CHANGELOG.md` 里这个版本的那一节）；
 4. 校验构建（`scripts/verify-release.sh`）之后，发布到家族官网 **actnow.dev**（`scripts/release-publish.sh`）。AudioSmith 的下载、更新和更新日志都由官网提供：
-   - **先发官网。** 官网自己的发布脚本 [`scripts/actnow-publish.sh`](../scripts/actnow-publish.sh) 把 DMG、更新包、增量包和更新清单经官网的发布接口送上去，只用一个 secret：`ACTNOW_INGEST_TOKEN`。官网逐项检查（大小和 sha256、清单里的地址和更新签名、`CHANGELOG.md` 里这个版本的那一节），存好文件，在[下载页](https://actnow.dev/download/audiosmith)（需要免费账号）和[更新日志](https://actnow.dev/audiosmith/changelog)列出这个版本，然后发布：公开清单最后写入。已安装的 AudioSmith 每天读一次 `https://actnow.dev/updates/audiosmith/update-darwin-arm64.json`（或通过菜单 AudioSmith → 检查更新…）：**官网一发布，它们就能看到新版本**。CI 不持有任何存储密钥，写存储的是官网自己。
+   - **先发官网。** 官网自己的发布脚本 [`scripts/actnow-publish.sh`](../scripts/actnow-publish.sh) 把 DMG、更新包、增量包和更新清单经官网的发布接口送上去，只用一个 secret：`ACTNOW_INGEST_TOKEN`。官网逐项检查（大小和 sha256、清单里的地址和更新签名、`CHANGELOG.md` 里这个版本的那一节），存好文件，在[下载页](https://actnow.dev/download/audiosmith)（需要免费账号）和[更新日志](https://actnow.dev/audiosmith/changelog)列出这个版本，然后发布：公开清单最后写入。已安装的 AudioSmith 每天读一次 `https://actnow.dev/updates/audiosmith/update-darwin-arm64.json`（或通过菜单 AudioSmith → 检查更新…）：**官网一发布，它们就能看到新版本**：侧栏底部出现"有新版本"，更新说明按 app 的语言从官网的更新日志接口读取（updates.go：在 MyGo 的更新 API 上用 actnowkit 的 `updates`，不再用 MyGo 的更新窗口）。CI 不持有任何存储密钥，写存储的是官网自己。
    - **再建草稿 GitHub Release**，带更新说明和下载页链接（源码仍在 GitHub，AGPL）。你检查后点发布。
 
 标签带预发布后缀（例如 `v0.4.0-beta.5`）时，做出来的是 **Beta 版**：在官网走 Beta 通道 `/updates/audiosmith/beta/`，只有打开了「接收 Beta 版更新」的副本才会读；在 GitHub 上是 prerelease（预发布）（见下文 [Beta 版和正式版](#beta-版和正式版更新通道)）。
@@ -120,7 +120,7 @@ spctl --assess --type open --context context:primary-signature -vv AudioSmith-0.
 
 Beta 版（`0.4.0-beta.2`）和正式版（`0.4.0`）步骤完全一样，由版本号决定是哪一种。
 
-1. 在 `CHANGELOG.md` 里把 `## Unreleased` 改成版本号和日期，例如 `## 0.4.0 — 2026-10-20` 或 `## 0.4.0-beta.2 — 2026-10-18`（更新窗口和官网的更新日志显示的就是这一节；缺了这一节构建会直接失败，官网也会拒收）。用英文写；如果有中文部分，放在后面，用中文标题（`### 中文`）开头，官网会把它作为中文说明。标题的第一个词必须**正好**是版本号：`## 0.4.0-beta.1` 不算 0.4.0 的那一节，所以 Beta 之后的正式版要有自己的一节（可以把各个 Beta 的内容汇总进去）。之后可以在上面再新开一个 `## Unreleased`。
+1. 在 `CHANGELOG.md` 里把 `## Unreleased` 改成版本号和日期，例如 `## 0.4.0 — 2026-10-20` 或 `## 0.4.0-beta.2 — 2026-10-18`（更新清单和官网的更新日志用的就是这一节；缺了这一节构建会直接失败，官网也会拒收），并在 `CHANGELOG.zh-Hans.md` 里同样改好，内容是这一节的中文版。两个文件的版本段必须一一对应（构建前 `scripts/release-check.sh` 会检查，官网也会拒收对不上的发布：`changelog_mismatch`）；中文界面下，app 的更新面板和更新日志、官网的中文更新日志页显示中文说明。标题的第一个词必须**正好**是版本号：`## 0.4.0-beta.1` 不算 0.4.0 的那一节，所以 Beta 之后的正式版要有自己的一节（可以把各个 Beta 的内容汇总进去）。之后可以在两个文件的上面再新开一个 `## Unreleased`。
 2. 把 `mygo.json` 的 `"version"` 改成同一个版本号。这是唯一的版本号来源：关于页、设置、本地 API 的 `/health`、MCP 和更新器都读它（`mygo.App.Version()`）。
 3. 确认应用里带的第三方许可文本 `THIRD-PARTY-NOTICES.txt` 是最新的：`scripts/third-party-notices.sh --check`。如果不是（写入之后依赖变过；CI 的 `go test` 也会失败），运行 `scripts/third-party-notices.sh`（Swift 依赖的版本变过时加 `--fetch`），把文件和这次发布一起提交。
 4. 提交、打标签、推送：
@@ -185,7 +185,7 @@ scripts/release-local.sh --dry-run        # ad-hoc，与工作流的试跑一样
 
 `--upload` 会运行 `scripts/release-publish.sh`，需要环境里有 `ACTNOW_INGEST_TOKEN` 和 `gh`（过渡版本再加 `GITHUB_FEED=true`）；加 `--no-publish` 则在官网停在 verified。脚本结束后会把 `mygo.json` 恢复原样。
 
-这几个脚本也可以单独运行：`scripts/release-publish.sh [--dry-run] [--no-publish] [--skip-github | --skip-website]` 发布 `build/darwin-arm64` 里已有的构建；`scripts/actnow-publish.sh --app audiosmith --dir build/darwin-arm64 --changelog CHANGELOG.md --min-macos 15.0 [--dry-run]` 只做官网那一部分（`--help` 列出全部选项）。
+这几个脚本也可以单独运行：`scripts/release-publish.sh [--dry-run] [--no-publish] [--skip-github | --skip-website]` 发布 `build/darwin-arm64` 里已有的构建；`scripts/actnow-publish.sh --app audiosmith --dir build/darwin-arm64 --changelog CHANGELOG.md --changelog CHANGELOG.zh-Hans.md --min-macos 15.0 [--dry-run]` 只做官网那一部分（`--help` 列出全部选项）。
 
 ## Secrets 和变量一览
 

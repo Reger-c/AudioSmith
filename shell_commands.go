@@ -338,7 +338,7 @@ func (a *app) buildMenu() {
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Label: "AudioSmith", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleAbout, Label: i18n.T("About AudioSmith")},
-			// The updater plugin's item, labelled in our language (updates.go).
+			// Check for Updates… opens the update panel (updates.go).
 			{Label: i18n.T("Check for Updates…"), Click: act(a.checkForUpdates)},
 			mygo.Separator(),
 			{Label: i18n.T("Settings…"), Accelerator: "CmdOrCtrl+,", Click: act(func() { a.navigate("/settings") })},
