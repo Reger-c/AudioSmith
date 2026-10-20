@@ -12,6 +12,7 @@
 #   scripts/make-curated-voices.sh encode picks.json                     # refs to Ogg (here), pushed back
 #   scripts/make-curated-voices.sh final picks.json                      # previews + listening lines
 #   scripts/make-curated-voices.sh install                               # Ogg clips to assets/gallery-voices
+#   scripts/make-curated-voices.sh smoke                                 # the app with the bundle: curated and old voices in the Studio
 #   scripts/make-curated-voices.sh clean                                 # delete the Mac scratch
 #
 # picks.json maps a voice id (without "c-") to the seed index chosen.
@@ -58,7 +59,7 @@ setup)
     export PATH=/opt/homebrew/bin:\$PATH GOTOOLCHAIN=auto GOPROXY=\${MAC_GOPROXY:-https://goproxy.cn,direct}
     nice -n 10 go test -c -o curate.test . && ls -la curate.test engine/audiosmith-engine"
   ;;
-refs | pick | clone | asr)
+refs | pick | clone | asr | smoke)
   run_stage "$stage"
   ;;
 final)

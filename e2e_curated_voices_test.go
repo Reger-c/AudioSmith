@@ -492,11 +492,22 @@ func curateSmoke(t *testing.T, a *app, ctx context.Context, waitFor func(string,
 		t.Fatal(err)
 	}
 	a.voiceChanged(core.VoiceChanged{Voice: saved})
-	a.useVoiceInStudio(a.findVoice(saved.ID))
+	// Its own recipe on the design model, as before #94 (with neither a
+	// sample nor a reference, clone models can't speak it).
+	vdm, _ := catalog.Builtin().ByID(curateVD)
+	a.selectModel(vdm)
+	a.studioVoice, a.studioClip = saved.ID, nil
 	start = time.Now()
 	take("old voice take")
+	t.Logf("old voice on %s: take in %.0f s", vdm.ID, time.Since(start).Seconds())
+	// And Make reference gives it one from that recipe: then clone models
+	// speak it too.
 	ov := a.findVoice(saved.ID)
-	t.Logf("old voice: reference made (%.1f s, %q), take in %.0f s", ov.RefSeconds, ov.RefText, time.Since(start).Seconds())
+	done := false
+	a.makeReference(ov, func(bool) { done = true })
+	waitFor("old voice reference", 15*time.Minute, func() bool { return done })
+	ov = a.findVoice(saved.ID)
+	t.Logf("old voice: reference made (%.1f s, checked %v, %q)", ov.RefSeconds, ov.RefCheck != nil && ov.RefCheck.TextChecked, ov.RefText)
 	if ov.RefAudio == "" {
 		t.Error("the old voice got no reference")
 	}
