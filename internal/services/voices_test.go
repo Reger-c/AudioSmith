@@ -348,3 +348,38 @@ func TestVoiceReferenceCleaning(t *testing.T) {
 		t.Fatalf("removed %+v %v", d, err)
 	}
 }
+
+// TestReferenceTextChecked (thread #93): what the recognizer heard
+// becomes the reference's text, its cached prompts go and the mismatch
+// hint with them; the same text keeps the prompts; a reference that
+// changed meanwhile is refused.
+func TestReferenceTextChecked(t *testing.T) {
+	e := newEnv(t, nil)
+	vs := e.svc.Voices
+	dir := t.TempDir()
+	clean := writeFile(t, filepath.Join(dir, "clean.wav"), testWAV(2400))
+	prompt := writeFile(t, filepath.Join(dir, "p.bin"), []byte("prompt"))
+	q := &core.RefQuality{Grade: "poor", Hints: []string{"mismatch", "flat"}, Cleaned: []string{"tidied"}}
+	v, err := vs.SaveFiles(ctx, core.Voice{Name: "Elder", Kind: core.VoiceDesigned, RefText: "整句话。后半句。", RefCheck: q},
+		core.VoiceFiles{Reference: clean})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, err = vs.SaveFiles(ctx, v, core.VoiceFiles{Prompt: prompt, PromptModel: "m"}); err != nil || len(v.Prompts) != 1 {
+		t.Fatalf("prompt %+v %v", v, err)
+	}
+	same, err := vs.ReferenceTextChecked(ctx, v.ID, core.RefHeard{Audio: v.RefAudio, Text: v.RefText}, "整句话。后半句。")
+	if err != nil || len(same.Prompts) != 1 || !same.RefCheck.TextChecked || same.RefCheck.Grade != "ok" || !slices.Equal(same.RefCheck.Hints, []string{"flat"}) {
+		t.Fatalf("same text %+v %v", same.RefCheck, err)
+	}
+	got, err := vs.ReferenceTextChecked(ctx, v.ID, core.RefHeard{Audio: v.RefAudio, Text: v.RefText}, " 整句话。 ")
+	if err != nil || got.RefText != "整句话。" || len(got.Prompts) != 0 || !got.RefCheck.TextChecked || !slices.Equal(got.RefCheck.Cleaned, []string{"tidied"}) {
+		t.Fatalf("heard %+v %v", got, err)
+	}
+	if _, err := vs.ReferenceTextChecked(ctx, v.ID, core.RefHeard{Audio: "other.wav", Text: got.RefText}, "x"); !errors.Is(err, core.ErrInvalid) {
+		t.Errorf("changed reference: %v", err)
+	}
+	if _, err := vs.ReferenceTextChecked(ctx, v.ID, core.RefHeard{Audio: got.RefAudio, Text: "整句话。后半句。"}, "x"); !errors.Is(err, core.ErrInvalid) {
+		t.Errorf("changed text: %v", err)
+	}
+}

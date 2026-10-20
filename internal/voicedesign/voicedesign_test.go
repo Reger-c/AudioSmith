@@ -215,8 +215,9 @@ func TestLower(t *testing.T) {
 		voice  string
 		drop   int
 	}{
-		{TargetQwen3Design, full, "en", "A warm middle-aged woman with a deep, low-pitched voice and a British accent. She speaks slowly, in a whisper, sounding tender.", 0},
-		{TargetQwen3Design, full, "zh", "一位中年女性，声音低沉，音色温暖，带有英式口音，用耳语般的声音轻声说话，语速偏慢，语气温柔。", 0},
+		// A slow pace is left out of design prompts (#93).
+		{TargetQwen3Design, full, "en", "A warm middle-aged woman with a deep, low-pitched voice and a British accent. She speaks in a whisper, sounding tender.", 0},
+		{TargetQwen3Design, full, "zh", "一位中年女性，声音低沉，音色温暖，带有英式口音，用耳语般的声音轻声说话，语气温柔。", 0},
 		{TargetOmniVoice, full, "", "female, middle-aged, low pitch, whisper, british accent", 3},
 		{TargetQwen3CustomVoice, full, "en", "Serena, Speak slowly, in a whisper, in a warm voice, sounding tender.", 3},
 		{TargetQwen3Design, dialect, "en", "An energetic young man, speaking Mandarin with a Sichuan accent. He sounds happy.", 0},
@@ -269,6 +270,47 @@ func TestLowerFreeformDescription(t *testing.T) {
 	l, _ = Lower(TargetOmniVoice, Recipe{Description: desc, Attrs: parsed}, Options{})
 	if !l.DescriptionDropped || l.Voice != "elderly, british accent" {
 		t.Errorf("omni: %+v", l)
+	}
+}
+
+// TestSentenceSlowPace (#93, after #91): design prompts leave a slow pace
+// out (VoiceDesign said references past its length limit); a fast one
+// stays; the gallery's description keeps it; a description the user
+// wrote with "slowly" keeps it, even when a pick rewrites it in full.
+func TestSentenceSlowPace(t *testing.T) {
+	elder := Attributes{Gender: "male", Age: "elderly", Pitch: "low", Styles: []string{"warm"}, Pace: "slow"}
+	if got := Sentence(elder, "zh"); got != "一位老年男性，声音低沉，音色温暖。" {
+		t.Errorf("zh %q", got)
+	}
+	if got := Sentence(elder, "en"); got != "A warm elderly man with a deep, low-pitched voice." {
+		t.Errorf("en %q", got)
+	}
+	if got := Describe(elder, "zh"); got != "一位老年男性，声音低沉，音色温暖，语速偏慢。" {
+		t.Errorf("describe %q", got)
+	}
+	if Sentence(Attributes{Pace: "very_slow"}, "en") != "" {
+		t.Error("only a slow pace")
+	}
+	if got := Sentence(Attributes{Age: "young_adult", Pace: "fast"}, "zh"); !strings.Contains(got, "语速偏快") {
+		t.Errorf("fast %q", got)
+	}
+	// The user's own words.
+	desc := "an elderly man who speaks slowly"
+	parsed := Parse(desc).Attrs
+	if parsed.Pace != "slow" {
+		t.Fatalf("parsed %+v", parsed)
+	}
+	if l, _ := Lower(TargetQwen3Design, Recipe{Description: desc, Attrs: parsed}, Options{}); l.Voice != desc {
+		t.Errorf("verbatim %q", l.Voice)
+	}
+	a, _, _ := parsed.With(Age, "middle_aged")
+	if l, _ := Lower(TargetQwen3Design, Recipe{Description: desc, Attrs: a}, Options{}); !strings.Contains(l.Voice, "slowly") || !strings.Contains(l.Voice, "middle-aged") {
+		t.Errorf("rewritten %q", l.Voice)
+	}
+	// Picked, not written: left out.
+	b, _, _ := (Attributes{Age: "elderly"}).With(Pace, "slow")
+	if l, _ := Lower(TargetQwen3Design, Recipe{Attrs: b}, Options{Lang: "en"}); strings.Contains(l.Voice, "slow") {
+		t.Errorf("picked %q", l.Voice)
 	}
 }
 

@@ -47,11 +47,16 @@ const (
 	RegisterChild = "child"
 )
 
-// RefLang is the language of the reference texts for speech in lang:
-// Chinese for Chinese, English otherwise.
+// RefLang is the language of the reference texts for speech in lang: its
+// own when reftexts.json has texts in it (zh, en, ja, ko, de, fr, es, it,
+// pt, ru: the languages Qwen3-TTS speaks), English otherwise.
 func RefLang(lang string) string {
-	if strings.HasPrefix(strings.ToLower(lang), "zh") {
-		return "zh"
+	l := strings.ToLower(strings.TrimSpace(lang))
+	if i := strings.IndexAny(l, "-_"); i >= 0 {
+		l = l[:i]
+	}
+	if _, ok := refTexts[l]; ok {
+		return l
 	}
 	return "en"
 }
@@ -66,10 +71,32 @@ func ReferenceTexts(lang, register string) []string {
 	return append([]string(nil), m[RegisterAdult]...)
 }
 
+// RefTextLang is the language of reference text s ("" when s is not one
+// of them): what a reference made from it says, for the recognizer.
+func RefTextLang(s string) string {
+	s = strings.TrimSpace(s)
+	for lang, m := range refTexts {
+		for _, ts := range m {
+			for _, t := range ts {
+				if t == s {
+					return lang
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // ConversationalStyle is the delivery a voice's reference takes ask for,
-// in lang (Chinese or English): casual, like an everyday chat, not read
+// in lang (Chinese, else English: the languages descriptions and
+// instructions are written in): casual, like an everyday chat, not read
 // (#81's group D, which the user preferred by ear).
-func ConversationalStyle(lang string) string { return refStyle[RefLang(lang)] }
+func ConversationalStyle(lang string) string {
+	if s, ok := refStyle[RefLang(lang)]; ok {
+		return s
+	}
+	return refStyle["en"]
+}
 
 // WithStyle is a free-form voice description (or a speaker's
 // instruction) with style added.
@@ -79,11 +106,11 @@ func WithStyle(desc, style string) string {
 	case desc == "":
 		return style
 	case strings.HasSuffix(desc, "。") || strings.HasSuffix(desc, ".") || strings.HasSuffix(desc, "，") || strings.HasSuffix(desc, ","):
-		if RefLang(TextLang(style)) == "en" && !strings.HasSuffix(desc, " ") {
+		if TextLang(style) == "en" && !strings.HasSuffix(desc, " ") {
 			return desc + " " + style
 		}
 		return desc + style
-	case RefLang(TextLang(style)) == "zh":
+	case TextLang(style) == "zh":
 		return desc + "。" + style
 	}
 	return desc + ". " + style

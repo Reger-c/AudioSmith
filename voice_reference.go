@@ -13,6 +13,15 @@ package main
 // reference (RefAudio, RefText: what it says exactly), apart from its
 // sample, which stays for previews; a built-in voice's becomes its
 // portable copy. The candidates' takes are deleted afterwards.
+//
+// A reference must say its text (thread #93, after #91: slow designed
+// voices were cut off by the model's length limit and saved with the
+// whole sentence, so clones said the missing half before every line):
+// Qwen3-TTS takes get a generous length limit (refMaxTokens), a take that
+// reaches it counts as cut off, and when no candidate says its text
+// (refcheck.NeedsRetake) they are made once more with another seed. A
+// kept take the recognizer hears saying something else gets what it
+// heard as its text, or none is kept (refAccept).
 
 import (
 	"context"
@@ -27,11 +36,27 @@ import (
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/licence"
+	"github.com/hehehai/AudioSmith/internal/text"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
 // refCandidates is how many takes a reference is chosen from.
 const refCandidates = 3
+
+// refMaxTokens is the length limit of a Qwen3-TTS reference take, in
+// codec frames (12.5 a second): 50 s for a 10–14 s text, room for the
+// slowest voice. The engine's own limit follows the text's length (patch
+// 0008: 0.8 s per text token, 0.48 s before), which slow voices reached.
+const refMaxTokens = 625
+
+// refTakeLimit is the length limit to set on model e's reference takes
+// (0: the model's own).
+func refTakeLimit(e catalog.Entry) int {
+	if e.Family == "qwen3_tts" {
+		return refMaxTokens
+	}
+	return 0
+}
 
 // refMake is a reference being made: its candidates and what to do with
 // the best.
@@ -47,6 +72,11 @@ type refMake struct {
 	checking bool
 	err      string
 	then     []func(ok bool)
+	// takes are the candidates' recipes and retry what a licence prompt
+	// runs, for a second round (round 1) when none said its text.
+	takes []core.Take
+	retry func()
+	round int
 }
 
 // refCand is one candidate: the take, then its tidied file and measures.
@@ -58,6 +88,7 @@ type refCand struct {
 	path   string // tidied
 	secs   float64
 	check  refcheck.Candidate
+	heard  string // what the recognizer heard ("": it did not listen)
 }
 
 func (c *refCand) settled() bool { return c.take != nil || c.err != "" }
@@ -150,7 +181,8 @@ func (a *app) makeReference(v *core.Voice, then func(ok bool)) {
 	}
 	var takes []core.Take
 	for _, text := range vd.ReferenceTexts(lang, reg)[:refCandidates] {
-		takes = append(takes, core.Take{Text: text, Model: e.Repo, Voice: voice, Seed: r.Seed, Language: modelLanguage(e, lang), VoiceID: v.ID})
+		takes = append(takes, core.Take{Text: text, Model: e.Repo, Voice: voice, Seed: r.Seed, Language: modelLanguage(e, lang), VoiceID: v.ID,
+			MaxTokens: refTakeLimit(e)})
 	}
 	id := v.ID
 	a.startRefMake(m, takes, func() {
@@ -183,7 +215,7 @@ func (a *app) makePortableRef(pj portableJob, t core.Take, retry func()) {
 	var takes []core.Take
 	for _, text := range vd.ReferenceTexts(pj.lang, vd.RegisterAdult)[:refCandidates] {
 		c := t
-		c.Text = text
+		c.Text, c.MaxTokens = text, refTakeLimit(entryFor(t.Model))
 		takes = append(takes, c)
 	}
 	a.toast(i18n.T("Making a portable copy of “%s”…", pj.name))
@@ -202,6 +234,13 @@ func (a *app) startRefMake(m *refMake, takes []core.Take, retry func()) {
 		a.refMakes = map[string]*refMake{}
 	}
 	a.refMakes[m.key] = m
+	m.takes, m.retry = takes, retry
+	a.queueRefTakes(m, takes)
+}
+
+// queueRefTakes queues the candidates' takes.
+func (a *app) queueRefTakes(m *refMake, takes []core.Take) {
+	retry := m.retry
 	for _, t := range takes {
 		t.Render = &core.TakeRender{Bits: 24}
 		c := &refCand{text: t.Text}
@@ -272,9 +311,14 @@ func (a *app) refSettled(m *refMake) {
 	if v := a.findVoice(m.voiceID); v != nil && v.Sample != "" {
 		sample = a.voicePath(v, v.Sample)
 	}
+	limit := 0.0 // seconds: a take this long was cut off
+	if len(m.takes) > 0 && m.takes[0].MaxTokens > 0 {
+		limit = float64(m.takes[0].MaxTokens)/12.5 - 0.5
+	}
 	a.background(func() {
 		for i, c := range ok {
 			c.path, c.secs, c.check = tidyCandidate(paths[i], dir, c.text)
+			c.check.Truncated = limit > 0 && c.check.Raw.Seconds >= limit
 		}
 		f0 := 0.0
 		if sample != "" {
@@ -327,7 +371,7 @@ func (a *app) refHear(m *refMake, cs []*refCand, k int) {
 		}
 		if err == nil {
 			cer := textDrift(c.text, heard)
-			c.check.Raw.CER, c.check.Tidy.CER = cer, cer
+			c.check.Raw.CER, c.check.Tidy.CER, c.heard = cer, cer, heard
 		}
 		a.refHear(m, cs, k+1)
 	})
@@ -342,37 +386,90 @@ func (a *app) refPick(m *refMake, cs []*refCand) {
 			usable, checks = append(usable, c), append(checks, c.check)
 		}
 	}
+	if m.round == 0 && refcheck.NeedsRetake(checks) && len(m.takes) > 0 {
+		a.refRetake(m)
+		return
+	}
 	best := refcheck.Pick(checks, m.wantF0)
 	if best < 0 {
 		a.refFinish(m, nil, i18n.T("Could not read the takes."))
 		return
 	}
+	if !refAccept(usable[best]) {
+		a.refFinish(m, nil, i18n.T("The voice did not say its reference text, even in a second try: try another description, or make the reference again."))
+		return
+	}
 	a.refFinish(m, usable[best], "")
 }
 
-// refFinish saves the best candidate (nil: none, err says why), cleans up
-// the rest and runs what waited.
-func (a *app) refFinish(m *refMake, best *refCand, err string) {
+// refAccept makes the kept candidate's text what it says: a take that
+// says its text keeps it; one the recognizer heard saying something else
+// (or cut off) gets what it heard, when that is long enough to clone
+// from; else false: a reference whose text does not match its audio
+// makes clones say the difference.
+func refAccept(c *refCand) bool {
+	if !c.check.Mismatched() {
+		return true
+	}
+	if c.check.Tidy.Speech < refcheck.ShortSpeech || c.check.Tidy.Seconds > 2*refcheck.PickMaxLength || !heardFits(c.heard, c.check.Tidy.Speech) {
+		return false
+	}
+	c.text = c.heard
+	c.check.Raw.CER, c.check.Tidy.CER, c.check.Truncated = 0, 0, false
+	return true
+}
+
+// heardFits reports whether heard (a transcript) can be the text of
+// seconds of speech: at least a word or a character for every two
+// seconds (a recognizer that heard "嗯" in 12 s of speech did not hear
+// it), and five.
+func heardFits(heard string, seconds float64) bool {
+	w, c := text.Count(heard)
+	return max(w, c) >= max(5, int(seconds/2))
+}
+
+// refRetake makes the candidates again, once, each with the next seed:
+// none said its text.
+func (a *app) refRetake(m *refMake) {
+	a.refCleanup(m, nil)
+	m.round, m.checking, m.cands = 1, false, nil
+	takes := slices.Clone(m.takes)
+	for i := range takes {
+		if s := takes[i].Seed; s > 0 {
+			takes[i].Seed = s%vd.MaxSeed + 1
+		}
+	}
+	m.takes = takes
+	a.queueRefTakes(m, takes)
+}
+
+// refCleanup deletes the candidates' takes and their tidied files, but
+// keep's file.
+func (a *app) refCleanup(m *refMake, keep *refCand) {
 	var takeIDs, files []string
 	for _, c := range m.cands {
 		if c.take != nil {
 			takeIDs = append(takeIDs, c.take.ID)
 		}
-		if c.path != "" && c != best {
+		if c.path != "" && c != keep {
 			files = append(files, c.path)
 		}
 	}
 	svcT := a.lib.svc.Takes
-	cleanup := func() {
-		a.background(func() {
-			for _, id := range takeIDs {
-				svcT.Delete(context.Background(), id)
-			}
-			for _, f := range files {
-				os.Remove(f)
-			}
-		})
-	}
+	a.background(func() {
+		for _, id := range takeIDs {
+			svcT.Delete(context.Background(), id)
+		}
+		for _, f := range files {
+			os.Remove(f)
+		}
+	})
+}
+
+// refFinish saves the best candidate (nil: none, err says why), cleans up
+// the rest and runs what waited.
+func (a *app) refFinish(m *refMake, best *refCand, err string) {
+	cleanup := func() { a.refCleanup(m, best) }
 	done := func(ok bool, msg string) {
 		m.checking = false
 		if !ok {
@@ -391,6 +488,7 @@ func (a *app) refFinish(m *refMake, best *refCand, err string) {
 		return
 	}
 	q := refQuality(best.check.Tidy, []string{"tidied"}, best.check.Raw.Seconds)
+	q.TextChecked = best.check.Tidy.CER >= 0 // heard saying its text (refAccept)
 	raw := a.takeStore.AudioPath(*best.take)
 	if pj := m.portable; pj != nil {
 		a.savePortable(*pj, portableFiles{path: best.path, original: raw, text: best.text, seconds: best.secs, model: m.model, check: q}, func(ok bool) {
@@ -437,30 +535,53 @@ func (a *app) canMakeReferenceNow(v *core.Voice) bool {
 	return !m.known || m.local.State == hub.Downloaded
 }
 
+// refToMake reports whether ensureReferences makes v's reference: it has
+// none, it can be made without asking anything, and it did not fail.
+func (a *app) refToMake(v *core.Voice) bool {
+	return needsReference(v) && a.refFailed(v.ID) == "" && a.canMakeReferenceNow(v)
+}
+
+// refWork reports whether ensureReferences has work for v: a reference to
+// make or to check.
+func (a *app) refWork(v *core.Voice) bool { return a.refToMake(v) || a.refUnchecked(v) }
+
 // ensureReferences makes the references the voices lack (needsReference),
-// when that asks nothing of the user (canMakeReferenceNow), and runs then
-// once every one is made or failed; at once when none is made. It says
-// how many it makes.
-func (a *app) ensureReferences(vs []*core.Voice, then func()) int {
-	var need []*core.Voice
+// when that asks nothing of the user (canMakeReferenceNow) and did not
+// fail before, and checks those not yet heard saying their text
+// (refUnchecked, thread #93); it runs then once every one is done or
+// failed; at once when there is none. It says how many it makes and how
+// many it checks.
+func (a *app) ensureReferences(vs []*core.Voice, then func()) (making, checking int) {
+	var need, check []*core.Voice
+	has := func(xs []*core.Voice, v *core.Voice) bool {
+		return slices.ContainsFunc(xs, func(x *core.Voice) bool { return x.ID == v.ID })
+	}
 	for _, v := range vs {
-		if needsReference(v) && a.canMakeReferenceNow(v) && !slices.ContainsFunc(need, func(x *core.Voice) bool { return x.ID == v.ID }) {
+		switch {
+		case v == nil || has(need, v) || has(check, v):
+		case a.refToMake(v):
 			need = append(need, v)
+		case a.refUnchecked(v):
+			check = append(check, v)
 		}
 	}
-	if len(need) == 0 {
+	if len(need)+len(check) == 0 {
 		then()
-		return 0
+		return 0, 0
 	}
-	left := len(need)
+	left := len(need) + len(check)
+	done := func() {
+		if left--; left == 0 {
+			then()
+		}
+	}
 	for _, v := range need {
-		a.makeReference(v, func(bool) {
-			if left--; left == 0 {
-				then()
-			}
-		})
+		a.makeReference(v, func(bool) { done() })
 	}
-	return len(need)
+	for _, v := range check {
+		a.checkReference(v, done)
+	}
+	return len(need), len(check)
 }
 
 // clonesDesign reports whether model e speaks designed voices by cloning

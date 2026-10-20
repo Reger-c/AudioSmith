@@ -268,6 +268,38 @@ func TestPick(t *testing.T) {
 	if Pick(nil, 0) != -1 {
 		t.Error("picked from none")
 	}
+	// Cut off: a fault, and a mismatch even when the recognizer is absent.
+	cut := Candidate{Raw: good, Tidy: good, Truncated: true}
+	cut.Tidy.CER = -1
+	if f := cut.Faults(); !slices.Equal(f, []string{CodeTruncated}) || !cut.Mismatched() {
+		t.Errorf("cut: %v", f)
+	}
+	if got := Pick([]Candidate{cut, {Raw: good, Tidy: good}}, 0); got != 1 {
+		t.Errorf("picked the cut one: %d", got)
+	}
+}
+
+// TestNeedsRetake: takes are made again only when none says its text (cut
+// off, or heard over RetakeCER); an unknown error rate is not a mismatch.
+func TestNeedsRetake(t *testing.T) {
+	r := func(cer float64) Candidate { return Candidate{Tidy: Report{CER: cer}} }
+	cut := r(0)
+	cut.Truncated = true
+	for _, c := range []struct {
+		cs   []Candidate
+		want bool
+	}{
+		{nil, false},
+		{[]Candidate{r(0.06), r(0.2), r(1.3)}, true},
+		{[]Candidate{r(0.06), r(0.04)}, false},
+		{[]Candidate{r(0.06), cut}, true},
+		{[]Candidate{r(-1), r(0.5)}, false},
+		{[]Candidate{r(0.05)}, false},
+	} {
+		if got := NeedsRetake(c.cs); got != c.want {
+			t.Errorf("%+v: %v", c.cs, got)
+		}
+	}
 }
 
 // TestGradeOf: codes graded as reports are; dialogue-only codes do not

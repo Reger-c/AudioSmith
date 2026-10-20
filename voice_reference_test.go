@@ -154,13 +154,18 @@ func TestPortableHints(t *testing.T) {
 	if p := renderOf(t, eng.last(t)); p.Take.Model != kok.Repo || p.Take.Voice != "af_heart" {
 		t.Errorf("render %+v", p.Take)
 	}
-	// A designed voice with a reference: copied at once.
+	// A designed voice with a reference: heard once (#93), then copied
+	// without rendering.
 	d := addVoice(t, a, core.Voice{Name: "Mom", Kind: core.VoiceDesigned, Design: "a young mother", Language: "zh", RefText: "参考的文字。"}, 11)
 	n := len(eng.sent)
 	a.makePortable(&d)
+	answerTranscribe(t, eng, "参考的文字。")
 	tt.Frame()
-	if len(eng.sent) != n || !slices.ContainsFunc(a.voices, func(x core.Voice) bool { return x.RefText == "参考的文字。" && isPortable(&x) }) {
+	if len(eng.sent) != n+1 || !slices.ContainsFunc(a.voices, func(x core.Voice) bool { return x.RefText == "参考的文字。" && isPortable(&x) }) {
 		t.Errorf("designed portable: %d sent, voices %+v", len(eng.sent)-n, a.voices)
+	}
+	if g := a.findVoice(d.ID); g.RefCheck == nil || !g.RefCheck.TextChecked {
+		t.Errorf("not checked: %+v", g.RefCheck)
 	}
 }
 
@@ -261,8 +266,8 @@ func TestLazyReference(t *testing.T) {
 	a.voiceChanged(core.VoiceChanged{Voice: v})
 	called := 0
 	from := len(eng.sent)
-	if n := a.ensureReferences([]*core.Voice{&v, &v}, func() { called++ }); n != 1 || called != 0 {
-		t.Fatalf("ensure: %d, called %d", n, called)
+	if n, k := a.ensureReferences([]*core.Voice{&v, &v}, func() { called++ }); n != 1 || k != 0 || called != 0 {
+		t.Fatalf("ensure: %d %d, called %d", n, k, called)
 	}
 	for _, r := range refRenders(t, eng, from) {
 		if p := renderOf(t, r); !slices.Contains(vd.ReferenceTexts("zh", vd.RegisterChild), p.Take.Text) {
@@ -274,8 +279,8 @@ func TestLazyReference(t *testing.T) {
 		t.Errorf("called %d, voice %+v", called, a.findVoice(v.ID))
 	}
 	// Nothing missing: at once.
-	if n := a.ensureReferences([]*core.Voice{a.findVoice(v.ID)}, func() { called++ }); n != 0 || called != 2 {
-		t.Errorf("again: %d, %d", n, called)
+	if n, k := a.ensureReferences([]*core.Voice{a.findVoice(v.ID)}, func() { called++ }); n != 0 || k != 0 || called != 2 {
+		t.Errorf("again: %d %d, %d", n, k, called)
 	}
 	// Failing renders: then runs anyway; the failure is shown.
 	w := addVoice(t, a, core.Voice{Name: "Dad", Kind: core.VoiceDesigned, Design: "a father", Language: "en", Seed: 4, CreatedWith: vdm.Repo, DesignAttrs: attrsOf("a father")}, 0)

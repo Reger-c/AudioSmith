@@ -95,7 +95,8 @@ func (a *app) dialogueRefStatus(c *ui.Context, ref string, locked bool) {
 
 // lfMakeReferences makes the references a story's designed voices lack
 // before it renders, when whole dialogue or the story's model clones
-// them; then runs again. It reports whether it is making any (the caller
+// them, and has those made from a voice heard once (#93); then runs
+// again. It reports whether it is making or checking any (the caller
 // waits). A voice whose reference failed is not tried again here (Make
 // reference in its menu does).
 func (a *app) lfMakeReferences(p *lfPage, again func()) bool {
@@ -116,14 +117,17 @@ func (a *app) lfMakeReferences(p *lfPage, again func()) bool {
 		if book && !speakers[key] {
 			continue
 		}
-		if v := a.findVoice(t.VoiceID); needsReference(v) && a.refFailed(v.ID) == "" && a.canMakeReferenceNow(v) {
+		if v := a.findVoice(t.VoiceID); a.refWork(v) {
 			vs = append(vs, v)
 		}
 	}
 	if len(vs) == 0 {
 		return false
 	}
-	n := a.ensureReferences(vs, again)
+	n, checking := a.ensureReferences(vs, again)
+	if n == 0 {
+		return checking > 0 // heard first (#93): quick, no note
+	}
 	if book {
 		a.toast(i18n.N(n, "Making a reference for %d voice first: the book renders after it.", "Making references for %d voices first: the book renders after them.", n))
 		return true

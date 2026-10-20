@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dsp/refcheck"
 	"github.com/hehehai/AudioSmith/internal/store"
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
@@ -378,6 +379,39 @@ func (s *Voices) RevertReference(ctx context.Context, id string) (core.Voice, er
 			q.Cleaned, q.OriginalSeconds = nil, 0
 			v.RefCheck = &q
 		}
+		return obsolete, nil
+	})
+}
+
+// ReferenceTextChecked records that the recognizer heard the voice's
+// reference say text (thread #93): text becomes RefText (its cached
+// prompts go when it changes, as they encode it) and RefCheck says the
+// text is checked, without a mismatch. was is the reference as heard,
+// its file and text: it fails with ErrInvalid when the reference changed
+// meanwhile.
+func (s *Voices) ReferenceTextChecked(ctx context.Context, id string, was core.RefHeard, text string) (core.Voice, error) {
+	text = strings.TrimSpace(text)
+	return s.update(ctx, id, func(v *core.Voice) ([]string, error) {
+		if v.RefAudio == "" || v.RefAudio != was.Audio || v.RefText != was.Text || text == "" {
+			return nil, fmt.Errorf("voice %s: the reference changed: %w", id, core.ErrInvalid)
+		}
+		var obsolete []string
+		if v.RefText != text {
+			for _, p := range v.Prompts {
+				obsolete = append(obsolete, p)
+			}
+			v.RefText, v.Prompts = text, nil
+		}
+		q := core.RefQuality{}
+		if v.RefCheck != nil {
+			q = *v.RefCheck
+		}
+		q.Hints = slices.DeleteFunc(slices.Clone(q.Hints), func(h string) bool { return h == refcheck.CodeMismatch })
+		if q.Grade != "" {
+			q.Grade = string(refcheck.GradeOf(q.Hints, refcheck.UseClone))
+		}
+		q.TextChecked = true
+		v.RefCheck = &q
 		return obsolete, nil
 	})
 }

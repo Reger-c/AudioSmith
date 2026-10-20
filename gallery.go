@@ -172,6 +172,11 @@ func galleryModel(e catalog.Entry) gallery.Model {
 		}
 	}
 	m.Speakers = e.VoiceIDs()
+	// The tuned sampling the Studio's takes get (FillDefaults), not the
+	// engine's defaults.
+	if d, ok := presetDefaults(e)[""]; ok {
+		m.Sampling = gallery.Sampling{Temperature: d.Temperature, TopP: d.TopP, Guidance: d.Guidance, Steps: d.Steps}
+	}
 	return m
 }
 
