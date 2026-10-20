@@ -486,15 +486,17 @@ func curateSmoke(t *testing.T, a *app, ctx context.Context, waitFor func(string,
 
 	old, _ := gallery.Default().ByID("f-grandma-osmanthus")
 	attrs, _ := json.Marshal(old.Attrs)
+	// As the earlier Use voice saved it: attributes, seed, the model it
+	// was previewed with.
+	vdm, _ := catalog.Builtin().ByID(curateVD)
 	saved, err := a.lib.svc.Voices.SaveFiles(ctx, core.Voice{Name: "桂花奶奶（旧）", Kind: core.VoiceDesigned, DesignAttrs: attrs, Seed: old.Seed,
-		Language: "zh", Origin: "gallery:" + old.ID}, core.VoiceFiles{})
+		Language: "zh", Origin: "gallery:" + old.ID, CreatedWith: vdm.Repo}, core.VoiceFiles{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	a.voiceChanged(core.VoiceChanged{Voice: saved})
 	// Its own recipe on the design model, as before #94 (with neither a
 	// sample nor a reference, clone models can't speak it).
-	vdm, _ := catalog.Builtin().ByID(curateVD)
 	a.selectModel(vdm)
 	a.studioVoice, a.studioClip = saved.ID, nil
 	start = time.Now()
@@ -507,7 +509,7 @@ func curateSmoke(t *testing.T, a *app, ctx context.Context, waitFor func(string,
 	a.makeReference(ov, func(bool) { done = true })
 	waitFor("old voice reference", 15*time.Minute, func() bool { return done })
 	ov = a.findVoice(saved.ID)
-	t.Logf("old voice: reference made (%.1f s, checked %v, %q)", ov.RefSeconds, ov.RefCheck != nil && ov.RefCheck.TextChecked, ov.RefText)
+	t.Logf("old voice: reference made (%.1f s, checked %v, %q) %s", ov.RefSeconds, ov.RefCheck != nil && ov.RefCheck.TextChecked, ov.RefText, a.refFailed(ov.ID))
 	if ov.RefAudio == "" {
 		t.Error("the old voice got no reference")
 	}
