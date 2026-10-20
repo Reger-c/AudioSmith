@@ -9,7 +9,8 @@ package main
 // line-duotone, in the accent while it plays, a click again stops it),
 // the name and its type in a lighter tone, ✓ on the chosen one. Clicking
 // a name chooses and plays it; the panel stays open while the user tries
-// sounds. The same picker in every family app, in its own tokens.
+// sounds. The panel is soundPanelW wide; the type and volume buttons share
+// one face. The same picker in every family app, in its own tokens.
 
 import (
 	"fmt"
@@ -85,7 +86,7 @@ func soundPicker(c *ui.Context, sp soundPickerSpec) {
 		ui.Icon(c, icons.AltArrowDown.Linear).Size(px(t, 13), px(t, 13)).TextColor(mark)
 	})
 	ui.PopoverBase(c.Key("panel"), b, &st.open, func(panel ui.Element) {
-		panel.Width(px(t, 340)).Padding(px(t, 8)).Radius(px(t, radiusCard)).Background(k.Bg).Border(1, k.Line).
+		panel.Width(px(t, soundPanelW)).Padding(px(t, 8)).Radius(px(t, radiusCard)).Background(k.Bg).Border(1, k.Line).
 			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.18)).Label(i18n.T("Sounds")).Children(func() {
 			ui.Column(c).Gap(px(t, 6)).Children(func() { soundPanel(c, sp, st) })
 		})
@@ -115,7 +116,9 @@ func soundPanel(c *ui.Context, sp soundPickerSpec, st *soundPickerState) {
 		st.view = pickSystem // a build without the family's sounds
 	}
 	ui.Row(c.Key("top")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-		searchField(c, "sound-q", &st.query, i18n.T("Search sounds"), 0).AutoFocus() // type to search at once
+		// The field keeps its accessible name; its placeholder is short, so
+		// that the top line fits soundPanelW.
+		searchField(c, "sound-q", &st.query, i18n.T("Search sounds"), 0).Placeholder(i18n.T("Search")).AutoFocus() // type to search at once
 		soundTypeMenu(c, sp, st, lang)
 		if sp.SetVolume != nil {
 			soundVolumeMenu(c, sp)
@@ -162,16 +165,27 @@ func soundPanel(c *ui.Context, sp soundPickerSpec, st *soundPickerState) {
 	})
 }
 
-// soundTypeMenu is the type menu: All, Suggested, each group, macOS.
+// soundMenuButton is the face of the panel's two menu buttons, the type
+// and the volume: the trigger's look (its fill, corners, height and
+// padding), darker under the pointer and while pressed.
+func soundMenuButton(c *ui.Context, key, label, value string) ui.Element {
+	t := c.Theme()
+	k := tok(t)
+	b := ui.ButtonBase(c.Key(key)).Height(px(t, 28)).Padding(0, px(t, 8)).Gap(px(t, 4)).AlignItems(ui.Center).Justify(ui.Center).
+		Radius(px(t, radiusControl)).Background(k.Hover).Label(label).Value(value).Tooltip(label + " " + value).Shrink(0)
+	if b.Hovered() || b.Pressed() {
+		b.Background(k.Pressed)
+	}
+	return b
+}
+
+// soundTypeMenu is the type menu: All, Suggested, each group, macOS; as
+// wide as its value.
 func soundTypeMenu(c *ui.Context, sp soundPickerSpec, st *soundPickerState, lang string) {
 	t := c.Theme()
 	k := tok(t)
 	cur := soundViewName(sp, st.view, lang)
-	b := ui.ButtonBase(c.Key("type")).Height(px(t, 28)).MaxWidth(px(t, 120)).Padding(0, px(t, 8)).Gap(px(t, 4)).AlignItems(ui.Center).
-		Radius(px(t, radiusControl)).Background(k.Hover).Label(i18n.T("Type")).Value(cur).Tooltip(cur).Shrink(0)
-	if b.Hovered() {
-		b.Background(k.Pressed)
-	}
+	b := soundMenuButton(c, "type", i18n.T("Type"), cur).MaxWidth(px(t, 112))
 	b.Children(func() {
 		ui.Text(c, cur).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").MinWidth(0)
 		ui.Icon(c, icons.AltArrowDown.Linear).Size(px(t, 12), px(t, 12)).TextColor(k.Text2)
@@ -198,8 +212,9 @@ func soundTypeMenu(c *ui.Context, sp soundPickerSpec, st *soundPickerState, lang
 	})
 }
 
-// soundVolumeMenu is the volume button: its icon says the level, its menu
-// lists VolumeSteps loudest first, the current one checked.
+// soundVolumeMenu is the volume button, in the type menu's face: its icon
+// says the level, its menu lists VolumeSteps loudest first, the current
+// one checked.
 func soundVolumeMenu(c *ui.Context, sp soundPickerSpec) {
 	t := c.Theme()
 	k := tok(t)
@@ -211,14 +226,9 @@ func soundVolumeMenu(c *ui.Context, sp soundPickerSpec) {
 	case 1:
 		ic = icons.VolumeSmall
 	}
-	tip := fmt.Sprintf("%s %d%%", i18n.T("Volume"), cur)
-	b := ghostBase(c.Key("volume")).Size(px(t, 28), px(t, 28)).Center().Shrink(0).Label(i18n.T("Volume")).Value(fmt.Sprintf("%d%%", cur)).Tooltip(tip)
+	b := soundMenuButton(c, "volume", i18n.T("Volume"), fmt.Sprintf("%d%%", cur))
 	b.Children(func() {
-		col := k.Text2
-		if b.Hovered() {
-			col = k.Text
-		}
-		ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16)).TextColor(col)
+		ui.Icon(c, ic.Linear).Size(px(t, 16), px(t, 16)).TextColor(k.Text2)
 	})
 	b.Menu(func(m *ui.Menu) {
 		for i := len(sounds.VolumeSteps) - 1; i >= 0; i-- {
@@ -302,6 +312,14 @@ func soundRow(c *ui.Context, sp soundPickerSpec, choice, name, kind string) {
 		})
 	})
 }
+
+// soundPanelW is the panel's width in DIPs, the same in every family app,
+// measured (10-20): the widest top line is the search field at its least
+// (120, with its short placeholder), the type menu showing "Suggested"
+// (97) and the volume button (32), with the gaps, the padding and the
+// border: 279. The longest sound with its type ("Downlink Progress",
+// "大功告成 进度") needs 194.
+const soundPanelW = 280
 
 // soundPickerW is the picker button's width.
 const soundPickerW = 176
