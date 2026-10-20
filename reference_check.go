@@ -36,6 +36,11 @@ func textOptions(s string) refcheck.Options {
 // textDrift is the recognizer's error rate on what should be said.
 func textDrift(want, heard string) float64 { return dub.Drift(want, heard) }
 
+// refCER is the recognizer's character error rate on what a reference
+// made from a voice should say (spaces and punctuation left out, so a
+// word written in two does not count; #93).
+func refCER(want, heard string) float64 { return dub.CharDrift(want, heard) }
+
 // uniquePath is a new WAV file in dir.
 func uniquePath(dir, prefix string) string {
 	return filepath.Join(dir, prefix+"-"+core.NewID(time.Now())+".wav")

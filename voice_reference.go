@@ -370,7 +370,7 @@ func (a *app) refHear(m *refMake, cs []*refCand, k int) {
 			return
 		}
 		if err == nil {
-			cer := textDrift(c.text, heard)
+			cer := refCER(c.text, heard)
 			c.check.Raw.CER, c.check.Tidy.CER, c.heard = cer, cer, heard
 		}
 		a.refHear(m, cs, k+1)

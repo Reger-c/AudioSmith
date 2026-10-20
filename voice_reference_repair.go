@@ -72,7 +72,7 @@ func (a *app) checkReference(v *core.Voice, then func()) {
 		switch {
 		case err != nil || v == nil || !sameRef(v, was):
 			finish(false)
-		case textDrift(want, heard) <= refcheck.RetakeCER:
+		case refCER(want, heard) <= refcheck.RetakeCER:
 			a.saveRefText(id, was, want, finish)
 		case v.Kind == core.VoiceDesigned && a.canMakeReferenceNow(v):
 			a.toast(i18n.T("The reference of “%s” doesn't say its text: making it again…", v.Name))

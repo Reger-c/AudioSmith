@@ -29,7 +29,7 @@ type Candidate struct {
 }
 
 // Mismatched reports whether the take does not say its text: cut off, or
-// heard saying something else (over RetakeCER). An unknown error rate
+// heard saying something else (character error rate over RetakeCER). An unknown error rate
 // (no recognizer) is not a mismatch.
 func (c Candidate) Mismatched() bool {
 	return c.Truncated || c.Tidy.CER > RetakeCER
