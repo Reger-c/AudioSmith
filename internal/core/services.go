@@ -90,6 +90,10 @@ type VoiceService interface {
 	// or the consent: the speaker is the same.
 	CleanReference(ctx context.Context, id, path string, seconds float64, q *RefQuality) (Voice, error)
 	RevertReference(ctx context.Context, id string) (Voice, error)
+	// ReferenceTextChecked records that the recognizer heard the reference
+	// was say text: text becomes RefText and RefCheck says it is checked
+	// (ErrInvalid when the reference is no longer was).
+	ReferenceTextChecked(ctx context.Context, id string, was RefHeard, text string) (Voice, error)
 	// SetConsent stores a recording of the user reading the consent
 	// statement: the voice becomes Verified. RevokeConsent removes it.
 	SetConsent(ctx context.Context, id string, c ConsentRecording) (Voice, error)

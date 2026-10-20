@@ -29,7 +29,8 @@ func lowerFreeform(r Recipe, o Options) Lowered {
 		}
 		return Lowered{Voice: joinSentences(r.Description, Sentence(extra, lang), lang), Lang: lang, Used: allValues(r.Attrs)}
 	}
-	voice := Sentence(r.Attrs, lang)
+	// A slow pace the user wrote stays (Sentence leaves the attribute out).
+	voice := sentence(r.Attrs, lang, slowPace(parsed.Attrs.Pace) && r.Attrs.Pace == parsed.Attrs.Pace)
 	if terms := parsed.Unmatched; len(terms) > 0 {
 		words := make([]string, len(terms))
 		for i, t := range terms {
@@ -64,9 +65,25 @@ func joinSentences(a, b, lang string) string {
 
 // Sentence describes attributes as one natural sentence (two at most) in
 // English or Chinese, the way Qwen3-TTS VoiceDesign expects. Auto
-// attributes give "".
-func Sentence(a Attributes, lang string) string {
+// attributes give "". A slow pace is left out (thread #93, after #91):
+// VoiceDesign then says a reference so slowly that it runs past the
+// model's length limit, and clones copy the reference's pace, which
+// sounds read rather than spoken; a description the user writes keeps
+// it.
+func Sentence(a Attributes, lang string) string { return sentence(a, lang, false) }
+
+// Describe is Sentence with every attribute, a slow pace too: what the
+// gallery shows of a voice.
+func Describe(a Attributes, lang string) string { return sentence(a, lang, true) }
+
+// slowPace reports whether pace id is a slow one.
+func slowPace(id string) bool { return id == "slow" || id == "very_slow" }
+
+func sentence(a Attributes, lang string, slow bool) string {
 	a = a.Canonical()
+	if !slow && slowPace(a.Pace) {
+		a.Pace = ""
+	}
 	if a.IsAuto() {
 		return ""
 	}

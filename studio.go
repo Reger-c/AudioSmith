@@ -334,14 +334,18 @@ func (a *app) generate() {
 		return
 	}
 	// A designed voice cloned for the first time gets its reference
-	// first (#83, voice_reference.go).
-	if v := a.findVoice(a.studioVoice); needsReference(v) && a.refFailed(v.ID) == "" && a.canMakeReferenceNow(v) &&
-		clonesDesign(a.preset()) && a.studioUsesSavedVoice(a.preset()) {
-		if a.refMaking(v.ID) == nil {
-			a.toast(i18n.T("Making a reference for “%s” first: the take follows.", v.Name))
-			a.ensureReferences([]*core.Voice{v}, a.generate)
+	// first (#83, voice_reference.go); a reference made from the voice is
+	// heard once, and made again when it doesn't say its text (#93).
+	if v := a.findVoice(a.studioVoice); v != nil && clonesDesign(a.preset()) && a.studioUsesSavedVoice(a.preset()) {
+		if a.refMaking(v.ID) != nil || a.refChecking(v.ID) {
+			return // the take follows
 		}
-		return
+		if a.refWork(v) {
+			if making, _ := a.ensureReferences([]*core.Voice{v}, a.generate); making > 0 {
+				a.toast(i18n.T("Making a reference for “%s” first: the take follows.", v.Name))
+			}
+			return
+		}
 	}
 	a.startRender()
 	a.startTake(a.recipe(time.Now()))

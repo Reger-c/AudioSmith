@@ -70,12 +70,22 @@ type Voice struct {
 // RefQuality is what the reference checker (dsp/refcheck) found in a
 // voice's reference: its grade ("good", "ok", "poor"), its hints' codes,
 // what the automatic cleaning did ("denoised", "tidied") and how long the
-// original was.
+// original was. TextChecked: the recognizer heard the reference say its
+// RefText (thread #93: references made from a voice itself are checked
+// once; one that did not say its text is made again or gets what it
+// says).
 type RefQuality struct {
 	Grade           string   `json:"grade,omitempty"`
 	Hints           []string `json:"hints,omitempty"`
 	Cleaned         []string `json:"cleaned,omitempty"`
 	OriginalSeconds float64  `json:"originalSeconds,omitempty"`
+	TextChecked     bool     `json:"textChecked,omitempty"`
+}
+
+// RefHeard is a voice's reference as the recognizer heard it: its file
+// and the text it had.
+type RefHeard struct {
+	Audio, Text string
 }
 
 // Verified reports whether the profile has a consent recording made here.

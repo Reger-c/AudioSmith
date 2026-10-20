@@ -46,6 +46,13 @@ func (a *app) makePortable(v *core.Voice) {
 	pj := portableJob{name: v.Name, lang: lang, origin: "voice:" + v.ID}
 	if v.Kind == core.VoiceDesigned {
 		switch {
+		case a.refUnchecked(v): // heard first (#93)
+			id := v.ID
+			a.checkReference(v, func() {
+				if v := a.findVoice(id); v != nil && !a.refUnchecked(v) {
+					a.makePortable(v)
+				}
+			})
 		case v.RefAudio != "":
 			a.savePortable(pj, portableFiles{path: a.voicePath(v, v.RefAudio), text: v.RefText, seconds: v.RefSeconds, model: v.CreatedWith, check: v.RefCheck}, nil)
 		case needsReference(v):

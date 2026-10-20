@@ -62,6 +62,11 @@ type voicesState struct {
 	// refMakes are the references being made from voices (a designed
 	// voice's, a portable copy's), by key (voice_reference.go).
 	refMakes map[string]*refMake
+	// refChecks are the references being checked, by voice id;
+	// refCheckSkip those not to check again this session
+	// (voice_reference_repair.go).
+	refChecks    map[string]*refCheck
+	refCheckSkip map[string]bool
 }
 
 // clipRef is a reference clip used without saving it as a voice.

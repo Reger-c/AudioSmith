@@ -27,6 +27,110 @@
       "It snowed last night! My friends and I built a huge snowman in the playground and gave him my red hat. Doesn't he look funny? I want to build another one tomorrow!"
     ]
   },
+  "ja": {
+    "adult": [
+      "先週末、友だちと山に登りました。一時間で着くと思っていたのに、結局三時間近くかかったんです！でも頂上からの景色が本当にきれいで、行ってよかったと思いました。",
+      "昨日の夜、駅前のラーメン屋にすごい行列ができていて、気になって並んでみました。運ばれてきたら、いい香りがして最高でした！今度一緒に行きませんか？",
+      "朝、家を出てから傘を忘れたことに気づきました。急に雨が強くなったので近くの本屋に入ったら、ずっと探していた古い本が見つかったんです。運がいいでしょう？",
+      "最近料理を始めたんですが、最初の野菜炒めは塩を入れすぎて、しょっぱくて食べられませんでした。でも昨日作ったオムライスは、家族みんながおいしいと言ってくれました！"
+    ],
+    "child": [
+      "今日、学校の帰りに小さな鳥を見つけたよ！すごく高く飛んでいって、ずっと追いかけたんだ。あの鳥、お母さんのところに帰ったのかな？",
+      "今日は運動会で、かけっこで二番になったよ！最後はもう足が動かなかったけど、みんなが応援してくれたから、ゴールまで一気に走ったんだ！",
+      "おばあちゃんの畑には、真っ赤なトマトがいっぱいあるんだ。一番大きいのを取って食べたら、すごく甘かったよ！とれたてのトマト、食べたことある？"
+    ]
+  },
+  "ko": {
+    "adult": [
+      "지난 주말에 친구랑 산에 올라갔는데, 한 시간이면 될 줄 알았거든요. 그런데 거의 세 시간이나 걸렸어요! 그래도 정상에서 본 경치가 정말 멋져서 하나도 후회 안 했어요.",
+      "어제 저녁에 집 앞 국숫집에 줄이 엄청 길게 서 있길래 궁금해서 기다려 봤어요. 국수가 나오자마자 냄새가 정말 좋더라고요! 다음에 같이 가 볼래요?",
+      "아침에 나와서야 우산을 안 가져온 걸 알았어요. 비가 갑자기 쏟아져서 옆에 있는 서점에 들어갔는데, 오랫동안 찾던 책을 거기서 발견했지 뭐예요!",
+      "요즘 요리를 배우고 있는데, 처음 만든 볶음밥은 소금을 너무 많이 넣어서 짜서 못 먹었어요. 그래도 어제 만든 계란말이는 가족들이 다 맛있다고 했어요!"
+    ],
+    "child": [
+      "오늘 학교 끝나고 집에 가다가 작은 새를 봤어요! 엄청 높이 날아가서 한참 따라갔어요. 그 새는 엄마 찾으러 집에 간 걸까요?",
+      "오늘 운동회에서 달리기를 했는데 제가 이등을 했어요! 마지막 바퀴에서 다리가 너무 아팠지만, 친구들이 응원해 줘서 끝까지 힘껏 달렸어요!",
+      "할머니 집 마당에는 빨간 토마토가 정말 많아요. 제일 큰 걸 따서 한 입 먹었는데 진짜 달았어요! 방금 딴 토마토 먹어 본 적 있어요?"
+    ]
+  },
+  "de": {
+    "adult": [
+      "Letztes Wochenende sind wir auf den Berg hinter der Stadt gestiegen. Ich dachte, das dauert eine Stunde, aber es waren fast drei! Die Aussicht oben war trotzdem fantastisch. Warst du schon mal dort oben?",
+      "Gestern Abend stand vor dem kleinen Nudelladen an der Ecke eine riesige Schlange. Ich habe mich einfach angestellt, und weißt du was? Die Nudeln waren wirklich jede Minute wert!",
+      "Heute Morgen habe ich meinen Bus um zehn Sekunden verpasst. Ich stand da mit meinem Kaffee und habe ihm hinterhergeschaut! Dann kam eine Freundin vorbei und hat mich mitgenommen. Was für ein Glück, oder?",
+      "Ich lerne gerade, Brot zu backen. Mein erstes Brot war hart wie ein Stein, mein Bruder hat es kaum durchgeschnitten bekommen! Das dritte ist aber richtig gut geworden, alle wollten noch ein Stück."
+    ],
+    "child": [
+      "Rate mal! Heute hatten wir in der Schule ein Wettrennen, und ich habe den zweiten Platz gemacht! Am Ende waren meine Beine total müde, aber alle haben gejubelt, also bin ich einfach weitergerannt!",
+      "Oma hat einen Garten voller Tomaten. Ich habe die größte gepflückt, und sie war so süß! Hast du schon mal eine Tomate direkt von der Pflanze gegessen? Die schmeckt viel besser als aus dem Laden.",
+      "Letzte Nacht hat es geschneit! Meine Freunde und ich haben auf dem Schulhof einen riesigen Schneemann gebaut und ihm meine rote Mütze aufgesetzt. Sieht er nicht lustig aus?"
+    ]
+  },
+  "fr": {
+    "adult": [
+      "Le week-end dernier, on a grimpé sur la colline derrière la ville. Je pensais qu'il faudrait une heure, mais on a mis presque trois heures ! La vue d'en haut était magnifique. Tu y es déjà allé ?",
+      "Hier soir, il y avait une queue énorme devant le petit restaurant de nouilles au coin de la rue. J'ai attendu moi aussi, et franchement, ça valait le coup ! Tu viens avec moi la prochaine fois ?",
+      "Ce matin, j'ai raté mon bus à dix secondes près. J'étais là, mon café à la main, à le regarder partir ! Et puis une amie est passée en voiture et m'a proposé de monter. Quelle chance, non ?",
+      "J'apprends à faire du pain en ce moment. Mon premier pain était dur comme de la pierre, mon frère n'arrivait même pas à le couper ! Mais le troisième était vraiment parfait, tout le monde en a repris."
+    ],
+    "child": [
+      "Devine quoi ? Aujourd'hui à l'école, on a fait une course, et j'ai fini deuxième ! À la fin, mes jambes étaient super fatiguées, mais tout le monde criait, alors j'ai couru jusqu'au bout !",
+      "Mamie a un jardin plein de tomates. J'ai cueilli la plus grosse et elle était trop sucrée ! Tu as déjà mangé une tomate juste cueillie ? C'est bien meilleur que celles du magasin.",
+      "Il a neigé cette nuit ! Avec mes copains, on a fait un énorme bonhomme de neige dans la cour, et on lui a mis mon bonnet rouge. Il est rigolo, tu ne trouves pas ?"
+    ]
+  },
+  "es": {
+    "adult": [
+      "El fin de semana pasado subimos al cerro que está detrás del pueblo. Pensé que tardaríamos una hora, ¡pero tardamos casi tres! La vista desde arriba era increíble. ¿Tú has subido alguna vez?",
+      "Anoche había una cola enorme delante del restaurante de fideos de la esquina. Me puse a esperar por curiosidad, ¡y valió muchísimo la pena! ¿Quieres venir conmigo la próxima vez?",
+      "Esta mañana perdí el autobús por unos diez segundos. ¡Me quedé ahí, con el café en la mano, viendo cómo se iba! Luego pasó una amiga en coche y me llevó. ¿Qué suerte, verdad?",
+      "Estoy aprendiendo a hacer pan. Mi primera barra salió dura como una piedra, ¡mi hermano ni siquiera pudo cortarla! Pero la tercera me quedó perfecta y en casa se la comieron toda."
+    ],
+    "child": [
+      "¿Sabes qué? Hoy en el cole hicimos una carrera y quedé en segundo lugar. Al final tenía las piernas cansadísimas, pero todos me animaban, ¡así que seguí corriendo lo más rápido que pude!",
+      "Mi abuela tiene un huerto lleno de tomates. ¡Cogí el más grande y estaba dulcísimo! ¿Alguna vez has comido un tomate recién cogido de la planta? Es mucho mejor que los de la tienda.",
+      "¡Anoche nevó! Mis amigos y yo hicimos un muñeco de nieve enorme en el patio y le pusimos mi gorro rojo. ¿A que parece muy gracioso? ¡Mañana quiero hacer otro!"
+    ]
+  },
+  "it": {
+    "adult": [
+      "Lo scorso fine settimana siamo saliti sulla collina dietro il paese. Pensavo che ci volesse un'ora, invece ce ne sono volute quasi tre! Ma la vista dalla cima era stupenda. Ci sei mai stato?",
+      "Ieri sera c'era una fila lunghissima davanti al ristorantino di noodles all'angolo. Ci siamo messi in coda per curiosità, e ne è valsa davvero la pena! Vuoi venire con me la prossima volta?",
+      "Stamattina ho perso l'autobus per dieci secondi. Ero lì, con il caffè in mano, a guardarlo andare via! Poi è passata un'amica in macchina e mi ha dato un passaggio. Che fortuna, no?",
+      "Sto imparando a fare il pane. La prima pagnotta era dura come un sasso, mio fratello non riusciva nemmeno a tagliarla! La terza, però, è venuta perfetta e l'abbiamo finita in una sera."
+    ],
+    "child": [
+      "Indovina? Oggi a scuola abbiamo fatto una gara di corsa e ho preso il secondo posto! Alla fine le gambe erano stanchissime, ma tutti facevano il tifo, così ho continuato a correre fortissimo!",
+      "La nonna ha un orto pieno di pomodori. Ho raccolto il più grande ed era dolcissimo! Hai mai mangiato un pomodoro appena colto dalla pianta? È molto più buono di quelli del negozio.",
+      "Stanotte ha nevicato! Con i miei amici abbiamo fatto un pupazzo di neve enorme in cortile e gli abbiamo messo il mio cappello rosso. Non ti sembra buffissimo? Domani ne voglio fare un altro!"
+    ]
+  },
+  "pt": {
+    "adult": [
+      "No fim de semana passado, subimos o morro atrás da cidade. Achei que ia levar uma hora, mas levou quase três! A vista lá de cima era incrível. Você já subiu até lá?",
+      "Ontem à noite tinha uma fila enorme na frente do restaurante de macarrão da esquina. Entrei na fila por curiosidade, e valeu muito a pena! Quer ir comigo da próxima vez?",
+      "Hoje de manhã perdi o ônibus por uns dez segundos. Fiquei ali, com o café na mão, vendo ele ir embora! Depois uma amiga passou de carro e me deu uma carona. Que sorte, não é?",
+      "Estou aprendendo a fazer pão. O primeiro ficou duro como pedra, meu irmão nem conseguiu cortar! Mas o terceiro saiu perfeito, e a família inteira comeu tudo no café da manhã."
+    ],
+    "child": [
+      "Adivinha só? Hoje na escola teve uma corrida e eu fiquei em segundo lugar! No final minhas pernas estavam cansadas, mas todo mundo estava torcendo, então eu corri com toda a força!",
+      "A vovó tem uma horta cheia de tomates. Eu peguei o maior e ele estava muito doce! Você já comeu um tomate tirado direto do pé? É muito melhor do que os do mercado.",
+      "Ontem à noite nevou! Eu e meus amigos fizemos um boneco de neve enorme no pátio e colocamos o meu gorro vermelho nele. Ele não ficou engraçado? Amanhã quero fazer outro!"
+    ]
+  },
+  "ru": {
+    "adult": [
+      "В прошлые выходные мы поднялись на холм за городом. Казалось, это займёт час, а получилось почти три! Зато вид сверху был просто потрясающий. Ты там когда-нибудь был?",
+      "Вчера вечером у маленького кафе с лапшой на углу стояла огромная очередь. Мы тоже встали из любопытства, и знаешь что? Лапша того стоила! Пойдём туда вместе в следующий раз?",
+      "Сегодня утром автобус уехал прямо у меня перед носом, буквально на десять секунд раньше! Стою с кофе в руке и смотрю ему вслед. А потом мимо проезжала подруга и подвезла меня. Повезло, правда?",
+      "Я сейчас учусь печь хлеб. Первая буханка получилась твёрдой как камень, брат даже не смог её разрезать! Зато третья вышла просто идеальной, и мы съели её за один вечер."
+    ],
+    "child": [
+      "Знаешь что? Сегодня в школе были соревнования по бегу, и у меня второе место! В конце ноги совсем устали, но все громко болели за меня, и я бежал изо всех сил!",
+      "У бабушки в огороде много-много помидоров. Мы сорвали самый большой, и он был такой сладкий! А ты когда-нибудь ел помидор прямо с грядки? Он гораздо вкуснее, чем из магазина.",
+      "Вчера ночью выпал снег! Мы с друзьями слепили во дворе огромного снеговика и надели на него мою красную шапку. Правда, он смешной? Завтра хочу слепить ещё одного!"
+    ]
+  },
   "style": {
     "zh": "说话随意自然，像日常聊天，不是在朗读。",
     "en": "Speaking casually and naturally, like in an everyday chat, not reading aloud."

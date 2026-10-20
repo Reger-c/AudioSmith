@@ -307,5 +307,6 @@
  "sample":{"en":"When the first rain came, the whole street ran outside to meet it.","zh":"第一场雨落下时，整条街的人都跑出门去迎接它。"},
  "attrs":{"gender":"female","age":"middle_aged","pitch":"moderate","styles":["warm","soft"],"emotion":"tender"},
  "languages":["hi"],"local":{"lang":"hi","text":"जब पहली बारिश आई, तो पूरी गली उससे मिलने बाहर दौड़ पड़ी।"},
- "tags":["hindi","story"]}
+ "tags":["hindi","story"],
+ "hidden":"#91/#93: no model here designs or clones Hindi (Qwen3-TTS VoiceDesign and Base don't speak it), so it has no preview and no usable voice"}
 ]

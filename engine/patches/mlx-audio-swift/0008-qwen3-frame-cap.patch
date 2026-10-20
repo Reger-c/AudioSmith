@@ -1,0 +1,69 @@
+diff --git a/Sources/MLXAudioTTS/Models/Qwen3TTS/Qwen3TTS.swift b/Sources/MLXAudioTTS/Models/Qwen3TTS/Qwen3TTS.swift
+index 007d8be..46f5f05 100644
+--- a/Sources/MLXAudioTTS/Models/Qwen3TTS/Qwen3TTS.swift
++++ b/Sources/MLXAudioTTS/Models/Qwen3TTS/Qwen3TTS.swift
+@@ -28,8 +28,10 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+     public var sampleRate: Int { config.sampleRate }
+ 
+     public var defaultGenerationParameters: GenerateParameters {
++        // maxTokens nil: the cap follows the text's length (see
++        // effectiveMaxTokens); a value the caller sets replaces that cap.
+         GenerateParameters(
+-            maxTokens: 4096,
++            maxTokens: nil,
+             temperature: 0.9,
+             topP: 1.0,
+             repetitionPenalty: 1.05
+@@ -317,7 +319,7 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+         topP: Float,
+         repetitionPenalty: Float,
+         minP: Float,
+-        maxTokens: Int,
++        maxTokens: Int?,
+         streamingInterval: Double = 2.0,
+         onToken: ((Int) -> Void)? = nil,
+         onInfo: ((AudioGenerationInfo) -> Void)? = nil,
+@@ -386,7 +388,7 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+ 
+         // Cap max tokens based on text length
+         let targetTokenCount = tokenizer.encode(text: text).count
+-        let effectiveMaxTokens = min(maxTokens, max(75, targetTokenCount * 6))
++        let effectiveMaxTokens = Self.effectiveMaxTokens(textTokens: targetTokenCount, requested: maxTokens)
+ 
+         // Initialize cache and timing
+         let startTime = Date()
+@@ -623,7 +625,24 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+         let topP: Float
+         let repetitionPenalty: Float
+         let minP: Float
+-        let maxTokens: Int
++        let maxTokens: Int?
++    }
++
++    /// Frames (12.5 Hz) allowed per text token when the caller sets no
++    /// maxTokens: 0.8 s, room for slow voices (× 6, 0.48 s, cut slow
++    /// designed voices mid-sentence) while a run that never ends stops.
++    public static let framesPerTextToken = 10
++    /// The most frames any call generates (327 s), whatever it asks.
++    public static let maxFramesHardCap = 4096
++
++    /// The frame cap: maxTokens when the caller sets it (it may raise the
++    /// text-length cap as well as lower it), else max(75, tokens × 10);
++    /// never over maxFramesHardCap.
++    public static func effectiveMaxTokens(textTokens: Int, requested: Int?) -> Int {
++        if let requested, requested > 0 {
++            return min(requested, maxFramesHardCap)
++        }
++        return min(max(75, textTokens * framesPerTextToken), maxFramesHardCap)
+     }
+ 
+     public struct Qwen3TTSReferenceConditioning: @unchecked Sendable {
+@@ -668,7 +687,7 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
+             topP: generationParameters.topP,
+             repetitionPenalty: generationParameters.repetitionPenalty ?? 1.05,
+             minP: generationParameters.minP,
+-            maxTokens: generationParameters.maxTokens ?? 4096
++            maxTokens: generationParameters.maxTokens
+         )
+     }
+ 

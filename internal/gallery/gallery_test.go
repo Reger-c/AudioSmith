@@ -100,6 +100,10 @@ func TestDefault(t *testing.T) {
 // not change by accident. Update the hash only when data changes on
 // purpose (and say so in the commit).
 func TestIDsStable(t *testing.T) {
+	// Hidden (#93): Hindi has no model that designs or clones it.
+	if _, ok := Default().ByID("f-monsoon-stories"); ok {
+		t.Error("the Hindi voice is offered")
+	}
 	var ids []string
 	for _, a := range Default().All() {
 		ids = append(ids, a.ID)
@@ -110,7 +114,7 @@ func TestIDsStable(t *testing.T) {
 	}
 }
 
-const goldenIDs = "651283ca2f7bd2c7"
+const goldenIDs = "c7e8ef51f0d7f0ff" // #93: f-monsoon-stories hidden
 
 func TestNewValidates(t *testing.T) {
 	good := Default().All()[0]
@@ -288,7 +292,7 @@ func TestPlanPreviews(t *testing.T) {
 	g := Default()
 	cat := catalog.Builtin()
 	omni, _ := cat.ByID("omnivoice-bf16")
-	m := Model{ID: omni.ID, Family: omni.Family, Repo: omni.Repo}
+	m := Model{ID: omni.ID, Family: omni.Family, Repo: omni.Repo, Sampling: Sampling{Steps: 32, Guidance: 1.5}}
 	items := g.Search(Query{Limit: 120}).Items
 
 	plan, err := PlanPreviews(items, m, nil, 0)
@@ -302,7 +306,7 @@ func TestPlanPreviews(t *testing.T) {
 	a, _ := g.ByID(j.ArchetypeID)
 	line, lang := a.PreviewLine()
 	if j.Target != vd.TargetOmniVoice || j.Text != line || j.Lang != lang || j.Seed != a.Seed ||
-		j.Key != PreviewKey(a.Recipe(), m.ID, line, lang) || j.Voice == "" {
+		j.Key != PreviewKey(a.Recipe(), m.ID, m.Sampling, line, lang) || j.Voice == "" {
 		t.Errorf("job %+v", j)
 	}
 	// cached keys are skipped; limit caps; order kept
@@ -327,10 +331,13 @@ func TestPlanPreviews(t *testing.T) {
 		t.Error("kokoro planned")
 	}
 	// the key depends on the model and the recipe
-	if PreviewKey(a.Recipe(), "a", line, lang) == PreviewKey(a.Recipe(), "b", line, lang) {
+	if PreviewKey(a.Recipe(), "a", Sampling{}, line, lang) == PreviewKey(a.Recipe(), "b", Sampling{}, line, lang) {
 		t.Error("model not in key")
 	}
-	if got := PreviewKey(vd.Recipe{Attrs: vd.Attributes{Gender: "male"}, Seed: 1}, "omnivoice-bf16", "Hello.", "en"); got != goldenPreviewKey {
+	if PreviewKey(a.Recipe(), "a", Sampling{Temperature: 0.7}, line, lang) == PreviewKey(a.Recipe(), "a", Sampling{}, line, lang) {
+		t.Error("sampling not in key")
+	}
+	if got := PreviewKey(vd.Recipe{Attrs: vd.Attributes{Gender: "male"}, Seed: 1}, "omnivoice-bf16", Sampling{}, "Hello.", "en"); got != goldenPreviewKey {
 		t.Errorf("PreviewKey = %s, want %s", got, goldenPreviewKey)
 	}
 	// job spec
@@ -340,7 +347,8 @@ func TestPlanPreviews(t *testing.T) {
 	}
 	var params map[string]any
 	_ = json.Unmarshal(spec.Params, &params)
-	if params["voice"] != j.Voice || params["seed"].(float64) != float64(j.Seed) || params["text"] != j.Text {
+	if params["voice"] != j.Voice || params["seed"].(float64) != float64(j.Seed) || params["text"] != j.Text ||
+		params["steps"] != 32.0 || params["guidance"] != 1.5 || params["temperature"] != nil {
 		t.Errorf("params %v", params)
 	}
 
@@ -364,7 +372,7 @@ func TestPlanPreviews(t *testing.T) {
 	}
 }
 
-const goldenPreviewKey = "e3be1f13e298b6c21602b445b2bfcb3ab2a827fc56ea2041dc321efafda3d198"
+const goldenPreviewKey = "4e4433681674a685bd083b100bf826a2752d94e518e66003261a7416acc23339" // v2 (#93): with the sampling
 
 func TestPresets(t *testing.T) {
 	ps := Presets()

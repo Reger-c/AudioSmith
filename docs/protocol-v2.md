@@ -163,6 +163,8 @@ Parameters left unset use the model's defaults:
 - `speed`, `temperature`, `topP` and `seed` are pointers on the Go side;
 - `maxTokens`, `steps`, `instruct` and `duration` count as unset when absent.
 
+Qwen3-TTS (VoiceDesign, CustomVoice, Base) stops a take after `max(75, text tokens × 10)` codec frames (12.5 a second: 0.8 s a token) when `maxTokens` is unset; a `maxTokens` replaces that limit, raising or lowering it, up to 4,096 frames (327 s) (engine patch 0008, thread #93; upstream's × 6 cut slow voices off).
+
 OmniVoice takes its own parameters through the same fields: `steps` (diffusion steps, default 32), `duration` (target seconds; the take comes out that long), `speed`, `seed`; `voice` is a design description ("female, young adult, british accent"), and `refAudio`/`refText` clone. It runs in the job's task and stops at the next diffusion step when cancelled.
 
 What `voice`, `instruct` and the clone fields mean, by model (catalogue capabilities in brackets):

@@ -184,6 +184,9 @@ type featuredSpec struct {
 	Languages   []string      `json:"languages"`
 	Local       *LocalLine    `json:"local"`
 	Tags        []string      `json:"tags"`
+	// Hidden says why the voice is not offered (it stays in the data, so
+	// voices saved from it keep their origin).
+	Hidden string `json:"hidden"`
 }
 
 func readJSON(name string, v any) error {
@@ -212,6 +215,9 @@ func Build() ([]Archetype, error) {
 	}
 	var out []Archetype
 	for _, f := range feats {
+		if f.Hidden != "" {
+			continue
+		}
 		a := Archetype{
 			ID: "f-" + f.ID, Featured: true, Category: f.Cat,
 			Name: f.Name, Description: f.Description, Sample: f.Sample, Local: f.Local,
@@ -268,8 +274,8 @@ func expand(r roleSpec) ([]Archetype, error) {
 							Zh: fl.name.Zh + r.Name.Zh + " · " + loc.name.Zh + p.Zh,
 						},
 						Description: vd.Text{
-							En: r.Blurb.En + ". " + vd.Sentence(attrs, "en"),
-							Zh: r.Blurb.Zh + "。" + vd.Sentence(attrs, "zh"),
+							En: r.Blurb.En + ". " + vd.Describe(attrs, "en"),
+							Zh: r.Blurb.Zh + "。" + vd.Describe(attrs, "zh"),
 						},
 						Sample:    r.Sample,
 						Attrs:     attrs,

@@ -32,6 +32,28 @@ func Drift(expected, heard string) float64 {
 	return round3(float64(editDistance(a, b)) / float64(len(a)))
 }
 
+// CharDrift is Drift in characters for every script, spaces and
+// punctuation left out: a recognizer that writes "hinterher geschaut"
+// for "hinterhergeschaut" made no error (thread #93: references are
+// checked so, words would count it twice).
+func CharDrift(expected, heard string) float64 {
+	chars := func(s string) []string {
+		var out []string
+		for _, r := range strings.Join(tokens(s), "") {
+			out = append(out, string(r))
+		}
+		return out
+	}
+	a, b := chars(expected), chars(heard)
+	if len(a) == 0 {
+		if len(b) == 0 {
+			return 0
+		}
+		return 1
+	}
+	return round3(float64(editDistance(a, b)) / float64(len(a)))
+}
+
 // tokens splits s for Drift: unspaced characters one by one, other text
 // by words, without punctuation, folded to lower case.
 func tokens(s string) []string {

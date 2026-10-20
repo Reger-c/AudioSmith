@@ -305,6 +305,16 @@ func TestDrift(t *testing.T) {
 	if d := Drift("你好世界", "你们世界"); d != 0.25 {
 		t.Errorf("cjk one %v", d)
 	}
+	// Characters, spaces left out (#93).
+	if d := CharDrift("habe ihm hinterhergeschaut.", "Habe ihm hinterher geschaut"); d != 0 {
+		t.Errorf("split word %v", d)
+	}
+	if d := CharDrift("eine Katze", "meine Katze"); d != 0.111 {
+		t.Errorf("one letter of nine %v", d)
+	}
+	if d := CharDrift("你好世界", "你们世界"); d != 0.25 || CharDrift("", "") != 0 || CharDrift("", "x") != 1 {
+		t.Errorf("cjk one %v", d)
+	}
 	q := CheckLine("s1", "a b c d", "x y z", 2, 2)
 	if !q.Flagged || q.SyncRatio != 1 {
 		t.Errorf("%+v", q)

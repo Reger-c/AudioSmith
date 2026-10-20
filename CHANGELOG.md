@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Designed voices no longer say leftover reference text
+- Slow designed voices (Storyteller, Elder, Meditation guide, and a few gallery voices) were cut off half-way through their reference: Qwen3-TTS stopped at a length limit that slow speech reached (engine patch 0008 raises it from 0.48 s to 0.8 s per text token, and AudioSmith's own limit can now raise it as well as lower it). The reference was still saved with its whole text, so clones said the missing half before every line.
+- A reference made from a voice must now say its text: when the recognizer hears none of the three takes say it (or they were cut off), they are made once more; a kept take that says something else gets what it says as its text, or none is kept and the voice says why. Its text is never one the audio doesn't say.
+- References made before are heard once, the first time a take, story or book clones them: one that doesn't say its text is made again (a note says so) or gets the text it says.
+- Design prompts no longer ask for slow speech ("speaks slowly", "语速偏慢") from a preset or a picked pace: it made references slow and clones sound read. A description you write keeps it.
+- Voices designed for Japanese, Korean, German, French, Spanish, Italian, Portuguese or Russian say their reference in that language, not English.
+- Gallery previews use the tuned sampling the Studio uses (temperature 0.7, top-p 0.8 for Qwen3-TTS) instead of the engine's defaults; previews are made again once.
+- The Hindi gallery voice is hidden: no model here designs or clones Hindi.
+
 ### Dictation's sounds to choose
 - Settings → Dictation → Sounds: the sound of listening starting, of it stopping and of an error are each chosen from the ActNow family's sound library (Tally, Wrap and Shrug by default), macOS's system sounds or none. A compact picker searches them (names and tags), filters by type, plays each with ▶ (again to stop) and sets the volume in steps; Try plays the choice.
 - The sounds are React Bits Sound Lab's and come with the builds from actnow.dev and GitHub releases only: they are not in this repository or under its licence (NOTICE). A build from source plays the system sounds AudioSmith used before (Tink, Pop, Basso).

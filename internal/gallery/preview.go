@@ -18,12 +18,28 @@ type Model struct {
 	Repo      string   // Hugging Face repo (picks the lowering)
 	Languages []string // BCP-47 primary subtags it speaks; empty = any
 	Speakers  []string // CustomVoice: speakers the build has; empty = all
+	// Sampling is the model's recommended sampling (the catalogue's
+	// presets), as the Studio's takes get it (thread #93: previews had
+	// the engine's defaults, temperature 0.9 and top-p 1.0 for Qwen3-TTS).
+	Sampling Sampling
 }
 
-// PreviewKey is the cache key of a rendered preview: the recipe, the model
-// and the line spoken. Equal keys mean byte-identical requests.
-func PreviewKey(r vd.Recipe, modelID, line, lang string) string {
-	return vd.Key("gallery.preview.v1", r.Key(), modelID, lang, text.NormalizeForKey(line))
+// Sampling are generation parameters; 0 = the model's own.
+type Sampling struct {
+	Temperature, TopP, Guidance float64
+	Steps                       int
+}
+
+func (s Sampling) key() string {
+	return fmt.Sprintf("t%g p%g g%g s%d", s.Temperature, s.TopP, s.Guidance, s.Steps)
+}
+
+// PreviewKey is the cache key of a rendered preview: the recipe, the
+// model, its sampling and the line spoken. Equal keys mean
+// byte-identical requests. v2 (#93): the sampling joined the key, and
+// design prompts lost their slow pace.
+func PreviewKey(r vd.Recipe, modelID string, s Sampling, line, lang string) string {
+	return vd.Key("gallery.preview.v2", r.Key(), modelID, s.key(), lang, text.NormalizeForKey(line))
 }
 
 // PreviewJob is one preview to render: everything a tts.synthesize call
@@ -37,6 +53,7 @@ type PreviewJob struct {
 	Text        string       `json:"text"`
 	Lang        string       `json:"lang"`
 	Seed        int64        `json:"seed"`
+	Sampling    Sampling     `json:"sampling"`
 	Dropped     []vd.Dropped `json:"dropped,omitempty"` // attributes this model can't express
 }
 
@@ -45,10 +62,18 @@ type PreviewJob struct {
 // absolute output path in the preview cache.
 func (p PreviewJob) Params(modelRef, language, out string) proto.SynthesizeParams {
 	seed := p.Seed
-	return proto.SynthesizeParams{
+	sp := proto.SynthesizeParams{
 		Model: modelRef, Text: p.Text, Voice: p.Voice, Language: language,
-		Seed: &seed, Output: proto.Output{Path: out, Format: "wav"},
+		Seed: &seed, Output: proto.Output{Path: out, Format: "wav"}, Steps: p.Sampling.Steps,
 	}
+	ptr := func(v float64) *float64 {
+		if v == 0 {
+			return nil
+		}
+		return &v
+	}
+	sp.Temperature, sp.TopP, sp.Guidance = ptr(p.Sampling.Temperature), ptr(p.Sampling.TopP), ptr(p.Sampling.Guidance)
+	return sp
 }
 
 // Spec wraps the request as a background job on the GPU lane: previews
@@ -91,7 +116,7 @@ func PlanPreviews(items []Archetype, m Model, has func(key string) bool, limit i
 			continue
 		}
 		r := a.Recipe()
-		key := PreviewKey(r, m.ID, line, lang)
+		key := PreviewKey(r, m.ID, m.Sampling, line, lang)
 		if seen[key] {
 			continue
 		}
@@ -109,7 +134,7 @@ func PlanPreviews(items []Archetype, m Model, has func(key string) bool, limit i
 		}
 		plan.Jobs = append(plan.Jobs, PreviewJob{
 			ArchetypeID: a.ID, Key: key, Model: m.ID, Target: eng.Target,
-			Voice: low.Voice, Text: line, Lang: lang, Seed: low.Seed, Dropped: low.Dropped,
+			Voice: low.Voice, Text: line, Lang: lang, Seed: low.Seed, Sampling: m.Sampling, Dropped: low.Dropped,
 		})
 	}
 	return plan, nil
