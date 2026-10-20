@@ -445,7 +445,7 @@ func (s *Server) addStudioTools() {
 	sdk.AddTool(s.srv, add("batch_dub", "Batch dub", "Dub several files (or a folder) with the Batch queue, one dub per file at background priority; returns their job_ids."), s.batchDub)
 	sdk.AddTool(s.srv, add("list_batch", "List the batch queue", "The Batch queue's dubs, its settings and its watch folder (read only)."), s.listBatch)
 	sdk.AddTool(s.srv, add("search_voices", "Discover voices",
-		"Search Discover voices (about 1,100 ready-made designed voices) with the page's filters: category, gender, age, pitch, accent, language, style."), s.searchVoices)
+		"Search Discover voices (about 35 curated voices, ready to speak) with the page's filters: use case (category), gender, age, language."), s.searchVoices)
 	sdk.AddTool(s.srv, add("use_gallery_voice", "Use a gallery voice",
 		"Save a voice from Discover voices to My voices (as its Use voice does) and say which models speak it."), s.useGalleryVoice)
 	sdk.AddTool(s.srv, add("export_audio", "Export a take",

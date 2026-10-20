@@ -64,7 +64,7 @@ func (a *app) newAPIBackend(dataDir string) *apiBackend {
 	if a.eng != nil {
 		b.sup = a.eng.sup
 	}
-	b.useStudio(a.dubSvc, a.wfSvc, a.voiceCacheDir()) // thread #35
+	b.useStudio(a.dubSvc, a.wfSvc) // thread #35
 	return b
 }
 

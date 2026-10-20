@@ -26,7 +26,7 @@
       "voices": [
         {"id": "af_heart", "language": "en-US", "gender": "female"},
         {"id": "af_bella", "language": "en-US", "gender": "female"},
-        {"id": "af_nicole", "language": "en-US", "gender": "female"},
+        {"id": "af_nicole", "language": "en-US", "gender": "female", "hidden": true},
         {"id": "af_sarah", "language": "en-US", "gender": "female"},
         {"id": "af_sky", "language": "en-US", "gender": "female"},
         {"id": "am_adam", "language": "en-US", "gender": "male"},
@@ -35,7 +35,7 @@
         {"id": "bf_emma", "language": "en-GB", "gender": "female"},
         {"id": "bf_isabella", "language": "en-GB", "gender": "female"},
         {"id": "bm_george", "language": "en-GB", "gender": "male"},
-        {"id": "bm_lewis", "language": "en-GB", "gender": "male"},
+        {"id": "bm_lewis", "language": "en-GB", "gender": "male", "hidden": true},
         {"id": "zf_xiaobei", "language": "zh", "gender": "female", "hidden": true},
         {"id": "zf_xiaoni", "language": "zh", "gender": "female", "hidden": true},
         {"id": "zf_xiaoxiao", "language": "zh", "gender": "female", "hidden": true},
@@ -93,7 +93,7 @@
         {"id": "Uncle_Fu", "native": "zh", "gender": "male"},
         {"id": "Dylan", "native": "zh", "gender": "male"},
         {"id": "Eric", "native": "zh", "gender": "male"},
-        {"id": "Ryan", "native": "en", "gender": "male"},
+        {"id": "Ryan", "native": "en", "gender": "male", "hideIn": ["zh"]},
         {"id": "Aiden", "native": "en", "gender": "male"}
       ],
       "capabilities": ["sampling", "voiceStyle", "instruct", "language", "stream"],

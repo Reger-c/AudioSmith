@@ -63,6 +63,15 @@ Voice previews (assets/voice-previews)
   made with AudioSmith's engine by scripts/make-voice-previews.sh (2026-10-16).
   The voices are the models' own synthetic speakers, not recordings of people.
 
+Discover voices' clips (assets/gallery-voices)
+  The curated voices' references and previews: voices designed from written
+  descriptions with Qwen3-TTS 12Hz 1.7B VoiceDesign (Apache License 2.0,
+  https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign), previews
+  cloned from them with Qwen3-TTS 12Hz 1.7B Base (Apache License 2.0,
+  https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base), made with
+  AudioSmith's engine by scripts/make-curated-voices.sh (2026-10-20). They
+  are synthetic voices, not recordings of people.
+
 VoxtNew (the logs' line selection and order, shell_logs_select.go,
 shell_logs_order.go)
   Adapted from VoxtNew (https://github.com/hehehai/sglang-omni, VoxtNew/,

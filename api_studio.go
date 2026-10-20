@@ -39,9 +39,8 @@ var _ api.Studio = (*apiBackend)(nil)
 // studioParts are what the Studio operations use besides the library:
 // the services main makes (nil in tests of the API alone).
 type studioParts struct {
-	dubs     *services.Dubs
-	wf       *services.Workflows
-	previews string // the gallery's preview cache
+	dubs *services.Dubs
+	wf   *services.Workflows
 
 	jobMu sync.Mutex
 	onEnd map[string]func(jobs.Job) // queue job id → what to do when it ends
@@ -49,8 +48,8 @@ type studioParts struct {
 }
 
 // useStudio gives the API the app's dub and workflow services (newAPIBackend).
-func (b *apiBackend) useStudio(dubs *services.Dubs, wf *services.Workflows, previews string) {
-	b.dubs, b.wf, b.previews = dubs, wf, previews
+func (b *apiBackend) useStudio(dubs *services.Dubs, wf *services.Workflows) {
+	b.dubs, b.wf = dubs, wf
 	b.onEnd = map[string]func(jobs.Job){}
 	b.unsub = core.On(b.lib.bus, func(u jobs.Updated) {
 		if u.Chunk != nil || !(u.Job.State.Terminal() || u.Job.State == jobs.StateInterrupted) {
@@ -224,7 +223,7 @@ func voiceRef(voices []core.Voice, e catalog.Entry, name, param string) (string,
 	if n == "" {
 		return "", nil
 	}
-	speakers := e.VoiceIDs()
+	speakers := e.AllVoiceIDs() // hidden ones still work when named
 	if id, ok := strings.CutPrefix(n, services.SpeakerRef); ok {
 		for _, sp := range speakers {
 			if strings.EqualFold(sp, id) {

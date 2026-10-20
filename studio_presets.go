@@ -23,7 +23,7 @@ import (
 func (s *studioState) loadPreset(e catalog.Entry, ov settings.ModelParams) {
 	pr, hasPreset := catalog.PresetFor(e.ID)
 	s.voice, s.language = "", ""
-	ids := e.VoiceIDs()
+	ids := e.VoiceIDsIn(i18n.Locale())
 	if v := pr.VoiceFor(i18n.Locale()); v != "" && slices.Contains(ids, v) {
 		s.voice = v
 	} else if len(ids) > 0 {

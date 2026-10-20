@@ -82,12 +82,12 @@ func skillTools() []skillTool {
 		}},
 		{Name: "check_health", Lead: i18n.T("whether AudioSmith's engine is ready, starting or unavailable. No arguments.")},
 		// Thread #35: the app's modules.
-		{Name: "search_voices", Lead: i18n.T("search Discover voices: about 1,100 ready-made designed voices, with the page's filters."), Args: []skillArg{
-			arg(i18n.T("Words that must all occur in a voice's name, description or tags (English or Chinese)."), "query"),
-			arg(i18n.T("The page's filters; the answer's facets list each filter's values with how many voices they give. Categories: narration, conversational, characters, social, advertising, education, news, games, wellness."), "category", "gender", "age", "pitch", "accent", "language", "style"),
-			arg(i18n.T("One voice by its id (the other filters are ignored)."), "id"),
+		{Name: "search_voices", Lead: i18n.T("search Discover voices: about 35 curated voices, ready to speak, with the page's filters."), Args: []skillArg{
+			arg(i18n.T("Words that must all occur in a voice's name, description, persona or tags (English or Chinese)."), "query"),
+			arg(i18n.T("The page's filters; the answer's facets list each filter's values with how many voices they give. Use cases (category): narration, conversational, characters, announcing."), "category", "gender", "age", "language"),
+			arg(i18n.T("One voice by its id (the other filters are ignored); ids of the earlier, larger gallery still resolve."), "id"),
 			arg(i18n.T("Paging: at most limit voices (20 by default, up to 100) after offset."), "limit", "offset"),
-		}, After: i18n.T("Returns voices (id, name, description, languages, tags, sample_text, saved_voice_id when it was used already) and facets.")},
+		}, After: i18n.T("Returns voices (id, name, description, kind, uses, gender, age, languages, persona or model and speaker, sample_text, saved_voice_id when it was used already) and facets.")},
 		{Name: "use_gallery_voice", Lead: i18n.T("save a voice of Discover voices to My voices, as its Use voice button does (once)."), Args: []skillArg{
 			must(i18n.T("The voice's id from search_voices."), "id"),
 		}, After: i18n.T("Returns the saved voice, the model it was designed for, the models that can speak it, and whether that model is downloaded. Then use its name as voice anywhere.")},

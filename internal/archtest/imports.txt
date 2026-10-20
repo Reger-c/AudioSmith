@@ -100,9 +100,6 @@ family                   catalog
 family                   engine/proto
 family                   settings
 
-gallery                  engine/proto
-gallery                  jobs
-gallery                  text
 gallery                  voicedesign
 
 gallery/persona          lang

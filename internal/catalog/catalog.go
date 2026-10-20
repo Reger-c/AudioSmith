@@ -225,8 +225,12 @@ type VoiceOption struct {
 	Native string `json:"native,omitempty"`
 	Gender string `json:"gender,omitempty"` // "female", "male"
 	// Hidden speakers are not offered by pickers (Kokoro's Chinese
-	// voices: unintelligible, thread #41) but still work when named.
-	Hidden bool `json:"hidden,omitempty"`
+	// voices: unintelligible, thread #41; af_nicole and bm_lewis, the
+	// weakest of #91's audit) but still work when named. HideIn are
+	// interface languages (base codes) whose pickers don't offer it
+	// (Ryan in Chinese: #91 heard him give up on Chinese numbers).
+	Hidden bool     `json:"hidden,omitempty"`
+	HideIn []string `json:"hideIn,omitempty"`
 }
 
 // File is one file of the repo to download.

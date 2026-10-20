@@ -34,7 +34,7 @@ func lfVoicesOf(voices []core.Voice, e catalog.Entry) []lfVoice {
 			out = append(out, lfVoice{v.ID, v.Name})
 		}
 	}
-	for _, id := range e.VoiceIDs() {
+	for _, id := range e.VoiceIDsIn(i18n.Locale()) {
 		out = append(out, lfVoice{services.SpeakerRef + id, id})
 	}
 	return out
@@ -73,7 +73,7 @@ func lfResolverOf(d *services.LongformDoc, all []core.Voice, fill func(*core.Tak
 			byName[strings.ToLower(v.Name)] = i
 		}
 	}
-	speakers := e.VoiceIDs()
+	speakers := e.AllVoiceIDs() // hidden ones too: a book may name one
 	return func(ref string) (string, core.Take, bool) {
 		t := core.Take{Language: lang}
 		if id, ok := strings.CutPrefix(ref, services.SpeakerRef); ok {
@@ -219,7 +219,7 @@ func (a *app) autoLfModel(p *lfPage) {
 				break
 			}
 		}
-	} else if sp := pr.VoiceFor(i18n.Locale()); sp != "" && slices.Contains(e.VoiceIDs(), sp) {
+	} else if sp := pr.VoiceFor(i18n.Locale()); sp != "" && slices.Contains(e.VoiceIDsIn(i18n.Locale()), sp) {
 		d.Voice = services.SpeakerRef + sp
 	}
 }

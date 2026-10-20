@@ -7,6 +7,7 @@ package main
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -51,7 +52,10 @@ func (a *app) studioVoiceChoices(e catalog.Entry) (cur string, opts []voiceOptio
 	}
 	if !e.NeedsReference {
 		group := i18n.T("Model voices")
-		ids := e.VoiceIDs()
+		ids := e.VoiceIDsIn(i18n.Locale())
+		if speaker != "" && !slices.Contains(ids, speaker) {
+			ids = append(ids, speaker) // a hidden speaker chosen before stays shown
+		}
 		if len(ids) == 0 {
 			add(voiceOption{value: "default", label: i18n.T("Model default"), group: group}, clearOthers)
 		}

@@ -138,6 +138,12 @@ func (a *app) batchSetup(c *ui.Context) {
 	for _, pr := range dubPresets() {
 		choices = append(choices, dubVoiceChoice{dub.PresetPrefix + pr.ID, pr.Name.In(i18n.Locale()), i18n.T("Design presets")})
 	}
+	// A preset no longer offered (thread #94) that the settings still name.
+	if id, ok := strings.CutPrefix(s.Voice, dub.PresetPrefix); ok && !slices.ContainsFunc(choices, func(ch dubVoiceChoice) bool { return ch.ref == s.Voice }) {
+		if pr, ok := dubPreset(id); ok {
+			choices = append(choices, dubVoiceChoice{s.Voice, pr.Name.In(i18n.Locale()), i18n.T("Design presets")})
+		}
+	}
 	labels := make([]string, len(choices))
 	refs := make([]string, len(choices))
 	for i, ch := range choices {

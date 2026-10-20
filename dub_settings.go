@@ -174,6 +174,9 @@ func (a *app) dubbingSettings(c *ui.Context) {
 // dubPresets are the design presets the cast offers.
 func dubPresets() []gallery.Preset { return gallery.Presets() }
 
+// dubPreset finds a design preset, one no longer offered too.
+func dubPreset(id string) (gallery.Preset, bool) { return gallery.PresetByID(id) }
+
 // galleryArchetype finds a gallery voice.
 func galleryArchetype(id string) (gallery.Archetype, bool) { return gallery.Default().ByID(id) }
 

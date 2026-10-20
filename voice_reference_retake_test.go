@@ -336,17 +336,3 @@ func TestReferenceLanguages(t *testing.T) {
 		t.Errorf("heard as %q", p.Language)
 	}
 }
-
-// TestGalleryPreviewSampling (#93): gallery previews are rendered with
-// the model's tuned sampling, as the Studio's takes are.
-func TestGalleryPreviewSampling(t *testing.T) {
-	vdm := withDesignCatalog(t)
-	m := galleryModel(vdm)
-	if m.Sampling.Temperature != 0.7 || m.Sampling.TopP != 0.8 {
-		t.Errorf("sampling %+v", m.Sampling)
-	}
-	omni := entry(t, "omnivoice-bf16")
-	if s := galleryModel(omni).Sampling; s.Steps != 32 || s.Guidance != 1.5 || s.Temperature != 0 {
-		t.Errorf("omnivoice %+v", s)
-	}
-}

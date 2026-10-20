@@ -135,7 +135,7 @@ func skillModules() map[string]skillModule {
 		m("/dub", i18n.T("dubs a video or audio into other languages in the speakers' own voices, with subtitles."),
 			i18n.T("Timeline edits (timing, splitting lines) only in the app."),
 			"create_dub", "get_dub", "edit_dub", "run_dub", "export_dub"),
-		m("/gallery", i18n.T("about 1,100 ready-made voices to search and filter."), "", "search_voices", "use_gallery_voice"),
+		m("/gallery", i18n.T("about 35 curated voices, ready to speak, to search and filter."), "", "search_voices", "use_gallery_voice"),
 		m("/voices", i18n.T("the saved voices: designed, cloned and gallery voices."),
 			i18n.T("Editing a voice (name, tags, locking its sample) only in the app."), "list_voices", "delete_item"),
 		m("/design", i18n.T("a new voice from a description (gender, age, accent, style)."), "", "describe_voice", "design_voice"),

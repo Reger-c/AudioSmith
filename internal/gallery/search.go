@@ -14,17 +14,15 @@ import (
 type Facet string
 
 const (
-	FacetCategory Facet = "category"
+	FacetCategory Facet = "category" // the use cases
 	FacetGender   Facet = "gender"
 	FacetAge      Facet = "age"
-	FacetPitch    Facet = "pitch"
-	FacetAccent   Facet = "accent" // English accent or Chinese dialect value id
 	FacetLanguage Facet = "language"
-	FacetStyle    Facet = "style"
 )
 
-// Facets lists the facets in display order.
-var Facets = []Facet{FacetCategory, FacetGender, FacetAge, FacetPitch, FacetAccent, FacetLanguage, FacetStyle}
+// Facets lists the facets in display order (thread #94: pitch, accent and
+// style went with the earlier gallery).
+var Facets = []Facet{FacetCategory, FacetGender, FacetAge, FacetLanguage}
 
 // Page sizes.
 const (
@@ -34,15 +32,12 @@ const (
 
 // Query filters and pages the gallery. Empty fields don't filter.
 type Query struct {
-	Text     string // every word must occur in the name, description, tags or attributes (en or zh)
-	Category string
+	Text     string // every word must occur in the name, description, persona, tags or facets (en or zh)
+	Category string // a use case (or an earlier gallery category, mapped by CategoryID)
 	Gender   string
 	Age      string
-	Pitch    string
-	Accent   string // an Accent or a Dialect value ("british", "sichuan")
 	Language string // BCP-47 primary subtag among the recommended languages
-	Style    string
-	Featured bool // featured archetypes only
+	Featured bool   // featured archetypes only
 	// Favorites restricts to favorites (FavoritesOnly) and is otherwise
 	// unused; nil means no favorites.
 	Favorites     FavoriteSet
@@ -83,13 +78,27 @@ func haystack(a Archetype) string {
 	add(a.Name.Zh)
 	add(a.Description.En)
 	add(a.Description.Zh)
+	add(a.Persona)
+	add(a.Speaker)
 	add(a.Role)
 	for _, t := range a.Tags {
 		add(t)
 	}
-	if i := categoryIndex(a.Category); i >= 0 {
-		add(categories[i].Name.En)
-		add(categories[i].Name.Zh)
+	for _, u := range a.useCases() {
+		if i := categoryIndex(u); i >= 0 {
+			add(categories[i].Name.En)
+			add(categories[i].Name.Zh)
+		}
+	}
+	for _, c := range []vd.Category{vd.Gender, vd.Age} {
+		v := a.Gender
+		if c == vd.Age {
+			v = a.Age
+		}
+		if op, ok := vd.Lookup(c, v); ok {
+			add(op.Label.En)
+			add(op.Label.Zh)
+		}
 	}
 	add(a.Attrs.Summary("en"))
 	add(a.Attrs.Summary("zh"))
@@ -112,6 +121,17 @@ type matcher struct {
 	terms []string
 }
 
+// useCases are a's use cases: its own (curated), or its category's.
+func (a *Archetype) useCases() []string {
+	if len(a.Uses) > 0 {
+		return a.Uses
+	}
+	if c := CategoryID(a.Category); c != "" {
+		return []string{c}
+	}
+	return nil
+}
+
 // match reports whether item i passes every filter except skip.
 func (m *matcher) match(g *Gallery, i int, skip Facet) bool {
 	a := &g.items[i]
@@ -122,25 +142,16 @@ func (m *matcher) match(g *Gallery, i int, skip Facet) bool {
 	if q.FavoritesOnly && (q.Favorites == nil || !q.Favorites.Has(a.ID)) {
 		return false
 	}
-	if skip != FacetCategory && q.Category != "" && a.Category != q.Category {
+	if skip != FacetCategory && q.Category != "" && !slices.Contains(a.useCases(), CategoryID(q.Category)) {
 		return false
 	}
-	if skip != FacetGender && q.Gender != "" && a.Attrs.Gender != q.Gender {
+	if skip != FacetGender && q.Gender != "" && a.Gender != q.Gender {
 		return false
 	}
-	if skip != FacetAge && q.Age != "" && a.Attrs.Age != q.Age {
-		return false
-	}
-	if skip != FacetPitch && q.Pitch != "" && a.Attrs.Pitch != q.Pitch {
-		return false
-	}
-	if skip != FacetAccent && q.Accent != "" && a.Attrs.Accent != q.Accent && a.Attrs.Dialect != q.Accent {
+	if skip != FacetAge && q.Age != "" && a.Age != q.Age {
 		return false
 	}
 	if skip != FacetLanguage && q.Language != "" && !slices.Contains(a.Languages, q.Language) {
-		return false
-	}
-	if skip != FacetStyle && q.Style != "" && !a.Attrs.HasStyle(q.Style) {
 		return false
 	}
 	for _, t := range m.terms {
@@ -152,7 +163,7 @@ func (m *matcher) match(g *Gallery, i int, skip Facet) bool {
 }
 
 // Search filters, counts facets and returns one page. Results keep the
-// gallery's order: featured first, then by category.
+// gallery's order.
 func (g *Gallery) Search(q Query) Page {
 	m := &matcher{q: q, terms: terms(q.Text)}
 	limit := q.Limit
@@ -196,23 +207,16 @@ func (g *Gallery) facetCounts(m *matcher) map[Facet][]FacetCount {
 			a := &g.items[i]
 			switch f {
 			case FacetCategory:
-				counts[a.Category]++
+				for _, u := range a.useCases() {
+					counts[u]++
+				}
 			case FacetGender:
-				counts[a.Attrs.Gender]++
+				counts[a.Gender]++
 			case FacetAge:
-				counts[a.Attrs.Age]++
-			case FacetPitch:
-				counts[a.Attrs.Pitch]++
-			case FacetAccent:
-				counts[a.Attrs.Accent]++
-				counts[a.Attrs.Dialect]++
+				counts[a.Age]++
 			case FacetLanguage:
 				for _, l := range a.Languages {
 					counts[l]++
-				}
-			case FacetStyle:
-				for _, s := range a.Attrs.Styles {
-					counts[s]++
 				}
 			}
 		}
@@ -246,17 +250,10 @@ func facetValues(f Facet) []FacetCount {
 		fromCat(vd.Gender)
 	case FacetAge:
 		fromCat(vd.Age)
-	case FacetPitch:
-		fromCat(vd.Pitch)
-	case FacetAccent:
-		fromCat(vd.Accent)
-		fromCat(vd.Dialect)
 	case FacetLanguage:
 		for _, l := range Languages {
 			out = append(out, FacetCount{Value: l, Label: languageName(l)})
 		}
-	case FacetStyle:
-		fromCat(vd.Style)
 	}
 	return out
 }
