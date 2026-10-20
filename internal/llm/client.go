@@ -221,6 +221,9 @@ func (c *Client) JSON(ctx context.Context, req Request, out any, repairs int) (R
 		req.Messages = append(append([]Message{}, base...),
 			Message{Role: Assistant, Content: clip(resp.Text, 8000)},
 			Message{Role: User, Content: repairPrompt(problems)})
+		// A repair turn of the local engine is sampled: decoding greedily,
+		// it would mostly write the same reply again (or the same loop).
+		req.SampleConstrained = true
 	}
 }
 

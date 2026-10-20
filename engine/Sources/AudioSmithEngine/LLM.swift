@@ -1,4 +1,5 @@
 import AudioSmithProtocol
+import AudioSmithText
 import Foundation
 @preconcurrency import MLX
 import MLXGuidedGeneration
@@ -10,43 +11,49 @@ import Tokenizers
 // language model (mlx-swift-lm's MLXLLM: Qwen3, Gemma 4…), loaded from the
 // snapshot the app downloaded, its text streamed as llm.token. JSON
 // requests are constrained to their schema with xgrammar
-// (MLXGuidedGeneration, greedy); when that fails the reply is generated
-// freely and the app validates it (internal/llm repairs).
+// (MLXGuidedGeneration's matcher, the engine's own loop: LLMGuided.swift;
+// greedy unless sampleConstrained; the reply primed with a ```json fence);
+// when the schema does not compile the
+// reply is generated freely and the app validates it (internal/llm
+// repairs).
 
 /// A loaded language model, resident in the ModelStore.
 final class LocalLLM: @unchecked Sendable {
     let context: ModelContext
     /// The context the engine allows: prompt + reply, in tokens.
     let contextLimit: Int
+    /// The tokenizer's special tokens (tokenizer.json's added tokens
+    /// marked special): never text under the grammar.
+    let specialTokenIDs: Set<Int>
     private var grammar: GrammarTokenizer?
-    private var biases: (closing: MLXArray, whitespace: MLXArray, whitespaceIDs: Set<Int>)?
+    private var whitespace: (bias: MLXArray, ids: Set<Int>)?
 
-    init(context: ModelContext, contextLimit: Int) {
+    init(context: ModelContext, contextLimit: Int, specialTokenIDs: Set<Int>) {
         self.context = context
         self.contextLimit = contextLimit
+        self.specialTokenIDs = specialTokenIDs
     }
 
     /// The tokenizer xgrammar masks with, built on the first JSON request
-    /// (it scans the vocabulary once).
+    /// (it scans the vocabulary once): the special and stop tokens
+    /// blanked, so the grammar never takes one for text (GrammarVocab).
     func grammarTokenizer() throws -> GrammarTokenizer {
         if let grammar { return grammar }
         let vocab = TokenizerVocabExtractor.extractForGrammar(from: context.tokenizer)
-        let g = try GrammarTokenizer(vocab: vocab.vocab, vocabType: vocab.vocabType,
-                                     eosTokenId: Int32(context.tokenizer.eosTokenId ?? 0))
+        let eos = context.tokenizer.eosTokenId ?? 0
+        let pieces = GrammarVocab.blanked(vocab.vocab, specialTokenIDs.union(stopTokenIDs), keep: eos)
+        let g = try GrammarTokenizer(vocab: pieces, vocabType: vocab.vocabType, eosTokenId: Int32(eos))
         grammar = g
         return g
     }
 
-    /// Logit biases for constrained JSON: towards closing the value near
-    /// maxTokens, and against whitespace-only tokens (JSON allows any
-    /// amount between tokens, and greedy decoding can loop on it).
-    func grammarBiases() -> (closing: MLXArray, whitespace: MLXArray, whitespaceIDs: Set<Int>) {
-        if let biases { return biases }
-        let closing = ClosingTokenBias.compute(tokenizer: context.tokenizer, eosTokenId: context.tokenizer.eosTokenId)
-        let (whitespace, ids) = WhitespaceTokenBias.compute(tokenizer: context.tokenizer)
-        let b = (closing: closing, whitespace: whitespace, whitespaceIDs: ids)
-        biases = b
-        return b
+    /// The bias against whitespace-only tokens once they run (JSON allows
+    /// any amount between tokens, and greedy decoding can loop on it).
+    func grammarWhitespace() -> (bias: MLXArray, ids: Set<Int>) {
+        if let whitespace { return whitespace }
+        let (bias, ids) = WhitespaceTokenBias.compute(tokenizer: context.tokenizer)
+        whitespace = (bias, ids)
+        return (bias, ids)
     }
 
     /// Token ids that end the reply.
@@ -114,7 +121,12 @@ extension Analyzer {
         let (m, _) = try await store.acquire(model, task: "llm", job: job, as: LocalLLM.self, sampleRate: { _ in 0 },
                                              estimate: weightBytes(dir)) {
             let context = try await LLMModelFactory.shared.load(from: dir, using: TransformersTokenizerLoader())
-            return LocalLLM(context: context, contextLimit: min(Self.positionLimit(dir) ?? Int.max, Self.llmContextCap))
+            var special = Set<Int>()
+            if let data = try? Data(contentsOf: dir.appendingPathComponent("tokenizer.json")) {
+                special = GrammarVocab.specialTokenIDs(tokenizerJSON: data) ?? []
+            }
+            return LocalLLM(context: context, contextLimit: min(Self.positionLimit(dir) ?? Int.max, Self.llmContextCap),
+                            specialTokenIDs: special)
         }
         return m
     }
@@ -159,7 +171,16 @@ extension Analyzer {
         let llm = try await llmModel(p.model, path: p.modelPath, job: job, offline: offline)
         defer { store.release(p.model) }
         let started = Date()
-        let prompt = try chatTokens(llm, p.messages)
+        var prompt = try chatTokens(llm, p.messages)
+        // A constrained reply starts after an opening ```json line, as the
+        // model writes JSON on its own (kept from the fence by the grammar,
+        // it writes compact JSON, and worse in it: LLMGuided.swift).
+        // AUDIOSMITH_LLM_PRIME=0: no fence.
+        if (p.json == true || p.schema != nil)
+            && ProcessInfo.processInfo.environment["AUDIOSMITH_LLM_GRAMMAR"] != "0"
+            && ProcessInfo.processInfo.environment["AUDIOSMITH_LLM_PRIME"] != "0" {
+            prompt += llm.context.tokenizer.encode(text: "```json\n", addSpecialTokens: false)
+        }
         let limit = llm.contextLimit
         var maxTokens = p.maxTokens ?? 0
         if maxTokens <= 0 { maxTokens = min(2048, max(limit - prompt.count, 0)) }
@@ -214,38 +235,35 @@ extension Analyzer {
         // AUDIOSMITH_LLM_GRAMMAR=0 turns the JSON grammar off (the prompt
         // and the app's validation remain).
         let grammarOn = ProcessInfo.processInfo.environment["AUDIOSMITH_LLM_GRAMMAR"] != "0"
+        // AUDIOSMITH_LLM_TRACE=1 logs how each constrained reply went.
+        // (2: each token too, and the model's own choice where the grammar
+        // overrode it.)
+        let traceLevel = ProcessInfo.processInfo.environment["AUDIOSMITH_LLM_TRACE"] ?? ""
+        let trace = traceLevel == "1" || traceLevel == "2"
         if (p.json == true || p.schema != nil) && grammarOn {
             do {
                 let gt = try llm.grammarTokenizer()
-                let schema: String
-                if let s = p.schema, let data = try? JSONEncoder().encode(s), let str = String(data: data, encoding: .utf8) {
-                    schema = str
-                } else {
-                    schema = #"{"type":["object","array"]}"#
-                }
+                let schema = p.grammarSchema
                 let constraint = try GrammarConstraint(tokenizer: gt, jsonSchema: schema, fastForward: true,
                                                        hostTokenizer: llm.context.tokenizer)
-                let bias = llm.grammarBiases()
-                let reserve = CompletionReserve.estimate(schemaJSON: schema, tokenizer: llm.context.tokenizer)
                 freeRun = false
                 constrained = true
-                do {
-                    completion = try GuidedGenerationLoop.run(input: input, context: llm.context, constraint: constraint,
-                                                              maxTokens: maxTokens, vocabSize: gt.vocabSize,
-                                                              completionReserve: max(reserve * 3, maxTokens / 4),
-                                                              hardReserve: reserve * 8,
-                                                              closingBias: bias.closing, whitespaceBias: bias.whitespace,
-                                                              whitespaceTokenIDs: bias.whitespaceIDs) { delta in
-                        add(delta)
-                        return !stopped && !Task.isCancelled
-                    }
-                    finish = "stop"
-                } catch GuidedGenerationError.incompleteOutput {
-                    finish = "length"
-                    completion = maxTokens
-                } catch GuidedGenerationError.prematureEOS {
-                    finish = "stop"
+                // Greedy (the same reply every time) unless asked to sample.
+                let sampler: LogitSampler
+                if p.sampleConstrained == true, let t = p.temperature, t > 0 {
+                    sampler = TopPSampler(temperature: Float(t), topP: Float(p.topP ?? 0.95),
+                                          seed: p.seed.map { UInt64(bitPattern: $0) })
+                } else {
+                    sampler = ArgMaxSampler()
                 }
+                let r = try llm.guidedReply(input: input, constraint: constraint, grammar: gt, maxTokens: maxTokens,
+                                            sampler: sampler, steps: traceLevel == "2" ? { log("llm \(job) \($0)") } : nil) { delta in
+                    add(delta)
+                    return !stopped && !Task.isCancelled
+                }
+                completion = r.tokens
+                finish = r.finish
+                if trace { log("llm.generate \(job): \(r.note), prompt \(prompt.count), maxTokens \(maxTokens)") }
             } catch let error as GrammarError {
                 // The schema did not compile (an xgrammar limit): generate
                 // freely, the app validates.

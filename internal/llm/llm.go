@@ -64,9 +64,17 @@ type Request struct {
 
 	// Format and Schema ask for JSON. Backends use the provider's native
 	// mode when the preset has one (json_schema / json_object) and the
-	// prompt otherwise; Client.JSON validates and repairs either way.
+	// prompt otherwise; Client.JSON validates and repairs either way. The
+	// local engine constrains decoding to the schema (xgrammar) when it
+	// can — greedily, Temperature, TopP and Seed ignored, unless
+	// SampleConstrained.
 	Format Format
 	Schema *Schema
+	// SampleConstrained samples the local engine's constrained reply as a
+	// free one: Temperature (at least RepairTemperature), TopP (default
+	// 0.95) and Seed (default 1). Client.JSON sets it on repair turns;
+	// other backends ignore it.
+	SampleConstrained bool
 
 	// OnDelta, when set, streams: it is called with each text delta, in
 	// order, on the calling goroutine, before Chat returns. It must not

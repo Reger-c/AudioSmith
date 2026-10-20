@@ -32,6 +32,12 @@
 - In the Dub page's line editor ⌘Z did nothing on the Mac (the Edit menu's Undo took the key before the editor saw it), and with menu keys that have ⇧ fixed (MyGo patch 0009) ⇧⌘Z would have done nothing either. Edit → Undo and Redo, and their keys, now undo and redo the editor's changes whether a line, the toolbar or the timeline was clicked last; while a line's text is being edited they undo its typing, as before.
 - Menu items with ⇧ in their keys show and take exactly those keys (⇧⌘Z is Redo, not also ⌘Z).
 
+### The local writing model answers in full
+- The built-in writing model (Qwen3 4B) could cut its answers short or garble them when they had to follow a fixed form. The AI director left the last line of a story undirected; the emotion director could lose half a scene (`"surprisedn”: 2note”:` in place of an emotion); Cinematic translation's review copied the translation instead of pointing out problems, so nothing was improved. These came from how the engine kept answers to the form. They are fixed: in tests every line of every story is directed and the review finds real issues.
+- The same request now gets the same answer every time; before, the order of an answer's parts changed each time AudioSmith started.
+- An answer that starts repeating itself is stopped at once and asked again, instead of running for minutes (a glossary note did).
+- A retry after an unusable answer is no longer a copy of the same answer: it is sampled.
+
 ## 0.4.0-beta.5
 
 AudioSmith joins the ActNow family: it works together with the other ActNow apps on this Mac (Dicta, Auralink, Pik, VoxtNew). The apps share one copy of each model, some settings, and, if you agree, API keys, and they don't get in each other's way. AudioSmith names another app only when a released version of it is installed; with no other ActNow app, nothing on screen changes.

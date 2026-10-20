@@ -34,10 +34,14 @@ type LLMGenerateParams struct {
 	// Stream asks for llm.token notifications.
 	Stream bool `json:"stream,omitempty"`
 	// JSON asks for one JSON value; Schema (JSON Schema) constrains it.
-	// The engine constrains decoding to the grammar (greedy) when it can,
+	// The engine constrains decoding to the grammar when it can (greedy:
+	// Temperature, TopP and Seed are ignored unless SampleConstrained),
 	// and the app validates either way.
 	JSON   bool            `json:"json,omitempty"`
 	Schema json.RawMessage `json:"schema,omitempty"`
+	// SampleConstrained samples a constrained reply with Temperature, TopP
+	// and Seed as a free one.
+	SampleConstrained bool `json:"sampleConstrained,omitempty"`
 }
 
 // LLMGenerateResult is llm.generate's result.

@@ -4,8 +4,10 @@ package enginetest
 // "echo: " (with json or a schema: that message when it is JSON, else
 // {}), cut at the first stop string and at maxTokens words. A prompt of
 // over FakeLLMContext tokens (4 characters each) with maxTokens fails with
-// context_too_long. With stream, each word is an llm.token. Models named
-// "slow", "oom" or "crash" behave as for the other methods.
+// context_too_long. With stream, each word is an llm.token. Sampling
+// (temperature, topP, seed, sampleConstrained) changes nothing: the reply
+// is the same every time. Models named "slow", "oom" or "crash" behave as
+// for the other methods.
 
 import (
 	"encoding/json"
