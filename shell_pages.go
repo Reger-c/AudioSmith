@@ -6,6 +6,9 @@ package main
 // badges in its file (longform_pages.go, dub_pages.go, …).
 
 import (
+	"slices"
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
@@ -17,20 +20,27 @@ type navPage struct {
 	icon        icons.Icon
 }
 
-// navGroup is a section of the sidebar.
+// navGroup is a section of the sidebar; the first, without an id, is the
+// views: the pages used most, with no title over them, that do not fold.
 type navGroup struct {
-	id    string // English title, translated by groupTitle
+	id    string // English title, translated by groupTitle; "" the views
 	pages []navPage
 }
 
-// navGroups are the sidebar's sections and pages, in order (M7a). Each
+// navGroups are the sidebar's views and sections, in order (the ActNow
+// family's window layout: a few views, then sections that fold). Each
 // area keeps its page's view, route and badge in its own file.
 var navGroups = []navGroup{
-	{"Create", []navPage{
+	{"", []navPage{
 		{"/studio", "Studio", studioIcon},
-		{"/stories", "Stories", storiesIcon},       // M3: longform_pages.go
-		{"/audiobook", "Audiobook", audiobookIcon}, // M3
-		{"/dub", "Dub", dubIcon},                   // M4: dub_pages.go
+		{"/projects", "Projects", projectsIcon}, // M3
+		{"/history", "History", historyIcon},
+	}},
+	{"Create", []navPage{
+		{"/stories", "Stories", storiesIcon},           // M3: longform_pages.go
+		{"/audiobook", "Audiobook", audiobookIcon},     // M3
+		{"/dub", "Dub", dubIcon},                       // M4: dub_pages.go
+		{"/transcripts", "Transcribe", transcribeIcon}, // M2: transcribe*.go
 	}},
 	{"Voices", []navPage{ // voices.go (thread V)
 		{"/gallery", "Discover voices", galleryIcon},
@@ -38,39 +48,55 @@ var navGroups = []navGroup{
 		{"/design", "Design", designIcon},
 		{"/clone", "Clone", cloneIcon},
 	}},
-	{"Library", []navPage{
-		{"/projects", "Projects", projectsIcon}, // M3
-		{"/history", "History", historyIcon},
-		{"/transcripts", "Transcribe", transcribeIcon}, // M2: transcribe*.go
-	}},
 	{"Automate", []navPage{
 		{"/workflows", "Workflows", workflowsIcon}, // M6: workflow_pages.go
 		{"/batch", "Batch", batchIcon},             // M4
 		{"/calls", "Calls", callsIcon},             // M6b: calls_pages.go
 	}},
-	{"Utilities", []navPage{ // M5: api_pages.go
-		{"/tools", "Tools", toolsIcon},
-		{"/integrations", "Integrations", integrationsIcon},
-	}},
-	{"System", []navPage{
-		{"/models", "Models", modelsIcon},
-		{"/engine", "Engine", engineIcon},
-		{"/logs", "Logs", logsIcon},
-	}},
+}
+
+// otherPages are the pages the sidebar does not list: the palette, the
+// Go menu, links and buttons reach them. Tools has its icon at the
+// sidebar's foot; Models and Integrations open their Settings sections
+// (settingsPageAliases).
+var otherPages = []navPage{
+	{"/tasks", "Tasks", tasksIcon},                      // shell_tasks.go
+	{"/tools", "Tools", toolsIcon},                      // M5: api_pages.go
+	{"/integrations", "Integrations", integrationsIcon}, // Settings → Integrations
+	{"/models", "Models", modelsIcon},                   // Settings → Models & network
+	{"/engine", "Engine", engineIcon},
+	{"/logs", "Logs", logsIcon},
+}
+
+// settingsPageAliases are the pages that became Settings sections: their
+// paths open the section.
+func settingsPageAlias(path string) (string, bool) {
+	switch {
+	case path == "/models":
+		return "/settings/models", true
+	case path == "/integrations":
+		return "/settings/integrations", true
+	case strings.HasPrefix(path, "/integrations/") && path != "/integrations/twilio": // Twilio's is the Calls setup
+		return "/settings" + path, true
+	}
+	return "", false
 }
 
 // shortcutPages are the pages ⌘1…⌘9 open, in that order: the ones used
 // most. The others are a click or the palette (⌘K) away.
 var shortcutPages = []string{"/studio", "/stories", "/audiobook", "/dub", "/gallery", "/voices", "/design", "/projects", "/transcripts"}
 
-// pages are every page of the sidebar, in its order.
-var pages = func() []navPage {
+// sidebarPages are the pages of the sidebar, in its order.
+var sidebarPages = func() []navPage {
 	var out []navPage
 	for _, g := range navGroups {
 		out = append(out, g.pages...)
 	}
 	return out
 }()
+
+// pages are every page: the sidebar's, then the others.
+var pages = append(slices.Clone(sidebarPages), otherPages...)
 
 // pageKeys is the shortcut of a page ("⌘1"), "" when it has none.
 func pageKeys(path string) string {
@@ -85,18 +111,14 @@ func pageKeys(path string) string {
 // groupTitle translates a sidebar section's title.
 func groupTitle(id string) string {
 	switch id {
+	case "":
+		return i18n.T("Main pages")
 	case "Create":
 		return i18n.T("Create")
 	case "Voices":
 		return i18n.T("Voices")
-	case "Library":
-		return i18n.T("Library")
 	case "Automate":
 		return i18n.T("Automate")
-	case "Utilities":
-		return i18n.T("Utilities")
-	case "System":
-		return i18n.T("System")
 	}
 	return id
 }
@@ -107,10 +129,6 @@ func (a *app) navBadge(path string) string {
 	switch path {
 	case "/history":
 		if n := len(a.takes); n > 0 {
-			return itoa(n)
-		}
-	case "/models":
-		if n := a.downloadsRunning(); n > 0 {
 			return itoa(n)
 		}
 	}
@@ -144,6 +162,8 @@ func pageTitle(path string) string {
 		return i18n.T("Logs")
 	case "/settings":
 		return i18n.T("Settings")
+	case "/tasks":
+		return i18n.T("Tasks")
 	case "/transcripts": // M2
 		return i18n.T("Transcribe")
 	}
@@ -177,6 +197,7 @@ var (
 	settingsIcon = icons.Settings
 	bellIcon     = icons.Bell
 	searchIcon   = icons.Magnifer
+	tasksIcon    = icons.ChecklistMinimalistic
 )
 
 // pages builds the page the router shows.
@@ -189,9 +210,9 @@ func (a *app) pages(c *ui.Context) {
 		case r.Match("/history"):
 			r.Title(i18n.T("History"))
 			a.historyPage(c)
-		case r.Match("/models"):
-			r.Title(i18n.T("Models"))
-			a.modelsPage(c)
+		case r.Match("/tasks"):
+			r.Title(i18n.T("Tasks"))
+			a.tasksPage(c) // shell_tasks.go
 		case r.Match("/engine"):
 			r.Title(i18n.T("Engine"))
 			a.enginePage(c)

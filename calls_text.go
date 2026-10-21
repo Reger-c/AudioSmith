@@ -32,7 +32,7 @@ func callErrorText(err error) string {
 	case errors.Is(err, core.ErrNotDownloaded):
 		return i18n.T("The voice's speech model is not downloaded yet.")
 	case errors.As(err, &lic):
-		return i18n.T("The voice's speech model needs its licence accepted on the Models page.")
+		return i18n.T("The voice's speech model needs its licence accepted in Settings → Models & network.")
 	case errors.Is(err, core.ErrUnsupported):
 		return i18n.T("Finish the setup steps above to place calls.")
 	}

@@ -304,9 +304,11 @@ func TestKeyDifferentPrompt(t *testing.T) {
 // The Hugging Face token and the translators' keys go the same way.
 func TestKeyHFAndTranslator(t *testing.T) {
 	a, tt, kc, fx := keysApp(t, true)
+	tallSettings(tt) // the token is under the list of models
 	au := auralinkKeys(fx, kc)
 	au.Save(context.Background(), "huggingface", "hf_auralink_tok_01", credentials.SaveOptions{})
-	a.navigate("/settings/models")
+	openModels(a)
+	a.settingsReveal = "storage-models" // the token, under the list of models
 	tt.Frame()
 	tt.Frame()
 	if !tt.HasText("Use the Hugging Face key from Auralink (hf_…k_01)") {

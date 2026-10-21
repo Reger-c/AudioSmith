@@ -83,89 +83,91 @@ func (a *app) removeYtDlp() {
 func (a *app) dubbingSettings(c *ui.Context) {
 	t := c.Theme()
 	d := a.prefs.Dubbing
-	sectionTitle(c, i18n.T("Import from links"))
-	caption(c, i18n.T("Paste a YouTube (or other) link on the Dub page to dub the video. This needs yt-dlp, a free downloader (about 35 MB), which AudioSmith downloads from GitHub or the ActNow mirror and checks before using. Links to this Mac or the local network, live streams and playlists are refused."))
-	y := &a.ytdlp
-	switch {
-	case y.installing:
-		ui.Row(c.Key("ytdlp-progress")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			frac := 0.0
-			if y.size > 0 {
-				frac = float64(y.done) / float64(y.size)
-			}
-			ui.Progress(c, frac).Grow(1)
-			caption(c, i18n.T("%.0f of %.0f MB", float64(y.done)/1e6, float64(y.size)/1e6)).SingleLine()
-			if ui.Button(c.Key("ytdlp-cancel"), i18n.T("Cancel")).Clicked() && y.cancel != nil {
-				y.cancel()
-			}
-		})
-	case d.URLImport && d.YtDlp != "":
-		settingRowNote(c, "ytdlp-on", i18n.T("Importing from links is on"), i18n.T("yt-dlp %s · %s", dub.YtDlpVersion, shortPath(d.YtDlp)), func() {
-			if ui.Button(c.Key("ytdlp-remove"), i18n.T("Turn off and remove")).Clicked() {
-				a.removeYtDlp()
-			}
-		})
-	default:
-		settingRow(c, "ytdlp-off", i18n.T("Importing from links is off"), i18n.T("Turning it on downloads yt-dlp %s.", dub.YtDlpVersion), func() {
-			if primaryButton(c.Key("ytdlp-install"), i18n.T("Turn on")).Clicked() {
-				a.installYtDlp()
-			}
-		})
-	}
-	if y.err != "" {
-		ui.Row(c).Gap(px(t, 6)).Children(func() {
-			iconMark(c, icons.DangerCircle, t.Danger, "")
-			caption(c, y.err).TextColor(t.Danger).Grow(1).MinWidth(0)
-		})
-	}
-
-	sectionTitle(c, i18n.T("New dubs"))
-	review := !d.NoReview
-	settingRow(c, "dub-review", i18n.T("Review after each step"), i18n.T("Stops after the transcript and after the translation, so they can be checked first."), func() {
-		if ui.Switch(c.Key("dub-review"), &review).Label(i18n.T("Review after each step")).Changed() {
-			a.updateSettings(func(s *settings.Settings) { s.Dubbing.NoReview = !review })
-		}
-	})
-	models := dubTTSModels()
-	names := []string{i18n.T("Automatic")}
-	repos := []string{""}
-	for _, e := range models {
-		names = append(names, e.DisplayName())
-		repos = append(repos, e.Repo)
-	}
-	cur := names[max(slices.Index(repos, d.Model), 0)]
-	settingRow(c, "dub-model", i18n.T("Voice model"), i18n.T("Automatic uses a downloaded model that clones voices."), func() {
-		if ui.Select(c.Key("dub-model"), &cur, names).Label(i18n.T("Voice model")).Changed() {
-			repo := repos[slices.Index(names, cur)]
-			a.updateSettings(func(s *settings.Settings) { s.Dubbing.Model = repo })
-		}
-	})
-	// "" is the default (dub.DefaultTarget, switched for a video in that
-	// language); a language picked here is used as it is.
-	langs := []string{""}
-	langNames := []string{i18n.T("%s (default)", dubLangName(dub.DefaultTarget))}
-	for _, l := range dubTargetLangs {
-		langs = append(langs, l)
-		langNames = append(langNames, dubLangName(l))
-	}
-	target := ""
-	if len(d.Targets) > 0 {
-		target = d.Targets[0]
-		if !slices.Contains(langs, target) {
-			langs, langNames = append(langs, target), append(langNames, dubLangName(target))
-		}
-	}
-	tcur := langNames[max(slices.Index(langs, target), 0)]
-	settingRow(c, "dub-target", i18n.T("Dub into"), i18n.T("The first target language of a new dub.")+" "+dubAutoTargetHint(), func() {
-		if ui.Select(c.Key("dub-target"), &tcur, langNames).Label(i18n.T("Dub into")).Changed() {
-			l := langs[slices.Index(langNames, tcur)]
-			a.updateSettings(func(s *settings.Settings) {
-				s.Dubbing.Targets = nil
-				if l != "" {
-					s.Dubbing.Targets = []string{l}
+	settingGroup(c, i18n.T("Import from links"), func() {
+		caption(c, i18n.T("Paste a YouTube (or other) link on the Dub page to dub the video. This needs yt-dlp, a free downloader (about 35 MB), which AudioSmith downloads from GitHub or the ActNow mirror and checks before using. Links to this Mac or the local network, live streams and playlists are refused."))
+		y := &a.ytdlp
+		switch {
+		case y.installing:
+			ui.Row(c.Key("ytdlp-progress")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+				frac := 0.0
+				if y.size > 0 {
+					frac = float64(y.done) / float64(y.size)
+				}
+				ui.Progress(c, frac).Grow(1)
+				caption(c, i18n.T("%.0f of %.0f MB", float64(y.done)/1e6, float64(y.size)/1e6)).SingleLine()
+				if ui.Button(c.Key("ytdlp-cancel"), i18n.T("Cancel")).Clicked() && y.cancel != nil {
+					y.cancel()
+				}
+			})
+		case d.URLImport && d.YtDlp != "":
+			settingRowNote(c, "ytdlp-on", i18n.T("Importing from links is on"), i18n.T("yt-dlp %s · %s", dub.YtDlpVersion, shortPath(d.YtDlp)), func() {
+				if ui.Button(c.Key("ytdlp-remove"), i18n.T("Turn off and remove")).Clicked() {
+					a.removeYtDlp()
+				}
+			})
+		default:
+			settingRow(c, "ytdlp-off", i18n.T("Importing from links is off"), i18n.T("Turning it on downloads yt-dlp %s.", dub.YtDlpVersion), func() {
+				if primaryButton(c.Key("ytdlp-install"), i18n.T("Turn on")).Clicked() {
+					a.installYtDlp()
 				}
 			})
 		}
+		if y.err != "" {
+			ui.Row(c).Gap(px(t, 6)).Children(func() {
+				iconMark(c, icons.DangerCircle, t.Danger, "")
+				caption(c, y.err).TextColor(t.Danger).Grow(1).MinWidth(0)
+			})
+		}
+
+	})
+	settingGroup(c, i18n.T("New dubs"), func() {
+		review := !d.NoReview
+		settingRow(c, "dub-review", i18n.T("Review after each step"), i18n.T("Stops after the transcript and after the translation, so they can be checked first."), func() {
+			if ui.Switch(c.Key("dub-review"), &review).Label(i18n.T("Review after each step")).Changed() {
+				a.updateSettings(func(s *settings.Settings) { s.Dubbing.NoReview = !review })
+			}
+		})
+		models := dubTTSModels()
+		names := []string{i18n.T("Automatic")}
+		repos := []string{""}
+		for _, e := range models {
+			names = append(names, e.DisplayName())
+			repos = append(repos, e.Repo)
+		}
+		cur := names[max(slices.Index(repos, d.Model), 0)]
+		settingRow(c, "dub-model", i18n.T("Voice model"), i18n.T("Automatic uses a downloaded model that clones voices."), func() {
+			if ui.Select(c.Key("dub-model"), &cur, names).Label(i18n.T("Voice model")).Changed() {
+				repo := repos[slices.Index(names, cur)]
+				a.updateSettings(func(s *settings.Settings) { s.Dubbing.Model = repo })
+			}
+		})
+		// "" is the default (dub.DefaultTarget, switched for a video in that
+		// language); a language picked here is used as it is.
+		langs := []string{""}
+		langNames := []string{i18n.T("%s (default)", dubLangName(dub.DefaultTarget))}
+		for _, l := range dubTargetLangs {
+			langs = append(langs, l)
+			langNames = append(langNames, dubLangName(l))
+		}
+		target := ""
+		if len(d.Targets) > 0 {
+			target = d.Targets[0]
+			if !slices.Contains(langs, target) {
+				langs, langNames = append(langs, target), append(langNames, dubLangName(target))
+			}
+		}
+		tcur := langNames[max(slices.Index(langs, target), 0)]
+		settingRow(c, "dub-target", i18n.T("Dub into"), i18n.T("The first target language of a new dub.")+" "+dubAutoTargetHint(), func() {
+			if ui.Select(c.Key("dub-target"), &tcur, langNames).Label(i18n.T("Dub into")).Changed() {
+				l := langs[slices.Index(langNames, tcur)]
+				a.updateSettings(func(s *settings.Settings) {
+					s.Dubbing.Targets = nil
+					if l != "" {
+						s.Dubbing.Targets = []string{l}
+					}
+				})
+			}
+		})
 	})
 }
 

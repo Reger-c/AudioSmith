@@ -11,6 +11,7 @@ magic-stick-3           # Design
 widget                  # Gallery
 folder-with-files       # Projects
 history                 # History
+list                    # the list view (Projects)
 subtitles               # Transcribe
 structure               # Workflows
 layers-minimalistic     # Batch
@@ -21,6 +22,7 @@ box                     # Models
 cpu-bolt                # Engine
 clipboard-list          # Logs
 settings                # Settings
+checklist-minimalistic  # Tasks
 
 # Shell.
 bell                    # notifications

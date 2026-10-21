@@ -21,7 +21,7 @@ func TestModelsPage(t *testing.T) {
 	f := useFakeHub(t, a)
 	var progress []hub.Progress
 	core.On(a.bus, func(ev hub.DownloadProgress) { progress = append(progress, ev.Progress) })
-	a.navigate("/models")
+	openModels(a)
 	tt.Frame()
 	if !tt.HasText("Fast English voices") || !tt.HasText("Multilingual all-rounder") || !tt.HasText("Not downloaded") {
 		t.Fatalf("models: %q", tt.Texts())
@@ -84,7 +84,7 @@ func TestLicenceGate(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	f := useFakeHub(t, a)
 	omni := entry(t, "omnivoice-bf16")
-	a.navigate("/models")
+	openModels(a)
 	tt.Frame()
 	if !tt.HasText("non-commercial use only") || !tt.HasText("Review licence…") {
 		t.Fatalf("licence line: %q", tt.Texts())
@@ -115,7 +115,8 @@ func TestLicenceGate(t *testing.T) {
 		t.Errorf("accepted %+v", a.accepted)
 	}
 	// Settings lists it, and withdrawing gates the model again.
-	a.navigate("/settings/models")
+	openModels(a)
+	a.settingsReveal = "licences" // under the list of models
 	tt.Frame()
 	if !tt.HasText("CC BY-NC 4.0") {
 		t.Fatalf("settings: %q", tt.Texts())
@@ -140,7 +141,7 @@ func TestDownloadErrors(t *testing.T) {
 	useFakeHub(t, a)
 	a.updateSettings(func(s *settings.Settings) { s.Models.Endpoints = []string{"http://127.0.0.1:1"} })
 	a.resetHub()
-	a.navigate("/models")
+	openModels(a)
 	tt.Frame()
 	a.download(entry(t, "chatterbox-turbo-8bit"))
 	tt.Frame()
@@ -161,7 +162,7 @@ func TestDownloadErrors(t *testing.T) {
 func TestModelsPageKinds(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	useFakeHub(t, a)
-	a.navigate("/models")
+	openModels(a)
 	tt.Frame()
 	n := len(catalog.Builtin().Entries)
 	if !tt.HasText("All  " + itoa(n)) {

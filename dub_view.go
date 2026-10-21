@@ -78,7 +78,7 @@ func (a *app) dubPage(c *ui.Context) {
 		// The workspace fills the page; when the window is too short for
 		// its notices, player, timeline and some lines, it scrolls.
 		_, winH := c.Size()
-		avail := winH - titleBarHeight - px(t, statusBarHeight) - px(t, 40) - px(t, 52) - 4
+		avail := winH - titleBarHeight - px(t, 40) - px(t, 52) - 4
 		ui.Scroll(c.Key("dub-work")).Grow(1).MinWidth(0).Children(func() {
 			ui.Column(c).MinHeight(avail).Padding(px(t, sp3), px(t, sp6), px(t, sp2)).Gap(px(t, sp2)).Children(func() {
 				a.dubBanners(c)

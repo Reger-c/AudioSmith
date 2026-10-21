@@ -83,6 +83,9 @@ func pinSnapshots(t *testing.T, bubble bool, body func(t *testing.T, out string)
 	if out == "" {
 		t.Skip("set AUDIOSMITH_SNAPSHOTS to a directory")
 	}
+	old := settingsH
+	settingsH = settingsHMax // as tall as in the app (TestMain raises it)
+	t.Cleanup(func() { settingsH = old })
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		t.Fatal(err)
 	}

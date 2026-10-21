@@ -157,7 +157,7 @@ func TestNavigation(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyComma)
-	if a.shownPath() != "/settings/appearance" {
+	if a.shownPath() != "/settings/general" { // Appearance is part of General
 		t.Errorf("settings section: %s", a.shownPath())
 	}
 }
@@ -165,15 +165,17 @@ func TestNavigation(t *testing.T) {
 func TestDeepLinks(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	for link, want := range map[string]string{
-		"audiosmith://models":          "/models",
-		"audiosmith://settings/models": "/settings/models",
-		"audiosmith:///history":        "/history",
-		"audiosmith://studio/":         "/studio",
-		"/settings/engine":             "/settings/engine",
-		"audiosmith://logs?source=app": "/logs",
-		"AudioSmith://engine":          "/engine",
-		"audiosmith://workflows":       "/workflows", // M7a: every sidebar page
-		"audiosmith://dub":             "/dub",
+		"audiosmith://models":           "/settings/models", // a Settings section
+		"audiosmith://settings/models":  "/settings/models",
+		"audiosmith:///history":         "/history",
+		"audiosmith://studio/":          "/studio",
+		"/settings/engine":              "/settings/models", // part of Models & network
+		"audiosmith://integrations/n8n": "/settings/integrations/n8n",
+		"audiosmith://tasks":            "/tasks",
+		"audiosmith://logs?source=app":  "/logs",
+		"AudioSmith://engine":           "/engine",
+		"audiosmith://workflows":        "/workflows", // M7a: every sidebar page
+		"audiosmith://dub":              "/dub",
 	} {
 		a.openURL(link)
 		if a.shownPath() != want {
@@ -211,9 +213,11 @@ func TestPalette(t *testing.T) {
 		t.Fatalf("items %+v", items)
 	}
 	tt.Key(0, ui.KeyEnter)
-	if a.paletteOpen || a.router.Path() != "/models" {
-		t.Errorf("enter: open %v path %s", a.paletteOpen, a.router.Path())
+	if a.paletteOpen || a.shownPath() != "/settings/models" {
+		t.Errorf("enter: open %v path %s", a.paletteOpen, a.shownPath())
 	}
+	a.settingsOpen = false
+	tt.Frame()
 
 	// Arrows move the choice; Escape closes.
 	tt.Key(ui.Cmd, ui.KeyK)
@@ -275,7 +279,7 @@ func TestLanguageSwitch(t *testing.T) {
 	a.settingsForm.language = "简体中文"
 	a.updateSettings(func(s *settings.Settings) { s.General.Language = "zh-Hans" })
 	tt.Frame()
-	if i18n.Locale() != "zh-Hans" || !tt.HasText("工作室") || !tt.HasText("设置") || !tt.HasText("引擎就绪") {
+	if i18n.Locale() != "zh-Hans" || !tt.HasText("工作室") || !tt.HasText("设置") || !tt.HasText("创作") {
 		t.Fatalf("zh: %s %q", i18n.Locale(), tt.Texts())
 	}
 	// Saved: a new app over the same library starts in Chinese.

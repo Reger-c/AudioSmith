@@ -142,7 +142,7 @@ func TestModelNamesInUI(t *testing.T) {
 			t.Errorf("%s picker: %q", loc, tt.Texts())
 		}
 		a.pickerOpen = map[string]bool{}
-		a.navigate("/models")
+		openModels(a)
 		check("models page")
 		for _, e := range catalog.Builtin().Entries {
 			if !tt.HasText(e.DisplayName()) {
@@ -207,7 +207,7 @@ func TestModelSearch(t *testing.T) {
 	}
 	a.pickerOpen = map[string]bool{}
 
-	a.navigate("/models")
+	openModels(a)
 	a.modelsFind = "whisper"
 	tt.Frame()
 	if !tt.HasText("Multilingual transcription") || tt.HasText("Fast English voices") {

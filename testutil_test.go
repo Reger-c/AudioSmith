@@ -141,3 +141,14 @@ func writeTestWAV(t *testing.T, path string, rate int, seconds float64) {
 		t.Fatal(err)
 	}
 }
+
+// tallSettings makes the window and Settings tall enough for a whole
+// section to show without scrolling (tests that click far down one).
+func tallSettings(tt *ui.Tester) { tt.SetSize(1100, 3000) }
+
+// openModels opens Settings → Models & network over the logs page,
+// whose texts are none of the models' (the Studio's model picker is).
+func openModels(a *app) {
+	a.navigate("/logs")
+	a.navigate("/models")
+}

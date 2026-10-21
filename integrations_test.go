@@ -86,19 +86,12 @@ func TestIntegrationsPage(t *testing.T) {
 			t.Fatalf("no card for %s", in.Name)
 		}
 	}
-	a.integQuery = "n8n"
-	tt.Frame()
-	if tt.HasText("Claude Code") || !tt.HasText("n8n") {
-		t.Fatal("search")
-	}
-	a.integQuery = ""
-	tt.Frame()
 	if err := tt.Click("Claude Code"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.router.Path() != "/integrations/claude-code" || !tt.HasText("http://127.0.0.1:4123/mcp") {
-		t.Fatalf("detail %s", a.router.Path())
+	if a.shownPath() != "/settings/integrations/claude-code" || !tt.HasText("http://127.0.0.1:4123/mcp") {
+		t.Fatalf("detail %s", a.shownPath())
 	}
 	a.navigate("/integrations/nope")
 	tt.Frame()

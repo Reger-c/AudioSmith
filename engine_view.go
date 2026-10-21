@@ -41,7 +41,7 @@ func (a *app) enginePage(c *ui.Context) {
 	})
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp3)).MaxWidth(px(t, 760)).Children(func() {
-			sectionTitleTip(c.Key("engine-about"), i18n.T("Processes"), i18n.T("AudioSmith runs speech models in audiosmith-engine, a helper built on mlx-audio-swift that runs on the Mac's GPU with MLX. It loads them, without the network, from the model folder the Models page downloads into (the Hugging Face cache the Python tools share)."))
+			sectionTitleTip(c.Key("engine-about"), i18n.T("Processes"), i18n.T("AudioSmith runs speech models in audiosmith-engine, a helper built on mlx-audio-swift that runs on the Mac's GPU with MLX. It loads them, without the network, from the model folder Settings → Models & network downloads into (the Hugging Face cache the Python tools share)."))
 			workers := a.workers
 			if len(workers) == 0 {
 				workers = []engine.WorkerStatus{{Role: proto.RoleGPU, State: engine.WorkerStarting}}

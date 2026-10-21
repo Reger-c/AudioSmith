@@ -223,7 +223,7 @@ func mcpBlocks(e integEnv) []integBlock {
 	}
 	tools := strings.Join(lines, "\n") + "\nresources: voice://{id} · history://recent"
 	return []integBlock{
-		{Title: i18n.T("Streamable HTTP"), Hint: i18n.T("Name your agent in the header: it gets its own voice (Settings → Local API)."), Lang: "json", Code: jsonText(httpConf)},
+		{Title: i18n.T("Streamable HTTP"), Hint: i18n.T("Name your agent in the header: it gets its own voice (Settings → Integrations → Local API)."), Lang: "json", Code: jsonText(httpConf)},
 		{Title: i18n.T("stdio"), Hint: i18n.T("For clients that start servers as commands. AudioSmith must be running; the shim finds it by itself."), Lang: "json", Code: jsonText(stdio), File: "mcp.json"},
 		{Title: i18n.T("What it offers"), Lang: "text", Code: tools},
 	}
@@ -364,7 +364,7 @@ func n8nWorkflow(e integEnv) string {
 
 func n8nBlocks(e integEnv) []integBlock {
 	return []integBlock{{Title: i18n.T("n8n workflow"),
-		Hint: i18n.T("Paste it into an n8n canvas (or import the file). If n8n runs in Docker it cannot reach 127.0.0.1: turn on sharing in Settings → Local API and use the shared address with the PIN header."),
+		Hint: i18n.T("Paste it into an n8n canvas (or import the file). If n8n runs in Docker it cannot reach 127.0.0.1: turn on sharing in Settings → Integrations → Local API and use the shared address with the PIN header."),
 		Lang: "json", Code: n8nWorkflow(e), File: "audiosmith-n8n.json"}}
 }
 

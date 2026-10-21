@@ -58,55 +58,58 @@ func permissionText(p dictation.Permission) (string, bool) {
 }
 
 func (a *app) permissionsSettings(c *ui.Context) {
+	a.revealAnchor(c, "permissions")
 	t := c.Theme()
 	if !a.perms.checked {
 		a.recheckPermissions()
 	}
+	subHeading(c, i18n.T("Permissions"))
 	caption(c, i18n.T("AudioSmith works on this Mac: these permissions are used only for what each row says, and audio never leaves it."))
-	badge := func(text string, ok bool) {
-		if ok {
-			statusMark(c, icons.CheckCircle, t.Success, text)
-		} else {
-			statusMark(c, icons.DangerTriangle, t.Warning, text)
-		}
-	}
-	micText, micOK := permissionText(a.perms.mic)
-	settingRow(c, "perm-mic", i18n.T("Microphone"), i18n.T("Recording voices, transcribing recordings, and dictation."), func() {
-		badge(micText, micOK)
-		if a.perms.mic == dictation.PermissionNotDetermined {
-			if ghostButton(c.Key("perm-mic-ask"), i18n.T("Ask")).Clicked() {
-				sys := a.dictSys
-				a.async(func() {
-					sys.RequestMicrophone(func(bool) { a.post(a.recheckPermissions) })
-				})
+	settingGroup(c, i18n.T("Permissions"), func() {
+		badge := func(text string, ok bool) {
+			if ok {
+				statusMark(c, icons.CheckCircle, t.Success, text)
+			} else {
+				statusMark(c, icons.DangerTriangle, t.Warning, text)
 			}
 		}
-		if !micOK {
-			if ghostIconButton(c.Key("perm-mic-open"), icons.SquareArrowRightUp, i18n.T("Open System Settings")).Label(i18n.T("Open System Settings")).Clicked() {
-				a.openPrivacy(c, privacyMicrophone)
+		micText, micOK := permissionText(a.perms.mic)
+		settingRow(c, "perm-mic", i18n.T("Microphone"), i18n.T("Recording voices, transcribing recordings, and dictation."), func() {
+			badge(micText, micOK)
+			if a.perms.mic == dictation.PermissionNotDetermined {
+				if ghostButton(c.Key("perm-mic-ask"), i18n.T("Ask")).Clicked() {
+					sys := a.dictSys
+					a.async(func() {
+						sys.RequestMicrophone(func(bool) { a.post(a.recheckPermissions) })
+					})
+				}
 			}
+			if !micOK {
+				if ghostIconButton(c.Key("perm-mic-open"), icons.SquareArrowRightUp, i18n.T("Open System Settings")).Label(i18n.T("Open System Settings")).Clicked() {
+					a.openPrivacy(c, privacyMicrophone)
+				}
+			}
+		})
+		accText, accOK := i18n.T("Not allowed"), a.perms.access
+		if accOK {
+			accText = i18n.T("Allowed")
 		}
-	})
-	accText, accOK := i18n.T("Not allowed"), a.perms.access
-	if accOK {
-		accText = i18n.T("Allowed")
-	}
-	settingRow(c, "perm-access", i18n.T("Accessibility"), i18n.T("Lets dictation type the text into other apps (⌘V). Without it the text is copied and you paste it."), func() {
-		badge(accText, accOK)
-		if !accOK {
-			if ghostButton(c.Key("perm-access-ask"), i18n.T("Ask")).Tooltip(i18n.T("Adds AudioSmith to the list in System Settings")).Clicked() {
-				a.dictSys.PromptAccessibility()
+		settingRow(c, "perm-access", i18n.T("Accessibility"), i18n.T("Lets dictation type the text into other apps (⌘V). Without it the text is copied and you paste it."), func() {
+			badge(accText, accOK)
+			if !accOK {
+				if ghostButton(c.Key("perm-access-ask"), i18n.T("Ask")).Tooltip(i18n.T("Adds AudioSmith to the list in System Settings")).Clicked() {
+					a.dictSys.PromptAccessibility()
+					a.recheckPermissions()
+				}
+				if ghostIconButton(c.Key("perm-access-open"), icons.SquareArrowRightUp, i18n.T("Open System Settings")).Label(i18n.T("Open System Settings")).Clicked() {
+					a.openPrivacy(c, privacyAccessibility)
+				}
+			}
+		})
+		settingRow(c, "perm-recheck-row", i18n.T("Changed in System Settings"), i18n.T("After you change a permission, macOS may ask to quit and reopen AudioSmith. Global shortcuts need no permission."), func() {
+			if secondaryIconButton(c.Key("perm-recheck"), icons.Refresh, i18n.T("Check again")).Label(i18n.T("Check again")).Clicked() {
 				a.recheckPermissions()
 			}
-			if ghostIconButton(c.Key("perm-access-open"), icons.SquareArrowRightUp, i18n.T("Open System Settings")).Label(i18n.T("Open System Settings")).Clicked() {
-				a.openPrivacy(c, privacyAccessibility)
-			}
-		}
-	})
-	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
-		if secondaryIconButton(c.Key("perm-recheck"), icons.Refresh, i18n.T("Check again")).Label(i18n.T("Check again")).Clicked() {
-			a.recheckPermissions()
-		}
-		infoTip(c.Key("perm-note"), i18n.T("After you change a permission, macOS may ask to quit and reopen AudioSmith. Global shortcuts need no permission."))
+		})
 	})
 }

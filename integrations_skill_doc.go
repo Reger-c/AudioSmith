@@ -108,7 +108,7 @@ func agentSkill(slug string, p promptEnv) string {
 	head(i18n.T("Check first"))
 	item(i18n.T("AudioSmith must be open with its Local API on. %s (or %s) answers %s when it is ready; %s: wait a few seconds and check again; %s: its engine is down, ask the user to look at AudioSmith.",
 		q("check_health"), q("curl -sS "+p.Base+"/health"), q(`"status":"ok"`), q(`"starting"`), q(`"unavailable"`)))
-	item(i18n.T("If the connection is refused, or the audiosmith tools cannot connect, AudioSmith is not running: ask the user to open it and turn on Settings → Local API → Run the Local API (port %s). Run %s yourself only if the user agrees, then wait for /health.", p.port(), q("open -a AudioSmith")))
+	item(i18n.T("If the connection is refused, or the audiosmith tools cannot connect, AudioSmith is not running: ask the user to open it and turn on Settings → Integrations → Run the Local API (port %s). Run %s yourself only if the user agrees, then wait for /health.", p.port(), q("open -a AudioSmith")))
 	item(i18n.T("If this chat has no audiosmith tools although /health answers, the MCP server is not set up in this agent: tell the user (AudioSmith → Integrations has a setup prompt) and use the Local API meanwhile."))
 	item(i18n.T("Errors start with a code that says what to do: %s or %s: ask the user to accept the licence or to download the model in AudioSmith → Models; %s or %s: wait and try again; %s: that model speaks cloned voices only, use a cloned voice or another model; %s: check list_voices.",
 		q("licence_required"), q("model_not_downloaded"), q("engine_unavailable"), q("queue_timeout"), q("needs_reference"), q("voice_not_found")))
@@ -146,23 +146,29 @@ func agentSkill(slug string, p promptEnv) string {
 	if strings.HasPrefix(i18n.Locale(), "zh") {
 		sp = ""
 	}
+	page := func(pg navPage) {
+		md := mods[pg.path]
+		s := "**" + md.Name + "**: " + md.What
+		if len(md.Tools) > 0 {
+			s += sp + i18n.T("Tools: %s.", tools(md.Tools))
+		}
+		if md.App != "" {
+			s += sp + md.App
+		}
+		item(s)
+	}
 	for _, g := range navGroups {
 		line("")
 		line("### " + groupTitle(g.id))
 		for _, pg := range g.pages {
-			md := mods[pg.path]
-			s := "**" + md.Name + "**: " + md.What
-			if len(md.Tools) > 0 {
-				s += sp + i18n.T("Tools: %s.", tools(md.Tools))
-			}
-			if md.App != "" {
-				s += sp + md.App
-			}
-			item(s)
+			page(pg)
 		}
 	}
 	line("")
 	line("### " + i18n.T("Not in the sidebar"))
+	for _, pg := range otherPages {
+		page(pg)
+	}
 	for _, k := range []string{"settings", "dictation"} {
 		md := mods[k]
 		item("**" + md.Name + "**: " + md.What + sp + md.App)

@@ -22,6 +22,12 @@ func settingsSectionIcon(id string) icons.Icon {
 		return icons.Pallete2
 	case "models":
 		return icons.CloudDownload
+	case "integrations":
+		return icons.PlugCircle
+	case "advanced":
+		return icons.Database
+	case "about":
+		return icons.InfoCircle
 	case "studio":
 		return icons.Soundwave
 	case "engine":
@@ -53,11 +59,40 @@ func settingsSectionIcon(id string) icons.Icon {
 }
 
 // openSettings shows the settings dialog at a section's path ("/models").
+// The sections that are part of another now (settingsAliases: Appearance
+// in General, Engine and Network in Models & network…) open that one.
 func (a *app) openSettings(sub string) {
-	if a.setRouter.Path() != sub {
+	id, rest, _ := strings.Cut(strings.TrimPrefix(sub, "/"), "/")
+	if to, ok := settingsAliases[id]; ok {
+		a.settingsReveal = id // the section scrolls to the part that was it
+		sub = "/" + to
+		if rest != "" {
+			sub += "/" + rest
+		}
+	}
+	changed := a.setRouter.Path() != sub
+	if changed {
 		a.setRouter.Replace(sub)
 	}
+	if (!a.settingsOpen || changed) && strings.HasPrefix(sub, "/models") {
+		a.refreshModels() // the models read the disk again, as their page did
+	}
 	a.settingsOpen = true
+}
+
+// revealAnchor marks where a part of a section that was a section of its
+// own begins: opened by its old path, the section scrolls to it.
+func (a *app) revealAnchor(c *ui.Context, id string) {
+	ui.Box(c.Key("reveal-" + id)).Height(0).Shrink(0).Children(func() {
+		if a.settingsReveal != id {
+			return
+		}
+		a.settingsReveal = ""
+		// As tall as the view: scrolled into view as little as shows it,
+		// its top (the part's) comes to the top.
+		t := c.Theme()
+		ui.Box(c).Absolute().Top(-px(t, sp3)).Left(0).Width(1).Height(max(a.sectionH-px(t, sp2), 1)).PassThrough().ScrollIntoView()
+	})
 }
 
 // shownPath is the path of what shows: the settings dialog's section
@@ -69,8 +104,22 @@ func (a *app) shownPath() string {
 	return a.router.Path()
 }
 
+// Settings' size, DIPs at 100 % (the ActNow family's window spec): at
+// most settingsW × settingsH (less in a smaller window: the dialog keeps a
+// margin, and its sections scroll), the sections' column settingsNavW (at
+// most 0.3 of the dialog).
+const (
+	settingsW    = 800
+	settingsNavW = 200
+	settingsHMax = 620
+)
+
+// settingsH is the height Settings takes at most: settingsHMax (tests
+// that look at whole sections in a tall window raise it).
+var settingsH float32 = settingsHMax
+
 // settingsDialog is Settings (⌘,): a dialog over the page, its sections
-// in a column on the left (0.3: Typeless-style, research/ui-design-spec.md).
+// in a column on the left, each a column of groups (settingGroup).
 func (a *app) settingsDialog(c *ui.Context) {
 	if !a.settingsOpen {
 		if len(a.otherShown) > 0 {
@@ -84,10 +133,11 @@ func (a *app) settingsDialog(c *ui.Context) {
 	margin := px(t, sp6)
 	ui.DialogBase(c.Key("settings-dialog"), &a.settingsOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.32))
-		panel.Width(min(w-2*margin, px(t, 820))).Height(h-4*margin).Radius(px(t, radiusCard)).Background(k.Bg).Clip().
+		dw := min(w-2*margin, px(t, settingsW))
+		panel.Width(dw).Height(min(h-2*margin, px(t, settingsH))).Radius(px(t, radiusDialog)).Background(k.Bg).Clip().
 			Shadow(0, 16, 48, 0, ui.RGBA(0, 0, 0, 0.28)).Label(i18n.T("Settings"))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Width(min(px(t, 196), (w-2*margin)*0.28)).Shrink(0).Background(k.Sidebar).Children(func() {
+			ui.Column(c).Width(min(px(t, settingsNavW), dw*0.3)).Shrink(0).Background(k.Sidebar).Children(func() {
 				ui.Row(c).Height(px(t, 52)).Shrink(0).AlignItems(ui.Center).Padding(0, px(t, sp4)).Children(func() {
 					ui.Text(c, i18n.T("Settings")).FontSize(px(t, fsSection)).FontWeight(600).SingleLine()
 				})
@@ -140,8 +190,13 @@ func (a *app) settingsDialog(c *ui.Context) {
 							a.settingsOpen = false
 						}
 					})
+					r.Title(title) // the page takes the focus: its name for VoiceOver
 					ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-						ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp4)).MaxWidth(px(t, 680)).Children(func() {
+						ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp5)).Children(func() {
+							// What a section lays out by (pageWidth): its own width.
+							a.sectionW = dw - min(px(t, settingsNavW), dw*0.3) - 1 - px(t, 2*sp6)
+							a.sectionH = min(h-2*margin, px(t, settingsH)) - px(t, 52)
+							defer func() { a.sectionW = 0 }()
 							a.settingsSection(c, r)
 						})
 					})
@@ -151,64 +206,65 @@ func (a *app) settingsDialog(c *ui.Context) {
 	})
 }
 
-// settingsSection builds the section of the settings dialog r shows.
+// settingsSection builds the section of the settings dialog r shows:
+// each a column of groups (settingGroup), several of them made of what
+// were sections of their own.
 func (a *app) settingsSection(c *ui.Context, r *ui.Route) {
 	t := c.Theme()
+	section := func(id string, build ...func(*ui.Context)) bool {
+		if !r.Match("/"+id) && !r.Match("/"+id+"/{rest}") {
+			return false
+		}
+		for _, s := range settingsSections() {
+			if s.id == id {
+				r.Title(s.title)
+			}
+		}
+		a.lastSettings = id
+		for _, b := range build {
+			b(c)
+		}
+		return true
+	}
 	switch {
-	case r.Match("/general"):
-		r.Title(i18n.T("General"))
-		a.lastSettings = "general"
-		a.generalSettings(c)
-	case r.Match("/appearance"):
-		r.Title(i18n.T("Appearance"))
-		a.lastSettings = "appearance"
-		a.appearanceSettings(c)
-	case r.Match("/models"):
-		r.Title(i18n.T("Models and downloads"))
-		a.lastSettings = "models"
-		a.modelSettings(c)
-	case r.Match("/studio"):
-		r.Title(i18n.T("Studio"))
-		a.lastSettings = "studio"
-		a.studioSettings(c)
-	case r.Match("/engine"):
-		r.Title(i18n.T("Engine"))
-		a.lastSettings = "engine"
-		a.engineSettings(c)
-	case r.Match("/pronunciation"): // M1-G: pronunciation_settings.go
-		r.Title(i18n.T("Pronunciation"))
-		a.lastSettings = "pronunciation"
-		a.pronunciationSettings(c)
-	// M2 (thread #17).
-	case r.Match("/dictation"):
-		r.Title(i18n.T("Dictation"))
-		a.lastSettings = "dictation"
-		a.dictationSettings(c)
-	case r.Match("/writing"):
-		r.Title(i18n.T("Writing help"))
-		a.lastSettings = "writing"
-		a.writingSettings(c)
-	case r.Match("/permissions"):
-		r.Title(i18n.T("Permissions"))
-		a.lastSettings = "permissions"
-		a.permissionsSettings(c)
+	case section("general", a.generalSettings, a.appearanceSettings):
+	case section("studio", a.studioSettings, a.pronunciationSettings): // M1-G: pronunciation_settings.go
 	case a.dubSettingsRoute(c, r): // M4: Settings → Dubbing (dub_pages.go, thread #19)
-	case a.apiSettingsRoute(c, r): // M5: api_settings.go (thread #20)
-	case a.m7SettingsRoute(c, r): // M7a: settings_pages.go
+	// M2 (thread #17).
+	case section("dictation", a.dictationSettings, a.permissionsSettings):
+	case section("writing", a.writingSettings):
+	case section("integrations", a.integrationsSettings): // M5: settings_integrations.go
+	// M7a (thread #22): settings_*.go.
+	case section("audio-tools", a.audioToolsSettings):
+	case section("models", a.modelsList, a.networkSettings, a.modelSettings, a.engineSettings, a.licenceSettings):
+	case section("privacy", a.privacySettings):
+	case section("advanced", a.storageSettings, a.usageSettings, a.diagnosticsSettings):
+	case section("about", a.aboutSettings):
 	default:
 		ui.Text(c, i18n.T("There is no page at %s.", a.shownPath())).TextColor(t.TextMuted)
 	}
 }
 
-// settingRow is a setting: its name, a ⓘ telling what it does (desc, ""
-// for none) and its control on the right (formRow in ui_layout.go).
+// settingRow is a setting: its name, what it does (desc, "" for none)
+// and its control on the right. In a group (settingGroup: Settings) the
+// line shows under the name; elsewhere (a page's form, a dialog) it is a
+// ⓘ beside it (formRow in ui_layout.go).
 func settingRow(c *ui.Context, key, title, desc string, control func()) {
-	formRow(c, key, title, desc, control)
+	if settingDepth == 0 {
+		formRow(c, key, title, desc, control)
+		return
+	}
+	groupRow(c, key, title, desc, ui.Color{}, false, control)
 }
 
-// settingRowNote is a setting whose description is a state to read at
-// once (a path, what is missing, a version): it shows under the name.
+// settingRowNote is a setting whose line is a state to read at once (a
+// path, what is missing, a version): it shows under the name, and can be
+// selected to copy.
 func settingRowNote(c *ui.Context, key, title, note string, control func()) {
+	if settingDepth > 0 {
+		groupRow(c, key, title, note, ui.Color{}, true, control)
+		return
+	}
 	t := c.Theme()
 	ui.Row(c.Key(key)).Wrap().GapX(px(t, sp4)).GapY(px(t, 6)).AlignItems(ui.Center).MinHeight(px(t, 32)).Children(func() {
 		ui.Column(c).Grow(1).Basis(px(t, 200)).MinWidth(px(t, 140)).Gap(px(t, 2)).Children(func() {

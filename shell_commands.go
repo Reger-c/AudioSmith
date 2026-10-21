@@ -37,7 +37,7 @@ func (a *app) commands() []command {
 	add := func(id, group, title, en, keys string, enabled bool, run func()) {
 		cmds = append(cmds, command{id: id, group: group, title: title, en: en, keys: keys, run: run, enabled: enabled})
 	}
-	for _, p := range pages { // every sidebar page (shell_pages.go navGroups)
+	for _, p := range pages { // every page: the sidebar's, then the others (shell_pages.go)
 		add("go"+p.path, nav, pageTitle(p.path), p.title, pageKeys(p.path), true, func() { a.navigate(p.path) })
 	}
 	a.longformCommands(nav, add) // M3: the book's commands (longform_pages.go, thread #18)
@@ -70,6 +70,7 @@ func (a *app) commands() []command {
 	})
 
 	view := i18n.T("View")
+	add("search", view, i18n.T("Search the library"), "Search the library find projects voices takes", "⌘F", true, a.focusSearch)
 	add("palette", view, i18n.T("Command palette"), "Command palette", "⌘K", true, a.openPalette)
 	add("switch", view, i18n.T("Engine quick switch"), "Engine quick switch", "⌘E", true, func() { a.switchOpen = true })
 	add("logs-panel", view, i18n.T("Show or hide the logs panel"), "Show or hide the logs panel", "⇧⌘L", true, func() { a.logsPanel = !a.logsPanel })
@@ -144,6 +145,9 @@ func (a *app) shortcuts(c *ui.Context) {
 	if c.Shortcut(ui.Cmd, ui.KeyK) {
 		a.openPalette()
 	}
+	if c.Shortcut(ui.Cmd, ui.KeyF) {
+		a.focusSearch()
+	}
 	if c.Shortcut(ui.Cmd, ui.KeyE) {
 		a.switchOpen = true
 	}
@@ -161,6 +165,17 @@ func (a *app) shortcuts(c *ui.Context) {
 	if !a.scriptFocused() && c.Shortcut(ui.Shift, ui.KeySlash) { // M1-G: "?" is text in the script editor
 		a.sheetOpen = true
 	}
+}
+
+// focusSearch puts the keyboard in the sidebar's search field (⌘F); on
+// the icon rail, which has none, it opens the palette.
+func (a *app) focusSearch() {
+	if a.railMode() {
+		a.openPalette()
+		return
+	}
+	a.settingsOpen = false
+	a.searchFocus = true
 }
 
 // commandIcon is a command's icon in the palette: its page's for "Go
@@ -199,7 +214,7 @@ func (a *app) palette(c *ui.Context) {
 	_, h := c.Size()
 	ui.DialogBase(c, &a.paletteOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.2)).Justify(ui.Start).Padding(min(px(t, 90), h*0.12), px(t, sp6), 0)
-		panel.Width(px(t, 560)).MaxWidth(px(t, 560)).Radius(px(t, radiusCard)).Background(k.Bg).Border(1, k.Line).Clip().
+		panel.Width(px(t, 560)).MaxWidth(px(t, 560)).Radius(px(t, radiusDialog)).Background(k.Bg).Border(1, k.Line).Clip().
 			Shadow(0, 16, 40, 0, ui.RGBA(0, 0, 0, 0.22)).Label(i18n.T("Command palette"))
 		items := a.paletteItems()
 		a.paletteSel = max(0, min(a.paletteSel, len(items)-1))
@@ -277,6 +292,7 @@ func (a *app) shortcutSheet(c *ui.Context) {
 			rows  [][2]string
 		}{
 			{i18n.T("Navigation"), [][2]string{
+				{"⌘F", i18n.T("Search the library")},
 				{"⌘K", i18n.T("Command palette")},
 				{"⌘1 … ⌘4", i18n.T("Studio, Stories, Audiobook, Dub")},
 				{"⌘5 … ⌘7", i18n.T("Discover voices, My voices, Design")},
@@ -323,7 +339,8 @@ func (a *app) buildMenu() {
 		return func(*mygo.MenuItem, *mygo.Window) { a.post(fn) }
 	}
 	goItems := []*mygo.MenuItem{}
-	for gi, g := range navGroups {
+	groups := append(slices.Clone(navGroups), navGroup{"Others", otherPages})
+	for gi, g := range groups {
 		if gi > 0 {
 			goItems = append(goItems, mygo.Separator())
 		}
@@ -361,6 +378,7 @@ func (a *app) buildMenu() {
 			{Role: mygo.RoleSelectAll, Label: i18n.T("Select All")},
 		}},
 		{Label: i18n.T("View"), Submenu: []*mygo.MenuItem{
+			{Label: i18n.T("Search the library"), Accelerator: "CmdOrCtrl+F", Click: act(a.focusSearch)},
 			{Label: i18n.T("Command palette"), Accelerator: "CmdOrCtrl+K", Click: act(a.openPalette)},
 			{Label: i18n.T("Engine quick switch"), Accelerator: "CmdOrCtrl+E", Click: act(func() { a.switchOpen = true })},
 			{Label: i18n.T("Show or hide the logs panel"), Click: act(func() { a.logsPanel = !a.logsPanel })},
@@ -400,7 +418,10 @@ func (a *app) openURL(raw string) {
 	}
 	path = "/" + strings.Trim(path, "/")
 	switch sec := section(path); {
-	case slices.ContainsFunc(pages, func(p navPage) bool { return p.path == sec }): // every sidebar page
+	case slices.ContainsFunc(pages, func(p navPage) bool { return p.path == sec }): // every page
+		if _, ok := settingsPageAlias(path); ok { // an integration's setup: Settings
+			sec = path
+		}
 		a.navigate(sec)
 	case sec == "/settings":
 		if path == "/settings" {

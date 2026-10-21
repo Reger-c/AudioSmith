@@ -261,6 +261,8 @@ func TestAboutPage(t *testing.T) {
 			t.Fatalf("about: no %s in %q", link, tt.Texts())
 		}
 	}
+	a.navigate("/settings/advanced") // the self-check is in Advanced's diagnostics
+	tt.Frame()
 	if err := tt.Click("Run the check"); err != nil {
 		t.Fatal(err)
 	}
@@ -338,11 +340,9 @@ func TestNetworkUsagePrivacyAppearance(t *testing.T) {
 	if len(a.netChecks) != 4 || !tt.HasText("80 ms") || !tt.HasText("timeout") || !tt.HasText("mirror.actnow.dev") {
 		t.Errorf("checks %+v", a.netChecks)
 	}
-	// The models page links here.
-	a.navigate("/settings/models")
-	tt.Frame()
-	if tt.HasText("Download from") || !tt.HasText("Download source and proxy") {
-		t.Errorf("models page %q", tt.Texts())
+	// It is a part of Models & network now, under the models.
+	if a.shownPath() != "/settings/models" || !tt.HasText("Fast English voices") {
+		t.Errorf("models and network %s %q", a.shownPath(), tt.Texts())
 	}
 
 	addTake(t, a, core.Take{ID: core.NewID(time.Now()), Text: "x", Model: kokoro, Voice: "af_heart", Language: "en", SampleRate: 24000, AudioSeconds: 65, GenSeconds: 13}, 1)

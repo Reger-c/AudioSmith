@@ -1,8 +1,8 @@
 package main
 
-// Tests of the shell's status bar and overlays: notifications, logs, the
-// ⌘E quick switch and the jobs in the status bar (shell_status.go,
-// shell_logs.go).
+// Tests of the shell's overlays and its sidebar's foot: notifications,
+// logs, the ⌘E quick switch and the activity cards (shell_status.go,
+// shell_activity.go, shell_logs.go).
 
 import (
 	"context"
@@ -25,8 +25,8 @@ func TestNotifications(t *testing.T) {
 	if len(a.notices) != 2 || a.notices[0].Title != "Hello" {
 		t.Fatalf("notices %+v", a.notices)
 	}
-	if !tt.HasText("2") {
-		t.Errorf("no unread count: %q", tt.Texts())
+	if n := a.unreadNotices(); n != 2 {
+		t.Errorf("%d unread", n)
 	}
 	tt.Click("Notifications")
 	if !a.noticesOpen || !tt.HasText("Disk almost full") || !tt.HasText("2 GB left") {
@@ -101,31 +101,44 @@ func TestQuickSwitch(t *testing.T) {
 	}
 }
 
-func TestStatusBar(t *testing.T) {
+// No status bar: a stopped engine, downloads and jobs are cards at the
+// sidebar's foot; its icons open the logs panel and the notifications.
+func TestActivityCards(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	tt.Frame()
-	if !tt.HasText("Engine ready") || !tt.HasText("· No model loaded") {
-		t.Errorf("status: %q", tt.Texts())
+	if tt.HasText("Engine ready") || len(a.actCards) != 0 {
+		t.Errorf("a card while all is well: %q %+v", tt.Texts(), a.actCards)
 	}
 	m := a.model(entry(t, "chatterbox-turbo-8bit"))
 	m.downloading, m.progress = true, hub.Progress{Bytes: 50, TotalBytes: 200}
 	tt.Frame()
-	if !tt.HasText("Downloading “English clone” · 25%") {
-		t.Errorf("download in status: %q", tt.Texts())
+	if !tt.HasText("Downloading “English clone”") || !tt.HasText("25%") {
+		t.Errorf("download card: %q", tt.Texts())
 	}
 	tt.Click("Downloading “English clone” · 25%")
-	if a.router.Path() != "/models" {
-		t.Errorf("click: %s", a.router.Path())
+	if a.shownPath() != "/settings/models" {
+		t.Errorf("click: %s", a.shownPath())
 	}
+	a.settingsOpen = false
 	m.downloading = false
+	a.engState = engineFailed
+	tt.Frame()
+	if !tt.HasText("Engine stopped") || a.actCards[0].key != "engine" {
+		t.Errorf("engine card: %q", tt.Texts())
+	}
+	if err := tt.Click("Restart engine"); err != nil { // its button shows without the pointer
+		t.Error(err)
+	}
+	a.engState = engineReady
 	tt.Click("Show or hide the logs panel (⇧⌘L)")
 	if !a.logsPanel {
 		t.Error("logs toggle")
 	}
 }
 
-// The status bar lists every unfinished job; each is cancelled by its id.
-func TestJobsInStatusBar(t *testing.T) {
+// Every unfinished job is on a card, those of a kind on one, and on the
+// Tasks page; each is cancelled by its id.
+func TestJobsInCards(t *testing.T) {
 	a, eng, tt := newTestApp(t)
 	tt.Frame()
 	tt.Click("Generate")
@@ -134,13 +147,13 @@ func TestJobsInStatusBar(t *testing.T) {
 	eng.progress(take, "generating", 0.5, 1)
 	eng.update(other, func(j *jobs.Job) { j.State = jobs.StateQueued })
 	tt.Frame()
-	if !tt.HasText("2 jobs · 1 waiting") {
-		t.Fatalf("status: %q", tt.Texts())
+	if len(a.actCards) != 2 || !tt.HasText(i18n.T("Generate take")) || !tt.HasText("2 in progress") {
+		t.Fatalf("cards %+v: %q", a.actCards, tt.Texts())
 	}
-	tt.Click("2 jobs · 1 waiting")
+	a.navigate("/tasks")
 	tt.Frame()
-	if !a.jobsOpen || !tt.HasText("Batch export") || !tt.HasText(i18n.T("Generate take")) {
-		t.Fatalf("jobs panel: %q", tt.Texts())
+	if !tt.HasText("Batch export") || !tt.HasText("Running and waiting · 2") {
+		t.Fatalf("tasks page: %q", tt.Texts())
 	}
 	// Running first; the Studio's take is cancelled through the Studio.
 	active := a.activeJobs()
@@ -158,8 +171,8 @@ func TestJobsInStatusBar(t *testing.T) {
 	eng.cancelled(other)
 	eng.cancelled(take)
 	tt.Frame()
-	if len(a.activeJobs()) != 0 || tt.HasText("2 jobs · 1 waiting") {
-		t.Errorf("after: %+v", a.activeJobs())
+	if len(a.activeJobs()) != 0 || len(a.actCards) != 0 || tt.HasText("2 in progress") {
+		t.Errorf("after: %+v %+v", a.activeJobs(), a.actCards)
 	}
 }
 

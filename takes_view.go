@@ -101,8 +101,7 @@ func (a *app) historyModels() []string {
 func (a *app) historyPage(c *ui.Context) {
 	t := c.Theme()
 	h := &a.history
-	pageHeader(c, i18n.T("History"), func() {
-		caption(c, i18n.N(len(a.takes), "%d take", "%d takes", len(a.takes))).SingleLine()
+	browseHeader(c, i18n.T("History"), i18n.N(len(a.takes), "%d take", "%d takes", len(a.takes)), func() {
 		if iconButton(c.Key("open-folder"), icons.FolderOpen, i18n.T("Open folder")).Tooltip(i18n.T("Open the folder of the takes in Finder")).Clicked() {
 			mygo.Shell.OpenPath(a.takeStore.AudioDir())
 		}

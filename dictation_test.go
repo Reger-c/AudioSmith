@@ -305,6 +305,7 @@ func TestDictationShortcutSettings(t *testing.T) {
 func TestPermissionsPage(t *testing.T) {
 	m := newM2Test(t)
 	a, tt, sys := m.a, m.tt, m.sys
+	tallSettings(tt) // the permissions are at the foot of Dictation
 	sys.Mic, sys.Trusted = dictation.PermissionNotDetermined, false
 	a.recheckPermissions()
 	a.navigate("/settings/permissions")

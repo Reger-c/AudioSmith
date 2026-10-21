@@ -367,7 +367,7 @@ func (a *app) wfCheck(n *workflow.Node, _ workflow.Type) []workflow.Diagnostic {
 	stt := func() {
 		m := dubModels(a.lib)
 		if m.STT == "" {
-			add(workflow.Error, wfCodeSTT, i18n.T("No speech-to-text model is available: download one on the Models page."))
+			add(workflow.Error, wfCodeSTT, i18n.T("No speech-to-text model is available: download one in Settings → Models & network."))
 			return
 		}
 		if e, ok := catalog.Builtin().ByRepo(m.STT); ok {

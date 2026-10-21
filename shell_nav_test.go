@@ -6,16 +6,26 @@ import (
 	"time"
 )
 
-// The sidebar's sections, the ⌘ numbers and the palette agree (M7a).
+// The sidebar's views and sections, the ⌘ numbers and the palette agree
+// (the ActNow family's window layout): Models, Engine, Logs and
+// Integrations are not in the sidebar, Tools is an icon at its foot.
 func TestSidebarGroups(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	tt.Frame()
-	for _, title := range []string{"Create", "Voices", "Library", "Automate", "Utilities", "System",
+	for _, title := range []string{"Create", "Voices", "Automate",
 		"Studio", "Stories", "Audiobook", "Dub", "Design", "Clone", "Discover voices", "My voices", "Projects", "History", "Transcribe",
-		"Workflows", "Batch", "Tools", "Integrations", "Models", "Engine", "Logs", "Settings"} {
+		"Workflows", "Batch", "Calls", "Tools", "Settings (⌘,)", "Show or hide the logs panel (⇧⌘L)", "Notifications", "Search the library"} {
 		if !tt.HasText(title) {
 			t.Errorf("sidebar lacks %q", title)
 		}
+	}
+	for _, title := range []string{"Library", "Utilities", "System", "Integrations", "Models", "Engine", "Logs", "Engine ready"} {
+		if tt.HasText(title) {
+			t.Errorf("sidebar has %q", title)
+		}
+	}
+	if navGroups[0].id != "" || len(navGroups[0].pages) > 5 {
+		t.Errorf("views %+v", navGroups[0])
 	}
 	if len(shortcutPages) != 9 {
 		t.Fatalf("%d shortcut pages", len(shortcutPages))
@@ -81,13 +91,13 @@ func TestSidebarRail(t *testing.T) {
 		t.Fatal("the sidebar did not come back")
 	}
 	// Close a section: its pages go, and the settings remember it.
-	*a.sectionOpen("Utilities") = false
+	*a.sectionOpen("Automate") = false
 	tt.Frame()
 	tt.Frame()
-	if tt.HasText("Integrations") {
+	if tt.HasText("Batch") {
 		t.Error("closed section still shows its pages")
 	}
-	if !slices.Contains(a.settings.Get().Appearance.ClosedSections, "Utilities") {
+	if !slices.Contains(a.settings.Get().Appearance.ClosedSections, "Automate") {
 		t.Errorf("closed sections %v", a.settings.Get().Appearance.ClosedSections)
 	}
 	// The resized width is saved.

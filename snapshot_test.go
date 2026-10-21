@@ -85,9 +85,9 @@ func snapshotsMain(t *testing.T, out string) {
 		dlJob, _ := eng.host.sched.Submit(context.Background(), jobs.Spec{Kind: "x.download", Lane: jobs.LaneNet,
 			Title: i18n.T("Download %s", "Qwen3-TTS 0.6B Base (voice clone)"), Owner: "model:x"})
 		eng.update(dlJob, func(j *jobs.Job) { j.State = jobs.StateQueued })
-		a.jobsOpen = true
+		a.navigate("/tasks")
 		save("jobs")
-		a.jobsOpen = false
+		a.navigate("/studio")
 		eng.cancelled(dlJob)
 		eng.cancelled(a.job.id)
 		a.toasts = nil

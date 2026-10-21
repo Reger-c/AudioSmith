@@ -23,6 +23,9 @@ func TestMain(m *testing.M) {
 	if enginetest.Enabled() {
 		enginetest.Main()
 	}
+	// Settings as tall as the window: tests that look at a whole section
+	// make the window taller (snapshots keep the app's height: pinSnapshots).
+	settingsH = 1 << 14
 	os.Exit(m.Run())
 }
 
@@ -50,7 +53,7 @@ func TestErrorsAndCancel(t *testing.T) {
 	tt.Click("Generate")
 	eng.fail(eng.last(t).ID, proto.CodeModelNotDownloaded, "Kokoro is not downloaded")
 	tt.Frame()
-	if !tt.HasText("The model is not downloaded. Download it on the Models page.") {
+	if !tt.HasText("The model is not downloaded. Download it in Settings → Models & network.") {
 		t.Errorf("not downloaded: %q", tt.Texts())
 	}
 

@@ -2,9 +2,18 @@
 
 ## Unreleased
 
+### The window in the ActNow family's layout
+- The sidebar starts with a search field (⌘F): it searches projects, voices, takes, transcripts and exports, and the Projects page shows what it finds ("3 found", Clear search). ⌘K opens the command palette from the button in it.
+- Studio, Projects and History come first; Create (Stories, Audiobook, Dub, Transcribe), Voices and Automate are sections that fold. The ⌘1–⌘9 keys are as before.
+- No status bar: what goes on shows as cards at the foot of the sidebar — a stopped engine (Restart), dictation and calls under way (Stop, Hang up), each story, book, dub and workflow being made, takes, exports, transcriptions and downloads, several of a kind as "2/5", a finished one for 3 seconds. The pointer over them opens the stack; View all opens the new Tasks page, with every job that runs or waits.
+- Under the cards: Settings, the logs panel (⇧⌘L) and Tools, and the notifications' bell (a dot while some are unread).
+- Models and Integrations are Settings sections now (their links open them); Engine and Logs left the sidebar (the palette, the Go menu, Settings → Advanced → Diagnostics). ⌘E's quick switch is a small dialog with the engine's state and the model in use.
+- Settings: 17 sections become 11, each a column of groups with a line under every setting: General (with Appearance), Studio (with Pronunciation), Dubbing, Dictation (with Permissions), Writing help, Integrations (apps and agents, then the Local API), Audio tools, Models & network (the models, then downloads, storage, the Hugging Face token, memory and licences), Privacy, Advanced (storage, usage, diagnostics and the self-check) and About. Old links open the part they were.
+- Page titles are smaller; Projects and History have ‹ › (⌘[ ⌘]) and how many; Projects switches list and cards in its header (⌥1 ⌥2). Toasts show at the foot of the page, except on the Studio, Dub, Stories and Audiobook, whose foot has a bar of its own: there they show in the header.
+
 ### Updates show in the window
 - MyGo's update window is gone: a new version shows as "Update available" at the foot of the sidebar (a dot on the icon rail's download button), and nothing pops up. Its panel shows the version's notes in AudioSmith's language from actnow.dev (in English where a version has no Chinese notes, marked so), Download and Install with the download's progress, and Restart to Finish the Update. A failed download says AudioSmith is unchanged and offers Try again.
-- Settings → Diagnostics and about → Software updates: Check for Updates…, the daily check, installing without asking (a version found by the daily check installs and waits for the restart) and beta updates as before, and Show Changelog…, every version's notes in AudioSmith's language. The choices made in the old update window carry over.
+- Settings → About → Software updates: Check for Updates…, the daily check, installing without asking (a version found by the daily check installs and waits for the restart) and beta updates as before, and Show Changelog…, every version's notes in AudioSmith's language. The choices made in the old update window carry over.
 - Releases send their notes in English and Chinese (CHANGELOG.md and CHANGELOG.zh-Hans.md), so actnow.dev's changelog page and the app show each in its language.
 
 ### Designed voices no longer say leftover reference text
@@ -22,7 +31,7 @@
 
 ### Models move to the ActNow folder, out of Time Machine
 - Models are kept in ~/Library/Application Support/ActNow/models, shared with the other ActNow apps, instead of the Hugging Face cache (~/.cache/huggingface), which cleaning tools treat as a cache. Models already there are brought over at the first start without downloading them again (hard links: the cache stays as it is, for the tools that use it).
-- Time Machine leaves models out (they can be downloaded again); Settings → Storage → "Back up models with Time Machine" turns it back on for all ActNow apps.
+- Time Machine leaves models out (they can be downloaded again); Settings → Advanced → "Back up models with Time Machine" turns it back on for all ActNow apps.
 - A model file cut short (a disk error, a copy that stopped) is no longer taken for a downloaded model; downloading again repairs it. A download of another version left half-way no longer makes a downloaded model look incomplete. Checking a model's files waits for other ActNow apps working on it and tells them when a file was bad.
 - If the ActNow folder's model claims are deleted (a cleaning tool), AudioSmith claims its models again when it comes to the front, and keeps models another app may still use.
 

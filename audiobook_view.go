@@ -390,6 +390,6 @@ func (a *app) lexiconCard(c *ui.Context, p *lfPage, locked bool) {
 		if ghostIconButton(c.Key("lex-add"), icons.AddCircle, i18n.T("Add word")).Label(i18n.T("Add word")).Disabled(locked).Clicked() {
 			p.doc.Lexicon = append(p.doc.Lexicon, services.LexiconEntry{})
 		}
-		infoTip(c.Key("lex-tip"), i18n.T("Words of this book and how to say them, on top of Settings → Pronunciation."))
+		infoTip(c.Key("lex-tip"), i18n.T("Words of this book and how to say them, on top of Settings → Studio → Pronunciation."))
 	})
 }

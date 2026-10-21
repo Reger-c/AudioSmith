@@ -201,7 +201,7 @@ func TestDesignModels(t *testing.T) {
 		return &c
 	}
 	tt.Frame()
-	if !tt.HasText("No model here can design voices. Download one that can, such as “Voice design”, on the Models page.") {
+	if !tt.HasText("No model here can design voices. Download one that can, such as “Voice design”, in Settings → Models & network.") {
 		t.Errorf("no models: %q", tt.Texts())
 	}
 }

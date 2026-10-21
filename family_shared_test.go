@@ -188,7 +188,7 @@ func TestSharedNoFamilyWording(t *testing.T) {
 			t.Errorf("%s differs with the family", pages[i])
 		}
 	}
-	a.navigate("/models")
+	openModels(a)
 	tt.Frame()
 	if tt.HasText("Move models…") {
 		t.Error("Move models banner without a release app")
@@ -210,7 +210,7 @@ func TestMoveModelsToFamilyFolder(t *testing.T) {
 	if a.prefs.Family.Follows(famset.KeyModelsRoot) || !a.prefs.Family.OtherValue[famset.KeyModelsRoot] {
 		t.Fatalf("family %+v", a.prefs.Family)
 	}
-	a.navigate("/models")
+	openModels(a)
 	tt.Frame()
 	want := "Dicta keeps models in " + to + ". Move AudioSmith's models there to share them?"
 	if !tt.HasText(want) || !tt.HasText("Keep separate") {
@@ -275,7 +275,7 @@ func TestKeepSeparate(t *testing.T) {
 	tf.familySet(t, famset.KeyModelsRoot, filepath.Join(t.TempDir(), "elsewhere"))
 	useShared(t, tf)
 	from := a.prefs.Models.CacheDir
-	a.navigate("/models")
+	openModels(a)
 	a.keepSeparate()
 	a.shared.Wait()
 	tt.Frame()

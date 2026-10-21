@@ -88,7 +88,7 @@ func TestAgentPrompts(t *testing.T) {
 						t.Errorf("%s %s: tool %s missing", lang, slug, tool)
 					}
 				}
-				if (slug == "claude-code") != strings.Contains(s, "Settings → Local API → Each agent's voice): Narrator") && lang == "en" {
+				if (slug == "claude-code") != strings.Contains(s, "Settings → Integrations → Each agent's voice): Narrator") && lang == "en" {
 					t.Errorf("%s: the bound voice", slug)
 				}
 				switch mode {

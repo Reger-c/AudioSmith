@@ -84,9 +84,9 @@ func jobErrorText(e *jobs.Error) string {
 	case engine.CodeEngineUnavailable:
 		return i18n.T("The engine is not running. Restart it on the Engine page.")
 	case proto.CodeModelNotDownloaded:
-		return i18n.T("The model is not downloaded. Download it on the Models page.")
+		return i18n.T("The model is not downloaded. Download it in Settings → Models & network.")
 	case proto.CodeLicenceRequired:
-		return i18n.T("The model's licence has not been accepted. Review it on the Models page.")
+		return i18n.T("The model's licence has not been accepted. Review it in Settings → Models & network.")
 	case proto.CodeOOM:
 		return i18n.T("Out of memory. Unload other models, or choose a smaller one.")
 	case proto.CodeInputTooLong:

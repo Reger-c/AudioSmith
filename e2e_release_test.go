@@ -261,7 +261,7 @@ func TestV02FirstRun(t *testing.T) {
 	if m.err == "" {
 		t.Errorf("download through a dead proxy: no error shown")
 	}
-	a.navigate("/models")
+	openModels(a)
 	tt.Frame()
 
 	// The Local API answers, and says the model is missing.

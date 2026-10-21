@@ -178,7 +178,7 @@ func agentPrompt(slug string, p promptEnv) string {
 		item(s)
 	}
 	if v := p.Bindings[ag.Client]; v != "" && ag.Client != "" {
-		item(i18n.T("Your own voice (Settings → Local API → Each agent's voice): %s. generate_speech uses it when no voice is given.", v))
+		item(i18n.T("Your own voice (Settings → Integrations → Each agent's voice): %s. generate_speech uses it when no voice is given.", v))
 	}
 	if filepath.IsAbs(p.Dir) {
 		item(i18n.T("generate_speech saves its WAV files in %s.", p.Dir))
@@ -197,7 +197,7 @@ func agentPrompt(slug string, p promptEnv) string {
 	head(i18n.T("Setup steps"))
 	line("1. " + i18n.T("Check that AudioSmith is running:"))
 	code("sh", "curl -sS "+p.Base+"/health")
-	line("   " + i18n.T("%s means ready; %s means wait a few seconds and check again. If the connection is refused, ask me to open AudioSmith and turn on Settings → Local API → Run the Local API (port %s), then check again.", `"status":"ok"`, `"status":"starting"`, p.port()))
+	line("   " + i18n.T("%s means ready; %s means wait a few seconds and check again. If the connection is refused, ask me to open AudioSmith and turn on Settings → Integrations → Run the Local API (port %s), then check again.", `"status":"ok"`, `"status":"starting"`, p.port()))
 	line("2. " + i18n.T("Add the MCP server:"))
 	switch slug {
 	case "claude-code":

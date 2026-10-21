@@ -183,7 +183,7 @@ func dialogFrame(c *ui.Context, key string, open *bool, title, sub string, width
 	margin := px(t, sp6)
 	return ui.DialogBase(c.Key(key), open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.32))
-		panel.Width(min(w-2*margin, width)).MaxHeight(h-2*margin).Radius(px(t, radiusCard)).Background(k.Bg).Clip().
+		panel.Width(min(w-2*margin, width)).MaxHeight(h-2*margin).Radius(px(t, radiusDialog)).Background(k.Bg).Clip().
 			Shadow(0, 16, 48, 0, ui.RGBA(0, 0, 0, 0.28)).Label(title)
 		ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Row(c).Shrink(0).AlignItems(ui.Center).Padding(px(t, sp4), px(t, sp3), px(t, sp2), px(t, sp6)).Gap(px(t, sp2)).Children(func() {

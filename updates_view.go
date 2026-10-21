@@ -215,66 +215,67 @@ func (a *app) softwareUpdateSettings(c *ui.Context) {
 	u := a.updates
 	st := u.st
 	on := u.enabled()
-	sectionTitle(c, i18n.T("Software updates"))
-	if st.Phase == akup.Ready {
-		settingRowNote(c, "about-relaunch", i18n.T("Update installed"), i18n.T("The new version runs once AudioSmith restarts."), func() {
-			if primaryButton(c.Key("about-relaunch"), i18n.T("Restart AudioSmith")).Clicked() {
-				a.restartForUpdate()
+	settingGroup(c, i18n.T("Software updates"), func() {
+		if st.Phase == akup.Ready {
+			settingRowNote(c, "about-relaunch", i18n.T("Update installed"), i18n.T("The new version runs once AudioSmith restarts."), func() {
+				if primaryButton(c.Key("about-relaunch"), i18n.T("Restart AudioSmith")).Clicked() {
+					a.restartForUpdate()
+				}
+			})
+		}
+		last := a.prefs.Updates.LastCheck
+		if st.CheckedAt.After(last) {
+			last = st.CheckedAt
+		}
+		note := i18n.T("Development builds and copies built on this Mac don't update themselves; copies from actnow.dev do.")
+		switch {
+		case !on:
+		case st.Phase == akup.Checking:
+			note = i18n.T("Checking for updates…")
+		case st.Phase == akup.Available && st.Release != nil:
+			note = i18n.T("AudioSmith %s is available", st.Release.Version)
+		case last.IsZero():
+			note = i18n.T("Not checked yet.")
+		default:
+			note = i18n.T("Last checked %s.", i18n.DateTime(last))
+		}
+		settingRowNote(c, "about-update", i18n.T("Check for updates"), note, func() {
+			if ui.Button(c.Key("about-update"), i18n.T("Check for Updates…")).Disabled(st.Phase == akup.Checking).Clicked() {
+				a.checkForUpdates()
 			}
 		})
-	}
-	last := a.prefs.Updates.LastCheck
-	if st.CheckedAt.After(last) {
-		last = st.CheckedAt
-	}
-	note := i18n.T("Development builds and copies built on this Mac don't update themselves; copies from actnow.dev do.")
-	switch {
-	case !on:
-	case st.Phase == akup.Checking:
-		note = i18n.T("Checking for updates…")
-	case st.Phase == akup.Available && st.Release != nil:
-		note = i18n.T("AudioSmith %s is available", st.Release.Version)
-	case last.IsZero():
-		note = i18n.T("Not checked yet.")
-	default:
-		note = i18n.T("Last checked %s.", i18n.DateTime(last))
-	}
-	settingRowNote(c, "about-update", i18n.T("Check for updates"), note, func() {
-		if ui.Button(c.Key("about-update"), i18n.T("Check for Updates…")).Disabled(st.Phase == akup.Checking).Clicked() {
-			a.checkForUpdates()
+		auto := on && a.prefs.Updates.AutoCheckOn()
+		settingRow(c, "about-update-auto", i18n.T("Automatic checks"), i18n.T("Once a day AudioSmith reads the version file of its newest version on actnow.dev, and shows a new version at the foot of the sidebar with its release notes. Nothing about you is sent."), func() {
+			if ui.Switch(c.Key("about-update-auto"), &auto).Label(i18n.T("Check for updates automatically")).Disabled(!on).Changed() {
+				a.setAutoCheck(auto)
+			}
+		})
+		install := on && a.prefs.Updates.AutoCheckOn() && a.prefs.Updates.AutoInstall
+		settingRow(c, "about-update-download", i18n.T("Automatic installs"), i18n.T("A new version found by the daily check downloads and installs without asking, and runs the next time you open AudioSmith."), func() {
+			if ui.Switch(c.Key("about-update-download"), &install).Label(i18n.T("Install without asking")).Disabled(!on || !a.prefs.Updates.AutoCheckOn()).Changed() {
+				v := install
+				a.updateSettings(func(s *settings.Settings) { s.Updates.AutoInstall = v })
+			}
+		})
+		// The channel (thread #52, updates.go): betas are prereleases, in the
+		// website's beta feed.
+		beta := on && betaUpdates(a.prefs, a.version)
+		info := i18n.T("Betas get new features sooner but may be less stable. Turned off, AudioSmith only updates to releases.")
+		if isPrerelease(a.version) {
+			info = i18n.T("Betas get new features sooner but may be less stable. This copy is a beta: turned off, AudioSmith never goes back to an older version, and stays on this one until a release newer than it is out.")
 		}
-	})
-	auto := on && a.prefs.Updates.AutoCheckOn()
-	settingRow(c, "about-update-auto", i18n.T("Automatic checks"), i18n.T("Once a day AudioSmith reads the version file of its newest version on actnow.dev, and shows a new version at the foot of the sidebar with its release notes. Nothing about you is sent."), func() {
-		if ui.Switch(c.Key("about-update-auto"), &auto).Label(i18n.T("Check for updates automatically")).Disabled(!on).Changed() {
-			a.setAutoCheck(auto)
-		}
-	})
-	install := on && a.prefs.Updates.AutoCheckOn() && a.prefs.Updates.AutoInstall
-	settingRow(c, "about-update-download", i18n.T("Automatic installs"), i18n.T("A new version found by the daily check downloads and installs without asking, and runs the next time you open AudioSmith."), func() {
-		if ui.Switch(c.Key("about-update-download"), &install).Label(i18n.T("Install without asking")).Disabled(!on || !a.prefs.Updates.AutoCheckOn()).Changed() {
-			v := install
-			a.updateSettings(func(s *settings.Settings) { s.Updates.AutoInstall = v })
-		}
-	})
-	// The channel (thread #52, updates.go): betas are prereleases, in the
-	// website's beta feed.
-	beta := on && betaUpdates(a.prefs, a.version)
-	info := i18n.T("Betas get new features sooner but may be less stable. Turned off, AudioSmith only updates to releases.")
-	if isPrerelease(a.version) {
-		info = i18n.T("Betas get new features sooner but may be less stable. This copy is a beta: turned off, AudioSmith never goes back to an older version, and stays on this one until a release newer than it is out.")
-	}
-	// The info shows under the name, not in ⓘ: it says what turning it
-	// off does to a beta copy.
-	settingRowNote(c, "about-update-beta", i18n.T("Receive beta updates"), info, func() {
-		if ui.Switch(c.Key("about-update-beta"), &beta).Label(i18n.T("Beta updates")).Disabled(!on).Changed() {
-			a.setBetaUpdates(beta)
-		}
-	})
-	settingRow(c, "about-changelog", i18n.T("Changelog"), i18n.T("What changed in each version, in AudioSmith's language."), func() {
-		if ui.Button(c.Key("about-changelog"), i18n.T("Show Changelog…")).Clicked() {
-			a.openHistory()
-		}
+		// The info shows under the name, not in ⓘ: it says what turning it
+		// off does to a beta copy.
+		settingRowNote(c, "about-update-beta", i18n.T("Receive beta updates"), info, func() {
+			if ui.Switch(c.Key("about-update-beta"), &beta).Label(i18n.T("Beta updates")).Disabled(!on).Changed() {
+				a.setBetaUpdates(beta)
+			}
+		})
+		settingRow(c, "about-changelog", i18n.T("Changelog"), i18n.T("What changed in each version, in AudioSmith's language."), func() {
+			if ui.Button(c.Key("about-changelog"), i18n.T("Show Changelog…")).Clicked() {
+				a.openHistory()
+			}
+		})
 	})
 }
 

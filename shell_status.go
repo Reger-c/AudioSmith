@@ -1,15 +1,15 @@
 package main
 
-// The status bar along the bottom of the window: the engine (which opens
-// the ⌘E quick switch), the jobs in the queue (a list where each can be
-// cancelled by id), downloads, the notification centre's bell, the logs
-// panel toggle and the version. The engine part reads the workers'
-// status as the supervisor publishes it; the jobs part the scheduler's
-// jobs (jobs.Updated, and the list at start).
+// What goes on, which the window shows without a status bar (the ActNow
+// family's window layout): the unfinished jobs of every owner (the
+// scheduler's jobs.Updated, and the list at start), each cancellable by
+// id, for the activity cards (shell_activity.go) and the Tasks page
+// (shell_tasks.go); the downloads; the ⌘E quick switch, a dialog with the
+// engine's state and models; and the notification centre, whose bell is
+// at the sidebar's foot.
 
 import (
 	"context"
-	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -25,103 +25,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 )
-
-func (a *app) statusBar(c *ui.Context) {
-	t := c.Theme()
-	k := tok(t)
-	eng := a.engineSummary()
-	ui.Row(c).Height(px(t, statusBarHeight)).Shrink(0).Padding(0, px(t, sp2)).Gap(px(t, sp1)).AlignItems(ui.Center).Background(k.Sidebar).TextColor(k.Text2).Children(func() {
-		// The engine.
-		color, label := t.Warning, i18n.T("Engine starting…")
-		switch eng.State {
-		case engineReady:
-			color, label = t.Success, i18n.T("Engine ready")
-		case engineFailed:
-			color, label = t.Danger, i18n.T("Engine stopped")
-		}
-		model := i18n.T("No model loaded")
-		if len(eng.Loaded) > 0 {
-			model = catalog.Builtin().DisplayName(eng.Loaded[0])
-		}
-		engBtn := statusButton(c, "status-engine", i18n.T("Engine quick switch (⌘E)"), func() {
-			ui.Box(c).Size(px(t, 6), px(t, 6)).Radius(px(t, 3)).Background(color)
-			ui.Text(c, label).FontSize(px(t, fsCaption)).SingleLine()
-			ui.Text(c, "· "+model).FontSize(px(t, fsCaption)).TextColor(k.Text3).SingleLine().Ellipsis("…").MaxWidth(px(t, 200)).MinWidth(0)
-		})
-		if engBtn.Clicked() {
-			a.switchOpen = !a.switchOpen
-		}
-		ui.Popover(c, engBtn, &a.switchOpen, func() { a.quickSwitch(c) })
-
-		// The queue.
-		if active := a.activeJobs(); len(active) > 0 {
-			running := 0
-			for _, j := range active {
-				if j.State == jobs.StateRunning {
-					running++
-				}
-			}
-			label := i18n.N(len(active), "%d job", "%d jobs", len(active))
-			if running < len(active) {
-				label += " · " + i18n.N(len(active)-running, "%d waiting", "%d waiting", len(active)-running)
-			}
-			jobsBtn := statusButton(c, "status-jobs", i18n.T("Jobs"), func() {
-				ui.Spinner(c).Size(px(t, 11), px(t, 11))
-				ui.Text(c, label).FontSize(px(t, fsCaption)).SingleLine()
-			})
-			if jobsBtn.Clicked() {
-				a.jobsOpen = !a.jobsOpen
-			}
-			ui.Popover(c, jobsBtn, &a.jobsOpen, func() { a.jobsPanel(c) })
-		} else if eng.Busy {
-			ui.Spinner(c).Size(px(t, 11), px(t, 11))
-			ui.Text(c, i18n.T("Working…")).FontSize(px(t, fsCaption)).SingleLine()
-		}
-
-		// Downloads.
-		for _, m := range a.downloads() {
-			e := m.entry
-			text := i18n.T("Downloading %s", modelRef(e))
-			if m.progress.TotalBytes > 0 {
-				text = i18n.T("Downloading %s · %d%%", modelRef(e), int(100*m.progress.Bytes/m.progress.TotalBytes))
-			}
-			if statusButton(c, "status-dl-"+modelKey(e), i18n.T("Show the models"), func() {
-				ui.Icon(c, icons.DownloadMinimalistic.Linear).Size(px(t, 13), px(t, 13))
-				ui.Text(c, text).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").MaxWidth(px(t, 240)).MinWidth(0)
-			}).Clicked() {
-				a.navigate("/models")
-			}
-		}
-		ui.Spacer(c)
-
-		// Notifications.
-		unread := 0
-		for _, n := range a.notices {
-			if !n.Read {
-				unread++
-			}
-		}
-		bell := statusButton(c, "status-bell", i18n.T("Notifications"), func() {
-			ui.Icon(c, bellIcon.Get(unread > 0)).Size(px(t, 14), px(t, 14))
-			if unread > 0 {
-				ui.Text(c, itoa(unread)).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.AccentInk)
-			}
-		})
-		if bell.Clicked() {
-			a.noticesOpen = !a.noticesOpen
-		}
-		ui.Popover(c, bell, &a.noticesOpen, func() { a.noticeCentre(c) })
-
-		if statusButton(c, "status-logs", i18n.T("Show or hide the logs panel (⇧⌘L)"), func() {
-			ui.Icon(c, logsIcon.Get(a.logsPanel)).Size(px(t, 14), px(t, 14))
-		}).Clicked() {
-			a.logsPanel = !a.logsPanel
-		}
-		if a.version != "" {
-			ui.Text(c, "v"+a.version).FontSize(px(t, fsMicro)).TextColor(k.Text3).Margin(0, px(t, sp1))
-		}
-	})
-}
 
 // downloads are the models downloading, catalogue first, in its order.
 func (a *app) downloads() []*modelState {
@@ -144,6 +47,9 @@ func (a *app) downloads() []*modelState {
 // status bar lists; it runs on the main thread.
 func (a *app) jobsChanged(j jobs.Job) {
 	if j.State.Terminal() || j.State == jobs.StateInterrupted {
+		if _, ok := a.jobList[j.ID]; ok {
+			a.jobEnded(j) // shell_activity.go: "done/total", the finished card
+		}
 		delete(a.jobList, j.ID)
 		return
 	}
@@ -168,44 +74,6 @@ func (a *app) activeJobs() []jobs.Job {
 	return list
 }
 
-// jobsPanel lists the unfinished jobs, each with its progress and Cancel.
-func (a *app) jobsPanel(c *ui.Context) {
-	t := c.Theme()
-	ui.Column(c).Width(px(t, 360)).Gap(px(t, sp2)).Padding(px(t, sp1)).Children(func() {
-		sectionHeading(c, i18n.T("Jobs"))
-		active := a.activeJobs()
-		if len(active) == 0 {
-			ui.Text(c, i18n.T("Nothing is running.")).TextColor(t.TextMuted)
-			return
-		}
-		for _, j := range active {
-			ui.Row(c.Key("job-" + j.ID)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 4)).Children(func() {
-					title := j.Title
-					if title == "" {
-						title = j.Kind
-					}
-					ui.Text(c, title).FontSize(px(t, 13)).SingleLine().Ellipsis("…")
-					state := i18n.T("Waiting")
-					if j.State == jobs.StateRunning {
-						state = stageText(j.Progress.Stage)
-						if j.Progress.Fraction >= 0 {
-							state += fmt.Sprintf(" · %d%%", int(100*j.Progress.Fraction))
-						}
-					}
-					if j.State == jobs.StateRunning {
-						ui.Progress(c, j.Progress.Fraction).Label(title)
-					}
-					ui.Text(c, state).FontSize(px(t, 11)).TextColor(t.TextMuted)
-				})
-				if iconButton(c.Key("cancel"), icons.CloseCircle, i18n.T("Cancel")).Clicked() {
-					a.cancelJobByID(j)
-				}
-			})
-		}
-	})
-}
-
 // cancelJobByID cancels any job by its id, as the Studio's Cancel does for
 // its own.
 func (a *app) cancelJobByID(j jobs.Job) {
@@ -222,42 +90,31 @@ func (a *app) cancelJobByID(j jobs.Job) {
 	a.cancelJob(j.ID)
 }
 
-// statusButton is a flat button of the status bar.
-func statusButton(c *ui.Context, key, label string, content func()) ui.Element {
-	t := c.Theme()
-	b := ui.ButtonBase(c.Key(key)).Padding(px(t, 2), px(t, 6)).Radius(px(t, 6)).Label(label).Tooltip(label).MinWidth(0).Shrink(1)
-	if b.Hovered() {
-		b.Background(tok(t).Hover)
+// quickSwitchDialog is ⌘E: a small dialog with the engine's state, the
+// models in memory and the speech model to use, and what to do with them
+// (the model shown nowhere else since the status bar went).
+func (a *app) quickSwitchDialog(c *ui.Context) {
+	if !a.switchOpen {
+		return
 	}
-	return b.Children(func() {
-		ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).MinWidth(0).Children(content)
-	})
-}
-
-// quickSwitch is the ⌘E panel: the engine's state and models, and what
-// to do with them.
-func (a *app) quickSwitch(c *ui.Context) {
 	t := c.Theme()
 	eng := a.engineSummary()
 	k := tok(t)
-	ui.Column(c).Width(px(t, 320)).Gap(px(t, sp2)).Padding(px(t, sp1)).Children(func() {
-		sectionHeading(c, i18n.T("Speech engine"))
-		state := map[engineState]string{engineStarting: i18n.T("Starting"), engineReady: i18n.T("Ready"), engineFailed: i18n.T("Stopped")}[eng.State]
-		info := state
-		if eng.Version != "" {
-			info += " · " + i18n.T("version %s", eng.Version)
-		}
-		if eng.PID != 0 {
-			info += " · PID " + itoa(eng.PID)
-		}
-		caption(c, info)
+	state := map[engineState]string{engineStarting: i18n.T("Starting"), engineReady: i18n.T("Ready"), engineFailed: i18n.T("Stopped")}[eng.State]
+	info := state
+	if eng.Version != "" {
+		info += " · " + i18n.T("version %s", eng.Version)
+	}
+	if eng.PID != 0 {
+		info += " · PID " + itoa(eng.PID)
+	}
+	dialogFrame(c, "quick-switch", &a.switchOpen, i18n.T("Speech engine"), info, px(t, 400), func() {
 		if eng.Err != "" {
 			ui.Text(c, eng.Err).FontSize(px(t, 12)).TextColor(t.Danger).MaxLines(3).Ellipsis("…")
 		}
 		if mem := a.gpuMemory(); mem != "" {
 			caption(c, mem)
 		}
-		ui.Divider(c)
 		sectionTitle(c, i18n.T("In memory"))
 		if len(eng.Loaded) == 0 {
 			ui.Text(c, i18n.T("No model loaded")).FontSize(px(t, 12))
@@ -270,10 +127,9 @@ func (a *app) quickSwitch(c *ui.Context) {
 				}
 			})
 		}
-		ui.Divider(c)
 		sectionTitle(c, i18n.T("Speech model"))
 		_, winH := c.Size()
-		ui.Scroll(c.Key("switch-models")).MaxHeight(max(winH*0.45, px(t, 120))).Children(func() {
+		ui.Scroll(c.Key("switch-models")).MaxHeight(max(winH*0.4, px(t, 120))).Children(func() {
 			for _, e := range catalog.Builtin().ForTask(catalog.TaskTTS) {
 				m := a.models[modelKey(e)]
 				chosen := a.preset().Repo == e.Repo
@@ -299,27 +155,25 @@ func (a *app) quickSwitch(c *ui.Context) {
 				}
 			}
 		})
-		ui.Divider(c)
-		ui.Row(c).Gap(px(t, sp1)).AlignItems(ui.Center).Children(func() {
-			if ui.Button(c.Key("switch-preload"), i18n.T("Preload")).Disabled(eng.Busy || eng.State != engineReady).Clicked() {
-				a.preload()
+	}, func() {
+		if ui.Button(c.Key("switch-preload"), i18n.T("Preload")).Disabled(eng.Busy || eng.State != engineReady).Clicked() {
+			a.preload()
+		}
+		if iconButton(c.Key("switch-restart"), icons.Restart, i18n.T("Restart engine")).Clicked() {
+			a.restartEngine()
+		}
+		ui.Spacer(c)
+		moreMenu(c.Key("switch-more"), "", func(m *ui.Menu) {
+			if m.Item(i18n.T("Unload")).Disabled(a.loadedModel == "" || a.job != nil).Chosen() {
+				a.unload()
 			}
-			if iconButton(c.Key("switch-restart"), icons.Restart, i18n.T("Restart engine")).Clicked() {
-				a.restartEngine()
+			if m.Item(i18n.T("Clear cache")).Disabled(eng.State != engineReady).Chosen() {
+				a.flushEngine()
 			}
-			ui.Spacer(c)
-			moreMenu(c.Key("switch-more"), "", func(m *ui.Menu) {
-				if m.Item(i18n.T("Unload")).Disabled(a.loadedModel == "" || a.job != nil).Chosen() {
-					a.unload()
-				}
-				if m.Item(i18n.T("Clear cache")).Disabled(eng.State != engineReady).Chosen() {
-					a.flushEngine()
-				}
-				if m.Item(i18n.T("Details")).Chosen() {
-					a.switchOpen = false
-					a.navigate("/engine")
-				}
-			})
+			if m.Item(i18n.T("Details")).Chosen() {
+				a.switchOpen = false
+				a.navigate("/engine")
+			}
 		})
 	})
 }

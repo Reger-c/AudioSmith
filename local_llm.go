@@ -179,55 +179,56 @@ func (a *app) localLLMSettings(c *ui.Context) {
 	if len(opts) == 0 {
 		return
 	}
-	sectionTitle(c, i18n.T("On this Mac (AudioSmith)"))
-	ui.Text(c, i18n.T("AudioSmith can run a language model itself, offline: it translates dubs and cleans up text without sending anything off your Mac.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
-	cur := a.localLLMEntry()
-	var labels []string
-	for _, e := range opts {
-		labels = append(labels, i18n.T("%s (%s)", e.DisplayName(), mb(e.Size)))
-	}
-	i := slices.IndexFunc(opts, func(e catalog.Entry) bool { return e.ID == cur.ID })
-	if i < 0 {
-		i = 0
-		cur = opts[0]
-	}
-	f := &a.llmForm
-	if f.localPick == "" || !slices.Contains(labels, f.localPick) {
-		f.localPick = labels[i]
-	}
-	m := a.model(cur)
-	desc := cur.Description()
-	switch {
-	case m.downloading:
-		pct := 0
-		if m.progress.TotalBytes > 0 {
-			pct = int(100 * m.progress.Bytes / m.progress.TotalBytes)
+	settingGroup(c, i18n.T("On this Mac (AudioSmith)"), func() {
+		ui.Text(c, i18n.T("AudioSmith can run a language model itself, offline: it translates dubs and cleans up text without sending anything off your Mac.")).
+			FontSize(px(t, 12)).TextColor(t.TextMuted)
+		cur := a.localLLMEntry()
+		var labels []string
+		for _, e := range opts {
+			labels = append(labels, i18n.T("%s (%s)", e.DisplayName(), mb(e.Size)))
 		}
-		desc = i18n.T("Downloading… %d%%", pct)
-	case m.known && m.local.State == hub.Downloaded:
-		desc = i18n.T("Ready. Automatic writing help uses it first.")
-	case m.err != "":
-		desc = m.err
-	}
-	settingRowNote(c, "llm-engine", i18n.T("Language model"), desc, func() {
-		if len(opts) == 1 {
-			ui.Text(c, labels[0]).Tooltip(cur.TechnicalSummary()).SingleLine().Ellipsis("…").MinWidth(0)
-		} else if ui.Select(c.Key("llm-engine-select"), &f.localPick, labels).Label(i18n.T("Language model")).Width(px(t, 260)).Changed() {
-			e := opts[max(slices.Index(labels, f.localPick), 0)]
-			id := e.ID
-			if id == catalog.DefaultLLM {
-				id = ""
+		i := slices.IndexFunc(opts, func(e catalog.Entry) bool { return e.ID == cur.ID })
+		if i < 0 {
+			i = 0
+			cur = opts[0]
+		}
+		f := &a.llmForm
+		if f.localPick == "" || !slices.Contains(labels, f.localPick) {
+			f.localPick = labels[i]
+		}
+		m := a.model(cur)
+		desc := cur.Description()
+		switch {
+		case m.downloading:
+			pct := 0
+			if m.progress.TotalBytes > 0 {
+				pct = int(100 * m.progress.Bytes / m.progress.TotalBytes)
 			}
-			a.updateSettings(func(s *settings.Settings) { s.LLM.LocalModel = id })
-			a.refreshModel(e)
-			a.applyLLM()
-			a.syncLLMForm()
+			desc = i18n.T("Downloading… %d%%", pct)
+		case m.known && m.local.State == hub.Downloaded:
+			desc = i18n.T("Ready. Automatic writing help uses it first.")
+		case m.err != "":
+			desc = m.err
 		}
-		if !(m.known && m.local.State == hub.Downloaded) && !m.downloading {
-			if ui.Button(c.Key("llm-engine-download"), i18n.T("Download")).Clicked() {
-				a.download(cur)
+		settingRowNote(c, "llm-engine", i18n.T("Language model"), desc, func() {
+			if len(opts) == 1 {
+				ui.Text(c, labels[0]).Tooltip(cur.TechnicalSummary()).SingleLine().Ellipsis("…").MinWidth(0)
+			} else if ui.Select(c.Key("llm-engine-select"), &f.localPick, labels).Label(i18n.T("Language model")).Width(px(t, 260)).Changed() {
+				e := opts[max(slices.Index(labels, f.localPick), 0)]
+				id := e.ID
+				if id == catalog.DefaultLLM {
+					id = ""
+				}
+				a.updateSettings(func(s *settings.Settings) { s.LLM.LocalModel = id })
+				a.refreshModel(e)
+				a.applyLLM()
+				a.syncLLMForm()
 			}
-		}
+			if !(m.known && m.local.State == hub.Downloaded) && !m.downloading {
+				if ui.Button(c.Key("llm-engine-download"), i18n.T("Download")).Clicked() {
+					a.download(cur)
+				}
+			}
+		})
 	})
 }

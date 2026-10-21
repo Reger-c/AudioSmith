@@ -1,8 +1,9 @@
 package main
 
-// The M5 pages in the shell: a sidebar section (Tools, Integrations), the
-// routes (and the API reference viewer's page), the titles and the
-// palette's entries (one call each from shell*.go).
+// The M5 pages in the shell: Tools (its icon at the sidebar's foot) and
+// the API reference viewer's page, their routes, titles and the palette's
+// entries (one call each from shell*.go). Integrations are a Settings
+// section now (settings_integrations.go).
 
 import (
 	"github.com/egoist/mygo"
@@ -35,12 +36,6 @@ func (a *app) m5Route(c *ui.Context, r *ui.Route) bool {
 	case r.Match("/tools"):
 		r.Title(i18n.T("Tools"))
 		a.toolsPage(c)
-	case r.Match("/integrations"):
-		r.Title(i18n.T("Integrations"))
-		a.integrationsPage(c)
-	case r.Match("/integrations/{slug}"):
-		r.Title(i18n.T("Integrations"))
-		a.integrationPage(c, r.Param("slug"))
 	case r.Match("/api-reference"):
 		r.Title(i18n.T("API reference"))
 		a.apiReferencePage(c)
@@ -65,13 +60,13 @@ func (a *app) apiReferencePage(c *ui.Context) {
 			go mygo.Shell.OpenExternal(a.apiBaseURL() + "/docs")
 		}
 		if iconButton(c.Key("ref-settings"), icons.Settings, i18n.T("Settings…")).Clicked() {
-			a.navigate("/settings/api")
+			a.navigate("/settings/integrations")
 		}
 	})
 	if a.apiPort == 0 {
 		emptyState(c, icons.Programming, i18n.T("The Local API is not running."), "", func() {
 			if ui.Button(c.Key("ref-settings-empty"), i18n.T("Settings…")).Clicked() {
-				a.navigate("/settings/api")
+				a.navigate("/settings/integrations")
 			}
 		})
 		return

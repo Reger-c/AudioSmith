@@ -1,6 +1,6 @@
 package main
 
-// The Models page's view: the catalogue by kind, each entry's card with
+// Settings → Models & network's list (the Models page it was): the catalogue by kind, each entry's card with
 // what of it is on disk, its details and actions, and the delete alert.
 // The state, the downloads and the licence dialog are shell_models.go.
 
@@ -19,21 +19,10 @@ import (
 	"github.com/hehehai/actnowkit/models"
 )
 
-func (a *app) modelsPage(c *ui.Context) {
+// modelsList is the head of Settings → Models & network (the Models
+// page it was): the catalogue by kind, searchable, each entry's card.
+func (a *app) modelsList(c *ui.Context) {
 	t := c.Theme()
-	pageHeader(c, i18n.T("Models"), func() {
-		if iconButton(c.Key("models-refresh"), icons.Refresh, i18n.T("Refresh")).Tooltip(i18n.T("Look again at what is on disk")).Clicked() {
-			a.refreshModels()
-		}
-		moreMenu(c.Key("models-more"), "", func(m *ui.Menu) {
-			if m.Item(i18n.T("Open model folder")).Chosen() {
-				mygo.Shell.OpenPath(a.hubClient().Options().CacheDir)
-			}
-			if m.Item(i18n.T("Download settings")).Chosen() {
-				a.navigate("/settings/models")
-			}
-		})
-	})
 	entries := catalog.Builtin().Entries
 	counts := make([]int, len(modelKinds))
 	for _, e := range entries {
@@ -44,8 +33,8 @@ func (a *app) modelsPage(c *ui.Context) {
 	for i, k := range modelKinds {
 		labels[i] = k() + "  " + itoa(counts[i])
 	}
-	ui.Row(c).Padding(px(t, sp1), px(t, sp6), px(t, sp2)).Gap(px(t, sp3)).AlignItems(ui.Center).Justify(ui.SpaceBetween).MaxWidth(px(t, 880+2*sp6)).Children(func() {
-		if a.pageWidth(c) < px(t, 760) {
+	ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Children(func() {
+		if a.pageWidth(c) < px(t, 520) {
 			// Too narrow for the tabs: the same choice as a select.
 			cur := labels[a.modelsKind]
 			if ui.Select(c.Key("models-kind-select"), &cur, labels).Label(i18n.T("Kind of model")).Width(px(t, 150)).Shrink(0).Changed() {
@@ -54,28 +43,40 @@ func (a *app) modelsPage(c *ui.Context) {
 		} else {
 			ui.Segmented(c.Key("models-kind"), &a.modelsKind, labels...).Label(i18n.T("Kind of model")).Shrink(0)
 		}
-		searchField(c, "models-search", &a.modelsFind, i18n.T("Search models"), px(t, 260)).Label(i18n.T("Search models"))
-	})
-	ui.Scroll(c.Key("models-scroll-" + itoa(a.modelsKind))).Grow(1).Children(func() {
-		ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp2)).MaxWidth(px(t, 880)).Children(func() {
-			find := strings.TrimSpace(a.modelsFind)
-			if find == "" {
-				a.moveModelsBanner(c) // family_shared_view.go: the family's model folder
+		ui.Spacer(c)
+		if iconButton(c.Key("models-refresh"), icons.Refresh, i18n.T("Look again at what is on disk")).Clicked() {
+			a.refreshModels()
+		}
+		moreMenu(c.Key("models-more"), "", func(m *ui.Menu) {
+			if m.Item(i18n.T("Open model folder")).Chosen() {
+				mygo.Shell.OpenPath(a.hubClient().Options().CacheDir)
 			}
-			if find == "" && a.removedShows(a.modelsKind) {
-				a.removedRow(c) // removed models still on disk
-			}
-			n := 0
-			for _, e := range entries {
-				if (a.modelsKind == 0 || modelKindOf(e) == a.modelsKind) && e.Matches(find) {
-					a.modelCard(c, e)
-					n++
-				}
-			}
-			if n == 0 && find != "" {
-				caption(c, i18n.T("No model matches")).TextColor(tok(t).Text3).Padding(px(t, sp3), 0)
+			if m.Item(i18n.T("Download source and proxy")).Chosen() {
+				a.settingsReveal = "network" // under the list
 			}
 		})
+	})
+	ui.Row(c).Children(func() {
+		searchField(c, "models-search", &a.modelsFind, i18n.T("Search models by name, language or use"), px(t, 420)).Label(i18n.T("Search models"))
+	})
+	ui.Column(c.Key("models-list-" + itoa(a.modelsKind))).Gap(px(t, sp2)).Children(func() {
+		find := strings.TrimSpace(a.modelsFind)
+		if find == "" {
+			a.moveModelsBanner(c) // family_shared_view.go: the family's model folder
+		}
+		if find == "" && a.removedShows(a.modelsKind) {
+			a.removedRow(c) // removed models still on disk
+		}
+		n := 0
+		for _, e := range entries {
+			if (a.modelsKind == 0 || modelKindOf(e) == a.modelsKind) && e.Matches(find) {
+				a.modelCard(c, e)
+				n++
+			}
+		}
+		if n == 0 && find != "" {
+			caption(c, i18n.T("No model matches")).TextColor(tok(t).Text3).Padding(px(t, sp3), 0)
+		}
 	})
 }
 

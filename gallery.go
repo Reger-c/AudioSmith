@@ -196,7 +196,7 @@ func (a *app) previewArchetype(arch gallery.Archetype) {
 	}
 	if ok, known := a.modelOnDisk(e); known && !ok {
 		// Not a failed render: say what to do instead.
-		a.toast(i18n.T("Previews use %s, which is not downloaded: choose a downloaded model at the top right, or download it on the Models page.", modelRef(e)))
+		a.toast(i18n.T("Previews use %s, which is not downloaded: choose a downloaded model at the top right, or download it in Settings → Models & network.", modelRef(e)))
 		return
 	}
 	if licence.Required(e) != nil && !licence.Covers(a.accepted, e) {

@@ -298,12 +298,8 @@ func TestCloneNoASR(t *testing.T) {
 	tt.Click("Clean reference noise")
 	eng.fail(eng.lastOf(t, proto.MethodEnhanceRun).ID, proto.CodeModelNotDownloaded, "no model")
 	tt.Frame()
-	if !tt.HasText("Could not clean the clip: The model is not downloaded. Download it on the Models page.") {
+	if !tt.HasText("Could not clean the clip: The model is not downloaded. Download it in Settings → Models & network.") {
 		t.Errorf("clean failure: %q", tt.Texts())
-	}
-	tt.Click("Models")
-	if a.router.Path() != "/models" {
-		t.Errorf("Models link: %s", a.router.Path())
 	}
 }
 

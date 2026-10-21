@@ -238,124 +238,128 @@ func (a *app) exportPronunciation() {
 }
 
 func (a *app) pronunciationSettings(c *ui.Context) {
+	a.revealAnchor(c, "pronunciation")
 	t := c.Theme()
 	p := &a.pron
 	if !p.loaded {
 		a.loadPronunciation()
 	}
+	subHeading(c, i18n.T("Pronunciation"))
 	ui.Text(c, i18n.T("Say how words are read: names, brands, abbreviations. Matching ignores case; in Chinese and Japanese a term matches inside words too. In a script, [[word|say it like this]] changes one place only.")).
 		FontSize(px(t, 12)).TextColor(t.TextMuted)
 
-	sectionTitle(c, i18n.T("Test a sentence"))
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		ui.TextInput(c.Key("pron-test"), &p.test).Placeholder(i18n.T("A sentence with your terms")).Label(i18n.T("Test sentence")).Grow(1)
-		label := i18n.T("Listen")
-		if p.previewJob != "" {
-			label = i18n.T("Rendering…")
-		}
-		if ui.Button(c.Key("pron-listen"), label).Disabled(strings.TrimSpace(p.test) == "" || p.previewJob != "" || a.engState != engineReady).
-			Tooltip(i18n.T("Render it with the Studio's model and voice")).Clicked() {
-			a.previewPronunciation()
-		}
-	})
-	if strings.TrimSpace(p.test) != "" {
-		ui.Text(c, i18n.T("The model reads: %s", a.testedText())).FontSize(px(t, 12)).Selectable()
-	}
-
-	sectionTitle(c, i18n.T("Entries"))
-	issues := map[int][]lexicon.Issue{}
-	for _, is := range lexicon.Validate(p.entries) {
-		issues[is.Index] = append(issues[is.Index], is)
-	}
-	labels := typeLabels()
-	if len(p.types) != len(p.entries) {
-		p.types = make([]string, len(p.entries))
-		for i, e := range p.entries {
-			p.types[i] = labels[0]
-			for k, ty := range entryTypes {
-				if e.Type == ty {
-					p.types[i] = labels[k]
-				}
+	settingGroup(c, i18n.T("Test a sentence"), func() {
+		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			ui.TextInput(c.Key("pron-test"), &p.test).Placeholder(i18n.T("A sentence with your terms")).Label(i18n.T("Test sentence")).Grow(1)
+			label := i18n.T("Listen")
+			if p.previewJob != "" {
+				label = i18n.T("Rendering…")
 			}
-		}
-	}
-	changed := false
-	if len(p.entries) == 0 {
-		ui.Text(c, i18n.T("No entries yet.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-	} else {
-		ui.Row(c).Gap(px(t, 8)).Children(func() {
-			for _, h := range []struct {
-				label string
-				w     float32
-			}{{i18n.T("Term"), 0}, {i18n.T("Say it as"), 0}, {i18n.T("Type"), 130}, {i18n.T("Languages"), 90}, {i18n.T("On"), 44}, {"", 40}} {
-				txt := ui.Text(c, h.label).FontSize(px(t, 11)).Bold().TextColor(t.TextMuted)
-				if h.w > 0 {
-					txt.Width(px(t, h.w)).Shrink(0)
-				} else {
-					txt.Grow(1).MinWidth(0).Width(0)
-				}
+			if ui.Button(c.Key("pron-listen"), label).Disabled(strings.TrimSpace(p.test) == "" || p.previewJob != "" || a.engState != engineReady).
+				Tooltip(i18n.T("Render it with the Studio's model and voice")).Clicked() {
+				a.previewPronunciation()
 			}
 		})
-	}
-	remove := -1
-	for i := range p.entries {
-		e := &p.entries[i]
-		ui.Column(c.Key(fmt.Sprintf("pron-%d", i))).Gap(px(t, 2)).Children(func() {
-			ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-				if ui.TextInput(c.Key("term"), &e.Term).Placeholder(i18n.T("Term")).Label(i18n.T("Term")).Grow(1).MinWidth(0).Width(0).Changed() {
-					changed = true
-				}
-				if ui.TextInput(c.Key("say"), &e.Replacement).Placeholder(i18n.T("Say it as")).Label(i18n.T("Say it as")).Grow(1).MinWidth(0).Width(0).Changed() {
-					changed = true
-				}
-				if ui.Select(c.Key("type"), &p.types[i], labels).Label(i18n.T("Type")).Width(px(t, 130)).Shrink(0).Changed() {
-					for k, l := range labels {
-						if p.types[i] == l {
-							e.Type = entryTypes[k]
-						}
+		if strings.TrimSpace(p.test) != "" {
+			ui.Text(c, i18n.T("The model reads: %s", a.testedText())).FontSize(px(t, 12)).Selectable()
+		}
+
+	})
+	settingGroup(c, i18n.T("Entries"), func() {
+		issues := map[int][]lexicon.Issue{}
+		for _, is := range lexicon.Validate(p.entries) {
+			issues[is.Index] = append(issues[is.Index], is)
+		}
+		labels := typeLabels()
+		if len(p.types) != len(p.entries) {
+			p.types = make([]string, len(p.entries))
+			for i, e := range p.entries {
+				p.types[i] = labels[0]
+				for k, ty := range entryTypes {
+					if e.Type == ty {
+						p.types[i] = labels[k]
 					}
-					changed = true
 				}
-				if ui.TextInput(c.Key("scope"), &e.Scope).Placeholder(lexicon.Global).Label(i18n.T("Languages")).Width(px(t, 90)).Shrink(0).
-					Tooltip(i18n.T("“global”, or a language code such as en or zh")).Changed() {
-					changed = true
-				}
-				if ui.Switch(c.Key("on"), &e.Enabled).Label(i18n.T("On")).Changed() {
-					changed = true
-				}
-				if iconButton(c.Key("remove"), icons.Close, i18n.T("Remove")).Tooltip(i18n.T("Remove")).Shrink(0).Clicked() {
-					remove = i
+			}
+		}
+		changed := false
+		if len(p.entries) == 0 {
+			ui.Text(c, i18n.T("No entries yet.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		} else {
+			ui.Row(c).Gap(px(t, 8)).Children(func() {
+				for _, h := range []struct {
+					label string
+					w     float32
+				}{{i18n.T("Term"), 0}, {i18n.T("Say it as"), 0}, {i18n.T("Type"), 130}, {i18n.T("Languages"), 90}, {i18n.T("On"), 44}, {"", 40}} {
+					txt := ui.Text(c, h.label).FontSize(px(t, 11)).Bold().TextColor(t.TextMuted)
+					if h.w > 0 {
+						txt.Width(px(t, h.w)).Shrink(0)
+					} else {
+						txt.Grow(1).MinWidth(0).Width(0)
+					}
 				}
 			})
-			for _, is := range issues[i] {
-				ui.Text(c, issueText(is)).FontSize(px(t, 11)).TextColor(t.Warning)
-			}
-		})
-	}
-	if remove >= 0 {
-		p.entries = append(p.entries[:remove:remove], p.entries[remove+1:]...)
-		p.types = nil
-		changed = true
-	}
-	ui.Row(c).Gap(px(t, 8)).Children(func() {
-		if ui.Button(c.Key("pron-add"), i18n.T("Add an entry")).Clicked() {
-			p.entries = append(p.entries, lexicon.Entry{Type: lexicon.Respelling, Scope: lexicon.Global, Enabled: true})
+		}
+		remove := -1
+		for i := range p.entries {
+			e := &p.entries[i]
+			ui.Column(c.Key(fmt.Sprintf("pron-%d", i))).Gap(px(t, 2)).Children(func() {
+				ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+					if ui.TextInput(c.Key("term"), &e.Term).Placeholder(i18n.T("Term")).Label(i18n.T("Term")).Grow(1).MinWidth(0).Width(0).Changed() {
+						changed = true
+					}
+					if ui.TextInput(c.Key("say"), &e.Replacement).Placeholder(i18n.T("Say it as")).Label(i18n.T("Say it as")).Grow(1).MinWidth(0).Width(0).Changed() {
+						changed = true
+					}
+					if ui.Select(c.Key("type"), &p.types[i], labels).Label(i18n.T("Type")).Width(px(t, 130)).Shrink(0).Changed() {
+						for k, l := range labels {
+							if p.types[i] == l {
+								e.Type = entryTypes[k]
+							}
+						}
+						changed = true
+					}
+					if ui.TextInput(c.Key("scope"), &e.Scope).Placeholder(lexicon.Global).Label(i18n.T("Languages")).Width(px(t, 90)).Shrink(0).
+						Tooltip(i18n.T("“global”, or a language code such as en or zh")).Changed() {
+						changed = true
+					}
+					if ui.Switch(c.Key("on"), &e.Enabled).Label(i18n.T("On")).Changed() {
+						changed = true
+					}
+					if iconButton(c.Key("remove"), icons.Close, i18n.T("Remove")).Tooltip(i18n.T("Remove")).Shrink(0).Clicked() {
+						remove = i
+					}
+				})
+				for _, is := range issues[i] {
+					ui.Text(c, issueText(is)).FontSize(px(t, 11)).TextColor(t.Warning)
+				}
+			})
+		}
+		if remove >= 0 {
+			p.entries = append(p.entries[:remove:remove], p.entries[remove+1:]...)
 			p.types = nil
 			changed = true
 		}
-		ui.MenuButton(c.Key("pron-import"), i18n.T("Import…"), func(m *ui.Menu) {
-			if m.Item(i18n.T("Add to the dictionary…")).Chosen() {
-				a.importPronunciation(lexicon.Merge)
+		ui.Row(c).Gap(px(t, 8)).Children(func() {
+			if ui.Button(c.Key("pron-add"), i18n.T("Add an entry")).Clicked() {
+				p.entries = append(p.entries, lexicon.Entry{Type: lexicon.Respelling, Scope: lexicon.Global, Enabled: true})
+				p.types = nil
+				changed = true
 			}
-			if m.Item(i18n.T("Replace the dictionary…")).Chosen() {
-				a.importPronunciation(lexicon.Replace)
+			ui.MenuButton(c.Key("pron-import"), i18n.T("Import…"), func(m *ui.Menu) {
+				if m.Item(i18n.T("Add to the dictionary…")).Chosen() {
+					a.importPronunciation(lexicon.Merge)
+				}
+				if m.Item(i18n.T("Replace the dictionary…")).Chosen() {
+					a.importPronunciation(lexicon.Replace)
+				}
+			})
+			if ui.Button(c.Key("pron-export"), i18n.T("Export…")).Disabled(len(p.entries) == 0).Clicked() {
+				a.exportPronunciation()
 			}
 		})
-		if ui.Button(c.Key("pron-export"), i18n.T("Export…")).Disabled(len(p.entries) == 0).Clicked() {
-			a.exportPronunciation()
+		if changed {
+			a.savePronunciation()
 		}
 	})
-	if changed {
-		a.savePronunciation()
-	}
 }

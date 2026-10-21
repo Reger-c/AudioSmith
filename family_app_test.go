@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -100,7 +101,7 @@ func TestDeleteSharedModel(t *testing.T) {
 	}
 	tf.claim(t, dictaID, e)
 	a.refreshModel(e)
-	a.navigate("/models")
+	openModels(a)
 	a.askDelete(e)
 	if !a.deleteAsk || !slices.Equal(a.deleteShared, []string{"Dicta"}) {
 		t.Fatalf("ask: open %v, shared %v", a.deleteAsk, a.deleteShared)
@@ -207,14 +208,16 @@ func TestNoFamilyWording(t *testing.T) {
 	tf := useFamily(t, a)
 	e := catalogEntry(t, "qwen3-asr-0.6b-4bit")
 	tf.claim(t, "dev.hehehai.dicta.conformance", e) // a test build of Dicta
-	a.navigate("/models")
+	openModels(a)
 	a.askDelete(e)
 	tt.Frame()
 	if len(a.deleteShared) != 0 || !tt.HasText("Delete “Chinese & English transcription”?") {
 		t.Errorf("dialog: shared %v", a.deleteShared)
 	}
 	for _, s := range []string{"Dicta", "ActNow", "AudioSmith?", "for all apps"} {
-		if tt.HasText(s) {
+		// Words, not parts of them: Settings lists Dictation.
+		word := regexp.MustCompile(`(^|\PL)` + regexp.QuoteMeta(s) + `($|\PL)`)
+		if slices.ContainsFunc(tt.Texts(), word.MatchString) {
 			t.Errorf("family wording %q shown", s)
 		}
 	}

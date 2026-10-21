@@ -347,6 +347,7 @@ func waitUntil(t *testing.T, cond func() bool) {
 func TestAPISettingsPage(t *testing.T) {
 	keys := useMemKeys(t)
 	a, _, tt := newTestApp(t)
+	tallSettings(tt) // the Local API is under the list of integrations
 	startTestAPI(t, a)
 	pf, err := api.ReadPortFile(a.apiPortFile())
 	if err != nil || pf.Port != a.apiPort {

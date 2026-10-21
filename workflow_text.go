@@ -16,13 +16,13 @@ func wfErrorText(code, msg string) string {
 	case "":
 		return msg
 	case "model_not_downloaded":
-		return i18n.T("A model this workflow uses is not downloaded: download it on the Models page.")
+		return i18n.T("A model this workflow uses is not downloaded: download it in Settings → Models & network.")
 	case "licence_required":
-		return i18n.T("A model this workflow uses needs its licence accepted on the Models page.")
+		return i18n.T("A model this workflow uses needs its licence accepted in Settings → Models & network.")
 	case services.CodeEngineUnavailable:
 		return i18n.T("The speech engine is not running. Start it on the Engine page.")
 	case services.WorkflowCodeNoSTT:
-		return i18n.T("No speech-to-text model is available: download one on the Models page.")
+		return i18n.T("No speech-to-text model is available: download one in Settings → Models & network.")
 	case services.WorkflowCodeNoSpeech:
 		return i18n.T("No speech was found.")
 	case services.WorkflowCodeVoice:

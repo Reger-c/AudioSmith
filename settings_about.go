@@ -24,6 +24,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/api"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -211,9 +212,9 @@ func (a *app) runSelfCheck() {
 		case hf.ok:
 			add("network", i18n.T("Network"), "pass", i18n.T("huggingface.co answers in %d ms", hf.latency.Milliseconds()))
 		case mirror.ok:
-			add("network", i18n.T("Network"), "warn", i18n.T("huggingface.co does not answer (%s); hf-mirror.com does: use it in Settings → Network.", hf.err))
+			add("network", i18n.T("Network"), "warn", i18n.T("huggingface.co does not answer (%s); hf-mirror.com does: use it in Settings → Models & network.", hf.err))
 		default:
-			add("network", i18n.T("Network"), "warn", i18n.T("No download source answers (%s): check the proxy in Settings → Network.", hf.err))
+			add("network", i18n.T("Network"), "warn", i18n.T("No download source answers (%s): check the proxy in Settings → Models & network.", hf.err))
 		}
 		// The Keychain.
 		if runtime.GOOS != "darwin" {
@@ -368,111 +369,145 @@ func (a *app) bugReportURL() string {
 func (a *app) aboutSettings(c *ui.Context) {
 	t := c.Theme()
 	a.loadSysInfo()
-	sectionTitle(c, i18n.T("About"))
-	ver := a.version
-	if ver == "" {
-		ver = i18n.T("development build")
-	}
-	rows := [][2]string{
-		{i18n.T("AudioSmith"), ver},
-		{i18n.T("Engine"), orDash(a.engVersion)},
-		{i18n.T("Engine protocol"), fmt.Sprint(proto.Version)},
-	}
-	if s := a.sys; s != nil {
-		rows = append(rows,
-			[2]string{i18n.T("System"), orDash(s.OS)},
-			[2]string{i18n.T("Chip"), orDash(s.Chip)},
-			[2]string{i18n.T("Memory"), i18n.T("%d GB", s.MemoryGB())},
-		)
-	}
-	if tool := a.mediaTool(); tool != nil {
-		rows = append(rows, [2]string{"ffmpeg", tool.Version})
-	}
-	ui.Grid(c.Key("about-grid")).ColumnTracks(ui.Fixed(px(t, 150)), ui.Fr(1)).GapX(px(t, 12)).GapY(px(t, 6)).Children(func() {
-		for i, r := range rows {
-			ui.Text(c, r[0]).TextColor(t.TextMuted)
-			if i == 0 && isPrerelease(a.version) {
-				// A beta (thread #52): the version, then a Beta badge.
-				ui.Row(c.Key("about-version")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, r[1]).Selectable()
-					betaBadge(c)
-				})
-				continue
+	settingGroup(c, i18n.T("About"), func() {
+		ver := a.version
+		if ver == "" {
+			ver = i18n.T("development build")
+		}
+		rows := [][2]string{
+			{i18n.T("AudioSmith"), ver},
+			{i18n.T("Engine"), orDash(a.engVersion)},
+			{i18n.T("Engine protocol"), fmt.Sprint(proto.Version)},
+		}
+		if s := a.sys; s != nil {
+			rows = append(rows,
+				[2]string{i18n.T("System"), orDash(s.OS)},
+				[2]string{i18n.T("Chip"), orDash(s.Chip)},
+				[2]string{i18n.T("Memory"), i18n.T("%d GB", s.MemoryGB())},
+			)
+		}
+		if tool := a.mediaTool(); tool != nil {
+			rows = append(rows, [2]string{"ffmpeg", tool.Version})
+		}
+		ui.Grid(c.Key("about-grid")).ColumnTracks(ui.Fixed(px(t, 150)), ui.Fr(1)).GapX(px(t, 12)).GapY(px(t, 6)).Children(func() {
+			for i, r := range rows {
+				ui.Text(c, r[0]).TextColor(t.TextMuted)
+				if i == 0 && isPrerelease(a.version) {
+					// A beta (thread #52): the version, then a Beta badge.
+					ui.Row(c.Key("about-version")).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, r[1]).Selectable()
+						betaBadge(c)
+					})
+					continue
+				}
+				ui.Text(c, r[1]).Selectable()
 			}
-			ui.Text(c, r[1]).Selectable()
-		}
-		// AGPL-3.0: the licence, and where the source code is.
-		ui.Text(c, i18n.T("Licence")).TextColor(t.TextMuted)
-		ui.Link(c, "GNU AGPL-3.0", licenceURL)
-		ui.Text(c, i18n.T("Source code")).TextColor(t.TextMuted)
-		ui.Link(c, strings.TrimPrefix(api.SourceURL, "https://"), api.SourceURL)
-		// The website (thread #69): downloads and release notes.
-		for _, l := range [][2]string{{i18n.T("Website"), websiteURL}, {i18n.T("Download"), downloadURL}, {i18n.T("Release notes"), releaseNotesURL}} {
-			ui.Text(c, l[0]).TextColor(t.TextMuted)
-			ui.Link(c, strings.TrimPrefix(l[1], "https://"), l[1])
-		}
-		// The libraries' and material's licences (thread #62).
-		if a.noticesURL == "" {
-			a.noticesURL = thirdPartyNoticesURL()
-		}
-		ui.Text(c, i18n.T("Third-party licences")).TextColor(t.TextMuted)
-		ui.Link(c, thirdPartyNotices, a.noticesURL)
-	})
-	ui.Text(c, i18n.T("AudioSmith runs every model on this Mac. Each model keeps its own licence: see Settings → Models and downloads.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
-	// 0.3: the icons' attribution (CC BY 4.0; NOTICE has it too).
-	ui.Row(c.Key("about-icons")).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
-		caption(c, i18n.T("Icons: Solar by 480 Design, under CC BY 4.0 (@iconify-json/solar %s).", icons.SolarVersion))
-		ui.Link(c, i18n.T("Licence"), "https://creativecommons.org/licenses/by/4.0/").FontSize(px(t, fsCaption))
-	})
-
-	a.softwareUpdateSettings(c) // thread #50
-
-	sectionTitle(c, i18n.T("Self-check"))
-	settingRow(c, "about-check", i18n.T("Check AudioSmith"), i18n.T("The library, the engine, the folders, the network, the Keychain, ffmpeg and the permissions."), func() {
-		if a.selfChecking {
-			ui.Spinner(c)
-		}
-		if ui.Button(c.Key("about-check"), i18n.T("Run the check")).Disabled(a.selfChecking).Clicked() {
-			a.runSelfCheck()
-		}
-	})
-	for _, ch := range a.checks {
-		ui.Row(c.Key("check-" + ch.id)).Gap(px(t, 8)).AlignItems(ui.Start).Children(func() {
-			mark, col := icons.CheckCircle, t.Success
-			switch ch.status {
-			case "warn":
-				mark, col = icons.DangerTriangle, t.Warning
-			case "fail":
-				mark, col = icons.CloseCircle, t.Danger
+			// AGPL-3.0: the licence, and where the source code is.
+			ui.Text(c, i18n.T("Licence")).TextColor(t.TextMuted)
+			ui.Link(c, "GNU AGPL-3.0", licenceURL)
+			ui.Text(c, i18n.T("Source code")).TextColor(t.TextMuted)
+			ui.Link(c, strings.TrimPrefix(api.SourceURL, "https://"), api.SourceURL)
+			// The website (thread #69): downloads and release notes.
+			for _, l := range [][2]string{{i18n.T("Website"), websiteURL}, {i18n.T("Download"), downloadURL}, {i18n.T("Release notes"), releaseNotesURL}} {
+				ui.Text(c, l[0]).TextColor(t.TextMuted)
+				ui.Link(c, strings.TrimPrefix(l[1], "https://"), l[1])
 			}
-			ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0).Margin(px(t, 2), 0, 0)
-			ui.Text(c, ch.title).Width(px(t, 150))
-			ui.Text(c, ch.detail).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).MinWidth(0)
+			// The libraries' and material's licences (thread #62).
+			if a.noticesURL == "" {
+				a.noticesURL = thirdPartyNoticesURL()
+			}
+			ui.Text(c, i18n.T("Third-party licences")).TextColor(t.TextMuted)
+			ui.Link(c, thirdPartyNotices, a.noticesURL)
 		})
-	}
+		ui.Text(c, i18n.T("AudioSmith runs every model on this Mac. Each model keeps its own licence: see Settings → Models & network.")).
+			FontSize(px(t, 12)).TextColor(t.TextMuted)
+		// 0.3: the icons' attribution (CC BY 4.0; NOTICE has it too).
+		ui.Row(c.Key("about-icons")).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
+			caption(c, i18n.T("Icons: Solar by 480 Design, under CC BY 4.0 (@iconify-json/solar %s).", icons.SolarVersion))
+			ui.Link(c, i18n.T("Licence"), "https://creativecommons.org/licenses/by/4.0/").FontSize(px(t, fsCaption))
+		})
+	})
+	a.softwareUpdateSettings(c) // thread #50
+}
 
-	sectionTitle(c, i18n.T("Report a problem"))
-	settingRow(c, "about-copy", i18n.T("Copy diagnostics"), i18n.T("Versions, the machine, folders and the self-check: no text, audio or keys."), func() {
-		if ui.Button(c.Key("about-copy"), i18n.T("Copy")).Clicked() {
-			c.WriteClipboard(a.diagnosticsText())
-			a.toast(i18n.T("Diagnostics copied"))
+// diagnosticsSettings is Settings → Advanced's foot: the engine (its
+// state, the models in memory, Details opens its page), the self-check
+// and reporting a problem.
+func (a *app) diagnosticsSettings(c *ui.Context) {
+	a.revealAnchor(c, "diagnostics")
+	t := c.Theme()
+	eng := a.engineSummary()
+	settingGroup(c, i18n.T("Diagnostics"), func() {
+		state := map[engineState]string{engineStarting: i18n.T("Starting"), engineReady: i18n.T("Ready"), engineFailed: i18n.T("Stopped")}[eng.State]
+		if eng.Version != "" {
+			state += " · " + i18n.T("version %s", eng.Version)
 		}
-	})
-	settingRow(c, "about-bundle", i18n.T("Save a diagnostic bundle"), i18n.T("A ZIP of the diagnostics, the logs and the settings (without keys), to attach to a report."), func() {
-		if ui.Button(c.Key("about-bundle"), i18n.T("Save…")).Clicked() {
-			a.saveBundle()
+		model := i18n.T("No model loaded")
+		if len(eng.Loaded) > 0 {
+			model = i18n.T("In memory: %s", catalog.Builtin().DisplayName(eng.Loaded[0]))
 		}
-	})
-	settingRow(c, "about-bug", i18n.T("Report a bug"), i18n.T("Opens a new issue on GitHub in your browser, with the diagnostics filled in. Nothing is sent until you submit it."), func() {
-		if ui.Button(c.Key("about-bug"), i18n.T("Report…")).Clicked() {
-			u := a.bugReportURL()
-			if a.win == nil {
-				c.Services().OpenURL(u)
-			} else {
-				go mygo.Shell.OpenExternal(u)
+		settingRowNote(c, "diag-engine", i18n.T("Speech engine"), state+"\n"+model, func() {
+			if ui.Button(c.Key("diag-engine-restart"), i18n.T("Restart engine")).Clicked() {
+				a.restartEngine()
 			}
+			if ui.Button(c.Key("diag-engine-details"), i18n.T("Details")).Clicked() {
+				a.navigate("/engine")
+			}
+		})
+		settingRow(c, "diag-logs", i18n.T("Logs"), i18n.T("What AudioSmith and the engine wrote: open them when something fails without a clear error."), func() {
+			if ui.Button(c.Key("diag-logs-open"), i18n.T("Show the logs")).Clicked() {
+				a.navigate("/logs")
+			}
+		})
+
+	})
+	settingGroup(c, i18n.T("Self-check"), func() {
+		settingRow(c, "about-check", i18n.T("Check AudioSmith"), i18n.T("The library, the engine, the folders, the network, the Keychain, ffmpeg and the permissions."), func() {
+			if a.selfChecking {
+				ui.Spinner(c)
+			}
+			if ui.Button(c.Key("about-check"), i18n.T("Run the check")).Disabled(a.selfChecking).Clicked() {
+				a.runSelfCheck()
+			}
+		})
+		for _, ch := range a.checks {
+			ui.Row(c.Key("check-" + ch.id)).Gap(px(t, 8)).AlignItems(ui.Start).Children(func() {
+				mark, col := icons.CheckCircle, t.Success
+				switch ch.status {
+				case "warn":
+					mark, col = icons.DangerTriangle, t.Warning
+				case "fail":
+					mark, col = icons.CloseCircle, t.Danger
+				}
+				ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0).Margin(px(t, 2), 0, 0)
+				ui.Text(c, ch.title).Width(px(t, 150))
+				ui.Text(c, ch.detail).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).MinWidth(0)
+			})
 		}
+
+	})
+	settingGroup(c, i18n.T("Report a problem"), func() {
+		settingRow(c, "about-copy", i18n.T("Copy diagnostics"), i18n.T("Versions, the machine, folders and the self-check: no text, audio or keys."), func() {
+			if ui.Button(c.Key("about-copy"), i18n.T("Copy")).Clicked() {
+				c.WriteClipboard(a.diagnosticsText())
+				a.toast(i18n.T("Diagnostics copied"))
+			}
+		})
+		settingRow(c, "about-bundle", i18n.T("Save a diagnostic bundle"), i18n.T("A ZIP of the diagnostics, the logs and the settings (without keys), to attach to a report."), func() {
+			if ui.Button(c.Key("about-bundle"), i18n.T("Save…")).Clicked() {
+				a.saveBundle()
+			}
+		})
+		settingRow(c, "about-bug", i18n.T("Report a bug"), i18n.T("Opens a new issue on GitHub in your browser, with the diagnostics filled in. Nothing is sent until you submit it."), func() {
+			if ui.Button(c.Key("about-bug"), i18n.T("Report…")).Clicked() {
+				u := a.bugReportURL()
+				if a.win == nil {
+					c.Services().OpenURL(u)
+				} else {
+					go mygo.Shell.OpenExternal(u)
+				}
+			}
+		})
 	})
 }
 

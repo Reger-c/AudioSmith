@@ -17,17 +17,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
-// apiSettingsRoute builds Settings → Local API (settings_dialog.go asks).
-func (a *app) apiSettingsRoute(c *ui.Context, r *ui.Route) bool {
-	if !r.Match("/api") {
-		return false
-	}
-	r.Title(i18n.T("Local API"))
-	a.lastSettings = "api"
-	a.apiSettings(c)
-	return true
-}
-
 // monoFont is the font of code and URLs.
 const monoFont = "ui-monospace, SFMono-Regular, Menlo, monospace"
 
@@ -37,170 +26,175 @@ func (a *app) apiSettings(c *ui.Context) {
 	muted := func(s string) { ui.Text(c, s).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap() }
 
 	// The server.
-	sectionTitle(c, i18n.T("Server"))
-	on := cfg.Enabled
-	settingRow(c, "api-on", i18n.T("Run the Local API"), i18n.T("OpenAI-compatible speech and transcription, AudioSmith's own API and an MCP server for agents, on this Mac only."), func() {
-		if ui.Switch(c.Key("api-on-switch"), &on).Label(i18n.T("Run the Local API")).Changed() {
-			a.updateSettings(func(s *settings.Settings) { s.API.Enabled = on })
-			a.applyAPI()
-		}
-	})
-	settingRow(c, "api-port", i18n.T("Port"), i18n.T("Clients connect to 127.0.0.1 at this port. Changing it breaks the configurations you gave out."), func() {
-		numberInput(c.Key("api-port-input"), &a.apiForm.port, 1024, 65535, 1, numOpts{Label: i18n.T("Port")})
-		p := int(a.apiForm.port)
-		if ui.Button(c.Key("api-port-apply"), i18n.T("Apply")).Disabled(p == cfg.LoopbackPort() || p < 1024).Clicked() {
-			a.updateSettings(func(s *settings.Settings) { s.API.Port = p })
-			a.applyAPI()
-		}
-	})
-	ui.Row(c.Key("api-status")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		switch {
-		case !cfg.Enabled:
-			ui.Text(c, i18n.T("Off")).TextColor(t.TextMuted).Grow(1)
-		case a.apiErr != "":
-			ui.Text(c, a.apiErr).TextColor(t.Danger).Wrap().Grow(1)
-		case a.apiPort == 0:
-			ui.Text(c, i18n.T("Starting…")).TextColor(t.TextMuted).Grow(1)
-		default:
-			ui.Badge(c, i18n.T("Running"))
-			ui.Text(c, a.apiBaseURL()).Font(monoFont).Grow(1).SingleLine()
-		}
-		if ui.Button(c.Key("api-copy-url"), i18n.T("Copy base URL")).Tooltip(i18n.T("The OpenAI base URL: %s", a.apiBaseURL()+"/v1")).Clicked() {
-			c.Services().WriteClipboard(a.apiBaseURL() + "/v1")
-			a.toast(i18n.T("Copied"))
-		}
-	})
-
-	// Access.
-	sectionTitle(c, i18n.T("Access"))
-	keyDesc := i18n.T("No key. Programs on this Mac need none; send one to require it, or to reach AudioSmith over the network.")
-	if a.apiHasKey {
-		keyDesc = i18n.T("A key is saved in the Keychain. OpenAI SDKs send it as their api_key.")
-	}
-	settingRowNote(c, "api-key", i18n.T("API key"), keyDesc, func() {
-		label := i18n.T("Generate")
-		if a.apiHasKey {
-			label = i18n.T("Replace")
-		}
-		if ui.Button(c.Key("api-key-gen"), label).Clicked() {
-			a.generateAPIKey()
-		}
-		if ui.Button(c.Key("api-key-revoke"), i18n.T("Revoke")).Disabled(!a.apiHasKey).Clicked() {
-			a.revokeAPIKey()
-		}
-	})
-	if a.apiNewKey != "" {
-		ui.Row(c.Key("api-new-key")).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 8)).Radius(6).Background(t.Surface).Children(func() {
-			ui.Text(c, a.apiNewKey).Font(monoFont).Grow(1).SingleLine()
-			if ui.Button(c.Key("api-key-copy"), i18n.T("Copy")).Clicked() {
-				c.Services().WriteClipboard(a.apiNewKey)
+	settingGroup(c, i18n.T("Server"), func() {
+		on := cfg.Enabled
+		settingRow(c, "api-on", i18n.T("Run the Local API"), i18n.T("OpenAI-compatible speech and transcription, AudioSmith's own API and an MCP server for agents, on this Mac only."), func() {
+			if ui.Switch(c.Key("api-on-switch"), &on).Label(i18n.T("Run the Local API")).Changed() {
+				a.updateSettings(func(s *settings.Settings) { s.API.Enabled = on })
+				a.applyAPI()
+			}
+		})
+		settingRow(c, "api-port", i18n.T("Port"), i18n.T("Clients connect to 127.0.0.1 at this port. Changing it breaks the configurations you gave out."), func() {
+			numberInput(c.Key("api-port-input"), &a.apiForm.port, 1024, 65535, 1, numOpts{Label: i18n.T("Port")})
+			p := int(a.apiForm.port)
+			if ui.Button(c.Key("api-port-apply"), i18n.T("Apply")).Disabled(p == cfg.LoopbackPort() || p < 1024).Clicked() {
+				a.updateSettings(func(s *settings.Settings) { s.API.Port = p })
+				a.applyAPI()
+			}
+		})
+		ui.Row(c.Key("api-status")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			switch {
+			case !cfg.Enabled:
+				ui.Text(c, i18n.T("Off")).TextColor(t.TextMuted).Grow(1)
+			case a.apiErr != "":
+				ui.Text(c, a.apiErr).TextColor(t.Danger).Wrap().Grow(1)
+			case a.apiPort == 0:
+				ui.Text(c, i18n.T("Starting…")).TextColor(t.TextMuted).Grow(1)
+			default:
+				ui.Badge(c, i18n.T("Running"))
+				ui.Text(c, a.apiBaseURL()).Font(monoFont).Grow(1).SingleLine()
+			}
+			if ui.Button(c.Key("api-copy-url"), i18n.T("Copy base URL")).Tooltip(i18n.T("The OpenAI base URL: %s", a.apiBaseURL()+"/v1")).Clicked() {
+				c.Services().WriteClipboard(a.apiBaseURL() + "/v1")
 				a.toast(i18n.T("Copied"))
 			}
-			if ui.Button(c.Key("api-key-hide"), i18n.T("Done")).Clicked() {
-				a.apiNewKey = ""
+		})
+
+		// Access.
+	})
+	settingGroup(c, i18n.T("Access"), func() {
+		keyDesc := i18n.T("No key. Programs on this Mac need none; send one to require it, or to reach AudioSmith over the network.")
+		if a.apiHasKey {
+			keyDesc = i18n.T("A key is saved in the Keychain. OpenAI SDKs send it as their api_key.")
+		}
+		settingRowNote(c, "api-key", i18n.T("API key"), keyDesc, func() {
+			label := i18n.T("Generate")
+			if a.apiHasKey {
+				label = i18n.T("Replace")
+			}
+			if ui.Button(c.Key("api-key-gen"), label).Clicked() {
+				a.generateAPIKey()
+			}
+			if ui.Button(c.Key("api-key-revoke"), i18n.T("Revoke")).Disabled(!a.apiHasKey).Clicked() {
+				a.revokeAPIKey()
 			}
 		})
-		muted(i18n.T("Copy it now: AudioSmith keeps it only in the Keychain and does not show it again."))
-	}
-	require := cfg.RequireKey
-	settingRow(c, "api-require", i18n.T("Require the key on this Mac too"), i18n.T("Every client must send the key, also programs on this Mac. Health and the API reference stay open."), func() {
-		if ui.Switch(c.Key("api-require-switch"), &require).Label(i18n.T("Require the key on this Mac too")).Disabled(!a.apiHasKey && !require).Changed() {
-			a.updateSettings(func(s *settings.Settings) { s.API.RequireKey = require })
-		}
-	})
-	ui.Field(c, i18n.T("Browser origins allowed"), func() {
-		ui.TextArea(c.Key("api-origins"), &a.apiForm.origins).Height(px(t, 52)).Font(monoFont).Label(i18n.T("Browser origins allowed"))
-	})
-	ui.Row(c.Key("api-origins-row")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		muted(i18n.T("One per line, such as http://localhost:5173. Web pages from other origins cannot call the API."))
-		ui.Spacer(c)
-		origins := splitLines(a.apiForm.origins)
-		if ui.Button(c.Key("api-origins-save"), i18n.T("Save")).Disabled(slices.Equal(origins, cfg.Origins)).Clicked() {
-			a.updateSettings(func(s *settings.Settings) { s.API.Origins = origins })
-		}
-	})
-
-	// LAN sharing.
-	sectionTitle(c, i18n.T("Sharing on the local network"))
-	sharing := a.apiShare != nil
-	settingRow(c, "api-share", i18n.T("Share with other devices"), i18n.T("Opens port %d on your network. Devices need the PIN below for speech, transcription and voices; the key for everything else. Until you turn it off or quit.", cfg.LANPort()), func() {
-		if ui.Switch(c.Key("api-share-switch"), &sharing).Label(i18n.T("Share with other devices")).Disabled(a.apiPort == 0 && !sharing).Changed() {
-			if sharing {
-				a.startSharing()
-			} else {
-				a.stopSharing()
-			}
-		}
-	})
-	if a.apiShareE != "" {
-		ui.Text(c, a.apiShareE).TextColor(t.Danger).Wrap()
-	}
-	if sh := a.apiShare; sh != nil {
-		ui.Column(c.Key("api-share-info")).Gap(px(t, 6)).Padding(px(t, 12)).Radius(8).Background(t.Surface).Children(func() {
-			ui.Row(c).Gap(px(t, 12)).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, i18n.T("PIN")).TextColor(t.TextMuted)
-				ui.Text(c, sh.PIN[:3]+" "+sh.PIN[3:]).Font(monoFont).FontSize(px(t, 22)).Bold()
-			})
-			if len(sh.URLs) == 0 {
-				muted(i18n.T("This Mac has no address on a local network."))
-			}
-			for i, u := range sh.URLs {
-				ui.Row(c.Key("share-url-" + strconv.Itoa(i))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, u+"/v1").Font(monoFont).Grow(1).SingleLine()
-					if ui.Button(c.Key("copy"), i18n.T("Copy")).Clicked() {
-						c.Services().WriteClipboard(u + "/v1")
-						a.toast(i18n.T("Copied"))
-					}
-				})
-			}
-			muted(i18n.T("Send the PIN as the X-AudioSmith-Pin header, or add ?pin=%s to the URL. Anyone on this network with the PIN can make speech with your voices.", sh.PIN))
-		})
-	}
-
-	// Agents.
-	sectionTitle(c, i18n.T("Agents (MCP)"))
-	settingRow(c, "api-mcp-output", i18n.T("Audio for agents"), i18n.T("How generate_speech hands back audio: in the answer, as a WAV file in the folder below, or both."), func() {
-		if ui.Segmented(c.Key("api-output-seg"), &a.apiForm.output, i18n.T("Both"), i18n.T("Inline"), i18n.T("File")).Label(i18n.T("Audio for agents")).Changed() {
-			mode := []string{settings.MCPOutputBoth, settings.MCPOutputInline, settings.MCPOutputFile}[a.apiForm.output]
-			a.updateSettings(func(s *settings.Settings) { s.API.MCPOutput = mode })
-		}
-	})
-	settingRowNote(c, "api-mcp-dir", i18n.T("Folder for agents' audio"), a.apiSandbox(), func() {
-		if ui.Button(c.Key("api-dir-choose"), i18n.T("Choose…")).Clicked() {
-			a.chooseAPIDir()
-		}
-		if ui.Button(c.Key("api-dir-reveal"), i18n.T("Show in Finder")).Clicked() {
-			a.revealAPIDir()
-		}
-	})
-	a.apiBindings(c)
-
-	// Reference.
-	sectionTitle(c, i18n.T("API reference"))
-	ui.Row(c.Key("api-ref")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		muted(i18n.T("The OpenAPI description is at %s.", a.apiBaseURL()+"/openapi.json"))
-		ui.Spacer(c)
-		if ui.Button(c.Key("api-ref-open"), i18n.T("Open the reference")).Disabled(a.apiPort == 0).Clicked() {
-			a.navigate("/api-reference")
-		}
-		if ui.Button(c.Key("api-ref-browser"), i18n.T("Open in the browser")).Disabled(a.apiPort == 0).Clicked() {
-			go mygo.Shell.OpenExternal(a.apiBaseURL() + "/docs")
-		}
-	})
-	ui.Collapsible(c.Key("api-ops"), i18n.T("Endpoints"), &a.apiForm.ops, func() {
-		ui.Column(c).Gap(px(t, 2)).Children(func() {
-			tag := ""
-			for i, op := range api.Operations() {
-				if op.Tag != tag {
-					tag = op.Tag
-					ui.Text(c.Key("tag-"+tag), tag).Bold().FontSize(px(t, 12)).TextColor(t.TextMuted).Padding(px(t, 6), 0, px(t, 2), 0)
+		if a.apiNewKey != "" {
+			ui.Row(c.Key("api-new-key")).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 8)).Radius(6).Background(t.Surface).Children(func() {
+				ui.Text(c, a.apiNewKey).Font(monoFont).Grow(1).SingleLine()
+				if ui.Button(c.Key("api-key-copy"), i18n.T("Copy")).Clicked() {
+					c.Services().WriteClipboard(a.apiNewKey)
+					a.toast(i18n.T("Copied"))
 				}
-				ui.Row(c.Key("op-" + strconv.Itoa(i))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, op.Method).Font(monoFont).FontSize(px(t, 11)).Bold().Width(px(t, 52)).TextColor(methodColor(t, op.Method))
-					ui.Text(c, op.Path).Font(monoFont).FontSize(px(t, 12)).Width(px(t, 230)).SingleLine()
-					ui.Text(c, op.Summary).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).SingleLine()
-				})
+				if ui.Button(c.Key("api-key-hide"), i18n.T("Done")).Clicked() {
+					a.apiNewKey = ""
+				}
+			})
+			muted(i18n.T("Copy it now: AudioSmith keeps it only in the Keychain and does not show it again."))
+		}
+		require := cfg.RequireKey
+		settingRow(c, "api-require", i18n.T("Require the key on this Mac too"), i18n.T("Every client must send the key, also programs on this Mac. Health and the API reference stay open."), func() {
+			if ui.Switch(c.Key("api-require-switch"), &require).Label(i18n.T("Require the key on this Mac too")).Disabled(!a.apiHasKey && !require).Changed() {
+				a.updateSettings(func(s *settings.Settings) { s.API.RequireKey = require })
 			}
+		})
+		ui.Field(c, i18n.T("Browser origins allowed"), func() {
+			ui.TextArea(c.Key("api-origins"), &a.apiForm.origins).Height(px(t, 52)).Font(monoFont).Label(i18n.T("Browser origins allowed"))
+		})
+		ui.Row(c.Key("api-origins-row")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			muted(i18n.T("One per line, such as http://localhost:5173. Web pages from other origins cannot call the API."))
+			ui.Spacer(c)
+			origins := splitLines(a.apiForm.origins)
+			if ui.Button(c.Key("api-origins-save"), i18n.T("Save")).Disabled(slices.Equal(origins, cfg.Origins)).Clicked() {
+				a.updateSettings(func(s *settings.Settings) { s.API.Origins = origins })
+			}
+		})
+
+		// LAN sharing.
+	})
+	settingGroup(c, i18n.T("Sharing on the local network"), func() {
+		sharing := a.apiShare != nil
+		settingRow(c, "api-share", i18n.T("Share with other devices"), i18n.T("Opens port %d on your network. Devices need the PIN below for speech, transcription and voices; the key for everything else. Until you turn it off or quit.", cfg.LANPort()), func() {
+			if ui.Switch(c.Key("api-share-switch"), &sharing).Label(i18n.T("Share with other devices")).Disabled(a.apiPort == 0 && !sharing).Changed() {
+				if sharing {
+					a.startSharing()
+				} else {
+					a.stopSharing()
+				}
+			}
+		})
+		if a.apiShareE != "" {
+			ui.Text(c, a.apiShareE).TextColor(t.Danger).Wrap()
+		}
+		if sh := a.apiShare; sh != nil {
+			ui.Column(c.Key("api-share-info")).Gap(px(t, 6)).Padding(px(t, 12)).Radius(8).Background(t.Surface).Children(func() {
+				ui.Row(c).Gap(px(t, 12)).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, i18n.T("PIN")).TextColor(t.TextMuted)
+					ui.Text(c, sh.PIN[:3]+" "+sh.PIN[3:]).Font(monoFont).FontSize(px(t, 22)).Bold()
+				})
+				if len(sh.URLs) == 0 {
+					muted(i18n.T("This Mac has no address on a local network."))
+				}
+				for i, u := range sh.URLs {
+					ui.Row(c.Key("share-url-" + strconv.Itoa(i))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, u+"/v1").Font(monoFont).Grow(1).SingleLine()
+						if ui.Button(c.Key("copy"), i18n.T("Copy")).Clicked() {
+							c.Services().WriteClipboard(u + "/v1")
+							a.toast(i18n.T("Copied"))
+						}
+					})
+				}
+				muted(i18n.T("Send the PIN as the X-AudioSmith-Pin header, or add ?pin=%s to the URL. Anyone on this network with the PIN can make speech with your voices.", sh.PIN))
+			})
+		}
+
+		// Agents.
+	})
+	settingGroup(c, i18n.T("Agents (MCP)"), func() {
+		settingRow(c, "api-mcp-output", i18n.T("Audio for agents"), i18n.T("How generate_speech hands back audio: in the answer, as a WAV file in the folder below, or both."), func() {
+			if ui.Segmented(c.Key("api-output-seg"), &a.apiForm.output, i18n.T("Both"), i18n.T("Inline"), i18n.T("File")).Label(i18n.T("Audio for agents")).Changed() {
+				mode := []string{settings.MCPOutputBoth, settings.MCPOutputInline, settings.MCPOutputFile}[a.apiForm.output]
+				a.updateSettings(func(s *settings.Settings) { s.API.MCPOutput = mode })
+			}
+		})
+		settingRowNote(c, "api-mcp-dir", i18n.T("Folder for agents' audio"), a.apiSandbox(), func() {
+			if ui.Button(c.Key("api-dir-choose"), i18n.T("Choose…")).Clicked() {
+				a.chooseAPIDir()
+			}
+			if ui.Button(c.Key("api-dir-reveal"), i18n.T("Show in Finder")).Clicked() {
+				a.revealAPIDir()
+			}
+		})
+		a.apiBindings(c)
+
+		// Reference.
+	})
+	settingGroup(c, i18n.T("API reference"), func() {
+		ui.Row(c.Key("api-ref")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			muted(i18n.T("The OpenAPI description is at %s.", a.apiBaseURL()+"/openapi.json"))
+			ui.Spacer(c)
+			if ui.Button(c.Key("api-ref-open"), i18n.T("Open the reference")).Disabled(a.apiPort == 0).Clicked() {
+				a.navigate("/api-reference")
+			}
+			if ui.Button(c.Key("api-ref-browser"), i18n.T("Open in the browser")).Disabled(a.apiPort == 0).Clicked() {
+				go mygo.Shell.OpenExternal(a.apiBaseURL() + "/docs")
+			}
+		})
+		ui.Collapsible(c.Key("api-ops"), i18n.T("Endpoints"), &a.apiForm.ops, func() {
+			ui.Column(c).Gap(px(t, 2)).Children(func() {
+				tag := ""
+				for i, op := range api.Operations() {
+					if op.Tag != tag {
+						tag = op.Tag
+						ui.Text(c.Key("tag-"+tag), tag).Bold().FontSize(px(t, 12)).TextColor(t.TextMuted).Padding(px(t, 6), 0, px(t, 2), 0)
+					}
+					ui.Row(c.Key("op-" + strconv.Itoa(i))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, op.Method).Font(monoFont).FontSize(px(t, 11)).Bold().Width(px(t, 52)).TextColor(methodColor(t, op.Method))
+						ui.Text(c, op.Path).Font(monoFont).FontSize(px(t, 12)).Width(px(t, 230)).SingleLine()
+						ui.Text(c, op.Summary).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).SingleLine()
+					})
+				}
+			})
 		})
 	})
 }

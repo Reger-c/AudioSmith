@@ -182,7 +182,7 @@ func TestTrimNotOffered(t *testing.T) {
 	if l := localLLMOptions(); len(l) != 1 || l[0].ID != catalog.DefaultLLM {
 		t.Errorf("language models %v", l)
 	}
-	a.navigate("/models")
+	openModels(a)
 	for k := range modelKinds {
 		a.modelsKind = k
 		tt.Frame()
@@ -221,7 +221,7 @@ func TestTrimCleanup(t *testing.T) {
 	}
 	// An unknown repo next to them is not AudioSmith's to delete.
 	putLeftover(t, cache, "someone/other-model", 1e6)
-	a.navigate("/models")
+	openModels(a)
 	a.refreshModels()
 	tt.Frame()
 	if !tt.HasText("Removed models still take 10 MB") {

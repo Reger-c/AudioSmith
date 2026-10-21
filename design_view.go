@@ -265,7 +265,7 @@ func (a *app) designTarget(c *ui.Context) {
 	d := &a.design
 	ms := designModels()
 	if len(ms) == 0 {
-		banner(c, icons.DangerTriangle, t.Warning, i18n.T("No model here can design voices. Download one that can, such as %s, on the Models page.", modelRefID(idVoiceDesign)), func() {
+		banner(c, icons.DangerTriangle, t.Warning, i18n.T("No model here can design voices. Download one that can, such as %s, in Settings → Models & network.", modelRefID(idVoiceDesign)), func() {
 			if ui.Button(c.Key("design-models"), i18n.T("Models")).Clicked() {
 				a.navigate("/models")
 			}

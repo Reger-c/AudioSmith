@@ -159,8 +159,8 @@ func TestReuseChooseModels(t *testing.T) {
 	if c := tf.Claims(family.ReleaseBundleID); len(c.Claims) != 0 {
 		t.Errorf("claimed %+v", c.Claims)
 	}
-	if a.currentPage() != "models" || a.firstSound {
-		t.Errorf("page %q, first sound %v", a.currentPage(), a.firstSound)
+	if a.shownPath() != "/settings/models" || a.firstSound {
+		t.Errorf("page %q, first sound %v", a.shownPath(), a.firstSound)
 	}
 	a.refreshFamily()
 	a.modelsFind = asr.DisplayName()
@@ -195,7 +195,7 @@ func TestRemovedModelReclaimedOnUse(t *testing.T) {
 	if tf.Claimed(family.ReleaseBundleID, refOf(asr)) {
 		t.Fatal("still claimed")
 	}
-	a.navigate("/models")
+	openModels(a)
 	a.modelsFind = asr.DisplayName()
 	tt.Frame()
 	if got := a.modelStateText(asr, a.model(asr)); got != "Installed · from Dicta" || !tt.HasText("Use") {
@@ -286,7 +286,7 @@ func TestStorageFolderShared(t *testing.T) {
 	a.navigate("/settings/storage")
 	tt.Frame()
 	tt.Frame()
-	if !tt.HasText("Shared by all ActNow apps. Change it in Settings → Models and downloads.") {
+	if !tt.HasText("Shared by all ActNow apps. Change it in Settings → Models & network.") {
 		t.Errorf("storage %q", tt.Texts())
 	}
 }
@@ -326,7 +326,7 @@ func TestNoFamilyWordingFirstRun(t *testing.T) {
 		t.Errorf("the pack's models not claimed: %+v", c)
 	}
 	a.refreshFamily()
-	a.navigate("/models")
+	openModels(a)
 	a.modelsFind = asr.DisplayName()
 	tt.Frame()
 	noFamily("models")
@@ -341,7 +341,7 @@ func TestNoFamilyWordingFirstRun(t *testing.T) {
 	a.navigate("/settings/storage")
 	tt.Frame()
 	tt.Frame()
-	if !tt.HasText("Change it in Settings → Models and downloads.") || !tt.HasText("Models can be downloaded again, so Time Machine leaves them out.") {
+	if !tt.HasText("Change it in Settings → Models & network.") || !tt.HasText("Models can be downloaded again, so Time Machine leaves them out.") {
 		t.Errorf("storage %q", tt.Texts())
 	}
 	noFamily("storage")

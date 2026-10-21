@@ -90,86 +90,89 @@ var reach = func(client *http.Client, host string) netCheck {
 
 // networkSettings is Settings → Network.
 func (a *app) networkSettings(c *ui.Context) {
+	a.revealAnchor(c, "network")
 	t := c.Theme()
-	sectionTitle(c, i18n.T("Downloads"))
-	ui.Text(c, i18n.T("Models, ffmpeg and yt-dlp download through these settings. The engine itself never connects to the network.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
-	sourceNote := i18n.T("Models come from Hugging Face, ffmpeg and yt-dlp from GitHub. Every download is checked (signature or checksum), so a mirror cannot change what you get.") + " " +
-		i18n.T("Mirrors never receive your token; gated models always come from huggingface.co.")
-	settingRow(c, "source", i18n.T("Download from"), sourceNote, func() {
-		opts := sourceOptions()
-		if ui.Select(c.Key("source-select"), &a.source, opts).Label(i18n.T("Download from")).Width(px(t, 440)).Shrink(1).MinWidth(px(t, 200)).Changed() {
-			var eps []string
-			switch slices.Index(opts, a.source) {
-			case 1:
-				eps = []string{"https://huggingface.co"}
-			case 2:
-				eps = []string{"https://hf-mirror.com"}
-			case 3:
-				eps = strings.Fields(a.endpoint)
-				if len(eps) == 0 {
-					return // until a URL is typed
+	settingGroup(c, i18n.T("Downloads"), func() {
+		ui.Text(c, i18n.T("Models, ffmpeg and yt-dlp download through these settings. The engine itself never connects to the network.")).
+			FontSize(px(t, 12)).TextColor(t.TextMuted)
+		sourceNote := i18n.T("Models come from Hugging Face, ffmpeg and yt-dlp from GitHub. Every download is checked (signature or checksum), so a mirror cannot change what you get.") + " " +
+			i18n.T("Mirrors never receive your token; gated models always come from huggingface.co.")
+		settingRow(c, "source", i18n.T("Download from"), sourceNote, func() {
+			opts := sourceOptions()
+			if ui.Select(c.Key("source-select"), &a.source, opts).Label(i18n.T("Download from")).Width(px(t, 440)).Shrink(1).MinWidth(px(t, 200)).Changed() {
+				var eps []string
+				switch slices.Index(opts, a.source) {
+				case 1:
+					eps = []string{"https://huggingface.co"}
+				case 2:
+					eps = []string{"https://hf-mirror.com"}
+				case 3:
+					eps = strings.Fields(a.endpoint)
+					if len(eps) == 0 {
+						return // until a URL is typed
+					}
 				}
-			}
-			a.updateSettings(func(s *settings.Settings) { s.Models.Endpoints = eps })
-		}
-	})
-	if slices.Index(sourceOptions(), a.source) == 3 {
-		settingRow(c, "endpoint", i18n.T("Endpoint"), i18n.T("One or more Hugging Face URLs, separated by spaces; the fastest answers. ffmpeg and yt-dlp come from the faster of github.com and mirror.actnow.dev."), func() {
-			in := ui.TextInput(c.Key("endpoint-input"), &a.endpoint).Placeholder("https://hf-mirror.com").Width(px(t, 280)).Label(i18n.T("Endpoint"))
-			if in.Submitted() {
-				eps := strings.Fields(a.endpoint)
 				a.updateSettings(func(s *settings.Settings) { s.Models.Endpoints = eps })
 			}
 		})
-	}
-	a.sharedScope(c, famset.KeyHFEndpoints) // family_shared_view.go: the ActNow family's
-	settingRowNote(c, "proxy", i18n.T("Proxy"), a.proxyInfo, func() {
-		opts := proxyOptions()
-		if ui.Select(c.Key("proxy-select"), &a.proxyMode, opts).Label(i18n.T("Proxy")).Width(px(t, 240)).Changed() {
-			mode := ""
-			switch slices.Index(opts, a.proxyMode) {
-			case 1:
-				mode = hub.ProxyDirect
-			case 2:
-				mode = strings.TrimSpace(a.proxy)
-				if mode == "" {
-					return
+		if slices.Index(sourceOptions(), a.source) == 3 {
+			settingRow(c, "endpoint", i18n.T("Endpoint"), i18n.T("One or more Hugging Face URLs, separated by spaces; the fastest answers. ffmpeg and yt-dlp come from the faster of github.com and mirror.actnow.dev."), func() {
+				in := ui.TextInput(c.Key("endpoint-input"), &a.endpoint).Placeholder("https://hf-mirror.com").Width(px(t, 280)).Label(i18n.T("Endpoint"))
+				if in.Submitted() {
+					eps := strings.Fields(a.endpoint)
+					a.updateSettings(func(s *settings.Settings) { s.Models.Endpoints = eps })
 				}
-			}
-			a.updateSettings(func(s *settings.Settings) { s.Models.Proxy = mode })
+			})
 		}
-	})
-	if slices.Index(proxyOptions(), a.proxyMode) == 2 {
-		settingRow(c, "proxy-url", i18n.T("Proxy URL"), i18n.T("http://, https:// or socks5://host:port"), func() {
-			in := ui.TextInput(c.Key("proxy-input"), &a.proxy).Placeholder("http://127.0.0.1:7890").Width(px(t, 280)).Label(i18n.T("Proxy URL"))
-			if in.Submitted() {
-				mode := strings.TrimSpace(a.proxy)
+		a.sharedScope(c, famset.KeyHFEndpoints) // family_shared_view.go: the ActNow family's
+		settingRowNote(c, "proxy", i18n.T("Proxy"), a.proxyInfo, func() {
+			opts := proxyOptions()
+			if ui.Select(c.Key("proxy-select"), &a.proxyMode, opts).Label(i18n.T("Proxy")).Width(px(t, 240)).Changed() {
+				mode := ""
+				switch slices.Index(opts, a.proxyMode) {
+				case 1:
+					mode = hub.ProxyDirect
+				case 2:
+					mode = strings.TrimSpace(a.proxy)
+					if mode == "" {
+						return
+					}
+				}
 				a.updateSettings(func(s *settings.Settings) { s.Models.Proxy = mode })
 			}
 		})
-	}
-	a.sharedScope(c, famset.KeyProxy)
-
-	sectionTitle(c, i18n.T("Connection"))
-	settingRow(c, "net-test", i18n.T("Test the connection"), i18n.T("Reaches Hugging Face, GitHub and their mirrors through the proxy above."), func() {
-		if a.netTesting {
-			ui.Spinner(c)
+		if slices.Index(proxyOptions(), a.proxyMode) == 2 {
+			settingRow(c, "proxy-url", i18n.T("Proxy URL"), i18n.T("http://, https:// or socks5://host:port"), func() {
+				in := ui.TextInput(c.Key("proxy-input"), &a.proxy).Placeholder("http://127.0.0.1:7890").Width(px(t, 280)).Label(i18n.T("Proxy URL"))
+				if in.Submitted() {
+					mode := strings.TrimSpace(a.proxy)
+					a.updateSettings(func(s *settings.Settings) { s.Models.Proxy = mode })
+				}
+			})
 		}
-		if ui.Button(c.Key("net-test"), i18n.T("Test")).Disabled(a.netTesting).Clicked() {
-			a.testNetwork(nil)
+		a.sharedScope(c, famset.KeyProxy)
+
+	})
+	settingGroup(c, i18n.T("Connection"), func() {
+		settingRow(c, "net-test", i18n.T("Test the connection"), i18n.T("Reaches Hugging Face, GitHub and their mirrors through the proxy above."), func() {
+			if a.netTesting {
+				ui.Spinner(c)
+			}
+			if ui.Button(c.Key("net-test"), i18n.T("Test")).Disabled(a.netTesting).Clicked() {
+				a.testNetwork(nil)
+			}
+		})
+		for _, r := range a.netChecks {
+			ui.Row(c.Key("net-" + r.host)).Gap(px(t, 8)).Children(func() {
+				mark, col := icons.CheckCircle, t.Success
+				detail := i18n.T("%d ms", r.latency.Milliseconds())
+				if !r.ok {
+					mark, col, detail = icons.CloseCircle, t.Danger, r.err
+				}
+				ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0)
+				ui.Text(c, strings.TrimPrefix(r.host, "https://")).Width(px(t, 160))
+				ui.Text(c, detail).TextColor(t.TextMuted).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			})
 		}
 	})
-	for _, r := range a.netChecks {
-		ui.Row(c.Key("net-" + r.host)).Gap(px(t, 8)).Children(func() {
-			mark, col := icons.CheckCircle, t.Success
-			detail := i18n.T("%d ms", r.latency.Milliseconds())
-			if !r.ok {
-				mark, col, detail = icons.CloseCircle, t.Danger, r.err
-			}
-			ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0)
-			ui.Text(c, strings.TrimPrefix(r.host, "https://")).Width(px(t, 160))
-			ui.Text(c, detail).TextColor(t.TextMuted).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-		})
-	}
 }

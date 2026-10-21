@@ -406,120 +406,124 @@ func (a *app) storageSettings(c *ui.Context) {
 		}
 	}
 
-	sectionTitle(c, i18n.T("Data folder"))
-	settingRow(c, "st-data", shortPath(a.dataDir()), i18n.T("Your library: takes, voices, projects, dubs, transcripts and the database."), func() {
-		open("st-open-data", a.dataDir())
-		if ui.Button(c.Key("st-move"), i18n.T("Move…")).Disabled(a.moving).Clicked() {
-			chooseMoveDir(a, a.startMove)
-		}
-	})
-	if l := a.stLoc; l.Previous != "" {
-		settingRowNote(c, "st-prev", i18n.T("The previous data folder is still there"), shortPath(l.Previous), func() {
-			if ui.Button(c.Key("st-prev-rm"), i18n.T("Remove it")).Clicked() {
-				a.removePrevious()
+	settingGroup(c, i18n.T("Data folder"), func() {
+		settingRow(c, "st-data", shortPath(a.dataDir()), i18n.T("Your library: takes, voices, projects, dubs, transcripts and the database."), func() {
+			open("st-open-data", a.dataDir())
+			if ui.Button(c.Key("st-move"), i18n.T("Move…")).Disabled(a.moving).Clicked() {
+				chooseMoveDir(a, a.startMove)
 			}
 		})
-	}
-	if l := a.stLoc; l.Failed != "" {
-		settingRowNote(c, "st-failed", i18n.T("The last move did not happen"), l.Failed, func() {
-			if ui.Button(c.Key("st-failed-ok"), i18n.T("Dismiss")).Clicked() {
-				a.dismissMoveFailure()
-			}
-		})
-	}
-	if a.moveErr != "" {
-		ui.Text(c, a.moveErr).FontSize(px(t, 12)).TextColor(t.Danger)
-	}
-
-	sectionTitle(c, i18n.T("What takes room"))
-	if r == nil {
-		ui.Row(c).Gap(px(t, 8)).Children(func() {
-			ui.Spinner(c)
-			muted(i18n.T("Measuring…"))
-		})
-	} else {
-		muted(i18n.T("Data folder: %s · free on its disk: %s", humanBytes(r.data), humanBytes(r.free)))
-		ui.Grid(c.Key("st-cats")).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 90)), ui.Fixed(px(t, 80))).GapX(px(t, 12)).GapY(px(t, 6)).Children(func() {
-			for _, cat := range r.cats {
-				ui.Text(c, cat.title)
-				ui.Text(c, humanBytes(cat.bytes)).TextColor(t.TextMuted).TextAlign(ui.End)
-				ui.Row(c.Key("cat-" + cat.id)).Children(func() {
-					if cat.id == "caches" {
-						busy := len(a.activeJobs()) > 0
-						b := ui.Button(c.Key("st-clear"), i18n.T("Clear")).Disabled(busy || cat.bytes == 0)
-						if busy {
-							b.Tooltip(i18n.T("Wait for the jobs in progress"))
-						}
-						if b.Clicked() {
-							a.clearCaches()
-						}
-						return
-					}
-					open("open", cat.dir)
-				})
-			}
-		})
-		muted(i18n.T("Caches are rebuilt when needed: waveforms, rendered chunks, voice previews."))
-	}
-
-	sectionTitle(c, i18n.T("Models"))
-	shared := i18n.T("Change it in Settings → Models and downloads.")
-	if len(a.famOthers) > 0 {
-		shared = i18n.T("Shared by all ActNow apps. Change it in Settings → Models and downloads.") // spec §7.10.2
-	}
-	settingRow(c, "st-models", shortPath(modelCache(a.prefs)), shared, func() {
-		open("st-open-models", modelCache(a.prefs))
-	})
-	if fam := a.lib.fam; fam != nil {
-		// Time Machine (family spec §7.12): the family's models.backup,
-		// off by default.
-		on := fam.Backup()
-		hint := i18n.T("Models can be downloaded again, so Time Machine leaves them out.")
-		if len(a.famOthers) > 0 {
-			hint = i18n.T("Models can be downloaded again, so Time Machine leaves them out. Applies to all ActNow apps.")
-		}
-		settingRow(c, "st-models-backup", i18n.T("Back up models with Time Machine"), hint, func() {
-			if ui.Switch(c.Key("st-models-backup-switch"), &on).Changed() {
-				go func(on bool) {
-					if err := fam.SetBackup(context.Background(), on); err != nil {
-						log.Printf("family: Time Machine: %v", err)
-					}
-				}(on)
-			}
-		})
-	}
-	if r != nil {
-		muted(i18n.T("AudioSmith's models: %s of %s in the folder · free on its disk: %s", humanBytes(r.ours), humanBytes(r.modelsAll), humanBytes(r.freeModel)))
-		ui.Grid(c.Key("st-models-list")).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 90))).GapX(px(t, 12)).GapY(px(t, 4)).Children(func() {
-			for i, m := range r.models {
-				if i >= 8 {
-					break
+		if l := a.stLoc; l.Previous != "" {
+			settingRowNote(c, "st-prev", i18n.T("The previous data folder is still there"), shortPath(l.Previous), func() {
+				if ui.Button(c.Key("st-prev-rm"), i18n.T("Remove it")).Clicked() {
+					a.removePrevious()
 				}
-				ui.Text(c, m.title).FontSize(px(t, 12))
-				ui.Text(c, humanBytes(m.bytes)).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.End)
+			})
+		}
+		if l := a.stLoc; l.Failed != "" {
+			settingRowNote(c, "st-failed", i18n.T("The last move did not happen"), l.Failed, func() {
+				if ui.Button(c.Key("st-failed-ok"), i18n.T("Dismiss")).Clicked() {
+					a.dismissMoveFailure()
+				}
+			})
+		}
+		if a.moveErr != "" {
+			ui.Text(c, a.moveErr).FontSize(px(t, 12)).TextColor(t.Danger)
+		}
+
+	})
+	settingGroup(c, i18n.T("What takes room"), func() {
+		if r == nil {
+			ui.Row(c).Gap(px(t, 8)).Children(func() {
+				ui.Spinner(c)
+				muted(i18n.T("Measuring…"))
+			})
+		} else {
+			muted(i18n.T("Data folder: %s · free on its disk: %s", humanBytes(r.data), humanBytes(r.free)))
+			ui.Grid(c.Key("st-cats")).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 90)), ui.Fixed(px(t, 80))).GapX(px(t, 12)).GapY(px(t, 6)).Children(func() {
+				for _, cat := range r.cats {
+					ui.Text(c, cat.title)
+					ui.Text(c, humanBytes(cat.bytes)).TextColor(t.TextMuted).TextAlign(ui.End)
+					ui.Row(c.Key("cat-" + cat.id)).Children(func() {
+						if cat.id == "caches" {
+							busy := len(a.activeJobs()) > 0
+							b := ui.Button(c.Key("st-clear"), i18n.T("Clear")).Disabled(busy || cat.bytes == 0)
+							if busy {
+								b.Tooltip(i18n.T("Wait for the jobs in progress"))
+							}
+							if b.Clicked() {
+								a.clearCaches()
+							}
+							return
+						}
+						open("open", cat.dir)
+					})
+				}
+			})
+			muted(i18n.T("Caches are rebuilt when needed: waveforms, rendered chunks, voice previews."))
+		}
+
+	})
+	settingGroup(c, i18n.T("Models"), func() {
+		shared := i18n.T("Change it in Settings → Models & network.")
+		if len(a.famOthers) > 0 {
+			shared = i18n.T("Shared by all ActNow apps. Change it in Settings → Models & network.") // spec §7.10.2
+		}
+		settingRow(c, "st-models", shortPath(modelCache(a.prefs)), shared, func() {
+			open("st-open-models", modelCache(a.prefs))
+		})
+		if fam := a.lib.fam; fam != nil {
+			// Time Machine (family spec §7.12): the family's models.backup,
+			// off by default.
+			on := fam.Backup()
+			hint := i18n.T("Models can be downloaded again, so Time Machine leaves them out.")
+			if len(a.famOthers) > 0 {
+				hint = i18n.T("Models can be downloaded again, so Time Machine leaves them out. Applies to all ActNow apps.")
+			}
+			settingRow(c, "st-models-backup", i18n.T("Back up models with Time Machine"), hint, func() {
+				if ui.Switch(c.Key("st-models-backup-switch"), &on).Changed() {
+					go func(on bool) {
+						if err := fam.SetBackup(context.Background(), on); err != nil {
+							log.Printf("family: Time Machine: %v", err)
+						}
+					}(on)
+				}
+			})
+		}
+		if r != nil {
+			muted(i18n.T("AudioSmith's models: %s of %s in the folder · free on its disk: %s", humanBytes(r.ours), humanBytes(r.modelsAll), humanBytes(r.freeModel)))
+			ui.Grid(c.Key("st-models-list")).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 90))).GapX(px(t, 12)).GapY(px(t, 4)).Children(func() {
+				for i, m := range r.models {
+					if i >= 8 {
+						break
+					}
+					ui.Text(c, m.title).FontSize(px(t, 12))
+					ui.Text(c, humanBytes(m.bytes)).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.End)
+				}
+			})
+			a.familyStorage(c, r) // storage_family.go
+		}
+
+	})
+	settingGroup(c, i18n.T("Reset"), func() {
+		settingRow(c, "st-reset-look", i18n.T("Reset the look"), i18n.T("Theme, colours, size, sidebar and language."), func() {
+			if ui.Button(c.Key("st-reset-look"), i18n.T("Reset")).Clicked() {
+				a.resetLook()
 			}
 		})
-		a.familyStorage(c, r) // storage_family.go
-	}
-
-	sectionTitle(c, i18n.T("Reset"))
-	settingRow(c, "st-reset-look", i18n.T("Reset the look"), i18n.T("Theme, colours, size, sidebar and language."), func() {
-		if ui.Button(c.Key("st-reset-look"), i18n.T("Reset")).Clicked() {
-			a.resetLook()
-		}
+		settingRow(c, "st-reset-settings", i18n.T("Reset all settings"), i18n.T("Every setting goes back to its default. Your library, models and saved keys stay."), func() {
+			if ui.Button(c.Key("st-reset-settings"), i18n.T("Reset…")).Clicked() {
+				a.resetAsk = "settings"
+			}
+		})
+		settingRow(c, "st-erase", i18n.T("Erase everything"), i18n.T("Deletes your library (takes, voices, projects, dubs, transcripts), settings, caches and logs, then restarts AudioSmith as new."), func() {
+			if ui.Button(c.Key("st-erase"), i18n.T("Erase…")).Clicked() {
+				a.resetAsk, a.resetText = "everything", ""
+				a.eraseKeeps()
+			}
+		})
+		a.storageDialogs(c)
 	})
-	settingRow(c, "st-reset-settings", i18n.T("Reset all settings"), i18n.T("Every setting goes back to its default. Your library, models and saved keys stay."), func() {
-		if ui.Button(c.Key("st-reset-settings"), i18n.T("Reset…")).Clicked() {
-			a.resetAsk = "settings"
-		}
-	})
-	settingRow(c, "st-erase", i18n.T("Erase everything"), i18n.T("Deletes your library (takes, voices, projects, dubs, transcripts), settings, caches and logs, then restarts AudioSmith as new."), func() {
-		if ui.Button(c.Key("st-erase"), i18n.T("Erase…")).Clicked() {
-			a.resetAsk, a.resetText = "everything", ""
-			a.eraseKeeps()
-		}
-	})
-	a.storageDialogs(c)
 }
 
 // storageDialogs are the confirmations and the move's progress.

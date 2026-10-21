@@ -192,72 +192,74 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 	ui.Text(c, i18n.T("AudioSmith reads and writes audio and video with macOS (AVFoundation). ffmpeg, a free media tool, adds MP3, Opus and FLAC export, WebM and MKV videos, and subtitles burnt into a video. It is optional, and runs as a separate program.")).
 		FontSize(px(t, 12)).TextColor(t.TextMuted)
 
-	sectionTitle(c, i18n.T("ffmpeg"))
 	m := a.prefs.Media
-	tool := a.mediaTool()
-	switch {
-	case m.FFmpeg == "":
-		settingRowNote(c, "ff-none", i18n.T("Not set up"), i18n.T("Exports are WAV, M4A and M4B; videos must be MP4 or MOV."), func() {})
-	case a.ffChecking:
-		settingRowNote(c, "ff-checking", i18n.T("Checking ffmpeg…"), shortPath(m.FFmpeg), func() { ui.Spinner(c) })
-	case tool == nil:
-		settingRowNote(c, "ff-broken", i18n.T("ffmpeg does not run"), orDash(a.ffErr), func() {
-			if ui.Button(c.Key("ff-retry"), i18n.T("Try again")).Clicked() {
-				a.ffPath = ""
-				a.loadMediaTool()
-			}
-		})
-	default:
-		desc := i18n.T("Version %s · %s licence · %s", tool.Version, tool.Licence, ffOriginText(m.Origin)) + "\n" + shortPath(tool.FFmpeg)
-		if tool.FFprobe == "" {
-			desc += "\n" + i18n.T("ffprobe is missing beside it: WebM and MKV files cannot be read.")
-		}
-		settingRowNote(c, "ff-ready", i18n.T("ffmpeg is ready"), desc, func() {
-			label := i18n.T("Stop using it")
-			if m.Origin == settings.MediaDownloaded {
-				label = i18n.T("Remove")
-			}
-			if ui.Button(c.Key("ff-remove"), label).Clicked() {
-				a.removeFFmpeg()
-			}
-		})
-		ui.Column(c.Key("ff-caps")).Gap(px(t, 4)).Children(func() {
-			for _, cp := range ffCapabilities(tool) {
-				mark, col := icons.CheckCircle, t.Success
-				if !cp.ok {
-					mark, col = icons.CloseCircle, t.TextMuted
+	settingGroup(c, i18n.T("ffmpeg"), func() {
+		tool := a.mediaTool()
+		switch {
+		case m.FFmpeg == "":
+			settingRowNote(c, "ff-none", i18n.T("Not set up"), i18n.T("Exports are WAV, M4A and M4B; videos must be MP4 or MOV."), func() {})
+		case a.ffChecking:
+			settingRowNote(c, "ff-checking", i18n.T("Checking ffmpeg…"), shortPath(m.FFmpeg), func() { ui.Spinner(c) })
+		case tool == nil:
+			settingRowNote(c, "ff-broken", i18n.T("ffmpeg does not run"), orDash(a.ffErr), func() {
+				if ui.Button(c.Key("ff-retry"), i18n.T("Try again")).Clicked() {
+					a.ffPath = ""
+					a.loadMediaTool()
 				}
-				ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
-					ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0)
-					ui.Text(c, cp.what).FontSize(px(t, 12))
-				})
+			})
+		default:
+			desc := i18n.T("Version %s · %s licence · %s", tool.Version, tool.Licence, ffOriginText(m.Origin)) + "\n" + shortPath(tool.FFmpeg)
+			if tool.FFprobe == "" {
+				desc += "\n" + i18n.T("ffprobe is missing beside it: WebM and MKV files cannot be read.")
+			}
+			settingRowNote(c, "ff-ready", i18n.T("ffmpeg is ready"), desc, func() {
+				label := i18n.T("Stop using it")
+				if m.Origin == settings.MediaDownloaded {
+					label = i18n.T("Remove")
+				}
+				if ui.Button(c.Key("ff-remove"), label).Clicked() {
+					a.removeFFmpeg()
+				}
+			})
+			ui.Column(c.Key("ff-caps")).Gap(px(t, 4)).Children(func() {
+				for _, cp := range ffCapabilities(tool) {
+					mark, col := icons.CheckCircle, t.Success
+					if !cp.ok {
+						mark, col = icons.CloseCircle, t.TextMuted
+					}
+					ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
+						ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0)
+						ui.Text(c, cp.what).FontSize(px(t, 12))
+					})
+				}
+			})
+		}
+
+		if ffmpegDownloadOffered || a.ffInstall.running || m.Origin == settings.MediaDownloaded {
+			a.ffmpegDownloadSection(c)
+		}
+
+	})
+	settingGroup(c, i18n.T("On this Mac"), func() {
+		if a.ffScanned && len(a.ffSystem) == 0 {
+			ui.Text(c, i18n.T("No ffmpeg found in Homebrew's or MacPorts' folders. With Homebrew: brew install ffmpeg")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		}
+		for _, p := range a.ffSystem {
+			settingRow(c, "ff-sys-"+p, shortPath(p), "", func() {
+				inUse := m.FFmpeg == p
+				if ui.Button(c.Key("ff-use"), i18n.T("Use this one")).Disabled(inUse).Clicked() {
+					a.useFFmpeg(p, settings.MediaSystem)
+				}
+			})
+		}
+		ui.Row(c).Gap(px(t, 8)).Children(func() {
+			if ui.Button(c.Key("ff-rescan"), i18n.T("Look again")).Clicked() {
+				a.scanFFmpeg()
+			}
+			if a.win != nil && ui.Button(c.Key("ff-choose"), i18n.T("Choose a file…")).Clicked() {
+				a.chooseFFmpeg()
 			}
 		})
-	}
-
-	if ffmpegDownloadOffered || a.ffInstall.running || m.Origin == settings.MediaDownloaded {
-		a.ffmpegDownloadSection(c)
-	}
-
-	sectionTitle(c, i18n.T("On this Mac"))
-	if a.ffScanned && len(a.ffSystem) == 0 {
-		ui.Text(c, i18n.T("No ffmpeg found in Homebrew's or MacPorts' folders. With Homebrew: brew install ffmpeg")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-	}
-	for _, p := range a.ffSystem {
-		settingRow(c, "ff-sys-"+p, shortPath(p), "", func() {
-			inUse := m.FFmpeg == p
-			if ui.Button(c.Key("ff-use"), i18n.T("Use this one")).Disabled(inUse).Clicked() {
-				a.useFFmpeg(p, settings.MediaSystem)
-			}
-		})
-	}
-	ui.Row(c).Gap(px(t, 8)).Children(func() {
-		if ui.Button(c.Key("ff-rescan"), i18n.T("Look again")).Clicked() {
-			a.scanFFmpeg()
-		}
-		if a.win != nil && ui.Button(c.Key("ff-choose"), i18n.T("Choose a file…")).Clicked() {
-			a.chooseFFmpeg()
-		}
 	})
 }
 

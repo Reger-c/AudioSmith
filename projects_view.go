@@ -22,8 +22,26 @@ func (a *app) projectsPage(c *ui.Context) {
 	s := &a.projects
 	a.refreshLibrary()
 	narrow := a.pageWidth(c)-px(t, 190) < px(t, 520)
-	pageHeader(c, i18n.T("Projects"), func() {
-		primaryIconButton(c.Key("pj-new"), icons.AddCircle, i18n.T("New")).Label(i18n.T("New")).Menu(func(m *ui.Menu) {
+	// The header (the family's window spec §3.2): ‹ ›, how many (or how many
+	// the sidebar's search found, and Clear search), the views, New, ⋯.
+	total := s.counts[libCategories[min(max(s.category, 0), len(libCategories)-1)]]
+	note := i18n.N(total, "%d item", "%d items", total)
+	searching := strings.TrimSpace(s.query) != ""
+	if searching {
+		note = i18n.N(len(s.items), "%d found", "%d found", len(s.items))
+	}
+	browseHeader(c, i18n.T("Projects"), note, func() {
+		if searching && ghostButton(c.Key("pj-clear-search"), i18n.T("Clear search")).Shrink(0).Clicked() {
+			s.query = ""
+			clear(s.selected)
+		}
+		if iconToggle(c.Key("pj-view-list"), icons.List, s.cards == 0, tip(i18n.T("List"), "⌥1")).Clicked() {
+			s.cards = 0
+		}
+		if iconToggle(c.Key("pj-view-cards"), galleryIcon, s.cards == 1, tip(i18n.T("Cards"), "⌥2")).Clicked() {
+			s.cards = 1
+		}
+		iconButton(c.Key("pj-new"), icons.AddCircle, i18n.T("New")).Menu(func(m *ui.Menu) {
 			if m.Item(i18n.T("New story")).Chosen() {
 				a.navigate("/stories")
 			}
@@ -35,6 +53,12 @@ func (a *app) projectsPage(c *ui.Context) {
 			}
 		})
 	})
+	if c.Shortcut(ui.Alt, ui.Key1) {
+		s.cards = 0
+	}
+	if c.Shortcut(ui.Alt, ui.Key2) {
+		s.cards = 1
+	}
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		if !narrow {
 			ui.Column(c.Key("pj-filters")).Width(px(t, 190)).Shrink(0).Padding(px(t, sp1), px(t, sp3)).Gap(px(t, 2)).Children(func() {
@@ -70,25 +94,19 @@ func (a *app) projectsPage(c *ui.Context) {
 	a.libraryDialogs(c)
 }
 
-// libraryToolbar: the category (narrow), search, view, selection.
+// libraryToolbar: the category (narrow) and the selection. The search is
+// the sidebar's (⌘F), the views are in the header.
 func (a *app) libraryToolbar(c *ui.Context, narrow bool) {
 	t := c.Theme()
 	s := &a.projects
-	room := a.pageWidth(c) - px(t, 2*sp6)
-	filtersW := float32(240)
-	if narrow {
-		filtersW = 300 // the category select, the view, the selection icon
-	} else {
-		room -= px(t, 190) + 1
-	}
-	filterBar(c, room, filtersW, func() {
+	ui.Row(c.Key("pj-toolbar")).Gap(px(t, sp2)).AlignItems(ui.Center).MinHeight(px(t, 30)).Children(func() {
 		if narrow {
 			labels := make([]string, len(libCategories))
 			for i, cat := range libCategories {
 				labels[i] = categoryLabel(cat) + " · " + strconv.Itoa(s.counts[cat])
 			}
 			cur := labels[min(max(s.category, 0), len(labels)-1)]
-			if ui.Select(c.Key("pj-category"), &cur, labels).Label(i18n.T("Category")).Tooltip(i18n.T("Category")).Width(px(t, 150)).Shrink(1).MinWidth(px(t, 90)).Changed() {
+			if ui.Select(c.Key("pj-category"), &cur, labels).Label(i18n.T("Category")).Tooltip(i18n.T("Category")).Width(px(t, 180)).Shrink(1).MinWidth(px(t, 90)).Changed() {
 				for i, l := range labels {
 					if l == cur {
 						s.category = i
@@ -97,11 +115,6 @@ func (a *app) libraryToolbar(c *ui.Context, narrow bool) {
 				clear(s.selected)
 			}
 		}
-		if searchField(c, "pj-search", &s.query, i18n.T("Search projects, voices, takes, exports…"), px(t, 380)).Label(i18n.T("Search the library")).Changed() {
-			clear(s.selected)
-		}
-	}, func() {
-		ui.Segmented(c.Key("pj-view"), &s.cards, i18n.T("List"), i18n.T("Cards")).Label(i18n.T("View")).Shrink(0)
 		ui.Spacer(c)
 		n := len(s.selected)
 		if n == 0 {
@@ -119,6 +132,7 @@ func (a *app) libraryToolbar(c *ui.Context, narrow bool) {
 			}
 			return
 		}
+		caption(c, i18n.N(n, "%d selected", "%d selected", n)).SingleLine().Shrink(0)
 		if iconButton(c.Key("pj-clear"), icons.Close, i18n.T("Clear selection")).Clicked() {
 			clear(s.selected)
 			clear(s.errors)
@@ -139,7 +153,11 @@ func (a *app) libraryItems(c *ui.Context) {
 		case s.loading && s.loaded == "":
 			ui.Column(c.Key("pj-empty")).Grow(1).Center().Children(func() { ui.Spinner(c).Label(i18n.T("Loading…")) })
 		case strings.TrimSpace(s.query) != "":
-			emptyState(c.Key("pj-empty"), icons.Magnifer, i18n.T("No matches for “%s”", strings.TrimSpace(s.query)), "", nil)
+			emptyState(c.Key("pj-empty"), icons.Magnifer, i18n.T("No matches for “%s”", strings.TrimSpace(s.query)), "", func() {
+				if ui.Button(c.Key("pj-empty-clear"), i18n.T("Clear search")).Clicked() {
+					s.query = ""
+				}
+			})
 		default:
 			emptyState(c.Key("pj-empty"), projectsIcon, i18n.T("Nothing here yet"), i18n.T("Write a story, make an audiobook, design a voice or generate a take, and it shows up here."), nil)
 		}

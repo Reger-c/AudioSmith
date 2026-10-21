@@ -240,7 +240,7 @@ func (a *app) obSystem(c *ui.Context) {
 			}
 		})
 	default:
-		obCheckRow(c, "ob-net", "warn", i18n.T("No download source answers"), i18n.T("You can download models later; a proxy goes in Settings → Network."), func() {
+		obCheckRow(c, "ob-net", "warn", i18n.T("No download source answers"), i18n.T("You can download models later; a proxy goes in Settings → Models & network."), func() {
 			if ghostIconButton(c.Key("ob-net-retry"), icons.Restart, i18n.T("Try again")).Label(i18n.T("Try again")).Clicked() {
 				a.testNetwork(nil)
 			}

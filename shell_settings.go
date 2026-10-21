@@ -52,28 +52,40 @@ type settingsForm struct {
 // settingsSection is a page of the settings.
 type settingsSection struct{ id, title, en string }
 
+// settingsSections are Settings' sections, in order (the ActNow family's
+// window spec §5: General first, the app's own, then models, privacy,
+// advanced and about). The sections that became part of one keep their
+// paths (settingsAliases).
 func settingsSections() []settingsSection {
 	return []settingsSection{
-		{"general", i18n.T("General"), "General"},
-		{"appearance", i18n.T("Appearance"), "Appearance"},
-		{"models", i18n.T("Models and downloads"), "Models and downloads"},
-		{"studio", i18n.T("Studio"), "Studio"},
-		{"engine", i18n.T("Engine"), "Engine"},
-		{"pronunciation", i18n.T("Pronunciation"), "Pronunciation"}, // M1-G: pronunciation_settings.go
+		{"general", i18n.T("General"), "General appearance theme language sidebar interface size"},
+		{"studio", i18n.T("Studio"), "Studio pronunciation"}, // with Pronunciation (pronunciation_settings.go)
+		dubSettingsSection(), // M4: dub_settings.go (thread #19)
 		// M2 (thread #17): dictation_settings.go, transcribe_llm_settings.go, permissions.go.
-		{"dictation", i18n.T("Dictation"), "Dictation"},
-		{"writing", i18n.T("Writing help"), "Writing help"},
-		{"permissions", i18n.T("Permissions"), "Permissions"},
-		dubSettingsSection(),                      // M4: dub_settings.go (thread #19)
-		{"api", i18n.T("Local API"), "Local API"}, // M5: api_settings.go (thread #20)
+		{"dictation", i18n.T("Dictation"), "Dictation permissions microphone accessibility"},
+		{"writing", i18n.T("Writing help"), "Writing help language model LLM Ollama"},
+		{"integrations", i18n.T("Integrations"), "Integrations Local API MCP agents"}, // M5: api_settings.go, settings_integrations.go
 		// M7a (thread #22): settings_*.go, ffmpeg_settings.go.
 		{"audio-tools", i18n.T("Audio tools"), "Audio tools ffmpeg"},
-		{"network", i18n.T("Network"), "Network proxy mirror"},
+		{"models", i18n.T("Models & network"), "Models downloads network proxy mirror engine memory"},
 		{"privacy", i18n.T("Privacy"), "Privacy history analytics"},
-		{"storage", i18n.T("Storage"), "Storage disk data folder reset"},
-		{"usage", i18n.T("Usage"), "Usage statistics"},
-		{"about", i18n.T("Diagnostics and about"), "Diagnostics about version bug report"},
+		{"advanced", i18n.T("Advanced"), "Advanced storage disk data folder reset usage statistics diagnostics self-check"},
+		{"about", i18n.T("About"), "About version updates licence"},
 	}
+}
+
+// settingsAliases are the sections that are part of another now, and
+// that one: their paths ("/settings/network", deep links, notifications)
+// open it.
+var settingsAliases = map[string]string{
+	"appearance":    "general",
+	"pronunciation": "studio",
+	"permissions":   "dictation",
+	"api":           "integrations",
+	"engine":        "models",
+	"network":       "models",
+	"storage":       "advanced",
+	"usage":         "advanced",
 }
 
 // updateSettings changes the settings: at once in the snapshot, and in

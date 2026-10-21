@@ -253,68 +253,69 @@ func (a *app) writingSettings(c *ui.Context) {
 	}
 	ui.Text(c.Key("llm-status"), status).Bold()
 
-	sectionTitle(c, i18n.T("Which model"))
-	labels, ids := a.routeOptions()
-	ollama := i18n.T("Ollama is not running on this Mac.")
-	if a.llmOllama != nil {
-		ollama = i18n.T("Ollama runs on this Mac with %d models.", len(a.llmOllama))
-		if len(a.llmOllama) == 0 {
-			ollama = i18n.T("Ollama runs on this Mac, but has no model: pull one, e.g. ollama pull qwen3:4b.")
+	settingGroup(c, i18n.T("Which model"), func() {
+		labels, ids := a.routeOptions()
+		ollama := i18n.T("Ollama is not running on this Mac.")
+		if a.llmOllama != nil {
+			ollama = i18n.T("Ollama runs on this Mac with %d models.", len(a.llmOllama))
+			if len(a.llmOllama) == 0 {
+				ollama = i18n.T("Ollama runs on this Mac, but has no model: pull one, e.g. ollama pull qwen3:4b.")
+			}
 		}
-	}
-	settingRowNote(c, "llm-route", i18n.T("Use for writing help"), ollama, func() {
-		if ui.Select(c.Key("llm-route-select"), &f.route, labels).Label(i18n.T("Use for writing help")).Width(px(t, 260)).Changed() {
-			a.chooseLLMRoute(ids[max(slices.Index(labels, f.route), 0)])
-		}
-		if ui.Button(c.Key("llm-recheck"), i18n.T("Look for Ollama")).Clicked() {
-			a.checkOllama()
-		}
-	})
-	cleanLabels, cleanIDs := cleanOptions(labels, ids)
-	settingRow(c, "llm-clean-route", i18n.T("Dictation clean-up"), i18n.T("Dictation waits at most 4 seconds for it: a fast, local model works best."), func() {
-		if ui.Select(c.Key("llm-clean-select"), &f.clean, cleanLabels).Label(i18n.T("Dictation clean-up")).Width(px(t, 260)).Changed() {
-			id := cleanIDs[max(slices.Index(cleanLabels, f.clean), 0)]
-			a.updateSettings(func(s *settings.Settings) {
-				m := map[string][]settings.LLMRoute{}
-				for k, v := range s.LLM.Skills {
-					m[k] = slices.Clone(v)
-				}
-				delete(m, string(llm.SkillDictationCleanup))
-				if id != "" {
-					m[string(llm.SkillDictationCleanup)] = []settings.LLMRoute{{Provider: id}}
-				}
-				s.LLM.Skills = m
-			})
-			a.applyLLM()
-		}
-	})
-	settingRow(c, "llm-local", i18n.T("Keep text on this Mac"), i18n.T("Only local models (Ollama, LM Studio) are used; cloud providers are skipped."), func() {
-		if ui.Switch(c.Key("llm-local-switch"), &f.local).Label(i18n.T("Keep text on this Mac")).Changed() {
-			on := f.local
-			a.updateSettings(func(s *settings.Settings) { s.Privacy.LocalOnlyLLM = on })
-			a.applyLLM()
-		}
-	})
+		settingRowNote(c, "llm-route", i18n.T("Use for writing help"), ollama, func() {
+			if ui.Select(c.Key("llm-route-select"), &f.route, labels).Label(i18n.T("Use for writing help")).Width(px(t, 260)).Changed() {
+				a.chooseLLMRoute(ids[max(slices.Index(labels, f.route), 0)])
+			}
+			if ui.Button(c.Key("llm-recheck"), i18n.T("Look for Ollama")).Clicked() {
+				a.checkOllama()
+			}
+		})
+		cleanLabels, cleanIDs := cleanOptions(labels, ids)
+		settingRow(c, "llm-clean-route", i18n.T("Dictation clean-up"), i18n.T("Dictation waits at most 4 seconds for it: a fast, local model works best."), func() {
+			if ui.Select(c.Key("llm-clean-select"), &f.clean, cleanLabels).Label(i18n.T("Dictation clean-up")).Width(px(t, 260)).Changed() {
+				id := cleanIDs[max(slices.Index(cleanLabels, f.clean), 0)]
+				a.updateSettings(func(s *settings.Settings) {
+					m := map[string][]settings.LLMRoute{}
+					for k, v := range s.LLM.Skills {
+						m[k] = slices.Clone(v)
+					}
+					delete(m, string(llm.SkillDictationCleanup))
+					if id != "" {
+						m[string(llm.SkillDictationCleanup)] = []settings.LLMRoute{{Provider: id}}
+					}
+					s.LLM.Skills = m
+				})
+				a.applyLLM()
+			}
+		})
+		settingRow(c, "llm-local", i18n.T("Keep text on this Mac"), i18n.T("Only local models (Ollama, LM Studio) are used; cloud providers are skipped."), func() {
+			if ui.Switch(c.Key("llm-local-switch"), &f.local).Label(i18n.T("Keep text on this Mac")).Changed() {
+				on := f.local
+				a.updateSettings(func(s *settings.Settings) { s.Privacy.LocalOnlyLLM = on })
+				a.applyLLM()
+			}
+		})
 
+	})
 	a.localLLMSettings(c) // local_llm.go
-
-	sectionTitle(c, i18n.T("Providers"))
-	a.keySecurityHelp(c) // family_keys_view.go: with another ActNow app only
-	if len(a.prefs.LLM.Providers) == 0 {
-		ui.Text(c, i18n.T("No provider set up. Ollama on this Mac is used without one.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-	}
-	for _, p := range a.prefs.LLM.Providers {
-		a.providerCard(c, p)
-	}
-	settingRow(c, "llm-add", i18n.T("Add a provider"), i18n.T("OpenAI-compatible servers, Anthropic, and local Ollama or LM Studio."), func() {
-		opts := presetLabels()
-		if f.add == "" {
-			f.add = opts[0]
+	settingGroup(c, i18n.T("Providers"), func() {
+		a.keySecurityHelp(c) // family_keys_view.go: with another ActNow app only
+		if len(a.prefs.LLM.Providers) == 0 {
+			ui.Text(c, i18n.T("No provider set up. Ollama on this Mac is used without one.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		}
-		ui.Select(c.Key("llm-add-select"), &f.add, opts).Label(i18n.T("Provider")).Width(px(t, 200))
-		if ui.Button(c.Key("llm-add-button"), i18n.T("Add")).Clicked() {
-			a.addProvider(f.add)
+		for _, p := range a.prefs.LLM.Providers {
+			a.providerCard(c, p)
 		}
+		settingRow(c, "llm-add", i18n.T("Add a provider"), i18n.T("OpenAI-compatible servers, Anthropic, and local Ollama or LM Studio."), func() {
+			opts := presetLabels()
+			if f.add == "" {
+				f.add = opts[0]
+			}
+			ui.Select(c.Key("llm-add-select"), &f.add, opts).Label(i18n.T("Provider")).Width(px(t, 200))
+			if ui.Button(c.Key("llm-add-button"), i18n.T("Add")).Clicked() {
+				a.addProvider(f.add)
+			}
+		})
 	})
 }
 

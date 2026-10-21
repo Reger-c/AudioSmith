@@ -167,7 +167,7 @@ func (a *app) openWatermark(lib *library) {
 	}, func() {
 		a.post(func() {
 			a.notify(core.SeverityInfo, i18n.T("Generated audio is not watermarked"),
-				i18n.T("Download the watermark model in Models to add the invisible watermark, or turn it off in Settings → Privacy."), "/models")
+				i18n.T("Download the watermark model in Settings → Models & network to add the invisible watermark, or turn it off in Settings → Privacy."), "/models")
 		})
 	})
 }

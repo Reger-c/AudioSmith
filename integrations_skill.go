@@ -119,8 +119,8 @@ type skillModule struct {
 	App   string   // what stays in the app, and where (with Tools), or why
 }
 
-// skillModules are every page of the sidebar (navGroups), then Settings
-// and Dictation (TestAgentSkill checks that none is missing).
+// skillModules are every page (the sidebar's, then the others), then
+// Settings and Dictation (TestAgentSkill checks that none is missing).
 func skillModules() map[string]skillModule {
 	m := func(path, what, app string, tools ...string) skillModule {
 		return skillModule{Path: path, Name: pageTitle(path), What: what, Tools: tools, App: app}
@@ -156,7 +156,9 @@ func skillModules() map[string]skillModule {
 			i18n.T("In the app; probe, rate fit, direction and the watermark check also through the Local API (/api/tools/…, /api/watermark/detect).")),
 		m("/integrations", i18n.T("setups for agents and SDKs (this skill comes from there)."), i18n.T("Only in the app.")),
 		m("/models", i18n.T("the speech models: downloads, licences, sizes."),
-			i18n.T("Downloading models and accepting licences only in the app (sidebar → %s → %s): ask the user.", groupTitle("System"), pageTitle("/models")), "list_models", "list_languages"),
+			i18n.T("Downloading models and accepting licences only in the app (%s → %s): ask the user.", pageTitle("/settings"), i18n.T("Models & network")), "list_models", "list_languages"),
+		m("/tasks", i18n.T("every job that runs or waits: renders, dubs, takes, exports, downloads."),
+			i18n.T("In the app: the cards at the foot of the sidebar open it. Agents follow their own jobs with get_job.")),
 		m("/engine", i18n.T("the speech engine: its state, memory, restart."), i18n.T("Restarting it only in the app."), "check_health"),
 		m("/logs", i18n.T("the app's and the engine's logs."), i18n.T("Only in the app: when something fails without a clear error, ask the user to look there.")),
 	}

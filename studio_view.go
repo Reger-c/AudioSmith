@@ -37,7 +37,7 @@ func (a *app) studioPage(c *ui.Context) {
 		ui.Scroll(c.Key("composer-scroll")).Grow(1).MinWidth(0).Children(func() {
 			// As tall as the page at least, so the script fills it; the
 			// page scrolls when the window is too short for all of it.
-			ui.Column(c).MinHeight(winH-titleBarHeight-px(t, statusBarHeight)-2).Padding(px(t, sp1), px(t, sp6), px(t, sp5)).Gap(px(t, sp3)).Children(func() {
+			ui.Column(c).MinHeight(winH-titleBarHeight-2).Padding(px(t, sp1), px(t, sp6), px(t, sp5)).Gap(px(t, sp3)).Children(func() {
 				a.composerToolbar(c)
 				a.scriptView(c)
 				a.statsLine(c)
@@ -66,7 +66,7 @@ func (a *app) studioPage(c *ui.Context) {
 		ui.Overlay(c, func() {
 			_, h := c.Size()
 			panel := ui.Scroll(c.Key("inspector-drawer")).Absolute().Right(0).Top(titleBarHeight).Width(px(t, inspectorWidth)).
-				Height(h-titleBarHeight-px(t, statusBarHeight)-1).Background(k.Bg).BorderWidth(0, 0, 0, 1).BorderColor(k.Line).
+				Height(h-titleBarHeight-1).Background(k.Bg).BorderWidth(0, 0, 0, 1).BorderColor(k.Line).
 				Shadow(-8, 0, 24, 0, ui.RGBA(0, 0, 0, 0.12)).Label(i18n.T("Inspector"))
 			panel.Children(func() {
 				ui.Column(c).Padding(px(t, sp4), px(t, sp5), px(t, sp5)).Gap(px(t, sp4)).Children(func() {

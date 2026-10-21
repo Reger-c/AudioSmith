@@ -320,7 +320,7 @@ func putLeftover(t *testing.T, cache, repo string, size int) {
 func TestModelsCleanup(t *testing.T) {
 	a, _, tt := newTestApp(t)
 	cache := a.hubClient().Options().CacheDir
-	a.navigate("/models")
+	openModels(a)
 	tt.Frame()
 	if tt.HasText("Clean up") || a.removedBytes() != 0 || !a.removedKnown {
 		t.Fatalf("nothing to clean, yet: %q", tt.Texts())

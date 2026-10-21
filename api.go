@@ -56,9 +56,8 @@ type apiState struct {
 	apiClients  []mcpsrv.Client // agents seen, for the bindings
 	apiDocs     *mygo.WebView   // the reference viewer, while its page shows
 	apiDocsErr  string
-	integQuery  string // the Integrations page's search
-	integManual bool   // thread #33: an agent page's Manual setup is open
-	skillAsk    bool   // thread #34: the Install skill dialog is open
+	integManual bool // thread #33: an agent page's Manual setup is open
+	skillAsk    bool // thread #34: the Install skill dialog is open
 }
 
 // apiForm is what the settings page's controls bind to.

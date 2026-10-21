@@ -1,14 +1,17 @@
 package main
 
-// The window shell: the window, the sidebar and the router of pages, the
-// status bar and the overlays every page shares (command palette, the
-// shortcut sheet, the engine quick switch, notifications, the licence
-// dialog), and the theme. Its parts:
+// The window shell: the window, the sidebar and the router of pages, and
+// the overlays every page shares (command palette, the shortcut sheet,
+// the engine quick switch, notifications, the licence dialog), and the
+// theme, in the ActNow family's window layout (no status bar: what goes
+// on shows as cards at the sidebar's foot). Its parts:
 //
-//	shell_pages.go        sidebar sections and pages, titles, badges, the router
-//	shell_nav.go          the sidebar, its search field and the icon rail
+//	shell_pages.go        sidebar views, sections and pages, titles, badges, the router
+//	shell_nav.go          the sidebar, its search field, its foot and the icon rail
+//	shell_activity.go     the activity cards at the sidebar's foot
+//	shell_tasks.go        the Tasks page: every job that runs or waits
 //	shell_commands.go     command registry, ⌘K palette, ? sheet, native menu, deep links
-//	shell_status.go       status bar, notification centre, ⌘E quick switch
+//	shell_status.go       jobs, notification centre, ⌘E quick switch
 //	shell_logs.go         logs page and panel
 //	shell_settings.go     settings service wiring, language, theme
 //	settings_dialog.go    the settings dialog, its sections' router, rows and titles
@@ -37,10 +40,9 @@ import (
 )
 
 const (
-	titleBarHeight  = 52
-	sidebarWidth    = 200
-	inspectorWidth  = 300
-	statusBarHeight = 26
+	titleBarHeight = 52
+	sidebarWidth   = 200
+	inspectorWidth = 300
 )
 
 // baseFontSize is the platform's text size at 100 %: px scales sizes
@@ -62,6 +64,11 @@ type shellState struct {
 	// ("/general"), which navigate drives from "/settings/…" paths.
 	settingsOpen bool
 	setRouter    *ui.Router
+	sectionW     float32 // while a section builds, its width (pageWidth)
+	sectionH     float32 // the height a section shows in
+	// settingsReveal is the part a section scrolls to (an old section's
+	// id: revealAnchor), "" none.
+	settingsReveal string
 
 	bus      *core.Bus
 	settings settings.Service
@@ -72,22 +79,22 @@ type shellState struct {
 	licences *licence.Gate
 	accepted []core.LicenceAcceptance
 
-	version string // the app's, for the status bar; "" in tests
+	version string // the app's, for Settings → About; "" in tests
 
-	paletteOpen  bool
-	paletteQuery string
-	paletteSel   int
-	sheetOpen    bool
-	switchOpen   bool
-	jobsOpen     bool
-	jobList      map[string]jobs.Job // unfinished jobs of every owner, by id
-	noticesOpen  bool
-	logsPanel    bool
-	logsSource   string
-	logsQuery    string
-	logSel       logSelection // the lines selected (shell_logs_select.go)
-	logsHeight   float32
-	logsDirty    atomic.Bool // a redraw for new lines is on its way
+	paletteOpen   bool
+	paletteQuery  string
+	paletteSel    int
+	sheetOpen     bool
+	switchOpen    bool
+	jobList       map[string]jobs.Job // unfinished jobs of every owner, by id
+	activityState                     // shell_activity.go: the cards at the sidebar's foot
+	noticesOpen   bool
+	logsPanel     bool
+	logsSource    string
+	logsQuery     string
+	logSel        logSelection // the lines selected (shell_logs_select.go)
+	logsHeight    float32
+	logsDirty     atomic.Bool // a redraw for new lines is on its way
 
 	modelsState
 	navState        // shell_nav.go (M7a)
@@ -187,18 +194,19 @@ func (a *app) navigate(path string) {
 		a.openSettings("/" + rest)
 		return
 	}
+	if to, ok := settingsPageAlias(path); ok { // Models, Integrations: Settings sections now
+		a.navigate(to)
+		return
+	}
 	a.settingsOpen = false
 	if path == a.router.Path() {
 		return
 	}
 	a.router.Push(path)
-	if path == "/models" {
-		a.refreshModels()
-	}
 }
 
 // showPage goes to a page by name ("studio", "history", "engine",
-// "models", "logs", "settings"). Other areas navigate only through it
+// "logs", "settings"; "models" opens Settings → Models & network). Other areas navigate only through it
 // (and read currentPage).
 func (a *app) showPage(name string) { a.navigate("/" + name) }
 
@@ -253,11 +261,15 @@ func (a *app) view(c *ui.Context) {
 		// Keep the elapsed time current.
 		c.After(500 * time.Millisecond)
 	}
+	a.buildActivity() // shell_activity.go: the cards of this frame
 	if a.pl.Active() {
 		// Notice the end of playback, so Pause turns back into Play.
 		c.After(200 * time.Millisecond)
 	}
 	a.syncNav()
+	// The main pages' ‹ › (browseHeader): the window's history.
+	headerNav.canBack, headerNav.canForward = a.router.CanGoBack(), a.router.CanGoForward()
+	headerNav.back, headerNav.forward = a.router.Back, a.router.Forward
 
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		a.sidebarFrame(c, func() { // shell_nav.go: the sidebar or the icon rail
@@ -269,13 +281,12 @@ func (a *app) view(c *ui.Context) {
 				})
 			}
 		})
-		ui.Divider(c)
-		a.statusBar(c)
 	})
 	a.settingsDialog(c) // settings_dialog.go
 	a.updatePanel(c)    // updates_view.go: over Settings, whose About asks for it
 	a.historyDialog(c)
 	a.palette(c)
+	a.quickSwitchDialog(c) // shell_status.go: ⌘E
 	a.shortcutSheet(c)
 	a.onboarding(c) // M7a: the first-run wizard, under the licence dialog
 	a.licenceModal(c)
@@ -288,24 +299,29 @@ func (a *app) view(c *ui.Context) {
 	a.toastsView(c)   // last: over dialogs too
 }
 
-// toastsView gives the toasts their place and look: small ink toasts in
-// the middle of the page's header (between its title and its actions,
-// where it is empty), centred over the page; more stack under it. At the
-// window's bottom (MyGo's place) they covered the bars and cards there:
-// the Studio's Generate, a ready card's Save, the status bar. While the
-// Settings dialog shows, they go to the foot of the dialog instead.
+// toastsView gives the toasts their place and look: small ink toasts at
+// the foot of the page, in its middle (the family's window spec §8); on
+// the pages whose foot is taken by a bar of their own (toastsTop: the
+// Studio's Generate and its take, the dub's player, the books' render
+// bar) in the middle of the page's header instead, between its title and
+// its actions. More stack beside the first. While the Settings dialog
+// shows, they go to the foot of the dialog.
 func (a *app) toastsView(c *ui.Context) {
 	t := c.Theme()
 	k := tok(t)
 	ui.ToastViewportBase(c, func(vp ui.Element, toasts []ui.Toast) {
-		w, _ := c.Size()
+		w, h := c.Size()
 		page := a.pageWidth(c)
 		vp.AlignItems(ui.Center).Gap(px(t, sp2))
-		if a.settingsOpen {
+		switch {
+		case a.settingsOpen:
 			// Over the Settings dialog's foot: its title row is at the top.
-			vp.Justify(ui.End).Padding(0, px(t, sp4), px(t, statusBarHeight+sp8))
-		} else {
+			dh := min(h-2*px(t, sp6), px(t, settingsH))
+			vp.Justify(ui.End).Padding(0, px(t, sp4), (h-dh)/2+px(t, sp4))
+		case a.toastsTop():
 			vp.Justify(ui.Start).Padding(max(px(t, 4), (titleBarHeight-px(t, 36))/2), px(t, sp4), 0, w-page+px(t, sp4))
+		default:
+			vp.Justify(ui.End).Padding(0, px(t, sp4), px(t, sp6), w-page+px(t, sp4))
 		}
 		for _, ts := range toasts {
 			p := ui.ToastBase(c, ts)
@@ -333,6 +349,16 @@ func (a *app) toastsView(c *ui.Context) {
 			})
 		}
 	})
+}
+
+// toastsTop reports whether the page shown has a bar of its own along its
+// foot, which toasts at the bottom would cover: they go to its header.
+func (a *app) toastsTop() bool {
+	switch section(a.router.Path()) {
+	case "/studio", "/dub", "/stories", "/audiobook":
+		return true
+	}
+	return false
 }
 
 // orDash shows "—" for an empty value.

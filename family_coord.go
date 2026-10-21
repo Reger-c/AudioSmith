@@ -247,7 +247,7 @@ func (a *app) shortcutConflictCard(c *ui.Context) {
 	k := tok(t)
 	ui.Overlay(c, func() {
 		w, _ := c.Size()
-		card := ui.Column(c.Key("family-conflict-card")).Absolute().Right(px(t, sp4)).Bottom(px(t, statusBarHeight+sp4)).
+		card := ui.Column(c.Key("family-conflict-card")).Absolute().Right(px(t, sp4)).Bottom(px(t, sp4)).
 			Width(min(px(t, 440), w-px(t, sp8))).Padding(px(t, sp4)).Gap(px(t, sp3)).Radius(px(t, radiusCard)).
 			Background(k.Bg).Border(1, k.Line).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, 0.18))
 		card.Children(func() {

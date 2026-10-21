@@ -314,140 +314,144 @@ func (a *app) dictationSettings(c *ui.Context) {
 	d := a.prefs.Dictation
 	ui.Text(c, i18n.T("Dictate into any app: press the shortcut, speak, and the text is typed where your cursor is. Speech stays on this Mac.")).
 		FontSize(px(t, 12)).TextColor(t.TextMuted)
-	settingRow(c, "dict-enabled", i18n.T("Dictation shortcut"), i18n.T("Works in every app while AudioSmith runs."), func() {
-		if ui.Switch(c.Key("dict-enabled-switch"), &f.enabled).Label(i18n.T("Dictation shortcut")).Changed() {
-			on := f.enabled
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Enabled = on })
-			a.applyDictShortcut()
-		}
-	})
-	if d.Enabled {
-		a.shortcutRow(c)
-	}
-	settingRow(c, "dict-mode", i18n.T("Mode"), i18n.T("Toggle: press once to start, again to stop. Hold: dictate while the keys are held; a quick tap keeps listening."), func() {
-		if ui.Segmented(c.Key("dict-mode-seg"), &f.mode, i18n.T("Toggle"), i18n.T("Hold")).Label(i18n.T("Mode")).Changed() {
-			m := settings.DictationToggle
-			if f.mode == 1 {
-				m = settings.DictationHold
+	settingGroup(c, "", func() {
+		settingRow(c, "dict-enabled", i18n.T("Dictation shortcut"), i18n.T("Works in every app while AudioSmith runs."), func() {
+			if ui.Switch(c.Key("dict-enabled-switch"), &f.enabled).Label(i18n.T("Dictation shortcut")).Changed() {
+				on := f.enabled
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Enabled = on })
+				a.applyDictShortcut()
 			}
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Mode = m })
+		})
+		if d.Enabled {
+			a.shortcutRow(c)
 		}
-	})
+		settingRow(c, "dict-mode", i18n.T("Mode"), i18n.T("Toggle: press once to start, again to stop. Hold: dictate while the keys are held; a quick tap keeps listening."), func() {
+			if ui.Segmented(c.Key("dict-mode-seg"), &f.mode, i18n.T("Toggle"), i18n.T("Hold")).Label(i18n.T("Mode")).Changed() {
+				m := settings.DictationToggle
+				if f.mode == 1 {
+					m = settings.DictationHold
+				}
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Mode = m })
+			}
+		})
 
-	sectionTitle(c, i18n.T("Speech recognition"))
-	e := a.dictModel()
-	desc := i18n.T("%s answers fastest; %s covers the other languages.", modelRef(catalog.Builtin().STTFor("", false)), modelRef(catalog.Builtin().STTFor("", true)))
-	if ready, known := a.modelOnDisk(e); known && !ready {
-		desc = i18n.T("%s is not downloaded yet.", modelRef(e))
-	}
-	settingRowNote(c, "dict-model", i18n.T("Model"), desc, func() {
-		cur, _ := catalog.Builtin().ByLabel(f.model)
-		if x, ok := modelSelect(c, "dict-model-select", cur, sttEntries(), i18n.T("Model"), px(t, 260)); ok {
-			f.model = x.Label
-			id := x.ID
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Model = id })
-		}
+	})
+	settingGroup(c, i18n.T("Speech recognition"), func() {
+		e := a.dictModel()
+		desc := i18n.T("%s answers fastest; %s covers the other languages.", modelRef(catalog.Builtin().STTFor("", false)), modelRef(catalog.Builtin().STTFor("", true)))
 		if ready, known := a.modelOnDisk(e); known && !ready {
-			m := a.model(e)
-			label := i18n.T("Download")
-			if m.downloading {
-				label = i18n.T("Downloading…")
+			desc = i18n.T("%s is not downloaded yet.", modelRef(e))
+		}
+		settingRowNote(c, "dict-model", i18n.T("Model"), desc, func() {
+			cur, _ := catalog.Builtin().ByLabel(f.model)
+			if x, ok := modelSelect(c, "dict-model-select", cur, sttEntries(), i18n.T("Model"), px(t, 260)); ok {
+				f.model = x.Label
+				id := x.ID
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Model = id })
 			}
-			if ui.Button(c.Key("dict-model-download"), label).Disabled(m.downloading).Clicked() {
-				a.download(e)
+			if ready, known := a.modelOnDisk(e); known && !ready {
+				m := a.model(e)
+				label := i18n.T("Download")
+				if m.downloading {
+					label = i18n.T("Downloading…")
+				}
+				if ui.Button(c.Key("dict-model-download"), label).Disabled(m.downloading).Clicked() {
+					a.download(e)
+				}
 			}
-		}
-	})
-	settingRow(c, "dict-lang", i18n.T("Language"), i18n.T("Choosing your language makes short dictations more accurate."), func() {
-		labels, codes := dictLanguages()
-		if ui.Select(c.Key("dict-lang-select"), &f.language, labels).Label(i18n.T("Language")).Width(px(t, 260)).Changed() {
-			code := codes[max(slices.Index(labels, f.language), 0)]
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Language = code })
-		}
-	})
-	settingRow(c, "dict-device", i18n.T("Microphone"), "", func() {
-		a.loadDevices()
-		labels, ids := []string{i18n.T("System default")}, []string{""}
-		for _, dv := range a.clone.devices {
-			labels, ids = append(labels, dv.Name), append(ids, dv.ID)
-		}
-		if !slices.Contains(labels, f.device) {
-			f.device = labels[max(slices.Index(ids, d.Device), 0)]
-		}
-		if ui.Select(c.Key("dict-device-select"), &f.device, labels).Label(i18n.T("Microphone")).Width(px(t, 260)).Changed() {
-			id := ids[max(slices.Index(labels, f.device), 0)]
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Device = id })
-		}
-	})
-	n := utf8.RuneCountInString(f.vocab)
-	settingRow(c, "dict-vocab", i18n.T("Vocabulary"), i18n.T("Names, jargon and spellings to expect, separated by commas or lines. Models that take a prompt use them; clean-up keeps them."), func() {})
-	ui.TextArea(c.Key("dict-vocab-area"), &f.vocab).Lines(2, 5).Placeholder(i18n.T("AudioSmith, MLX, Kubernetes, Ana Lucía")).Label(i18n.T("Vocabulary"))
-	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-		color := t.TextMuted
-		if n > settings.MaxVocabulary {
-			color = t.Danger
-		}
-		ui.Text(c, i18n.T("%d / %d characters", n, settings.MaxVocabulary)).FontSize(px(t, 11)).TextColor(color).Grow(1)
-		if ui.Button(c.Key("dict-vocab-save"), i18n.T("Save")).Disabled(f.vocab == d.Vocabulary || n > settings.MaxVocabulary).Clicked() {
-			v := f.vocab
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Vocabulary = v })
-			a.toast(i18n.T("Vocabulary saved"))
-		}
-	})
+		})
+		settingRow(c, "dict-lang", i18n.T("Language"), i18n.T("Choosing your language makes short dictations more accurate."), func() {
+			labels, codes := dictLanguages()
+			if ui.Select(c.Key("dict-lang-select"), &f.language, labels).Label(i18n.T("Language")).Width(px(t, 260)).Changed() {
+				code := codes[max(slices.Index(labels, f.language), 0)]
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Language = code })
+			}
+		})
+		settingRow(c, "dict-device", i18n.T("Microphone"), "", func() {
+			a.loadDevices()
+			labels, ids := []string{i18n.T("System default")}, []string{""}
+			for _, dv := range a.clone.devices {
+				labels, ids = append(labels, dv.Name), append(ids, dv.ID)
+			}
+			if !slices.Contains(labels, f.device) {
+				f.device = labels[max(slices.Index(ids, d.Device), 0)]
+			}
+			if ui.Select(c.Key("dict-device-select"), &f.device, labels).Label(i18n.T("Microphone")).Width(px(t, 260)).Changed() {
+				id := ids[max(slices.Index(labels, f.device), 0)]
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Device = id })
+			}
+		})
+		n := utf8.RuneCountInString(f.vocab)
+		settingRow(c, "dict-vocab", i18n.T("Vocabulary"), i18n.T("Names, jargon and spellings to expect, separated by commas or lines. Models that take a prompt use them; clean-up keeps them."), func() {})
+		ui.TextArea(c.Key("dict-vocab-area"), &f.vocab).Lines(2, 5).Placeholder(i18n.T("AudioSmith, MLX, Kubernetes, Ana Lucía")).Label(i18n.T("Vocabulary"))
+		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+			color := t.TextMuted
+			if n > settings.MaxVocabulary {
+				color = t.Danger
+			}
+			ui.Text(c, i18n.T("%d / %d characters", n, settings.MaxVocabulary)).FontSize(px(t, 11)).TextColor(color).Grow(1)
+			if ui.Button(c.Key("dict-vocab-save"), i18n.T("Save")).Disabled(f.vocab == d.Vocabulary || n > settings.MaxVocabulary).Clicked() {
+				v := f.vocab
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Vocabulary = v })
+				a.toast(i18n.T("Vocabulary saved"))
+			}
+		})
 
-	sectionTitle(c, i18n.T("Text"))
-	ok, who := a.llmAvailable()
-	cleanDesc := i18n.T("No language model is set up: only the built-in polish runs (capitals, punctuation, fillers). Set one up in Writing help.")
-	if ok {
-		cleanDesc = i18n.T("%s removes fillers and applies self-corrections; after 4 seconds the polished text is used instead.", who)
-	}
-	settingRowNote(c, "dict-cleanup", i18n.T("Clean up with a language model"), cleanDesc, func() {
-		if ui.Switch(c.Key("dict-cleanup-switch"), &f.cleanup).Label(i18n.T("Clean up with a language model")).Changed() {
-			on := f.cleanup
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Cleanup = on })
-			if on {
-				a.warmLocalLLM(llm.SkillDictationCleanup) // local_llm_warm.go
+	})
+	settingGroup(c, i18n.T("Text"), func() {
+		ok, who := a.llmAvailable()
+		cleanDesc := i18n.T("No language model is set up: only the built-in polish runs (capitals, punctuation, fillers). Set one up in Writing help.")
+		if ok {
+			cleanDesc = i18n.T("%s removes fillers and applies self-corrections; after 4 seconds the polished text is used instead.", who)
+		}
+		settingRowNote(c, "dict-cleanup", i18n.T("Clean up with a language model"), cleanDesc, func() {
+			if ui.Switch(c.Key("dict-cleanup-switch"), &f.cleanup).Label(i18n.T("Clean up with a language model")).Changed() {
+				on := f.cleanup
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Cleanup = on })
+				if on {
+					a.warmLocalLLM(llm.SkillDictationCleanup) // local_llm_warm.go
+				}
 			}
-		}
-		if !ok {
-			if ui.Button(c.Key("dict-writing"), i18n.T("Writing help…")).Clicked() {
-				a.navigate("/settings/writing")
+			if !ok {
+				if ui.Button(c.Key("dict-writing"), i18n.T("Writing help…")).Clicked() {
+					a.navigate("/settings/writing")
+				}
 			}
+		})
+		outDesc := i18n.T("Typing uses the clipboard and ⌘V, then puts back what you had copied. It needs Accessibility.")
+		if !a.dictSys.AccessibilityTrusted() {
+			outDesc = i18n.T("Typing needs Accessibility (Settings → Dictation): until then the text is copied.")
 		}
-	})
-	outDesc := i18n.T("Typing uses the clipboard and ⌘V, then puts back what you had copied. It needs Accessibility.")
-	if !a.dictSys.AccessibilityTrusted() {
-		outDesc = i18n.T("Typing needs Accessibility (Settings → Permissions): until then the text is copied.")
-	}
-	settingRowNote(c, "dict-output", i18n.T("Result"), outDesc, func() {
-		if ui.Segmented(c.Key("dict-output-seg"), &f.output, i18n.T("Type it"), i18n.T("Copy only")).Label(i18n.T("Result")).Changed() {
-			o := settings.OutputPaste
-			if f.output == 1 {
-				o = settings.OutputCopy
+		settingRowNote(c, "dict-output", i18n.T("Result"), outDesc, func() {
+			if ui.Segmented(c.Key("dict-output-seg"), &f.output, i18n.T("Type it"), i18n.T("Copy only")).Label(i18n.T("Result")).Changed() {
+				o := settings.OutputPaste
+				if f.output == 1 {
+					o = settings.OutputCopy
+				}
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Output = o })
 			}
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Output = o })
+		})
+		settingRow(c, "dict-sounds", i18n.T("Sounds"), i18n.T("A sound when listening starts and stops, and when something goes wrong. Choosing a sound plays it."), func() {
+			if ui.Switch(c.Key("dict-sounds-switch"), &f.sounds).Label(i18n.T("Sounds")).Changed() {
+				on := f.sounds
+				a.updateSettings(func(s *settings.Settings) { s.Dictation.Sounds = on })
+			}
+		})
+		if f.sounds {
+			a.dictSoundRows(c)
 		}
+		settingRow(c, "dict-try", i18n.T("Try it"), i18n.T("Dictates here: the text is copied, since AudioSmith is in front."), func() {
+			label := i18n.T("Start dictation")
+			if s := a.dict; s != nil && (s.phase == dictStarting || s.phase == dictListening) {
+				label = i18n.T("Stop dictation")
+			}
+			if ui.Button(c.Key("dict-try-button"), label).Clicked() {
+				a.dictToggle()
+			}
+		})
+		ui.Text(c, i18n.T("Not yet: live text while you speak, and dictating while AudioSmith plays audio (echo cancellation).")).
+			FontSize(px(t, 11)).TextColor(t.TextMuted)
 	})
-	settingRow(c, "dict-sounds", i18n.T("Sounds"), i18n.T("A sound when listening starts and stops, and when something goes wrong. Choosing a sound plays it."), func() {
-		if ui.Switch(c.Key("dict-sounds-switch"), &f.sounds).Label(i18n.T("Sounds")).Changed() {
-			on := f.sounds
-			a.updateSettings(func(s *settings.Settings) { s.Dictation.Sounds = on })
-		}
-	})
-	if f.sounds {
-		a.dictSoundRows(c)
-	}
-	settingRow(c, "dict-try", i18n.T("Try it"), i18n.T("Dictates here: the text is copied, since AudioSmith is in front."), func() {
-		label := i18n.T("Start dictation")
-		if s := a.dict; s != nil && (s.phase == dictStarting || s.phase == dictListening) {
-			label = i18n.T("Stop dictation")
-		}
-		if ui.Button(c.Key("dict-try-button"), label).Clicked() {
-			a.dictToggle()
-		}
-	})
-	ui.Text(c, i18n.T("Not yet: live text while you speak, and dictating while AudioSmith plays audio (echo cancellation).")).
-		FontSize(px(t, 11)).TextColor(t.TextMuted)
 }
 
 // shortcutRow shows the shortcut, its state, and the recorder.

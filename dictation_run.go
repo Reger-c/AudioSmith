@@ -157,7 +157,7 @@ func (a *app) dictTranscribe(s *dictSession, path string) {
 				}
 				var lic *core.LicenceRequiredError
 				if errors.As(err, &lic) {
-					a.dictFail(s, i18n.T("The model's licence has not been accepted. Review it on the Models page."))
+					a.dictFail(s, i18n.T("The model's licence has not been accepted. Review it in Settings → Models & network."))
 					return
 				}
 				a.dictFail(s, err.Error())
