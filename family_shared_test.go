@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/hehehai/AudioSmith/internal/family"
@@ -231,8 +232,28 @@ func TestMoveModelsToFamilyFolder(t *testing.T) {
 		t.Error("no confirmation")
 	}
 	a.modelsMoveAsk = false
+	// The move changes settings, and each change starts a shared-settings
+	// worker that posts showShared from its goroutine while the move's own
+	// posts run on this one: queue every post and run them here, as the
+	// window's main loop would (or -race sees two writers).
+	var mu sync.Mutex
+	var queue []func()
+	a.postQueue = func(fn func()) { mu.Lock(); queue = append(queue, fn); mu.Unlock() }
 	a.startModelsMove(a.modelsMovePlan)
-	a.shared.Wait()
+	for {
+		a.shared.Wait()
+		mu.Lock()
+		q := queue
+		queue = nil
+		mu.Unlock()
+		if len(q) == 0 {
+			break
+		}
+		for _, fn := range q {
+			fn()
+		}
+	}
+	a.postQueue = nil
 	if a.prefs.Models.CacheDir != to || !a.prefs.Family.Follows(famset.KeyModelsRoot) || a.prefs.Family.OtherValue[famset.KeyModelsRoot] {
 		t.Fatalf("after the move: cache %q, %+v", a.prefs.Models.CacheDir, a.prefs.Family)
 	}
