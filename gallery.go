@@ -1,9 +1,10 @@
 package main
 
-// The Voice Gallery (/gallery): ready-made designed voices
-// (internal/gallery) to search, filter by facets, favorite, preview and
-// use. Previews are tts.synthesize jobs at background priority, planned by
-// gallery.PlanPreviews and cached by their key in the cache directory.
+// Discover voices (/gallery): the curated voices (internal/gallery,
+// thread #94) to search, filter by use case, gender, age and language,
+// favorite, preview and use. Previews are bundled: a designed voice's
+// clip (gallery_assets.go), a built-in speaker's (voice_preview.go);
+// nothing is rendered to listen.
 
 import (
 	"context"
@@ -11,60 +12,41 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/gallery"
 	"github.com/hehehai/AudioSmith/internal/i18n"
-	"github.com/hehehai/AudioSmith/internal/jobs"
-	"github.com/hehehai/AudioSmith/internal/licence"
 	"github.com/hehehai/AudioSmith/internal/services"
 )
 
-// galleryPageSize is how many voices a page adds.
+// galleryPageSize is how many voices a page shows (all of them).
 const galleryPageSize = gallery.DefaultLimit
-
-// galleryOwner prefixes the owners of preview jobs.
-const galleryOwner = "archetype:"
 
 // galleryState is the Gallery page's view state.
 type galleryState struct {
-	text      string
-	tab       int // 0 = all categories, i = gallery.Categories()[i-1]
-	filters   map[gallery.Facet]string
-	favOnly   bool
-	limit     int
-	moreAsked bool    // the next page was asked for in this frame (infinite scroll)
-	tagH      float32 // a card's tag, as last laid out: its tags show two rows
-	contentH  float32 // a card's top to its footer's bottom, as last laid out (cardHeight)
+	text     string
+	tab      int // 0 = all use cases, i = gallery.Categories()[i-1]
+	filters  map[gallery.Facet]string
+	favOnly  bool
+	limit    int
+	tagH     float32 // a card's tag, as last laid out: its tags show two rows
+	contentH float32 // a card's top to its footer's bottom, as last laid out (cardHeight)
 
 	page    gallery.Page
 	pageFor string // the query page answers
 	favVer  int    // bumps when favorites change
 	grid    ui.GridState
 
-	favs     *gallery.Favorites
-	previews map[string]*galleryPreview // by archetype id
-	model    string                     // label of the preview model; "" = the first that can design
-	using    bool
+	favs  *gallery.Favorites
+	using bool
 }
 
-// galleryPreview is an archetype's preview: cached, rendering or failed.
-type galleryPreview struct {
-	key, path string
-	jobID     string
-	rendering bool
-	err       string
-}
-
-// openGallery loads the favorites and follows the preview jobs.
+// openGallery loads the favorites.
 func (a *app) openGallery(lib *library) {
 	g := &a.gallery
 	g.filters = map[gallery.Facet]string{}
-	g.previews = map[string]*galleryPreview{}
 	g.limit = galleryPageSize
 	g.favs, _ = gallery.LoadFavorites(context.Background(), nil)
 	g.grid.Key = func(i int) any {
@@ -84,12 +66,6 @@ func (a *app) openGallery(lib *library) {
 			g.favVer++
 		})
 	})
-	core.On(lib.bus, func(u jobs.Updated) {
-		if u.Chunk != nil || !strings.HasPrefix(u.Job.Owner, galleryOwner) || !u.Job.State.Terminal() {
-			return
-		}
-		a.post(func() { a.galleryJobDone(u.Job) })
-	})
 }
 
 // galleryQuery is the page's query.
@@ -104,16 +80,14 @@ func (a *app) galleryQuery() gallery.Query {
 	return q
 }
 
-// galleryFilterQuery is the gallery's query for a search text, a
-// category and facet filters: the page's and the API's search_voices.
+// galleryFilterQuery is the gallery's query for a search text, a use
+// case and facet filters: the page's and the API's search_voices.
 func galleryFilterQuery(text, category string, f map[gallery.Facet]string) gallery.Query {
 	return gallery.Query{Text: text, Category: category,
-		Gender: f[gallery.FacetGender], Age: f[gallery.FacetAge], Pitch: f[gallery.FacetPitch],
-		Accent: f[gallery.FacetAccent], Language: f[gallery.FacetLanguage], Style: f[gallery.FacetStyle]}
+		Gender: f[gallery.FacetGender], Age: f[gallery.FacetAge], Language: f[gallery.FacetLanguage]}
 }
 
-// galleryResults searches when the query changed (in memory: about a
-// third of a millisecond).
+// galleryResults searches when the query changed (in memory).
 func (a *app) galleryResults() gallery.Page {
 	g := &a.gallery
 	q := a.galleryQuery()
@@ -139,136 +113,44 @@ func (a *app) toggleFavorite(id string) {
 	})
 }
 
-// previewModel is the model gallery previews render with: the one chosen
-// at the top of the page, else the first that can design and is
-// downloaded (OmniVoice comes first in the catalogue, but few have it),
-// else the first that can design.
-func (a *app) previewModel() (catalog.Entry, bool) {
-	ms := designModels()
-	for _, e := range ms {
-		if e.Label == a.gallery.model {
-			return e, true
+// archetypePreview is what a gallery voice's Preview plays: a designed
+// voice's bundled clip, a built-in speaker's; none for the earlier
+// gallery's voices.
+func archetypePreview(arch gallery.Archetype) voicePreview {
+	switch arch.Kind {
+	case gallery.KindDesigned:
+		if b := galleryClip(arch.ID, "preview"); b != nil {
+			return voicePreview{id: "vp:gallery:" + arch.ID, data: b}
+		}
+	case gallery.KindBuiltin:
+		if e, ok := catalog.Builtin().ByID(arch.Model); ok {
+			return speakerPreview(e, arch.Speaker)
 		}
 	}
-	for _, e := range ms {
-		if ok, _ := a.modelOnDisk(e); ok {
-			return e, true
-		}
-	}
-	if len(ms) == 0 {
-		return catalog.Entry{}, false
-	}
-	return ms[0], true
+	return voicePreview{}
 }
 
-// galleryModel describes a model to the preview planner.
-func galleryModel(e catalog.Entry) gallery.Model {
-	m := gallery.Model{ID: e.ID, Family: e.Family, Repo: e.Repo}
-	p, _ := catalog.PresetFor(e.ID)
-	for _, l := range e.Languages {
-		code, _, _ := strings.Cut(l.Code, "-")
-		if !slices.Contains(p.HideLanguages, code) { // Kokoro's Chinese
-			m.Languages = append(m.Languages, code)
-		}
-	}
-	m.Speakers = e.VoiceIDs()
-	// The tuned sampling the Studio's takes get (FillDefaults), not the
-	// engine's defaults.
-	if d, ok := presetDefaults(e)[""]; ok {
-		m.Sampling = gallery.Sampling{Temperature: d.Temperature, TopP: d.TopP, Guidance: d.Guidance, Steps: d.Steps}
-	}
-	return m
-}
-
-// previewArchetype plays an archetype's preview, rendering it first
-// (once: it is cached by its key).
+// previewArchetype plays (or stops) a gallery voice's preview.
 func (a *app) previewArchetype(arch gallery.Archetype) {
-	g := &a.gallery
-	pid := galleryOwner + arch.ID
-	if a.pl.Playing(pid) {
+	p := archetypePreview(arch)
+	if !p.ok() {
+		return
+	}
+	if a.pl.Playing(p.id) {
 		a.pl.Stop()
 		return
 	}
-	e, ok := a.previewModel()
-	if !ok {
-		a.toast(i18n.T("No model that can design voices is available."))
-		return
-	}
-	if ok, known := a.modelOnDisk(e); known && !ok {
-		// Not a failed render: say what to do instead.
-		a.toast(i18n.T("Previews use %s, which is not downloaded: choose a downloaded model at the top right, or download it in Settings → Models & network.", modelRef(e)))
-		return
-	}
-	if licence.Required(e) != nil && !licence.Covers(a.accepted, e) {
-		a.askLicence(e, func() { a.previewArchetype(arch) })
-		return
-	}
-	plan, err := gallery.PlanPreviews([]gallery.Archetype{arch}, galleryModel(e), nil, 1)
-	if err != nil {
+	if err := a.pl.PlayPreview(p.id, p.data, p.path, 0); err != nil {
 		a.toast(err.Error())
-		return
-	}
-	if len(plan.Jobs) == 0 {
-		_, lang := arch.PreviewLine()
-		a.toast(i18n.T("%s doesn't speak %s, so this voice has no preview.", modelRef(e), languageName(lang)))
-		return
-	}
-	pj := plan.Jobs[0]
-	p := &galleryPreview{key: pj.Key, path: filepath.Join(a.voiceCacheDir(), pj.Key+".wav"), rendering: true}
-	g.previews[arch.ID] = p
-	spec, err := pj.Spec(pj.Params(e.Repo, modelLanguage(e, pj.Lang), p.path))
-	if err != nil {
-		p.rendering, p.err = false, err.Error()
-		return
-	}
-	spec.Title = i18n.T("Voice preview")
-	sched := a.lib.sched
-	a.background(func() {
-		if _, err := os.Stat(p.path); err == nil {
-			a.post(func() {
-				p.rendering = false
-				a.pl.Toggle(pid, p.path)
-			})
-			return
-		}
-		os.MkdirAll(filepath.Dir(p.path), 0o755)
-		id, err := sched.Submit(context.Background(), spec)
-		a.post(func() {
-			if err != nil {
-				p.rendering, p.err = false, err.Error()
-				return
-			}
-			if p.jobID == "" {
-				p.jobID = id
-			}
-		})
-	})
-}
-
-// galleryJobDone plays a preview that finished rendering.
-func (a *app) galleryJobDone(j jobs.Job) {
-	id := strings.TrimPrefix(j.Owner, galleryOwner)
-	p := a.gallery.previews[id]
-	if p == nil || !p.rendering {
-		return
-	}
-	p.rendering = false
-	switch j.State {
-	case jobs.StateSucceeded:
-		if err := a.pl.Toggle(galleryOwner+id, p.path); err != nil {
-			p.err = err.Error()
-		}
-	case jobs.StateCancelled:
-	default:
-		p.err = jobErrorText(j.Err)
 	}
 }
 
-// useArchetype saves an archetype as a designed voice (once: a second use
-// finds the voice it saved) and opens it in Design, or the Studio.
+// useArchetype saves a gallery voice to the voices (once: a second use
+// finds the voice it saved) and opens it in Design (a designed voice) or
+// the Studio (a built-in speaker, or when asked).
 func (a *app) useArchetype(arch gallery.Archetype, inStudio bool) {
 	done := func(v *core.Voice) {
-		if inStudio {
+		if inStudio || v.Kind != core.VoiceDesigned {
 			a.useVoiceInStudio(v)
 		} else {
 			a.openDesignFor(v)
@@ -277,8 +159,8 @@ func (a *app) useArchetype(arch gallery.Archetype, inStudio bool) {
 	a.useArchetypeThen(arch, done)
 }
 
-// useArchetypeThen saves an archetype as a designed voice (once) and hands
-// it to done (M3: Use in Stories, Narrate an audiobook).
+// useArchetypeThen saves a gallery voice (once) and hands it to done (M3:
+// Use in Stories, Narrate an audiobook).
 func (a *app) useArchetypeThen(arch gallery.Archetype, done func(*core.Voice)) {
 	g := &a.gallery
 	origin := galleryOrigin(arch.ID)
@@ -292,18 +174,11 @@ func (a *app) useArchetypeThen(arch gallery.Archetype, done func(*core.Voice)) {
 		return
 	}
 	g.using = true
-	model := ""
-	if e, ok := a.previewModel(); ok {
-		model = e.Repo
-	}
-	sample := ""
-	if p := g.previews[arch.ID]; p != nil && !p.rendering && p.err == "" {
-		sample = p.path
-	}
-	v, files := archetypeVoice(arch, i18n.Locale(), model, sample)
 	svc := a.lib.svc.Voices
+	tmp := a.lib.store.Dir()
+	loc := i18n.Locale()
 	a.background(func() {
-		saved, err := svc.SaveFiles(context.Background(), v, files)
+		saved, err := saveArchetype(context.Background(), svc, arch, loc, tmp)
 		a.post(func() {
 			g.using = false
 			if err != nil {
@@ -319,22 +194,75 @@ func (a *app) useArchetypeThen(arch gallery.Archetype, done func(*core.Voice)) {
 	})
 }
 
-// archetypeVoice is the designed voice "Use voice" saves for an
-// archetype: its name in the UI's language, attributes, seed, first
-// language and tags, the model it was previewed with, and the preview
-// (sample, "" = none) as its sample. The API's use_gallery_voice saves
-// the same.
-func archetypeVoice(arch gallery.Archetype, loc, model, sample string) (core.Voice, core.VoiceFiles) {
-	attrs, _ := json.Marshal(arch.Attrs)
-	v := core.Voice{Name: arch.Name.In(loc), Kind: core.VoiceDesigned, DesignAttrs: attrs, Seed: arch.Seed,
-		Language: arch.Languages[0], Origin: galleryOrigin(arch.ID), Tags: arch.Tags, CreatedWith: model}
-	var files core.VoiceFiles
-	if sample != "" {
-		v.SampleText, _ = arch.PreviewLine()
-		files.Sample = sample
-	}
-	return v, files
+// voiceSaver saves a voice with its files (core.VoiceService's SaveFiles).
+type voiceSaver interface {
+	SaveFiles(ctx context.Context, v core.Voice, files core.VoiceFiles) (core.Voice, error)
 }
 
-// galleryOrigin is the origin of a voice saved from an archetype.
+// saveArchetype saves gallery voice arch as "Use voice" does: a curated
+// designed voice with its bundled reference and preview, decoded into
+// tmpDir first; the others as archetypeVoice makes them. The page's and
+// the API's use_gallery_voice.
+func saveArchetype(ctx context.Context, svc voiceSaver, arch gallery.Archetype, loc, tmpDir string) (core.Voice, error) {
+	v := archetypeVoice(arch, loc)
+	var files core.VoiceFiles
+	if arch.Kind == gallery.KindDesigned {
+		dir, err := os.MkdirTemp(tmpDir, "gallery-*")
+		if err != nil {
+			return core.Voice{}, err
+		}
+		defer os.RemoveAll(dir)
+		for _, f := range []struct {
+			kind string
+			dst  *string
+		}{{"ref", &files.Reference}, {"preview", &files.Sample}} {
+			b := galleryClip(arch.ID, f.kind)
+			if b == nil {
+				return core.Voice{}, fmt.Errorf("no bundled %s for %s", f.kind, arch.ID)
+			}
+			p := filepath.Join(dir, f.kind+".wav")
+			secs, err := decodeBundled(b, p)
+			if err != nil {
+				return core.Voice{}, err
+			}
+			if f.kind == "ref" {
+				v.RefSeconds = secs
+			}
+			*f.dst = p
+		}
+	}
+	return svc.SaveFiles(ctx, v, files)
+}
+
+// archetypeVoice is the voice "Use voice" saves for a gallery voice, in
+// the UI's language: a built-in speaker's profile (its model and speaker);
+// a curated designed voice with its persona, seed and the bundled
+// reference's text (heard saying it when it was made, so it is not heard
+// again), made with 1.7B VoiceDesign; an earlier gallery voice with its
+// attributes and seed (its reference is made on first use).
+func archetypeVoice(arch gallery.Archetype, loc string) core.Voice {
+	v := core.Voice{Name: arch.Name.In(loc), Language: arch.Languages[0], Origin: galleryOrigin(arch.ID), Tags: arch.Tags}
+	if arch.Kind == gallery.KindBuiltin {
+		e, _ := catalog.Builtin().ByID(arch.Model)
+		v.Kind, v.Model, v.Speaker = core.VoiceBuiltin, e.Repo, arch.Speaker
+		return v
+	}
+	r := arch.Recipe()
+	attrs, _ := json.Marshal(r.Attrs)
+	v.Kind, v.Design, v.DesignAttrs, v.Seed = core.VoiceDesigned, r.Description, attrs, r.Seed
+	if arch.Kind == gallery.KindDesigned {
+		e, _ := catalog.Builtin().ByID(galleryDesignModel)
+		v.CreatedWith = e.Repo
+		v.RefText = arch.RefText
+		v.RefCheck = &core.RefQuality{Grade: arch.RefGrade, Cleaned: []string{"tidied"}, TextChecked: true}
+		v.SampleText, _ = arch.PreviewLine()
+	}
+	return v
+}
+
+// galleryDesignModel made the curated voices' references (and makes them
+// again when asked).
+const galleryDesignModel = "qwen3-tts-1.7b-voicedesign-4bit"
+
+// galleryOrigin is the origin of a voice saved from a gallery voice.
 func galleryOrigin(id string) string { return "gallery:" + id }

@@ -139,6 +139,16 @@ func (a *app) dubVoiceResolver(lib *library) func(ctx context.Context, ref, mode
 		switch {
 		case strings.HasPrefix(ref, dub.SpeakerPrefix):
 			return dub.VoiceSpec{Voice: strings.TrimPrefix(ref, dub.SpeakerPrefix)}, nil
+		case strings.HasPrefix(ref, dub.GalleryPrefix) && !canDesign(e):
+			// A curated voice speaks as it does elsewhere: a built-in
+			// speaker on its own model, a designed voice cloned from its
+			// bundled reference.
+			if arch, ok := gallery.Default().ByID(strings.TrimPrefix(ref, dub.GalleryPrefix)); ok && arch.Curated() {
+				if spec, ok := a.dubGallerySpec(arch, e); ok {
+					return spec, nil
+				}
+			}
+			fallthrough
 		case strings.HasPrefix(ref, dub.DesignPrefix), strings.HasPrefix(ref, dub.GalleryPrefix), strings.HasPrefix(ref, dub.PresetPrefix):
 			r, hint, ok := dubDesignRecipe(ref)
 			if !ok {
@@ -172,6 +182,23 @@ func (a *app) dubVoiceResolver(lib *library) func(ctx context.Context, ref, mode
 	}
 }
 
+// dubGallerySpec is how curated voice arch speaks on model e when e
+// cannot design: its own speaker on its own model, its bundled reference
+// on a model that clones; false otherwise.
+func (a *app) dubGallerySpec(arch gallery.Archetype, e catalog.Entry) (dub.VoiceSpec, bool) {
+	switch {
+	case arch.Kind == gallery.KindBuiltin && arch.Model == e.ID:
+		return dub.VoiceSpec{Voice: arch.Speaker}, true
+	case arch.Kind == gallery.KindDesigned && e.Has(catalog.CapClone):
+		p, err := galleryRefPath(a.voiceCacheDir(), arch)
+		if err != nil {
+			return dub.VoiceSpec{}, false
+		}
+		return dub.VoiceSpec{RefAudio: p, RefText: arch.RefText, Seed: arch.Seed}, true
+	}
+	return dub.VoiceSpec{}, false
+}
+
 // dubDesignRecipe is the design recipe of a design, preset or gallery
 // voice reference, and its delivery hint for models that cannot design.
 func dubDesignRecipe(ref string) (vd.Recipe, string, bool) {
@@ -183,11 +210,12 @@ func dubDesignRecipe(ref string) (vd.Recipe, string, bool) {
 		}
 		return vd.Recipe{Attrs: p.Attrs}, p.StyleHint.In("en"), true
 	case strings.HasPrefix(ref, dub.GalleryPrefix):
+		// Curated voices and the earlier gallery's (they still resolve).
 		arch, ok := gallery.Default().ByID(strings.TrimPrefix(ref, dub.GalleryPrefix))
-		if !ok {
+		if !ok || !arch.Designed() {
 			return vd.Recipe{}, "", false
 		}
-		return vd.Recipe{Attrs: arch.Attrs, Seed: arch.Seed}, arch.Description.In("en"), true
+		return arch.Recipe(), arch.Description.In("en"), true
 	}
 	desc := strings.TrimSpace(strings.TrimPrefix(ref, dub.DesignPrefix))
 	if desc == "" {

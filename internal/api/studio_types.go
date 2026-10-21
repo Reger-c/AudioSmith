@@ -36,15 +36,12 @@ type ProjectJSON struct {
 
 // GalleryQuery searches Discover voices with the page's filters.
 type GalleryQuery struct {
-	ID       string `json:"id,omitempty" jsonschema:"One voice by id (the other filters are ignored)."`
-	Query    string `json:"query,omitempty" jsonschema:"Words that must all occur in a voice's name, description, tags or attributes (English or Chinese)."`
-	Category string `json:"category,omitempty" jsonschema:"narration, conversational, characters, social, advertising, education, news, games or wellness."`
-	Gender   string `json:"gender,omitempty" jsonschema:"female, male or neutral."`
+	ID       string `json:"id,omitempty" jsonschema:"One voice by id (the other filters are ignored); ids of the earlier, larger gallery still resolve."`
+	Query    string `json:"query,omitempty" jsonschema:"Words that must all occur in a voice's name, description, persona or tags (English or Chinese)."`
+	Category string `json:"category,omitempty" jsonschema:"A use case: narration, conversational, characters or announcing."`
+	Gender   string `json:"gender,omitempty" jsonschema:"female or male."`
 	Age      string `json:"age,omitempty" jsonschema:"child, teen, young_adult, middle_aged or elderly (see facets)."`
-	Pitch    string `json:"pitch,omitempty" jsonschema:"An pitch value (see facets): very_low, low, moderate, high, very_high."`
-	Accent   string `json:"accent,omitempty" jsonschema:"An English accent or Chinese dialect (british, american, sichuan…; see facets)."`
-	Language string `json:"language,omitempty" jsonschema:"A recommended language (BCP-47 primary code: en, zh, ja…)."`
-	Style    string `json:"style,omitempty" jsonschema:"A style value (see facets)."`
+	Language string `json:"language,omitempty" jsonschema:"The language it speaks (BCP-47 primary code: en, zh, ja…)."`
 	Limit    int    `json:"limit,omitempty" jsonschema:"At most this many (default 20, up to 100)."`
 	Offset   int    `json:"offset,omitempty" jsonschema:"Skip this many (paging)."`
 }
@@ -54,10 +51,17 @@ type GalleryVoiceJSON struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
-	Category    string          `json:"category"`
+	Category    string          `json:"category"`       // the first use case
+	Uses        []string        `json:"uses,omitempty"` // every use case
+	Kind        string          `json:"kind,omitempty"` // "designed" or "builtin" ("": the earlier gallery)
+	Gender      string          `json:"gender,omitempty"`
+	Age         string          `json:"age,omitempty"`
 	Languages   []string        `json:"languages"`
 	Tags        []string        `json:"tags,omitempty"`
 	Attributes  json.RawMessage `json:"attributes"`
+	Persona     string          `json:"persona,omitempty"` // a designed voice's description, as the model gets it
+	Model       string          `json:"model,omitempty"`   // a built-in voice's model (catalogue id) and speaker
+	Speaker     string          `json:"speaker,omitempty"`
 	Sample      string          `json:"sample_text,omitempty"`
 	Featured    bool            `json:"featured,omitempty"`
 	Saved       string          `json:"saved_voice_id,omitempty"` // "Use voice" made it already

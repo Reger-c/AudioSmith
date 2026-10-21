@@ -347,7 +347,7 @@ func (a *app) wfVoiceChoices(model string) []dubVoiceChoice {
 			out = append(out, dubVoiceChoice{dub.PresetPrefix + pr.ID, pr.Name.In(i18n.Locale()), i18n.T("Design presets")})
 		}
 	}
-	for _, id := range e.VoiceIDs() {
+	for _, id := range e.VoiceIDsIn(i18n.Locale()) {
 		out = append(out, dubVoiceChoice{dub.SpeakerPrefix + id, id, i18n.T("Model voices")})
 	}
 	return out

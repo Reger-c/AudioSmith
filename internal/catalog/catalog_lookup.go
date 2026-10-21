@@ -105,6 +105,19 @@ func (e Entry) VoiceIDs() []string {
 	return ids
 }
 
+// VoiceIDsIn lists the built-in speakers pickers offer in interface
+// language locale: VoiceIDs without those hidden in it (HideIn).
+func (e Entry) VoiceIDsIn(locale string) []string {
+	base := BaseLanguage(locale)
+	var ids []string
+	for _, v := range e.Voices {
+		if !v.Hidden && !slices.Contains(v.HideIn, base) {
+			ids = append(ids, v.ID)
+		}
+	}
+	return ids
+}
+
 // SpeakerLanguage is the language of built-in speaker id (BCP-47 base,
 // "zh", "en"): the one it speaks, else its native one; "" when unknown.
 func (e Entry) SpeakerLanguage(id string) string {

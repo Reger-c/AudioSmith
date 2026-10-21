@@ -31,7 +31,8 @@ func TestStudioGallery(t *testing.T) {
 	for _, f := range []map[string]string{
 		{"query": "warm", "gender": "female"},
 		{"category": "narration", "language": "en", "age": "elderly"},
-		{"accent": "british", "style": ""},
+		{"category": "announcing"},
+		{"category": "news"}, // an earlier gallery category: mapped to its use case
 		{"query": "旁白"},
 	} {
 		var page api.GalleryPage
@@ -42,7 +43,7 @@ func TestStudioGallery(t *testing.T) {
 		e.must(t, "search_voices", args, &page)
 		// The page's query for the same filters.
 		g := galleryFilterQuery(f["query"], f["category"], map[gallery.Facet]string{gallery.FacetGender: f["gender"], gallery.FacetAge: f["age"],
-			gallery.FacetAccent: f["accent"], gallery.FacetLanguage: f["language"], gallery.FacetStyle: f["style"]})
+			gallery.FacetLanguage: f["language"]})
 		g.Limit = 100
 		ui := gallery.Default().Search(g)
 		if page.Total != ui.Total || len(page.Items) != len(ui.Items) || page.Total == 0 {
@@ -59,11 +60,11 @@ func TestStudioGallery(t *testing.T) {
 	}
 	// The page's own state gives the same.
 	var page api.GalleryPage
-	e.must(t, "search_voices", map[string]any{"category": "news", "gender": "male", "limit": 60}, &page)
+	e.must(t, "search_voices", map[string]any{"category": "narration", "gender": "male", "limit": 60}, &page)
 	done := make(chan gallery.Page)
 	e.a.postQueue(func() {
 		g := &e.a.gallery
-		g.tab = slices.IndexFunc(gallery.Categories(), func(c gallery.Category) bool { return c.ID == "news" }) + 1
+		g.tab = slices.IndexFunc(gallery.Categories(), func(c gallery.Category) bool { return c.ID == "narration" }) + 1
 		g.filters[gallery.FacetGender] = "male"
 		g.limit = 60
 		done <- e.a.galleryResults()
@@ -93,6 +94,22 @@ func TestStudioGallery(t *testing.T) {
 		t.Errorf("saved id %+v", page.Items[0])
 	}
 	e.fails(t, "use_gallery_voice", map[string]any{"id": "nope"}, api.CodeNotFound)
+	// A curated designed voice comes with its reference; an earlier
+	// gallery's id still resolves and saves its own recipe (no reference
+	// yet: it is made on first use).
+	if use.Voice.RefText == "" || use.Voice.Design == "" {
+		t.Errorf("curated voice without its reference or persona: %+v", use.Voice)
+	}
+	var oldPage api.GalleryPage
+	e.must(t, "search_voices", map[string]any{"id": "f-grandma-osmanthus"}, &oldPage)
+	if len(oldPage.Items) != 1 || oldPage.Items[0].Kind != "" || oldPage.Items[0].Persona != "" {
+		t.Fatalf("old id %+v", oldPage)
+	}
+	var old api.GalleryUse
+	e.must(t, "use_gallery_voice", map[string]any{"id": "f-grandma-osmanthus"}, &old)
+	if !old.Created || old.Voice.Kind != "designed" || old.Voice.RefText != "" || old.Voice.Origin != "gallery:f-grandma-osmanthus" {
+		t.Errorf("old use %+v", old)
+	}
 	if status, body := e.rest(t, "GET", "/api/gallery?gender=female&limit=3", nil); status != 200 || !strings.Contains(string(body), `"facets"`) {
 		t.Fatalf("GET /api/gallery %d %s", status, body)
 	}

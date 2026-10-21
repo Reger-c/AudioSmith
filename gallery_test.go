@@ -1,17 +1,19 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"os"
-	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
-	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/gallery"
-	"github.com/hehehai/AudioSmith/internal/hub"
-	"github.com/hehehai/AudioSmith/internal/jobs"
+	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
 func TestGalleryPage(t *testing.T) {
@@ -26,26 +28,29 @@ func TestGalleryPage(t *testing.T) {
 	if !tt.HasText(itoa(all)+" voices") || !tt.HasText(first.Name.En) {
 		t.Fatalf("gallery: %q", tt.Texts())
 	}
+	// No preview model to choose, nothing more to load: all of them fit.
+	if len(g.page.Items) != all || g.page.Next != -1 {
+		t.Errorf("page: %d of %d, next %d", len(g.page.Items), all, g.page.Next)
+	}
 
-	// Search, a category tab, a facet.
-	g.text = "whisper"
+	// Search, a use case, a facet.
+	g.text = "grandma"
 	tt.Frame()
 	if g.page.Total == 0 || g.page.Total >= all {
 		t.Errorf("search: %d", g.page.Total)
 	}
 	g.text = ""
 	tt.Frame()
-	games := gallery.Default().Search(gallery.Query{Category: "games"}).Total
-	// The categories are a select beside the search field.
-	if err := tt.Click("Category"); err != nil {
+	chars := gallery.Default().Search(gallery.Query{Category: "characters"}).Total
+	if err := tt.Click("Use"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if err := tt.Click("Games  " + itoa(games)); err != nil {
+	if err := tt.Click("Characters & kids  " + itoa(chars)); err != nil {
 		t.Fatalf("%v: %q", err, tt.Texts())
 	}
 	tt.Frame()
-	if g.page.Total != games || g.tab == 0 {
+	if g.page.Total != chars || g.tab == 0 {
 		t.Errorf("tab: %d %d", g.page.Total, g.tab)
 	}
 	if err := tt.Click("Gender"); err != nil {
@@ -69,8 +74,15 @@ func TestGalleryPage(t *testing.T) {
 		t.Errorf("facet: %v %q", g.filters, tt.Texts())
 	}
 	for _, it := range g.page.Items {
-		if it.Category != "games" || it.Attrs.Gender != "female" {
+		if !slices.Contains(it.Uses, "characters") || it.Gender != "female" {
 			t.Fatalf("filtered item %+v", it)
+		}
+	}
+	// The filters are the use case, language, gender and age: no pitch,
+	// accent or style any more.
+	for _, gone := range []string{"Pitch", "Accent or dialect", "Style"} {
+		if tt.HasText(gone) {
+			t.Errorf("filter %q is still there", gone)
 		}
 	}
 	tt.Click("Reset")
@@ -78,17 +90,6 @@ func TestGalleryPage(t *testing.T) {
 	if g.page.Total != all {
 		t.Errorf("reset: %d", g.page.Total)
 	}
-	// Paging.
-	if len(g.page.Items) != galleryPageSize {
-		t.Errorf("page %d", len(g.page.Items))
-	}
-	g.limit += galleryPageSize
-	tt.Frame()
-	if len(g.page.Items) != 2*galleryPageSize {
-		t.Errorf("more %d", len(g.page.Items))
-	}
-	g.limit = galleryPageSize
-	tt.Frame()
 
 	// Favorites persist.
 	if err := tt.Click("Add to favorites"); err != nil {
@@ -110,45 +111,25 @@ func TestGalleryPage(t *testing.T) {
 	}
 	tt.Frame()
 
-	// Preview: licence first, then a background job, cached.
+	// Preview plays the bundled clip: no job, no licence.
+	sent := len(eng.sent)
+	g.text = "Osmanthus"
+	tt.Frame()
+	arch, _ := gallery.Default().ByID("c-grandma-osmanthus")
+	if p := archetypePreview(arch); !p.ok() || len(p.data) == 0 {
+		t.Fatalf("no bundled preview for %s", arch.ID)
+	}
 	if err := tt.Click("Preview"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
-	if !a.licenceOpen {
-		t.Fatal("no licence dialog")
-	}
-	a.licenceOpen = false
-	acceptLicences(t, a)
-	tt.Frame()
-	sent := len(eng.sent)
-	tt.Click("Preview")
-	if len(eng.sent) != sent+1 {
-		t.Fatal("no preview job")
-	}
-	req := eng.last(t)
-	if req.Spec.Priority != jobs.PriorityBackground || req.Spec.Owner != galleryOwner+first.ID || req.Model != omni ||
-		!strings.HasPrefix(req.Output.Path, a.voiceCacheDir()) || req.Text == "" || req.Seed == nil || *req.Seed != first.Seed {
-		t.Fatalf("preview request %+v %+v", req.Spec, req.SynthesizeParams)
-	}
-	tt.Frame()
-	if !tt.HasText("Rendering the preview…") && !strings.Contains(strings.Join(tt.Texts(), "|"), "Rendering") {
-		t.Errorf("rendering: %q", tt.Texts())
-	}
-	writeTestWAV(t, req.Output.Path, 24000, 1)
-	eng.succeed(req.ID, proto.SynthesizeResult{Output: req.Output.Path, SampleRate: 24000, AudioSeconds: 1, Seconds: 1})
-	p := g.previews[first.ID]
-	if p.rendering || p.err != "" {
-		t.Fatalf("preview %+v", p)
+	if len(eng.sent) != sent || a.licenceOpen {
+		t.Fatalf("a preview sent %d jobs (licence %v)", len(eng.sent)-sent, a.licenceOpen)
 	}
 	a.pl.Stop()
-	tt.Frame()
-	tt.Click("Preview")
-	if len(eng.sent) != sent+1 {
-		t.Error("a cached preview rendered again")
-	}
 
-	// Use voice: a designed voice with the preview as its sample, in Design.
+	// Use voice: a designed voice with its persona, seed, the bundled
+	// reference (heard saying its text: nothing to make, nothing to
+	// check) and preview, in Design.
 	if err := tt.Click("Use voice"); err != nil {
 		t.Fatal(err)
 	}
@@ -156,13 +137,21 @@ func TestGalleryPage(t *testing.T) {
 		t.Fatalf("voices %+v", a.voices)
 	}
 	v := a.voices[0]
-	if v.Origin != "gallery:"+first.ID || v.Kind != core.VoiceDesigned || v.Seed != first.Seed || v.Sample != "sample.wav" || v.Name != first.Name.En {
+	if v.Origin != "gallery:"+arch.ID || v.Kind != core.VoiceDesigned || v.Seed != arch.Seed || v.Design != arch.Persona || v.Name != arch.Name.En ||
+		v.RefAudio == "" || v.RefText != arch.RefText || v.Sample == "" || v.RefCheck == nil || !v.RefCheck.TextChecked || v.RefSeconds < 8 {
 		t.Fatalf("voice %+v", v)
+	}
+	if needsReference(&v) || a.refUnchecked(&v) || a.refWork(&v) {
+		t.Error("a curated voice still has reference work")
+	}
+	if b, _, err := wav.ReadFile(a.voicePath(&v, v.RefAudio)); err != nil || b.Seconds() < 8 {
+		t.Fatalf("reference: %v", err)
 	}
 	if a.router.Path() != "/design" || a.design.linked != v.ID {
 		t.Errorf("design: %s %s", a.router.Path(), a.design.linked)
 	}
-	// Using it again finds it; Use in Studio picks it there.
+	// Using it again finds it; Use in Studio picks it there, on the clone
+	// model the Studio speaks designed voices with: its reference as it is.
 	a.navigate("/gallery")
 	tt.Frame()
 	tt.Click("More actions")
@@ -170,121 +159,172 @@ func TestGalleryPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	// The recommended model that speaks it (a designed voice: cloned from
-	// its sample on Qwen3-TTS 1.7B Base, thread #41).
 	if len(a.voices) != 1 || a.studioVoice != v.ID || a.router.Path() != "/studio" || a.preset().ID != "qwen3-tts-1.7b-base-8bit" {
 		t.Errorf("use in studio: %d %s %s", len(a.voices), a.router.Path(), a.preset().Repo)
 	}
-	if _, err := os.Stat(filepath.Join(a.voiceCacheDir(), filepath.Base(req.Output.Path))); err != nil {
-		t.Error(err)
+	var tk core.Take
+	a.fillVoice(&tk, a.findVoice(v.ID), a.preset())
+	if tk.RefAudio != a.voicePath(&v, v.RefAudio) || tk.RefText != arch.RefText {
+		t.Errorf("studio take: %q %q", tk.RefAudio, tk.RefText)
 	}
 }
 
-func TestGalleryPreviewFailure(t *testing.T) {
-	a, eng := newVoiceTestApp(t)
-	acceptLicences(t, a)
-	tt := ui.NewTester(a.view, 1200, 1800)
-	a.navigate("/gallery")
-	tt.Frame()
-	tt.Click("Preview")
-	req := eng.last(t)
-	eng.fail(req.ID, proto.CodeOOM, "out of memory")
-	tt.Frame()
-	if !tt.HasText("Preview failed") {
-		t.Errorf("failure: %q", tt.Texts())
-	}
-	// Open in Design without saving.
-	first := gallery.Default().All()[0]
-	tt.Click("More actions")
-	tt.ChooseMenuItem("Open in Design without saving")
-	if a.router.Path() != "/design" || a.design.linked != "" || int64(a.design.seed) != first.Seed || len(a.voices) != 0 {
-		t.Errorf("open in design: %+v", a.design)
-	}
-}
-
-// TestGalleryFiltersKeepTheirPlace: Reset appearing with a filter (or
-// Favorites) does not make the filter row taller and push the cards down.
-func TestGalleryFiltersKeepTheirPlace(t *testing.T) {
-	a, _, _ := newTestAppIn(t, t.TempDir())
-	tt := ui.NewTester(a.view, 1200, 900)
-	g := &a.gallery
-	a.navigate("/gallery")
-	tt.Frame()
-	tt.Frame()
-	first := gallery.Default().All()[0].Name.En
-	before, ok := tt.Find(first)
-	if !ok {
-		t.Fatalf("no %q", first)
-	}
-	g.filters[gallery.FacetGender] = gallery.Default().All()[0].Attrs.Gender
-	tt.Frame()
-	tt.Frame()
-	if !tt.HasText("Reset") {
-		t.Fatal("no Reset with a filter on")
-	}
-	after, ok := tt.Find(first)
-	if !ok {
-		t.Fatalf("no %q with the filter", first)
-	}
-	if after.Y != before.Y {
-		t.Errorf("cards moved from y=%.1f to %.1f when Reset appeared", before.Y, after.Y)
-	}
-}
-
-// TestGalleryLoadsMoreAtTheEnd: no Load more button: scrolling to the end
-// of the grid loads the next page.
-func TestGalleryLoadsMoreAtTheEnd(t *testing.T) {
-	a, _, _ := newTestAppIn(t, t.TempDir())
-	tt := ui.NewTester(a.view, 1100, 720)
-	g := &a.gallery
-	a.navigate("/gallery")
-	tt.Frame()
-	tt.Frame()
-	start := len(g.page.Items)
-	if start == 0 || start >= gallery.Default().Len() {
-		t.Fatalf("first page: %d items", start)
-	}
-	if tt.HasText("Load more") {
-		t.Error("a Load more button")
-	}
-	for range 40 {
-		tt.Scroll(700, 500, 0, 2000)
-		tt.Frame()
-	}
-	if got := len(g.page.Items); got <= start {
-		t.Errorf("scrolled to the end: still %d items", got)
-	}
-}
-
-// TestGalleryPreviewModelDownloaded: previews use a model that is
-// downloaded (OmniVoice comes first in the catalogue but often isn't);
-// the menu says which are not downloaded; asking for one of those says
-// what to do instead of failing.
-func TestGalleryPreviewModelDownloaded(t *testing.T) {
+// TestGalleryBuiltinVoice: a built-in speaker of the gallery previews
+// its bundled clip and is saved as that model's speaker, used in the
+// Studio.
+func TestGalleryBuiltinVoice(t *testing.T) {
 	a, eng, _ := newTestAppIn(t, t.TempDir())
-	tt := ui.NewTester(a.view, 1200, 900)
-	ms := designModels()
-	if len(ms) < 2 {
-		t.Skip("one design model")
+	tt := ui.NewTester(a.view, 1200, 1800)
+	arch, ok := gallery.Default().ByID("c-af_heart")
+	if !ok {
+		t.Fatal("no c-af_heart")
 	}
-	first, second := ms[0], ms[1]
-	a.model(first).known, a.model(first).local.State = true, hub.Missing
-	a.model(second).known, a.model(second).local.State = true, hub.Downloaded
+	if p := archetypePreview(arch); !p.ok() {
+		t.Fatal("no preview")
+	}
 	a.navigate("/gallery")
+	a.gallery.text = "af_heart"
 	tt.Frame()
-	if e, _ := a.previewModel(); e.ID != second.ID {
-		t.Fatalf("previews use %s, not the downloaded %s", e.Label, second.Label)
+	sent := len(eng.sent)
+	if err := tt.Click("Use voice"); err != nil {
+		t.Fatal(err)
 	}
-	if !tt.HasText(second.DisplayName()) {
-		t.Errorf("header does not name %s: %q", second.DisplayName(), tt.Texts())
+	if len(eng.sent) != sent || len(a.voices) != 1 {
+		t.Fatalf("sent %d, voices %d", len(eng.sent)-sent, len(a.voices))
 	}
-	// Choosing the one not downloaded: Preview explains, sends no job.
-	a.gallery.model = first.Label
-	tt.Frame()
-	before := len(eng.sent)
-	a.toasts = nil
-	a.previewArchetype(gallery.Default().All()[0])
-	if len(eng.sent) != before || len(a.toasts) != 1 || !strings.Contains(a.toasts[0], "not downloaded") {
-		t.Errorf("preview with a missing model: sent %d, toasts %q", len(eng.sent)-before, a.toasts)
+	v := a.voices[0]
+	e := entry(t, arch.Model)
+	if v.Kind != core.VoiceBuiltin || v.Model != e.Repo || v.Speaker != "af_heart" || v.Origin != "gallery:c-af_heart" {
+		t.Fatalf("voice %+v", v)
+	}
+	if a.router.Path() != "/studio" || a.studioVoice != v.ID || a.preset().ID != arch.Model {
+		t.Errorf("studio: %s %s %s", a.router.Path(), a.studioVoice, a.preset().ID)
+	}
+}
+
+// TestGalleryOldIDs: the earlier gallery's ids are not listed but still
+// resolve (a dub cast, an agent naming one), and a voice saved from one
+// keeps working: it carries its own recipe.
+func TestGalleryOldIDs(t *testing.T) {
+	a, _, _ := newTestAppIn(t, t.TempDir())
+	g := gallery.Default()
+	for _, id := range []string{"f-grandma-osmanthus", "f-monsoon-stories", "g-quest-giver-gravelly-zh-mm"} {
+		arch, ok := g.ByID(id)
+		if !ok || !arch.Legacy || !arch.Designed() {
+			t.Fatalf("%s: %v %+v", id, ok, arch)
+		}
+		if g.Search(gallery.Query{Text: id}).Total != 0 {
+			t.Errorf("%s is listed", id)
+		}
+		// A dub cast naming it: its recipe, as before.
+		r, _, ok := dubDesignRecipe("gallery:" + id)
+		if !ok || r.Seed != arch.Seed || r.Attrs.Gender != arch.Attrs.Gender {
+			t.Errorf("%s: dub recipe %+v", id, r)
+		}
+	}
+	// A voice saved from an old archetype before (its own attributes and
+	// seed, no reference yet): the Studio speaks it, a reference is made
+	// from its own recipe when a clone model needs one.
+	old, _ := g.ByID("g-quest-giver-gravelly-zh-mm")
+	attrs, _ := json.Marshal(old.Attrs)
+	saved, err := a.lib.svc.Voices.SaveFiles(context.Background(), core.Voice{Name: "沙哑的任务 NPC", Kind: core.VoiceDesigned, DesignAttrs: attrs,
+		Seed: old.Seed, Language: "zh", Origin: "gallery:" + old.ID}, core.VoiceFiles{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.voiceChanged(core.VoiceChanged{Voice: saved})
+	v := a.findVoice(saved.ID)
+	if r := voiceRecipe(v); r.Seed != old.Seed || r.Attrs.Gender != "male" || r.Description != "" {
+		t.Errorf("recipe %+v", r)
+	}
+	vdm := withDesignCatalog(t)
+	var tk core.Take
+	a.fillVoice(&tk, v, vdm)
+	if tk.Voice == "" || tk.Seed != old.Seed {
+		t.Errorf("design take %+v", tk)
+	}
+	if !needsReference(v) {
+		t.Error("an old voice without a reference should get one made")
+	}
+	// Hidden presets resolve too.
+	for _, id := range []string{"whisper", "kid", "upbeat", "northeast-buddy", "calm-guide"} {
+		if _, _, ok := dubDesignRecipe("preset:" + id); !ok {
+			t.Errorf("preset %s does not resolve", id)
+		}
+		if a.dubVoiceLabel("preset:"+id) == "Missing voice" {
+			t.Errorf("preset %s has no label", id)
+		}
+	}
+}
+
+// TestGalleryCuratedAssets: every curated voice is complete: a designed
+// one has its persona (sent as written), a tested seed, a bundled
+// reference that decodes to 8–20 s with its text, and a preview; a
+// built-in one names a visible speaker of a catalogue model with a
+// bundled preview. The bundle stays small.
+func TestGalleryCuratedAssets(t *testing.T) {
+	langs := map[string]int{}
+	for _, arch := range gallery.Default().All() {
+		langs[arch.Languages[0]]++
+		if p := archetypePreview(arch); !p.ok() || len(p.data) == 0 {
+			t.Errorf("%s: no bundled preview", arch.ID)
+		}
+		switch arch.Kind {
+		case gallery.KindBuiltin:
+			e, ok := catalog.Builtin().ByID(arch.Model)
+			if !ok || !slices.Contains(e.VoiceIDs(), arch.Speaker) {
+				t.Errorf("%s: %s has no visible speaker %s", arch.ID, arch.Model, arch.Speaker)
+			}
+			if lang := e.SpeakerLanguage(arch.Speaker); lang != arch.Languages[0] {
+				t.Errorf("%s: speaker language %q, listed as %q", arch.ID, lang, arch.Languages[0])
+			}
+		case gallery.KindDesigned:
+			r := arch.Recipe()
+			low, err := vd.Lower(vd.TargetQwen3Design, r, vd.Options{Lang: designTextLang(arch.Languages[0])})
+			if err != nil || low.Voice != arch.Persona || low.Seed != arch.Seed {
+				t.Errorf("%s: the persona is not sent as written: %q", arch.ID, low.Voice)
+			}
+			ref := galleryClip(arch.ID, "ref")
+			b, err := decodeVorbis(ref)
+			if err != nil || b.Seconds() < 8 || b.Seconds() > 20 {
+				t.Errorf("%s: reference %v, %.1f s", arch.ID, err, b.Seconds())
+			}
+			if (arch.Age == "child") != (r.Attrs.Register() == vd.RegisterChild) {
+				t.Errorf("%s: register %s for age %s", arch.ID, r.Attrs.Register(), arch.Age)
+			}
+		}
+	}
+	if langs["zh"] < 10 || langs["en"] < 10 || len(langs) < 6 {
+		t.Errorf("languages %v", langs)
+	}
+	var total int64
+	entries, _ := galleryVoicesFS.ReadDir(galleryVoicesDir)
+	for _, f := range entries {
+		info, _ := f.Info()
+		total += info.Size()
+	}
+	if total > 6<<20 {
+		t.Errorf("bundle %d bytes, over 6 MB", total)
+	}
+}
+
+// TestGalleryDubUsesBundledReference: a dub cast naming a curated
+// designed voice clones its bundled reference on a model that clones; a
+// curated built-in speaker speaks as itself on its own model.
+func TestGalleryDubUsesBundledReference(t *testing.T) {
+	a, _, _ := newTestAppIn(t, t.TempDir())
+	resolve := a.dubVoiceResolver(a.lib)
+	base := entry(t, "qwen3-tts-0.6b-base-8bit")
+	spec, err := resolve(context.Background(), "gallery:c-grandma-osmanthus", base.Repo, "zh")
+	arch, _ := gallery.Default().ByID("c-grandma-osmanthus")
+	if err != nil || spec.RefAudio == "" || spec.RefText != arch.RefText || spec.Seed != arch.Seed {
+		t.Fatalf("spec %+v %v", spec, err)
+	}
+	if _, err := os.Stat(spec.RefAudio); err != nil {
+		t.Fatal(err)
+	}
+	kokoro := entry(t, "kokoro-82m-bf16")
+	if spec, err := resolve(context.Background(), "gallery:c-af_heart", kokoro.Repo, "en"); err != nil || spec.Voice != "af_heart" {
+		t.Errorf("builtin %+v %v", spec, err)
 	}
 }

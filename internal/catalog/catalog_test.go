@@ -363,8 +363,22 @@ func TestRemoved(t *testing.T) {
 		t.Error("shared aux repos")
 	}
 	k, _ := c.ByID("kokoro-82m-bf16")
-	if slices.ContainsFunc(k.VoiceIDs(), func(v string) bool { return strings.HasPrefix(v, "z") }) || !slices.Contains(k.AllVoiceIDs(), "zf_xiaobei") || slices.Contains(k.VoiceIDs(), "jf_alpha") || !slices.Contains(k.AllVoiceIDs(), "jf_alpha") || len(k.VoiceIDs()) != 17 {
+	if slices.ContainsFunc(k.VoiceIDs(), func(v string) bool { return strings.HasPrefix(v, "z") }) || !slices.Contains(k.AllVoiceIDs(), "zf_xiaobei") || slices.Contains(k.VoiceIDs(), "jf_alpha") || !slices.Contains(k.AllVoiceIDs(), "jf_alpha") || len(k.VoiceIDs()) != 15 {
 		t.Errorf("kokoro voices %v", k.VoiceIDs())
+	}
+	// #91's weakest two are hidden but still named; Ryan is not offered in
+	// Chinese (#94).
+	for _, v := range []string{"af_nicole", "bm_lewis"} {
+		if slices.Contains(k.VoiceIDs(), v) || !slices.Contains(k.AllVoiceIDs(), v) {
+			t.Errorf("%s offered or gone", v)
+		}
+	}
+	cv, _ := c.ByID("qwen3-tts-0.6b-customvoice-8bit")
+	if slices.Contains(cv.VoiceIDsIn("zh-Hans"), "Ryan") || !slices.Contains(cv.VoiceIDsIn("en"), "Ryan") || !slices.Contains(cv.VoiceIDs(), "Ryan") {
+		t.Errorf("Ryan: zh %v, en %v", cv.VoiceIDsIn("zh-Hans"), cv.VoiceIDsIn("en"))
+	}
+	if !slices.Equal(k.VoiceIDsIn("zh-Hans"), k.VoiceIDs()) {
+		t.Error("Kokoro's speakers differ by interface language")
 	}
 	for name, edit := range map[string]func(*Catalog){
 		"replaced by a removed model":   func(b *Catalog) { b.Removed[0].ReplacedBy = "moss-tts-nano-100m" },

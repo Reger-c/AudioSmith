@@ -2,17 +2,11 @@ package gallery
 
 import vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 
-// tx is a Text literal (en, zh).
-func tx(en, zh string) vd.Text { return vd.Text{En: en, Zh: zh} }
+// The earlier gallery's tables: its categories, timbre flavors and
+// locales.
 
-// Category is a use-case group of the gallery.
-type Category struct {
-	ID          string  `json:"id"`
-	Name        vd.Text `json:"name"`
-	Description vd.Text `json:"description"`
-}
-
-var categories = []Category{
+// legacyCategories are the earlier gallery's use-case categories.
+var legacyCategories = []Category{
 	{"narration", tx("Narration & Audiobooks", "旁白与有声书"), tx("Long-form reading: novels, stories, poems.", "长篇朗读：小说、故事、诗歌。")},
 	{"conversational", tx("Conversational & Podcast", "对话与播客"), tx("Hosts, chats, assistants and support lines.", "主持、闲聊、助手与客服。")},
 	{"characters", tx("Characters & Animation", "角色与动画"), tx("Heroes, villains, sidekicks and cartoon voices.", "英雄、反派、跟班与卡通角色。")},
@@ -24,11 +18,8 @@ var categories = []Category{
 	{"wellness", tx("Meditation & ASMR", "冥想与助眠"), tx("Guided calm, sleep stories and soft whispers.", "引导放松、助眠故事与轻声耳语。")},
 }
 
-// Categories lists the use-case categories in display order.
-func Categories() []Category { return append([]Category(nil), categories...) }
-
-func categoryIndex(id string) int {
-	for i, c := range categories {
+func legacyCategoryIndex(id string) int {
+	for i, c := range legacyCategories {
 		if c.ID == id {
 			return i
 		}
@@ -143,7 +134,3 @@ func person(gender, age string) vd.Text {
 	}
 	return t[age][g]
 }
-
-// Languages lists the language facet: the languages archetypes recommend,
-// in display order.
-var Languages = []string{"en", "zh", "es", "fr", "de", "it", "pt", "ru", "hi", "ja", "ko"}

@@ -27,15 +27,17 @@ import (
 
 // --- voice discovery ---------------------------------------------------------------
 
-// galleryVoiceJSON is an archetype as agents see it, in the UI's language.
+// galleryVoiceJSON is a gallery voice as agents see it, in the UI's
+// language.
 func galleryVoiceJSON(a gallery.Archetype, loc string, saved map[string]string) api.GalleryVoiceJSON {
 	attrs, _ := json.Marshal(a.Attrs.Canonical())
 	sample, _ := a.PreviewLine()
-	return api.GalleryVoiceJSON{ID: a.ID, Name: a.Name.In(loc), Description: a.Description.In(loc), Category: a.Category,
-		Languages: a.Languages, Tags: a.Tags, Attributes: attrs, Sample: sample, Featured: a.Featured, Saved: saved[a.ID]}
+	return api.GalleryVoiceJSON{ID: a.ID, Name: a.Name.In(loc), Description: a.Description.In(loc), Category: a.Category, Uses: a.Uses,
+		Kind: a.Kind, Gender: a.Gender, Age: a.Age, Languages: a.Languages, Tags: a.Tags, Attributes: attrs, Persona: a.Persona,
+		Model: a.Model, Speaker: a.Speaker, Sample: sample, Featured: a.Featured, Saved: saved[a.ID]}
 }
 
-// savedArchetypes maps archetype ids to the voices "Use voice" saved.
+// savedArchetypes maps gallery voice ids to the voices "Use voice" saved.
 func savedArchetypes(voices []core.Voice) map[string]string {
 	out := map[string]string{}
 	for _, v := range voices {
@@ -48,6 +50,7 @@ func savedArchetypes(voices []core.Voice) map[string]string {
 
 // SearchGallery searches Discover voices with the page's query
 // (galleryFilterQuery) and returns the facets' values with their counts.
+// An id finds one voice, an earlier gallery's too.
 func (b *apiBackend) SearchGallery(ctx context.Context, q api.GalleryQuery) (api.GalleryPage, error) {
 	voices, _ := b.voices(ctx)
 	saved := savedArchetypes(voices)
@@ -60,7 +63,7 @@ func (b *apiBackend) SearchGallery(ctx context.Context, q api.GalleryQuery) (api
 		}
 		return api.GalleryPage{Total: 1, Next: -1, Items: []api.GalleryVoiceJSON{galleryVoiceJSON(a, loc, saved)}}, nil
 	}
-	if c := q.Category; c != "" && !slices.ContainsFunc(gallery.Categories(), func(x gallery.Category) bool { return x.ID == c }) {
+	if c := q.Category; c != "" && gallery.CategoryID(c) == "" {
 		var ids []string
 		for _, x := range gallery.Categories() {
 			ids = append(ids, x.ID)
@@ -68,7 +71,7 @@ func (b *apiBackend) SearchGallery(ctx context.Context, q api.GalleryQuery) (api
 		return api.GalleryPage{}, errBadRequest("category", "category is one of %s.", strings.Join(ids, ", "))
 	}
 	gq := galleryFilterQuery(q.Query, q.Category, map[gallery.Facet]string{gallery.FacetGender: q.Gender, gallery.FacetAge: q.Age,
-		gallery.FacetPitch: q.Pitch, gallery.FacetAccent: q.Accent, gallery.FacetLanguage: q.Language, gallery.FacetStyle: q.Style})
+		gallery.FacetLanguage: q.Language})
 	gq.Limit, gq.Offset = q.Limit, q.Offset
 	page := g.Search(gq)
 	out := api.GalleryPage{Total: page.Total, Offset: page.Offset, Next: page.Next, Items: []api.GalleryVoiceJSON{},
@@ -84,24 +87,7 @@ func (b *apiBackend) SearchGallery(ctx context.Context, q api.GalleryQuery) (api
 	return out, nil
 }
 
-// galleryPreviewModel is the model gallery voices are designed for: the
-// first that can design and is downloaded, else the first that can
-// design (the page's previewModel without its picker).
-func (b *apiBackend) galleryPreviewModel() (catalog.Entry, bool) {
-	ms := designModels()
-	for _, e := range ms {
-		if ok, _ := b.onDisk(e); ok {
-			return e, true
-		}
-	}
-	if len(ms) == 0 {
-		return catalog.Entry{}, false
-	}
-	return ms[0], true
-}
-
-// UseGalleryVoice saves an archetype as "Use voice" does (once), with
-// its cached preview as the sample when the gallery made one.
+// UseGalleryVoice saves a gallery voice as "Use voice" does (once).
 func (b *apiBackend) UseGalleryVoice(ctx context.Context, id string) (api.GalleryUse, error) {
 	arch, ok := gallery.Default().ByID(id)
 	if !ok {
@@ -111,27 +97,23 @@ func (b *apiBackend) UseGalleryVoice(ctx context.Context, id string) (api.Galler
 	if err != nil {
 		return api.GalleryUse{}, err
 	}
-	e, _ := b.galleryPreviewModel()
+	// The model it is for: a built-in speaker's own, else the design
+	// model (that made a curated voice's reference).
+	mid := galleryDesignModel
+	if arch.Kind == gallery.KindBuiltin {
+		mid = arch.Model
+	}
+	e, _ := catalog.Builtin().ByID(mid)
 	use := api.GalleryUse{Model: e.ID}
 	var v core.Voice
-	if vid := savedArchetypes(voices)[id]; vid != "" {
+	if vid := savedArchetypes(voices)[arch.ID]; vid != "" {
 		for _, x := range voices {
 			if x.ID == vid {
 				v = x
 			}
 		}
 	} else {
-		sample := ""
-		if e.Repo != "" && b.previews != "" {
-			if plan, err := gallery.PlanPreviews([]gallery.Archetype{arch}, galleryModel(e), nil, 1); err == nil && len(plan.Jobs) > 0 {
-				p := filepath.Join(b.previews, plan.Jobs[0].Key+".wav")
-				if _, err := os.Stat(p); err == nil {
-					sample = p
-				}
-			}
-		}
-		nv, files := archetypeVoice(arch, i18n.Locale(), e.Repo, sample)
-		if v, err = b.lib.svc.Voices.SaveFiles(ctx, nv, files); err != nil {
+		if v, err = saveArchetype(ctx, b.lib.svc.Voices, arch, i18n.Locale(), b.lib.store.Dir()); err != nil {
 			return api.GalleryUse{}, err
 		}
 		use.Created = true
@@ -143,8 +125,10 @@ func (b *apiBackend) UseGalleryVoice(ctx context.Context, id string) (api.Galler
 		}
 	}
 	use.Downloaded, _ = b.onDisk(e)
-	use.Note = "Speak with it: generate_speech with voice \"" + v.Name + "\" and a model from models (design models such as " + e.Label +
-		" speak it as designed). Use it in stories, audiobooks and dubs by its name."
+	use.Note = "Speak with it: generate_speech with voice \"" + v.Name + "\" and a model from models. Use it in stories, audiobooks and dubs by its name."
+	if v.RefAudio != "" {
+		use.Note += " It has its reference already: models that clone (such as Qwen3-TTS 1.7B Base) speak it at once."
+	}
 	if !use.Downloaded && e.ID != "" {
 		use.Note += " " + e.Label + " is not downloaded: ask the user to download it in AudioSmith → Models."
 	}

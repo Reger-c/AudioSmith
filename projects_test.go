@@ -180,6 +180,7 @@ func TestGalleryUseInStories(t *testing.T) {
 	acceptLicences(t, a)
 	tt := ui.NewTester(a.view, 1200, 1800)
 	a.navigate("/gallery")
+	a.gallery.text = "Osmanthus" // a designed voice
 	tt.Frame()
 	tt.Click("More actions")
 	if err := tt.ChooseMenuItem("Use in Stories"); err != nil {
@@ -190,7 +191,10 @@ func TestGalleryUseInStories(t *testing.T) {
 		t.Fatalf("%d voices, %s", len(a.voices), a.router.Path())
 	}
 	p := a.lfStories
-	if len(p.doc.Cast) != 1 || p.doc.Cast[0].Voice != a.voices[0].ID || p.doc.Model != omni {
+	// A curated voice comes with its reference: Stories clones it on its
+	// own recommended model (before #94, a gallery voice needed a design
+	// model).
+	if len(p.doc.Cast) != 1 || p.doc.Cast[0].Voice != a.voices[0].ID || p.doc.Model != entry(t, "qwen3-tts-1.7b-base-8bit").Repo {
 		t.Errorf("cast %+v, model %s", p.doc.Cast, p.doc.Model)
 	}
 	// Narrate an audiobook, from the voice editor's menu.

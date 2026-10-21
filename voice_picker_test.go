@@ -17,12 +17,13 @@ import (
 func TestVoicePreviewSources(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	cv, kok := entry(t, "qwen3-tts-0.6b-customvoice-8bit"), entry(t, "kokoro-82m-bf16")
-	// Every visible built-in speaker has its bundled clip, but Kokoro's
-	// Japanese ones (unintelligible) and the hidden Chinese ones.
+	// Every built-in speaker has its bundled clip, but Kokoro's Japanese
+	// ones (unintelligible) and the hidden Chinese ones; af_nicole and
+	// bm_lewis, hidden since #94, keep theirs for those who chose them.
 	for _, e := range []catalog.Entry{cv, kok} {
 		for _, v := range e.Voices {
 			p := speakerPreview(e, v.ID)
-			want := !v.Hidden && !strings.HasPrefix(v.Language, "ja")
+			want := !strings.HasPrefix(v.Language, "ja") && !(v.Hidden && strings.HasPrefix(v.Language, "zh"))
 			if p.ok() != want {
 				t.Errorf("%s %s: preview %v, want %v", e.ID, v.ID, p.ok(), want)
 			}

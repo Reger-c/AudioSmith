@@ -2,9 +2,9 @@ package main
 
 import (
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/gallery"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -12,8 +12,9 @@ import (
 	vd "github.com/hehehai/AudioSmith/internal/voicedesign"
 )
 
-// galleryFacets are the facets offered as filters (categories are tabs).
-var galleryFacets = []gallery.Facet{gallery.FacetGender, gallery.FacetAge, gallery.FacetPitch, gallery.FacetAccent, gallery.FacetLanguage, gallery.FacetStyle}
+// galleryFacets are the facets offered as filters (use cases are a
+// select beside the search).
+var galleryFacets = []gallery.Facet{gallery.FacetLanguage, gallery.FacetGender, gallery.FacetAge}
 
 // facetTitle names a facet.
 func facetTitle(f gallery.Facet) string {
@@ -22,14 +23,8 @@ func facetTitle(f gallery.Facet) string {
 		return i18n.T("Gender")
 	case gallery.FacetAge:
 		return i18n.T("Age")
-	case gallery.FacetPitch:
-		return i18n.T("Pitch")
-	case gallery.FacetAccent:
-		return i18n.T("Accent or dialect")
 	case gallery.FacetLanguage:
 		return i18n.T("Language")
-	case gallery.FacetStyle:
-		return i18n.T("Style")
 	}
 	return string(f)
 }
@@ -42,26 +37,10 @@ func (a *app) galleryPage(c *ui.Context) {
 	narrow := a.pageWidth(c) < px(t, 720)
 	pageHeader(c, i18n.T("Discover voices"), func() {
 		caption(c, i18n.N(page.Total, "%d voice", "%d voices", page.Total)).SingleLine()
-		if ms := designModels(); len(ms) > 1 {
-			// The model previews use; models not downloaded say so, and
-			// are not chosen unless asked for (previewModel).
-			cur, _ := a.previewModel()
-			dropButton(c.Key("gallery-model"), icons.Soundwave, cur.DisplayName()).Tooltip(i18n.T("Preview with")).MaxWidth(px(t, 220)).Menu(func(m *ui.Menu) {
-				for _, e := range ms {
-					label := e.DisplayName()
-					if ok, known := a.modelOnDisk(e); known && !ok {
-						label = i18n.T("%s (not downloaded)", e.DisplayName())
-					}
-					if m.Item(label).Checked(e.Label == cur.Label).Chosen() {
-						g.model = e.Label
-					}
-				}
-			})
-		}
 	})
 	ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp3)).Gap(px(t, sp2)).Children(func() {
 		ui.Row(c).Gap(px(t, sp2)).AlignItems(ui.Center).Wrap().Children(func() {
-			if searchField(c, "gallery-search", &g.text, i18n.T("Search: narrator, 东北, whisper…"), px(t, 360)).
+			if searchField(c, "gallery-search", &g.text, i18n.T("Search: narrator, 东北, grandma…"), px(t, 360)).
 				Label(i18n.T("Search Discover voices")).Changed() {
 				g.limit = galleryPageSize
 			}
@@ -88,53 +67,31 @@ func (a *app) galleryPage(c *ui.Context) {
 		return
 	}
 	items := page.Items
-	g.moreAsked = false
-	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items)+boolInt(page.Next >= 0), px(t, 260), g.cardHeight(t), func(i int) {
-		if i == len(items) {
-			// The grid builds only the rows in view: this cell is built
-			// when the end scrolls into view, so the next page loads then
-			// (an in-memory search: at once), with no button to press.
-			if !g.moreAsked {
-				g.moreAsked = true
-				g.limit += galleryPageSize
-				c.After(time.Millisecond)
-			}
-			ui.Column(c.Key("more")).Grow(1).Center().Children(func() {
-				ui.Spinner(c).Label(i18n.T("Loading…"))
-			})
-			return
-		}
+	ui.GridView(c.Key("gallery-grid"), &g.grid, len(items), px(t, 260), g.cardHeight(t), func(i int) {
 		a.archetypeCard(c, items[i])
 	}).Grow(1).Padding(0, px(t, sp6), px(t, sp4))
 }
 
-func boolInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-// galleryCounts are the voices of each category, and of all of them.
-func galleryCounts(page gallery.Page) (counts map[string]int, total int) {
-	counts = map[string]int{}
+// galleryCounts are the voices of each use case (a voice may have
+// several).
+func galleryCounts(page gallery.Page) map[string]int {
+	counts := map[string]int{}
 	for _, fc := range page.Facets[gallery.FacetCategory] {
 		counts[fc.Value] = fc.Count
-		total += fc.Count
 	}
-	return counts, total
+	return counts
 }
 
-// galleryCategorySelect is the categories, with their counts, as a
-// select beside the search field.
+// galleryCategorySelect is the use cases, with their counts, as a select
+// beside the search field.
 func (a *app) galleryCategorySelect(c *ui.Context, page gallery.Page, narrow bool) {
 	t := c.Theme()
 	g := &a.gallery
 	loc := i18n.Locale()
-	counts, total := galleryCounts(page)
+	counts := galleryCounts(page)
 	cats := gallery.Categories()
 	options := make([]string, 0, len(cats)+1)
-	options = append(options, i18n.T("All categories")+"  "+itoa(total))
+	options = append(options, i18n.T("All uses"))
 	for _, cat := range cats {
 		options = append(options, cat.Name.In(loc)+"  "+itoa(counts[cat.ID]))
 	}
@@ -146,7 +103,7 @@ func (a *app) galleryCategorySelect(c *ui.Context, page gallery.Page, narrow boo
 	if narrow {
 		w = px(t, 170)
 	}
-	if ui.Select(c.Key("gallery-category"), &cur, options).Label(i18n.T("Category")).Tooltip(i18n.T("Category")).Width(w).Shrink(1).MinWidth(px(t, 120)).Changed() {
+	if ui.Select(c.Key("gallery-category"), &cur, options).Label(i18n.T("Use")).Tooltip(i18n.T("Use")).Width(w).Shrink(1).MinWidth(px(t, 120)).Changed() {
 		for i, o := range options {
 			if o == cur {
 				g.tab, g.limit = i, galleryPageSize
@@ -209,15 +166,11 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 				a.toggleFavorite(arch.ID)
 			}
 		})
-		// The voice's details as tags, all of them: its language first,
-		// then gender, age, pitch and the rest; they wrap.
+		// The voice's details as tags: its language, gender and age, its
+		// use cases, and a built-in speaker's model; they wrap.
 		// At most two rows (the card has a fixed height): the rest are
 		// cut, and the tooltip lists them all.
-		var tags []string
-		if len(arch.Languages) > 0 {
-			tags = append(tags, dubLangName(arch.Languages[0]))
-		}
-		tags = append(tags, archetypeAttrLabels(arch.Attrs, loc)...)
+		tags := archetypeTags(arch, loc)
 		// Two rows' height comes from a tag as last laid out (its font and
 		// size vary: Chinese runs taller than English).
 		meta := ui.Row(c.Key("meta")).Gap(px(t, 4)).Wrap().AlignContent(ui.Start).Shrink(0).Tooltip(strings.Join(tags, " · "))
@@ -242,37 +195,29 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 			}
 		}()
 		foot.Children(func() {
-			p := g.previews[arch.ID]
-			switch {
-			case p != nil && p.rendering:
-				ui.Spinner(c).Label(i18n.T("Rendering the preview…"))
-			default:
+			if p := archetypePreview(arch); p.ok() {
 				label, ic := i18n.T("Preview"), icons.Play
-				if a.pl.Playing(galleryOwner + arch.ID) {
+				if a.pl.Playing(p.id) {
 					label, ic = i18n.T("Stop"), icons.Stop
 				}
-				b := ghostIconButtonSized(c.Key("preview"), ic, label, t.FontSize*0.9).Label(label)
-				if p != nil && p.err != "" {
-					b.Tooltip(p.err)
-				}
-				if b.Clicked() {
+				if ghostIconButtonSized(c.Key("preview"), ic, label, t.FontSize*0.9).Label(label).Clicked() {
 					a.previewArchetype(arch)
 				}
 			}
-			if p != nil && p.err != "" {
-				iconMark(c, icons.DangerCircle, t.Danger, i18n.T("Preview failed")+": "+p.err).Label(i18n.T("Preview failed"))
-			}
 			ui.Spacer(c)
-			if ui.Button(c.Key("use"), i18n.T("Use voice")).Disabled(g.using).
-				Tooltip(i18n.T("Save it to your voices and open it in Design")).Clicked() {
+			tip := i18n.T("Save it to your voices and open it in Design")
+			if !arch.Designed() {
+				tip = i18n.T("Save it to your voices and open it in the Studio")
+			}
+			if ui.Button(c.Key("use"), i18n.T("Use voice")).Disabled(g.using).Tooltip(tip).Clicked() {
 				a.useArchetype(arch, false)
 			}
 			moreMenu(c.Key("more"), "", func(m *ui.Menu) {
-				if m.Item(i18n.T("Use in Studio")).Chosen() {
+				if arch.Designed() && m.Item(i18n.T("Use in Studio")).Chosen() {
 					a.useArchetype(arch, true)
 				}
 				a.longformVoiceItems(m, func(then func(*core.Voice)) { a.useArchetypeThen(arch, then) }) // M3 (thread #18)
-				if m.Item(i18n.T("Open in Design without saving")).Chosen() {
+				if arch.Designed() && m.Item(i18n.T("Open in Design without saving")).Chosen() {
 					a.designFromArchetype(arch)
 				}
 			})
@@ -280,12 +225,14 @@ func (a *app) archetypeCard(c *ui.Context, arch gallery.Archetype) {
 	})
 }
 
-// designFromArchetype opens Design on an archetype's recipe, unsaved.
+// designFromArchetype opens Design on a gallery voice's recipe, unsaved:
+// a curated voice's persona as its description.
 func (a *app) designFromArchetype(arch gallery.Archetype) {
 	d := &a.design
 	script := d.script
 	d.reset()
-	d.attrs, d.seed = arch.Attrs.Canonical(), float64(arch.Seed)
+	r := arch.Recipe()
+	d.description, d.attrs, d.seed = r.Description, r.Attrs.Canonical(), float64(r.Seed)
 	d.script, d.language = arch.PreviewLine()
 	if d.script == "" {
 		d.script = script
@@ -295,17 +242,30 @@ func (a *app) designFromArchetype(arch gallery.Archetype) {
 	a.navigate("/design")
 }
 
-// archetypeAttrLabels are an archetype's attributes as labels, in the
-// design categories' order (what Summary joins with " · ").
-func archetypeAttrLabels(attrs vd.Attributes, locale string) []string {
-	attrs = attrs.Canonical()
+// archetypeTags are a gallery voice's card tags: its language, gender and
+// age, use cases, and a built-in speaker's model.
+func archetypeTags(arch gallery.Archetype, locale string) []string {
 	var out []string
-	for _, cat := range vd.Categories {
-		for _, v := range attrs.Get(cat) {
-			if op, ok := vd.Lookup(cat, v); ok {
-				out = append(out, op.Label.In(locale))
+	if len(arch.Languages) > 0 {
+		out = append(out, dubLangName(arch.Languages[0]))
+	}
+	for _, f := range []struct {
+		cat vd.Category
+		v   string
+	}{{vd.Gender, arch.Gender}, {vd.Age, arch.Age}} {
+		if op, ok := vd.Lookup(f.cat, f.v); ok {
+			out = append(out, op.Label.In(locale))
+		}
+	}
+	for _, u := range arch.Uses {
+		for _, c := range gallery.Categories() {
+			if c.ID == u {
+				out = append(out, c.Name.In(locale))
 			}
 		}
+	}
+	if e, ok := catalog.Builtin().ByID(arch.Model); ok && arch.Kind == gallery.KindBuiltin {
+		out = append(out, e.DisplayName())
 	}
 	return out
 }

@@ -363,7 +363,7 @@ func (a *app) dubVoiceChoices() []dubVoiceChoice {
 		}
 		out = append(out, dubVoiceChoice{dub.PresetPrefix + pr.ID, pr.Name.In(i18n.Locale()), i18n.T("Design presets")})
 	}
-	for _, id := range e.VoiceIDs() {
+	for _, id := range e.VoiceIDsIn(i18n.Locale()) {
 		out = append(out, dubVoiceChoice{dub.SpeakerPrefix + id, id, i18n.T("Model voices")})
 	}
 	return out
@@ -379,10 +379,9 @@ func (a *app) dubVoiceLabel(ref string) string {
 	case strings.HasPrefix(ref, dub.SpeakerPrefix):
 		return strings.TrimPrefix(ref, dub.SpeakerPrefix)
 	case strings.HasPrefix(ref, dub.PresetPrefix):
-		for _, pr := range dubPresets() {
-			if dub.PresetPrefix+pr.ID == ref {
-				return pr.Name.In(i18n.Locale())
-			}
+		// Hidden presets too: a cast may name one offered before.
+		if pr, ok := dubPreset(strings.TrimPrefix(ref, dub.PresetPrefix)); ok {
+			return pr.Name.In(i18n.Locale())
 		}
 	case strings.HasPrefix(ref, dub.DesignPrefix):
 		return strings.TrimPrefix(ref, dub.DesignPrefix)

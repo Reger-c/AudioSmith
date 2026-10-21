@@ -242,6 +242,7 @@
         ],
         "avoid": [
           "af_nicole",
+          "bm_lewis",
           "zf_xiaobei",
           "zf_xiaoni",
           "zf_xiaoxiao",
@@ -249,7 +250,7 @@
           "zm_yunjian",
           "zm_yunxi"
         ],
-        "notes": "af_nicole is a whisper voice: 8 silences >1 s, UTMOS 3.06. All six Chinese voices are unintelligible (CER 25–41%): hide them."
+        "notes": "af_nicole is a whisper voice: 8 silences >1 s, UTMOS 3.06. All six Chinese voices are unintelligible (CER 25–41%): hide them. #91: af_nicole and bm_lewis (NISQA 2.7, rough) scored lowest: hidden."
       },
       "dub": {
         "timing": "smart"

@@ -16,6 +16,19 @@
 - Settings → About → Software updates: Check for Updates…, the daily check, installing without asking (a version found by the daily check installs and waits for the restart) and beta updates as before, and Show Changelog…, every version's notes in AudioSmith's language. The choices made in the old update window carry over.
 - Releases send their notes in English and Chinese (CHANGELOG.md and CHANGELOG.zh-Hans.md), so actnow.dev's changelog page and the app show each in its language.
 
+### Discover voices: about 35 chosen voices instead of 1,184
+- Discover voices now lists a small set chosen by listening tests' measurements (thread #91's audit): Chinese and English voices first, a few in Japanese, Korean, Spanish, French, German, Italian, Portuguese and Russian. The 1,126 generated combinations and the weaker hand-made voices are gone from the list.
+- Each designed voice has a written character (age, voice, situation) that the model really gets, a seed that was tried, and a reference that ships with the app: Use voice saves it ready to speak, with no reference to wait for. Preview plays a clip made from that reference, as the Studio would say it; nothing is rendered to listen.
+- The gallery also offers the built-in speakers worth starting from (Serena and Dylan for Chinese, Kokoro's best English and European voices): Use voice saves the speaker and opens the Studio.
+- Filters: use (narration and audiobooks, conversation and podcasts, characters and kids, ads and announcing), language, gender and age, and search. Pitch, accent or dialect, style and the nine categories are gone.
+- Voices saved from the earlier gallery keep working (they carry their own recipe), and dub casts or agents that name an earlier gallery voice or design preset still get it: those ids are kept, just not listed.
+
+### Design: eight starting points
+- Narrator, Conversational, Newsreader, Presenter, Storyteller, Elder, Villain and the new Soft (which replaces Whisper and Calm Guide). Upbeat, Kid and Northeast Buddy are gone (a Northeastern voice is in Discover voices). None asks for slow speech any more.
+
+### Fewer weak built-in speakers
+- Kokoro's af_nicole (a whisper) and bm_lewis (rough) are no longer offered, and Qwen3-TTS's Ryan is not offered in Chinese (he gave up on Chinese numbers in tests). A project or a setting that uses one keeps it, and the API still takes them by name.
+
 ### Designed voices no longer say leftover reference text
 - Slow designed voices (Storyteller, Elder, Meditation guide, and a few gallery voices) were cut off half-way through their reference: Qwen3-TTS stopped at a length limit that slow speech reached (engine patch 0008 raises it from 0.48 s to 0.8 s per text token, and AudioSmith's own limit can now raise it as well as lower it). The reference was still saved with its whole text, so clones said the missing half before every line.
 - A reference made from a voice must now say its text: when the recognizer hears none of the three takes say it (or they were cut off), they are made once more; a kept take that says something else gets what it says as its text, or none is kept and the voice says why. Its text is never one the audio doesn't say.

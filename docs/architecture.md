@@ -45,7 +45,7 @@ github.com/hehehai/AudioSmith
 │   ├── telephony/       AI phone calls (M6b): Twilio REST, signed webhooks, TwiML, gateway, Media Streams WebSocket, μ-law, endpointer, agent loop
 │   ├── watermark/       AudioSeal message and weight conversion for the engine (over torchpt)
 │   ├── torchpt/         a reader of PyTorch .pt/.pth checkpoints (pure Go)                (leaf)
-│   ├── gallery/         the Voice Gallery: ~1,100 archetypes, facets, presets, preview planner (M1; not wired yet)
+│   ├── gallery/         Discover voices: ~35 curated voices (data/curated.json; #94), use cases and facets, search, favorites, Design presets; the earlier ~1,100 archetypes resolve by id only
 │   │   └── persona/     the .asvoice voice file (and VoiceStudio .ovsvoice import)
 │   ├── archtest/        tests of the code's structure: file sizes, import layering ("Code structure rules")
 │   └── tools/           developer commands (standard library only): snapcmp (snapshot comparison), declhash (pure-move check)
@@ -83,7 +83,7 @@ licence ──▶ catalog, core       notify, logs ──▶ core
 text/* ──▶ text                 doc ──▶ text, doc/subtitle, doc/textenc      doc/subtitle ──▶ text
 dsp/* ──▶ dsp siblings only (wav, edit, mix, qc… ──▶ dsp; loudness ──▶ dsp, dynamics, filter; refcheck ──▶ dsp, analysis, loudness; …)
 llm ──▶ core                    translate ──▶ core, lang, llm, text, text/markup
-voicedesign ──▶ text            gallery ──▶ voicedesign, text, jobs, engine/proto     gallery/persona ──▶ voicedesign, lang
+voicedesign ──▶ text            gallery ──▶ voicedesign     gallery/persona ──▶ voicedesign, lang
 core, jobs, engine/proto, settings, i18n, audio, lang, text, doc/textenc, dsp, dsp/filter ──▶ (nothing internal)
 ```
 
@@ -285,7 +285,7 @@ Rules that stay:
 | Renders (Stories/Audiobook) | `…/AudioSmith/renders/<id>/{chapters/NNN.wav(.json), book.wav, cues.txt, report.json, stems/}`; covers `…/AudioSmith/covers/`; longform chunk cache `~/Library/Caches/AudioSmith/longform/chunks/` (60 days / 24 GB); auditions `…/Caches/AudioSmith/auditions/`; tables `renders`, `exports` (migration 004) |
 | Dubs | `…/AudioSmith/dubs/<id>/` (audio.wav, speech.wav, stems, peaks, poster.jpg, preview.mp4, refs/, renders/<lang>/<seg>-<fp>.wav, renders/<lang>/dlg/<stretch>/ (dialogue model), tracks/<lang>.wav, download/); table `dubs` (migration 005); documents `dub:batch`, `dub:watch`; yt-dlp in `…/AudioSmith/tools/`; video served on `asmedia://localhost/<id>/video` |
 | Chunk cache | `~/Library/Caches/AudioSmith/chunks/<text.Key>.wav` (float32, pruned to 2 GB LRU) |
-| Gallery previews | `~/Library/Caches/AudioSmith/voice-previews/<key>.wav` (job owner `archetype:<id>`; voice jobs use owner `voicework:`) |
+| Discover voices' clips | bundled in the app (`assets/gallery-voices/<id>.ref.ogg`, `.preview.ogg`; scripts/make-curated-voices.sh); a dub cast's curated voice decodes its reference once into `~/Library/Caches/AudioSmith/voice-previews/gallery-<id>-<hash>.wav` |
 | Workflows | `…/AudioSmith/workflows/<id>/{items,out}`; table `workflows` (migration 006) |
 | Calls | `…/AudioSmith/calls/<id>.wav` (recordings, only when on and disclosed); table `calls` (migration 007) |
 | Local API | `…/AudioSmith/api.json` (port file while running), `api-tmp/` (wiped at start), `mcp/` (MCP output folder) |

@@ -255,7 +255,7 @@ func (s *Server) httpBatchDub(w http.ResponseWriter, r *http.Request) {
 func (s *Server) httpGallery(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	p, err := s.SearchGallery(r.Context(), GalleryQuery{Query: q.Get("query"), Category: q.Get("category"), Gender: q.Get("gender"),
-		Age: q.Get("age"), Pitch: q.Get("pitch"), Accent: q.Get("accent"), Language: q.Get("language"), Style: q.Get("style"),
+		Age: q.Get("age"), Language: q.Get("language"),
 		Limit: queryInt(r, "limit", 20, 1, 100), Offset: queryInt(r, "offset", 0, 0, 1<<20)})
 	if err != nil {
 		writeError(w, err)
