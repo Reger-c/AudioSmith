@@ -44,7 +44,7 @@ env:
   # the app itself reads actnow.dev. Set it to "false" once 0.4.0-beta.5
   # is published: later GitHub releases then carry the notes and the
   # website's manifest only (scripts/release-publish.sh).
-  GITHUB_FEED: "true"
+  GITHUB_FEED: "false"
   # "false" stops a release at "verified" on actnow.dev (actnow-publish.sh
   # --no-publish): publish it by hand in https://actnow.dev/panel/releases.
   WEBSITE_PUBLISH: "true"

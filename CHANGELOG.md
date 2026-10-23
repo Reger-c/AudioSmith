@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0-beta.6 — 2026-10-23
 
 ### The window in the ActNow family's layout
 - The sidebar starts with a search field (⌘F): it searches projects, voices, takes, transcripts and exports, and the Projects page shows what it finds ("3 found", Clear search). ⌘K opens the command palette from the button in it.
@@ -28,6 +28,10 @@
 
 ### Fewer weak built-in speakers
 - Kokoro's af_nicole (a whisper) and bm_lewis (rough) are no longer offered, and Qwen3-TTS's Ryan is not offered in Chinese (he gave up on Chinese numbers in tests). A project or a setting that uses one keeps it, and the API still takes them by name.
+
+### Settings breathe, and say it shorter
+- Every Settings page follows one spacing: the groups' padding, room above and below each row with a line between rows, a group's note as a block of its own, and room between titles, lines and controls. Writing help's model picker no longer cuts its value, and the status line that repeated the rows is gone.
+- 28 texts are shorter, in English and Chinese.
 
 ### Designed voices no longer say leftover reference text
 - Slow designed voices (Storyteller, Elder, Meditation guide, and a few gallery voices) were cut off half-way through their reference: Qwen3-TTS stopped at a length limit that slow speech reached (engine patch 0008 raises it from 0.48 s to 0.8 s per text token, and AudioSmith's own limit can now raise it as well as lower it). The reference was still saved with its whole text, so clones said the missing half before every line.
