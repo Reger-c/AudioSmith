@@ -226,8 +226,8 @@ func (a *app) buildActivity() {
 }
 
 // jobCard words a card of jobs; run is the kind's running job (zero if
-// none). Several jobs show "done/total", and how far the running one is
-// when it says (a download: "37% · 0/5"), its bar too.
+// none). Several jobs show "done/total"; a dub's also how far its running
+// step is ("37% · 0/5": the download), with its bar.
 func (a *app) jobCard(c activity.Card, run jobs.Job) actCard {
 	kind := c.Kind
 	ic := icons.Restart
@@ -257,11 +257,18 @@ func (a *app) jobCard(c activity.Card, run jobs.Job) actCard {
 		if c.Done > 1 {
 			out.detail = i18n.N(c.Done, "%d item", "%d items", c.Done)
 		}
-	case c.Total > 1:
+	case c.Total > 1 && strings.HasPrefix(kind, services.DubOwner):
+		// A dub's steps differ (a download, then transcribing…): the bar
+		// is the running step's, when it says how far it is.
 		out.detail, out.frac = itoa(c.Done)+"/"+itoa(c.Total), -1
 		if f := determinate(run); f > 0 {
 			out.detail, out.frac = percent(f)+" · "+out.detail, f
 		}
+	case c.Total > 1:
+		// Like items (chapters, exports): the bar is all of them, with
+		// how far the running one is.
+		out.detail = itoa(c.Done) + "/" + itoa(c.Total)
+		out.frac = (float64(c.Done) + max(determinate(run), 0)) / float64(c.Total)
 	case c.Waiting:
 		out.detail, out.frac = i18n.T("Waiting"), 0
 	case c.Frac >= 0:

@@ -16,9 +16,9 @@ import (
 
 // TestSnapshotsDubFetch renders a dub's URL download (thread #99): at 37 %
 // with its size and time left on the page, in its footer and on the
-// activity card; before its size is known and while merging (no bar,
-// and no empty track on the card), light and dark, in English and
-// Chinese (dub-fetch-*.png):
+// activity card, and on the Tasks page; before its size is known and
+// while merging (no bar, and no empty track on the card), light and dark,
+// in English and Chinese (dub-fetch-*.png):
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshotsDubFetch .
 func TestSnapshotsDubFetch(t *testing.T) { runSnapshots(t, snapshotsDubFetch) }
@@ -66,6 +66,9 @@ func snapshotsDubFetch(t *testing.T, out string) {
 		// 37 %: the bar, the size and the time left, everywhere.
 		update(a, fetch, jobs.Progress{Stage: services.FetchDownloading, Fraction: 0.37, Bytes: 48e6, TotalBytes: 130e6, ETA: 75})
 		save("progress")
+		a.navigate("/tasks") // the Tasks page says it too
+		save("tasks")
+		a.navigate("/dub")
 
 		// Joining the streams: no fraction again, no bar.
 		update(a, fetch, jobs.Progress{Stage: services.FetchMerging, Fraction: -1})

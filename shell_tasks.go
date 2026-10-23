@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -51,6 +52,9 @@ func (a *app) tasksPage(c *ui.Context) {
 								if title == "" {
 									title = j.Kind
 								}
+								if p := a.dub; p != nil && j.Owner == services.DubOwner+p.ID && p.Source.URL != "" && p.Title != p.Source.URL {
+									title = strings.ReplaceAll(title, p.Source.URL, p.Title) // named before the video's title was known
+								}
 								truncText(c, title).FontSize(px(t, 13))
 								state := i18n.T("Waiting")
 								if j.State == jobs.StateRunning {
@@ -61,7 +65,9 @@ func (a *app) tasksPage(c *ui.Context) {
 									if j.Kind == services.KindDubFetch {
 										state = dubFetchStatus(j.Progress) // with the size and time left
 									}
-									ui.Progress(c, j.Progress.Fraction).Label(title)
+									if f := determinate(j); f > 0 {
+										ui.Progress(c, f).Label(title)
+									}
 								}
 								ui.Text(c, state).FontSize(px(t, 11)).TextColor(k.Text3)
 							})
@@ -103,7 +109,7 @@ func (a *app) taskCardRow(c *ui.Context, cd actCard) {
 							ui.Text(c, cd.detail).FontSize(px(t, fsCaption)).TextColor(k.Text3).SingleLine().Shrink(0)
 						}
 					})
-					if cd.frac <= 1 {
+					if cd.frac > 0 && cd.frac <= 1 { // as on the card: only real progress
 						ui.Progress(c, cd.frac).Label(cd.title)
 					}
 				})

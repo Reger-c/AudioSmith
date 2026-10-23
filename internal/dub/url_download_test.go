@@ -64,3 +64,24 @@ func TestDownloadUsesFFmpegToMerge(t *testing.T) {
 		}
 	}
 }
+
+// Info's JSON is one long line (YouTube's lists of formats and automatic
+// captions make it a few MB): it is read whole.
+func TestInfoReadsALongLine(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script")
+	}
+	dir := t.TempDir()
+	pad := strings.Repeat("x", 3<<20)
+	if err := os.WriteFile(filepath.Join(dir, "info.json"), []byte(`{"id":"a","title":"Long","pad":"`+pad+`"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "yt-dlp")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\ncat '"+filepath.Join(dir, "info.json")+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	info, err := YtDlp{Path: bin}.Info(context.Background(), "https://example.com/v")
+	if err != nil || info.Title != "Long" {
+		t.Fatalf("%+v %v", info, err)
+	}
+}

@@ -408,8 +408,8 @@ func (y YtDlp) run(ctx context.Context, args []string, line func(string)) ([]byt
 }
 
 // lineWriter hands what is written to it to emit line by line (without
-// the line ends; a carriage return ends a line too). Lines over 1 MB are
-// cut.
+// the line ends; a carriage return ends a line too). Lines over 64 MB
+// (Info's JSON is one line, a few MB at most) are cut.
 type lineWriter struct {
 	emit func(string)
 	buf  []byte
@@ -424,7 +424,7 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 			w.buf = w.buf[:0]
 			continue
 		}
-		if len(w.buf) < 1<<20 {
+		if len(w.buf) < 64<<20 {
 			w.buf = append(w.buf, b)
 		}
 	}
