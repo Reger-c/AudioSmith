@@ -53,6 +53,7 @@ type view struct {
 	// highlighter has not confirmed yet.
 	approx     bool
 	tokScratch []Token
+	advScratch []float32 // lineAdvances'
 }
 
 // inlay is text shown in a line at an offset, as an inlay hint or a
@@ -641,7 +642,9 @@ func (v *view) piece(l *lineLayout, p *rowPiece) *text.Layout {
 // wrapBreaks returns where the displayed text s breaks into rows when
 // wrapping, as Zed's LineWrapper: summing the advances of characters,
 // breaking after whitespace or between a word and what is not, anywhere
-// in CJK, and inside a word too long for a row.
+// in CJK, and inside a word too long for a row. The advances are those
+// the characters take in the line (lineAdvances); a row is then shaped
+// as it paints and given back characters until it fits (fitRow).
 func (v *view) wrapBreaks(s string) []int {
 	if !v.wrap || v.wrapWidth <= 0 {
 		return nil
@@ -650,6 +653,8 @@ func (v *view) wrapBreaks(s string) []int {
 	if v.widths.mono > 0 && float32(len(s))*v.widths.mono <= width {
 		return nil
 	}
+	adv := v.lineAdvances(s)
+	exact := v.widths.mono > 0 && isASCII(s)
 	var breaks []int
 	indent := float32(0)
 	x := float32(0)
@@ -660,24 +665,113 @@ func (v *view) wrapBreaks(s string) []int {
 		if i > start && canBreak(prev, r) {
 			last = i
 		}
-		w := v.widths.of(r)
+		w := adv[i]
 		if x+w > width && i > start {
 			at := i
 			if last > start {
 				at = last
+			}
+			rowIndent := indent
+			if len(breaks) == 0 {
+				rowIndent = 0
+			}
+			if !exact {
+				at = v.fitRow(s, start, at, rowIndent)
 			}
 			breaks = append(breaks, at)
 			if indent == 0 {
 				indent = v.wrapIndent(s)
 			}
 			// Measure the new row from its start, after the indent.
-			x = indent + v.widths.width(s[at:i])
+			x = indent
+			for j := at; j < i; j++ {
+				x += adv[j]
+			}
 			start, last = at, -1
 		}
 		x += w
 		prev = r
 	}
 	return breaks
+}
+
+// fitRow returns where the row of s from start, indented by indent, ends
+// at the latest, at or before at, for its text, shaped as it paints, to
+// fit the wrap width: the sum of the advances in the line misses what
+// changes at the row's edges (Pango rounds a letter's position in its
+// line, not its advance). It gives back a place to break at a time,
+// a character at a time in a word, and keeps a character at least.
+// Spaces ending the row hang past the width, as they did.
+func (v *view) fitRow(s string, start, at int, indent float32) int {
+	for range 64 {
+		row := strings.TrimRight(s[start:at], " ")
+		if row == "" {
+			return at
+		}
+		l := text.Shared().Shape(text.Params{Text: row, Style: v.style, NoWrap: true, KeepSpaces: true})
+		if indent+l.Width <= v.wrapWidth {
+			return at
+		}
+		// The place to break before at, or else the character before it.
+		back := -1
+		var prev rune
+		for j, r := range s[start:at] {
+			if j > 0 && canBreak(prev, r) {
+				back = start + j
+			}
+			prev = r
+		}
+		if back <= start {
+			_, size := utf8.DecodeLastRuneInString(s[start:at])
+			back = at - size
+		}
+		if back <= start {
+			return at
+		}
+		at = back
+	}
+	return at
+}
+
+// lineAdvances returns the advance of each character of the displayed
+// text s, by the byte it starts at (0 for the other bytes), as the line
+// shapes: letters take another width in a line than alone, as kerned
+// pairs, and in Chinese and Japanese text on macOS a comma or a full stop
+// that Core Text shapes alone is half as wide as between ideographs (7.6
+// DIPs and 15.1 at 15 points). Summing the widths of letters alone, wrapped
+// rows came out wider than the wrap width and their last letters were cut
+// at the edge. Text in a monospaced font, all ASCII, is summed as before.
+// The slice is the view's, valid until the next call.
+func (v *view) lineAdvances(s string) []float32 {
+	adv := slices.Grow(v.advScratch[:0], len(s))[:len(s)]
+	clear(adv)
+	v.advScratch = adv
+	if v.widths.mono > 0 && isASCII(s) {
+		for i := range len(s) {
+			adv[i] = v.widths.of(rune(s[i]))
+		}
+		return adv
+	}
+	// Shaped in pieces, as long rows are (shapeRow), so that a very long
+	// line is not shaped at once.
+	for a := 0; a < len(s); {
+		b := min(a+pieceBytes, len(s))
+		for b < len(s) && !utf8.RuneStart(s[b]) {
+			b++
+		}
+		piece := s[a:b]
+		l := text.Shared().Shape(text.Params{Text: piece, Style: v.style, NoWrap: true, KeepSpaces: true})
+		bytesOf := runeBytes(piece)
+		for _, ln := range l.Lines {
+			for _, g := range ln.Glyphs {
+				if g.Cluster >= 0 && g.Cluster < len(bytesOf) {
+					adv[a+bytesOf[g.Cluster]] += g.Advance
+				}
+			}
+		}
+		a = b
+	}
+	return adv
 }
 
 // wrapIndent is how far rows after the first are indented: as far as the
