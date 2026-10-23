@@ -24,6 +24,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/services"
 )
 
 // downloads are the models downloading, catalogue first, in its order.
@@ -75,10 +76,15 @@ func (a *app) activeJobs() []jobs.Job {
 }
 
 // cancelJobByID cancels any job by its id, as the Studio's Cancel does for
-// its own.
+// its own; a dub's job stops the dub, as its page's Cancel and its card's
+// Stop do.
 func (a *app) cancelJobByID(j jobs.Job) {
 	if a.job != nil && a.job.id == j.ID {
 		a.cancel()
+		return
+	}
+	if strings.HasPrefix(j.Owner, services.DubOwner) && a.dubSvc != nil {
+		a.stopActivity(j.Owner, []string{j.ID})
 		return
 	}
 	for _, m := range a.models {

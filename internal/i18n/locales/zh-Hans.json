@@ -3634,5 +3634,10 @@
   "−18 LUFS (speech)": "−18 LUFS（人声）",
   "−23 LUFS (broadcast)": "−23 LUFS（广播）",
   "≈ %s": "约 %s",
-  "≈ %s of audio": "约 %s 音频"
+  "≈ %s of audio": "约 %s 音频",
+  "Joining the video and audio…": "正在合并视频和音频…",
+  "Finishing the download…": "正在完成下载…",
+  "%d s left": "还剩 %d 秒",
+  "%d min left": "还剩 %d 分钟",
+  "%d h %d min left": "还剩 %d 小时 %d 分钟"
 }

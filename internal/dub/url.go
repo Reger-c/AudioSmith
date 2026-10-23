@@ -1,7 +1,6 @@
 package dub
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,8 +15,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/hehehai/actnowkit/mirror"
 )
@@ -268,8 +268,9 @@ type DownloadOptions struct {
 }
 
 // Download fetches the video into dir and returns the file (and the
-// caption file, if any). progress gets the fraction done (0–1).
-func (y YtDlp) Download(ctx context.Context, u, dir string, o DownloadOptions, progress func(float64)) (video, captions string, err error) {
+// caption file, if any). progress (when set) gets how far it is, as often
+// as yt-dlp says (about four times a second), from one goroutine.
+func (y YtDlp) Download(ctx context.Context, u, dir string, o DownloadOptions, progress func(DownloadProgress)) (video, captions string, err error) {
 	if y.Path == "" {
 		return "", "", &URLError{Code: CodeNoYtDlp}
 	}
@@ -292,10 +293,10 @@ func (y YtDlp) Download(ctx context.Context, u, dir string, o DownloadOptions, p
 		format = "bv*[height<=1080][ext=mp4][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba/bv*+ba/b"
 		args = append(args, "--ffmpeg-location", o.FFmpeg, "--merge-output-format", "mp4")
 	}
-	args = append(args, "--no-playlist", "--newline", "--no-part", "--restrict-filenames",
-		"-f", format, "-o", filepath.Join(dir, "source.%(ext)s"),
-		"--progress-template", "download:AS %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s",
-		"--print", "after_move:filepath")
+	args = append(args, "--no-playlist", "--no-part", "--restrict-filenames",
+		"-f", format, "-o", filepath.Join(dir, "source.%(ext)s"))
+	args = append(args, progressArgs()...)
+	args = append(args, "--print", "after_move:"+progFile+"%(filepath)s")
 	if o.Captions != "" {
 		args = append(args, "--write-subs", "--sub-langs", o.Captions+".*,"+o.Captions, "--sub-format", "vtt/srt/best", "--convert-subs", "srt")
 		if o.FFmpeg == "" {
@@ -306,30 +307,21 @@ func (y YtDlp) Download(ctx context.Context, u, dir string, o DownloadOptions, p
 		args = append(args, "--cookies", o.Cookies)
 	}
 	args = append(args, "--", u)
+	var pp progressParser
 	var last string
 	out, err := y.run(ctx, args, func(line string) {
-		if f, ok := strings.CutPrefix(line, "AS "); ok && progress != nil {
-			fields := strings.Fields(f)
-			if len(fields) == 3 {
-				done, _ := strconv.ParseFloat(fields[0], 64)
-				total, _ := strconv.ParseFloat(fields[1], 64)
-				if total <= 0 {
-					total, _ = strconv.ParseFloat(fields[2], 64)
-				}
-				if total > 0 {
-					progress(min(done/total, 1))
-				}
-			}
-			return
+		if p, ok := pp.line(line); ok && progress != nil {
+			progress(p)
 		}
-		last = line
 	})
 	if err != nil {
 		return "", "", err
 	}
-	for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "AS ") {
-			video = l
+	for _, l := range strings.Split(string(out), "\n") {
+		if f, ok := strings.CutPrefix(l, progFile); ok && strings.TrimSpace(f) != "" {
+			video = strings.TrimSpace(f)
+		} else if l = strings.TrimSpace(l); video == "" && l != "" && !strings.HasPrefix(l, "AS") {
+			last = l
 		}
 	}
 	if video == "" {
@@ -359,35 +351,46 @@ func (y YtDlp) base() []string {
 
 var errorLine = regexp.MustCompile(`^ERROR:\s*(?:\[[^\]]*\]\s*)?`)
 
-// run runs yt-dlp, feeding stderr's and stdout's lines to line (when set)
-// and returning stdout.
+// run runs yt-dlp, feeding stdout's and stderr's lines to line (when
+// set, one line at a time) and returning stdout. Cancelling ctx kills
+// yt-dlp with everything it started, and run returns at once even if a
+// process outside its group still holds the pipes.
 func (y YtDlp) run(ctx context.Context, args []string, line func(string)) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, y.Path, args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	var stderr strings.Builder
-	cmd.Stderr = &limitWriter{b: &stderr, n: 64 << 10}
-	if err := cmd.Start(); err != nil {
-		return nil, &URLError{Code: CodeYtDlp, Detail: err.Error()}
-	}
-	var out strings.Builder
-	sc := bufio.NewScanner(stdout)
-	sc.Buffer(make([]byte, 1<<20), 64<<20)
-	for sc.Scan() {
-		l := sc.Text()
-		out.WriteString(l + "\n")
+	ownGroup(cmd)
+	cmd.WaitDelay = 2 * time.Second
+	var (
+		mu     sync.Mutex
+		out    strings.Builder
+		stderr strings.Builder
+	)
+	emit := func(l string, stdout bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		if stdout {
+			out.WriteString(l + "\n")
+		} else if stderr.Len() < 64<<10 {
+			stderr.WriteString(l[:min(len(l), 64<<10-stderr.Len())] + "\n")
+		}
 		if line != nil {
 			line(l)
 		}
 	}
-	err = cmd.Wait()
+	cmd.Stdout = &lineWriter{emit: func(l string) { emit(l, true) }}
+	cmd.Stderr = &lineWriter{emit: func(l string) { emit(l, false) }}
+	if err := cmd.Start(); err != nil {
+		return nil, &URLError{Code: CodeYtDlp, Detail: err.Error()}
+	}
+	err := cmd.Wait()
+	cmd.Stdout.(*lineWriter).flush()
+	cmd.Stderr.(*lineWriter).flush()
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 	if err != nil {
+		mu.Lock()
 		msg := strings.TrimSpace(stderr.String())
+		mu.Unlock()
 		if i := strings.LastIndex(msg, "\nERROR:"); i >= 0 {
 			msg = msg[i+1:]
 		}
@@ -399,19 +402,40 @@ func (y YtDlp) run(ctx context.Context, args []string, line func(string)) ([]byt
 		}
 		return nil, &URLError{Code: CodeYtDlp, Detail: msg}
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	return []byte(out.String()), nil
 }
 
-type limitWriter struct {
-	b *strings.Builder
-	n int
+// lineWriter hands what is written to it to emit line by line (without
+// the line ends; a carriage return ends a line too). Lines over 1 MB are
+// cut.
+type lineWriter struct {
+	emit func(string)
+	buf  []byte
 }
 
-func (w *limitWriter) Write(p []byte) (int, error) {
-	if w.b.Len() < w.n {
-		w.b.Write(p[:min(len(p), w.n-w.b.Len())])
+func (w *lineWriter) Write(p []byte) (int, error) {
+	for _, b := range p {
+		if b == '\n' || b == '\r' {
+			if len(w.buf) > 0 {
+				w.emit(string(w.buf))
+			}
+			w.buf = w.buf[:0]
+			continue
+		}
+		if len(w.buf) < 1<<20 {
+			w.buf = append(w.buf, b)
+		}
 	}
 	return len(p), nil
+}
+
+func (w *lineWriter) flush() {
+	if len(w.buf) > 0 {
+		w.emit(string(w.buf))
+		w.buf = w.buf[:0]
+	}
 }
 
 // ErrURLRefused reports any refused URL (errors.Is).

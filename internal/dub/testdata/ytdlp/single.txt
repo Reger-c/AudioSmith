@@ -1,0 +1,12 @@
+ASI 133 433081 "Me at the zoo"
+ASP downloading 1024 433081 NA 6377.843390454694 67 dl/single/source.mp4
+ASP downloading 3072 433081 NA 19034.066419573996 22 dl/single/source.mp4
+ASP downloading 7168 433081 NA 44269.34204640328 9 dl/single/source.mp4
+ASP downloading 31744 433081 NA 74555.13307194461 5 dl/single/source.mp4
+ASP downloading 64512 433081 NA 97811.40932064861 3 dl/single/source.mp4
+ASP downloading 130048 433081 NA 100802.88592156621 3 dl/single/source.mp4
+ASP downloading 233979 433081 NA 102161.12296104105 1 dl/single/source.mp4
+ASP downloading 337892 433081 NA 102177.99499370121 0 dl/single/source.mp4
+ASP downloading 433081 433081 NA 102251.42017703124 0 dl/single/source.mp4
+ASP finished 433081 433081 NA 91930.87479413307 NA dl/single/source.mp4
+ASF /tmp/dl/single/source.mp4

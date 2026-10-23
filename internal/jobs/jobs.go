@@ -102,6 +102,7 @@ type Progress struct {
 	AudioSeconds float64 `json:"audioSeconds,omitempty"` // TTS: audio made so far
 	Bytes        int64   `json:"bytes,omitempty"`        // downloads: done
 	TotalBytes   int64   `json:"totalBytes,omitempty"`   // downloads: expected
+	ETA          float64 `json:"eta,omitempty"`          // downloads: seconds left (0: not known)
 }
 
 // Error is a failed job's reason, typed so the UI can offer a fix.

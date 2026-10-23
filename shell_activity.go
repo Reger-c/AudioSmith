@@ -192,10 +192,14 @@ func (a *app) buildActivity() {
 			action: &actAction{icons.EndCallRounded, i18n.T("Hang up"), func() { a.hangupCall(id) }}})
 	}
 	var active []activity.Job
+	running := map[string]jobs.Job{} // each kind's first running job
 	for _, j := range a.activeJobs() {
 		kind := a.activityKind(j)
 		if kind == "" {
 			continue
+		}
+		if _, ok := running[kind]; !ok && j.State == jobs.StateRunning {
+			running[kind] = j
 		}
 		title := j.Title
 		if title == "" {
@@ -206,7 +210,7 @@ func (a *app) buildActivity() {
 	cards := a.actTracker.Cards(time.Now(), active, func(kind string) string { return a.activityTitle(kind, false) })
 	a.actTick = a.actTick || activity.Showing(cards)
 	for _, c := range cards {
-		add(a.jobCard(c))
+		add(a.jobCard(c, running[c.Kind]))
 	}
 	for _, m := range a.downloads() {
 		e := m.entry
@@ -221,8 +225,10 @@ func (a *app) buildActivity() {
 	}
 }
 
-// jobCard words a card of jobs.
-func (a *app) jobCard(c activity.Card) actCard {
+// jobCard words a card of jobs; run is the kind's running job (zero if
+// none). Several jobs show "done/total", and how far the running one is
+// when it says (a download: "37% · 0/5"), its bar too.
+func (a *app) jobCard(c activity.Card, run jobs.Job) actCard {
 	kind := c.Kind
 	ic := icons.Restart
 	switch {
@@ -252,7 +258,10 @@ func (a *app) jobCard(c activity.Card) actCard {
 			out.detail = i18n.N(c.Done, "%d item", "%d items", c.Done)
 		}
 	case c.Total > 1:
-		out.detail = itoa(c.Done) + "/" + itoa(c.Total)
+		out.detail, out.frac = itoa(c.Done)+"/"+itoa(c.Total), -1
+		if f := determinate(run); f > 0 {
+			out.detail, out.frac = percent(f)+" · "+out.detail, f
+		}
 	case c.Waiting:
 		out.detail, out.frac = i18n.T("Waiting"), 0
 	case c.Frac >= 0:
@@ -420,13 +429,12 @@ func (a *app) activityCard(c *ui.Context, card actCard, top float32) ui.Element 
 						ui.Text(c, card.detail).FontSize(px(t, 11)).TextColor(k.Text3).SingleLine().Shrink(0)
 					}
 				})
-				switch {
-				case card.frac >= 0 && card.frac <= 1:
-					ui.Box(c).Height(px(t, 2)).Radius(px(t, 1)).Background(k.G[2]).Children(func() {
+				// A bar only for real progress: no empty or moving track
+				// (the card itself says that something goes on).
+				if card.frac > 0 && card.frac <= 1 {
+					ui.Box(c.Key("bar")).Height(px(t, 2)).Radius(px(t, 1)).Background(k.G[2]).Children(func() {
 						ui.Box(c).WidthPercent(float32(card.frac) * 100).Height(px(t, 2)).Radius(px(t, 1)).Background(k.Accent)
 					})
-				case card.frac < 0:
-					ui.Progress(c, -1).Height(px(t, 2)).Label(card.title)
 				}
 			})
 		})

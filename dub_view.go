@@ -477,8 +477,14 @@ func (a *app) dubWorkspace(c *ui.Context) {
 		ui.Column(c.Key("dub-wait")).Grow(1).Center().Gap(px(t, sp3)).Padding(px(t, sp6)).Children(func() {
 			k := tok(t)
 			if a.dubBusy() {
-				ui.Spinner(c)
-				caption(c, a.dubStatus()).TextAlign(ui.Center)
+				// A bar while a download says how far it is, else a spinner.
+				status := a.dubStatus()
+				if f := determinate(a.dubRunning()); f > 0 {
+					ui.Progress(c.Key("dub-wait-bar"), f).Width(px(t, 280)).Label(status)
+				} else {
+					ui.Spinner(c)
+				}
+				caption(c, status).TextAlign(ui.Center)
 				return
 			}
 			ui.Icon(c, icons.Subtitles.Linear).Size(px(t, 36), px(t, 36)).TextColor(k.Text3)

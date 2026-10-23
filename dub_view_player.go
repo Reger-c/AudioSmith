@@ -13,6 +13,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/services"
 )
 
 // dubPlayerBar: play, A/B, time, the video.
@@ -140,6 +141,9 @@ func (a *app) dubStatus() string {
 	if j.ID == "" {
 		return ""
 	}
+	if j.Kind == services.KindDubFetch && j.State == jobs.StateRunning {
+		return dubFetchStatus(j.Progress)
+	}
 	st := dubStageName(dubStageOfKind(j.Kind))
 	var p dubJobParams
 	dubJSON(j.Params, &p)
@@ -178,8 +182,8 @@ func (a *app) dubFooter(c *ui.Context) {
 			j := a.dubRunning()
 			ui.Spinner(c)
 			ui.Text(c, a.dubStatus()).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
-			if j.Progress.Fraction > 0 {
-				ui.Progress(c, j.Progress.Fraction).Width(px(t, 160)).Shrink(1)
+			if f := determinate(j); f > 0 {
+				ui.Progress(c.Key("dub-progress"), f).Width(px(t, 160)).Shrink(1).Label(a.dubStatus())
 			}
 			ui.Spacer(c)
 			if ui.Button(c.Key("dub-cancel"), i18n.T("Cancel")).Clicked() {

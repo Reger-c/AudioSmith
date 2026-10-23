@@ -13,6 +13,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/services"
 )
 
 func (a *app) tasksPage(c *ui.Context) {
@@ -56,6 +57,9 @@ func (a *app) tasksPage(c *ui.Context) {
 									state = stageText(j.Progress.Stage)
 									if j.Progress.Fraction >= 0 {
 										state += fmt.Sprintf(" · %d%%", int(100*j.Progress.Fraction))
+									}
+									if j.Kind == services.KindDubFetch {
+										state = dubFetchStatus(j.Progress) // with the size and time left
 									}
 									ui.Progress(c, j.Progress.Fraction).Label(title)
 								}

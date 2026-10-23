@@ -1,0 +1,18 @@
+ASP downloading 440 NA NA 908.2368874855312 NA dl/subs/source.en.vtt
+ASP finished 440 440 NA 378.71384199155517 NA dl/subs/source.en.vtt
+ASI 133+140 742369 "Me at the zoo"
+ASP downloading 1024 433081 NA 38214.51269229742 11 dl/subs/source.f133.mp4
+ASP downloading 3072 433081 NA 110686.47516944566 3 dl/subs/source.f133.mp4
+ASP downloading 7168 433081 NA 250706.89686457638 1 dl/subs/source.f133.mp4
+ASP downloading 31744 433081 NA 62482.776536200116 6 dl/subs/source.f133.mp4
+ASP downloading 130048 433081 NA 172481.555826374 1 dl/subs/source.f133.mp4
+ASP downloading 261120 433081 NA 234442.09868723413 0 dl/subs/source.f133.mp4
+ASP downloading 433081 433081 NA 169902.44011391347 0 dl/subs/source.f133.mp4
+ASP finished 433081 433081 NA 142507.9771607319 NA dl/subs/source.f133.mp4
+ASP downloading 1024 309288 NA 6609.177356585915 46 dl/subs/source.f140.m4a
+ASP downloading 3072 309288 NA 19650.33557263969 15 dl/subs/source.f140.m4a
+ASP downloading 130048 309288 NA 210116.77884305365 0 dl/subs/source.f140.m4a
+ASP downloading 261120 309288 NA 227689.28628851942 0 dl/subs/source.f140.m4a
+ASP downloading 309288 309288 NA 241883.6949245456 0 dl/subs/source.f140.m4a
+ASP finished 309288 309288 NA 218937.32830576916 NA dl/subs/source.f140.m4a
+ASF /tmp/dl/subs/source.mp4
