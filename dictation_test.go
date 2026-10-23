@@ -337,14 +337,14 @@ func TestWritingHelpSettings(t *testing.T) {
 	a, tt := m.a, m.tt
 	a.navigate("/settings/writing")
 	tt.Frame()
-	if !tt.HasText("No language model: clean-up uses the built-in polish only.") || !tt.HasText("Ollama is not running on this Mac.") {
+	if ok, _ := a.llmAvailable(); ok || !tt.HasText("Not running on this Mac.") {
 		t.Fatalf("page %q", tt.Texts())
 	}
 	// Ollama found: automatic routing uses it, with a chat model.
 	a.llmOllama = []string{"nomic-embed-text", "qwen3:4b"}
 	a.applyLLM()
 	tt.Frame()
-	if ok, who := a.llmAvailable(); !ok || who != "Ollama · qwen3:4b" || !tt.HasText("Clean-up uses Ollama · qwen3:4b.") {
+	if ok, who := a.llmAvailable(); !ok || who != "Ollama · qwen3:4b" || !tt.HasText("Running with 2 models; it needs no setup.") {
 		t.Fatalf("auto: %v %q %q", ok, who, tt.Texts())
 	}
 	// Add OpenAI: not used until chosen.
@@ -360,8 +360,8 @@ func TestWritingHelpSettings(t *testing.T) {
 	}
 	a.chooseLLMRoute("openai")
 	tt.Frame()
-	if !tt.HasText("Clean-up uses OpenAI · gpt-4.1-mini.") {
-		t.Errorf("status: %q", tt.Texts())
+	if !tt.HasText("OpenAI") {
+		t.Errorf("route: %q", tt.Texts())
 	}
 	if !a.prefs.LLM.Manual || len(a.prefs.LLM.Default) != 1 || a.prefs.LLM.Default[0].Provider != "openai" {
 		t.Fatalf("route %+v", a.prefs.LLM)

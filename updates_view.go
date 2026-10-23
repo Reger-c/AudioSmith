@@ -245,7 +245,7 @@ func (a *app) softwareUpdateSettings(c *ui.Context) {
 			}
 		})
 		auto := on && a.prefs.Updates.AutoCheckOn()
-		settingRow(c, "about-update-auto", i18n.T("Automatic checks"), i18n.T("Once a day AudioSmith reads the version file of its newest version on actnow.dev, and shows a new version at the foot of the sidebar with its release notes. Nothing about you is sent."), func() {
+		settingRow(c, "about-update-auto", i18n.T("Automatic checks"), i18n.T("Once a day, from actnow.dev; a new version shows at the foot of the sidebar. Nothing about you is sent."), func() {
 			if ui.Switch(c.Key("about-update-auto"), &auto).Label(i18n.T("Check for updates automatically")).Disabled(!on).Changed() {
 				a.setAutoCheck(auto)
 			}

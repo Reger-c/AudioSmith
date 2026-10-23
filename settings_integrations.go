@@ -57,10 +57,5 @@ func (a *app) integrationsSettings(c *ui.Context) {
 	})
 	a.revealAnchor(c, "api")
 	subHeading(c, i18n.T("Local API"))
-	a.apiSettings(c)
-	ui.Row(c).Children(func() {
-		if ghostIconButton(c.Key("integ-ref"), icons.Programming, i18n.T("API reference")).Label(i18n.T("API reference")).Disabled(a.apiPort == 0).Clicked() {
-			a.navigate("/api-reference")
-		}
-	})
+	a.apiSettings(c) // its last group opens the API reference
 }

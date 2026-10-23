@@ -28,7 +28,7 @@ func presetLabels() []string {
 // routeOptions are the choices of "Use for writing help": automatic,
 // none, then each provider set up.
 func (a *app) routeOptions() (labels, ids []string) {
-	labels = []string{i18n.T("Automatic: AudioSmith's model, else Ollama on this Mac"), i18n.T("None: the built-in polish only")}
+	labels = []string{i18n.T("Automatic"), i18n.T("None: the built-in polish only")}
 	ids = []string{"auto", ""}
 	if a.localLLMReady() {
 		labels, ids = append(labels, providerName(localProvider, nil)), append(ids, localProvider)
@@ -244,35 +244,18 @@ func (a *app) writingSettings(c *ui.Context) {
 	if f.edits == nil {
 		return
 	}
-	ui.Text(c, i18n.T("A language model can clean up transcripts and dictations: remove fillers, apply your self-corrections, fix punctuation. Without one, AudioSmith's own polish still runs.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
-	ok, who := a.llmAvailable()
-	status := i18n.T("No language model: clean-up uses the built-in polish only.")
-	if ok {
-		status = i18n.T("Clean-up uses %s.", who)
-	}
-	ui.Text(c.Key("llm-status"), status).Bold()
+	caption(c, i18n.T("A language model tidies transcripts and dictations: fillers, self-corrections, punctuation."))
 
 	settingGroup(c, i18n.T("Which model"), func() {
 		labels, ids := a.routeOptions()
-		ollama := i18n.T("Ollama is not running on this Mac.")
-		if a.llmOllama != nil {
-			ollama = i18n.T("Ollama runs on this Mac with %d models.", len(a.llmOllama))
-			if len(a.llmOllama) == 0 {
-				ollama = i18n.T("Ollama runs on this Mac, but has no model: pull one, e.g. ollama pull qwen3:4b.")
-			}
-		}
-		settingRowNote(c, "llm-route", i18n.T("Use for writing help"), ollama, func() {
-			if ui.Select(c.Key("llm-route-select"), &f.route, labels).Label(i18n.T("Use for writing help")).Width(px(t, 260)).Changed() {
+		settingRow(c, "llm-route", i18n.T("Use for writing help"), i18n.T("Automatic: AudioSmith's model, else Ollama."), func() {
+			if ui.Select(c.Key("llm-route-select"), &f.route, labels).Label(i18n.T("Use for writing help")).Width(settingW(t)).Changed() {
 				a.chooseLLMRoute(ids[max(slices.Index(labels, f.route), 0)])
-			}
-			if ui.Button(c.Key("llm-recheck"), i18n.T("Look for Ollama")).Clicked() {
-				a.checkOllama()
 			}
 		})
 		cleanLabels, cleanIDs := cleanOptions(labels, ids)
-		settingRow(c, "llm-clean-route", i18n.T("Dictation clean-up"), i18n.T("Dictation waits at most 4 seconds for it: a fast, local model works best."), func() {
-			if ui.Select(c.Key("llm-clean-select"), &f.clean, cleanLabels).Label(i18n.T("Dictation clean-up")).Width(px(t, 260)).Changed() {
+		settingRow(c, "llm-clean-route", i18n.T("Dictation clean-up"), i18n.T("Waits at most 4 s: a fast local model works best."), func() {
+			if ui.Select(c.Key("llm-clean-select"), &f.clean, cleanLabels).Label(i18n.T("Dictation clean-up")).Width(settingW(t)).Changed() {
 				id := cleanIDs[max(slices.Index(cleanLabels, f.clean), 0)]
 				a.updateSettings(func(s *settings.Settings) {
 					m := map[string][]settings.LLMRoute{}
@@ -300,18 +283,27 @@ func (a *app) writingSettings(c *ui.Context) {
 	a.localLLMSettings(c) // local_llm.go
 	settingGroup(c, i18n.T("Providers"), func() {
 		a.keySecurityHelp(c) // family_keys_view.go: with another ActNow app only
-		if len(a.prefs.LLM.Providers) == 0 {
-			ui.Text(c, i18n.T("No provider set up. Ollama on this Mac is used without one.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+		ollama := i18n.T("Not running on this Mac.")
+		if a.llmOllama != nil {
+			ollama = i18n.N(len(a.llmOllama), "Running with %d model; it needs no setup.", "Running with %d models; it needs no setup.", len(a.llmOllama))
+			if len(a.llmOllama) == 0 {
+				ollama = i18n.T("Running, but without a model: pull one, e.g. ollama pull qwen3:4b.")
+			}
 		}
+		settingRowNote(c, "llm-ollama", i18n.T("Ollama on this Mac"), ollama, func() {
+			if ui.Button(c.Key("llm-recheck"), i18n.T("Look for Ollama")).Clicked() {
+				a.checkOllama()
+			}
+		})
 		for _, p := range a.prefs.LLM.Providers {
-			a.providerCard(c, p)
+			settingBlock(c, "llm-pb-"+p.ID, func() { a.providerCard(c, p) })
 		}
-		settingRow(c, "llm-add", i18n.T("Add a provider"), i18n.T("OpenAI-compatible servers, Anthropic, and local Ollama or LM Studio."), func() {
+		settingRow(c, "llm-add", i18n.T("Add a provider"), i18n.T("Cloud services or local servers."), func() {
 			opts := presetLabels()
 			if f.add == "" {
 				f.add = opts[0]
 			}
-			ui.Select(c.Key("llm-add-select"), &f.add, opts).Label(i18n.T("Provider")).Width(px(t, 200))
+			ui.Select(c.Key("llm-add-select"), &f.add, opts).Label(i18n.T("Provider")).Width(px(t, 180))
 			if ui.Button(c.Key("llm-add-button"), i18n.T("Add")).Clicked() {
 				a.addProvider(f.add)
 			}
@@ -330,7 +322,7 @@ func (a *app) providerCard(c *ui.Context, p settings.LLMProvider) {
 	cfg := a.providerConfig(p.ID)
 	pr, resolveErr := cfg.Resolve()
 	preset, _ := llm.LookupPreset(pid(cfg))
-	ui.Column(c.Key("llm-p-"+p.ID)).Gap(px(t, 8)).Padding(px(t, 12)).Radius(10).Border(1, t.Border).Children(func() {
+	ui.Column(c.Key("llm-p-" + p.ID)).Gap(px(t, sp2)).Children(func() {
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, providerName(p.ID, a.prefs.LLM.Providers)).Bold().Grow(1)
 			where := i18n.T("Cloud: text is sent to this provider")

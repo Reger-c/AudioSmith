@@ -245,10 +245,9 @@ func (a *app) pronunciationSettings(c *ui.Context) {
 		a.loadPronunciation()
 	}
 	subHeading(c, i18n.T("Pronunciation"))
-	ui.Text(c, i18n.T("Say how words are read: names, brands, abbreviations. Matching ignores case; in Chinese and Japanese a term matches inside words too. In a script, [[word|say it like this]] changes one place only.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
+	caption(c, i18n.T("Say how names, brands and abbreviations are read. In a script, [[word|say it like this]] changes one place only."))
 
-	settingGroup(c, i18n.T("Test a sentence"), func() {
+	settingGroupBlock(c, i18n.T("Test a sentence"), "pron-test-block", func() {
 		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 			ui.TextInput(c.Key("pron-test"), &p.test).Placeholder(i18n.T("A sentence with your terms")).Label(i18n.T("Test sentence")).Grow(1)
 			label := i18n.T("Listen")
@@ -265,7 +264,7 @@ func (a *app) pronunciationSettings(c *ui.Context) {
 		}
 
 	})
-	settingGroup(c, i18n.T("Entries"), func() {
+	settingGroupBlock(c, i18n.T("Entries"), "pron-entries", func() {
 		issues := map[int][]lexicon.Issue{}
 		for _, is := range lexicon.Validate(p.entries) {
 			issues[is.Index] = append(issues[is.Index], is)

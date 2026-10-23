@@ -21,9 +21,7 @@ import (
 const monoFont = "ui-monospace, SFMono-Regular, Menlo, monospace"
 
 func (a *app) apiSettings(c *ui.Context) {
-	t := c.Theme()
 	cfg := a.prefs.API
-	muted := func(s string) { ui.Text(c, s).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap() }
 
 	// The server.
 	settingGroup(c, i18n.T("Server"), func() {
@@ -42,26 +40,39 @@ func (a *app) apiSettings(c *ui.Context) {
 				a.applyAPI()
 			}
 		})
-		ui.Row(c.Key("api-status")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			switch {
-			case !cfg.Enabled:
-				ui.Text(c, i18n.T("Off")).TextColor(t.TextMuted).Grow(1)
-			case a.apiErr != "":
-				ui.Text(c, a.apiErr).TextColor(t.Danger).Wrap().Grow(1)
-			case a.apiPort == 0:
-				ui.Text(c, i18n.T("Starting…")).TextColor(t.TextMuted).Grow(1)
-			default:
-				ui.Badge(c, i18n.T("Running"))
-				ui.Text(c, a.apiBaseURL()).Font(monoFont).Grow(1).SingleLine()
-			}
-			if ui.Button(c.Key("api-copy-url"), i18n.T("Copy base URL")).Tooltip(i18n.T("The OpenAI base URL: %s", a.apiBaseURL()+"/v1")).Clicked() {
-				c.Services().WriteClipboard(a.apiBaseURL() + "/v1")
-				a.toast(i18n.T("Copied"))
-			}
-		})
-
-		// Access.
+		settingBlock(c, "api-status", func() { a.apiStatusRow(c) })
 	})
+	a.apiAccessSettings(c)
+}
+
+// apiStatusRow is the server's state and Copy base URL.
+func (a *app) apiStatusRow(c *ui.Context) {
+	t := c.Theme()
+	cfg := a.prefs.API
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		switch {
+		case !cfg.Enabled:
+			ui.Text(c, i18n.T("Off")).TextColor(t.TextMuted).Grow(1)
+		case a.apiErr != "":
+			ui.Text(c, a.apiErr).TextColor(t.Danger).Wrap().Grow(1)
+		case a.apiPort == 0:
+			ui.Text(c, i18n.T("Starting…")).TextColor(t.TextMuted).Grow(1)
+		default:
+			ui.Badge(c, i18n.T("Running"))
+			ui.Text(c, a.apiBaseURL()).Font(monoFont).Grow(1).SingleLine()
+		}
+		if ui.Button(c.Key("api-copy-url"), i18n.T("Copy base URL")).Tooltip(i18n.T("The OpenAI base URL: %s", a.apiBaseURL()+"/v1")).Clicked() {
+			c.Services().WriteClipboard(a.apiBaseURL() + "/v1")
+			a.toast(i18n.T("Copied"))
+		}
+	})
+}
+
+// apiAccessSettings are the Local API's key, origins, sharing, agents
+// and reference.
+func (a *app) apiAccessSettings(c *ui.Context) {
+	t := c.Theme()
+	cfg := a.prefs.API
 	settingGroup(c, i18n.T("Access"), func() {
 		keyDesc := i18n.T("No key. Programs on this Mac need none; send one to require it, or to reach AudioSmith over the network.")
 		if a.apiHasKey {
@@ -80,17 +91,7 @@ func (a *app) apiSettings(c *ui.Context) {
 			}
 		})
 		if a.apiNewKey != "" {
-			ui.Row(c.Key("api-new-key")).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 8)).Radius(6).Background(t.Surface).Children(func() {
-				ui.Text(c, a.apiNewKey).Font(monoFont).Grow(1).SingleLine()
-				if ui.Button(c.Key("api-key-copy"), i18n.T("Copy")).Clicked() {
-					c.Services().WriteClipboard(a.apiNewKey)
-					a.toast(i18n.T("Copied"))
-				}
-				if ui.Button(c.Key("api-key-hide"), i18n.T("Done")).Clicked() {
-					a.apiNewKey = ""
-				}
-			})
-			muted(i18n.T("Copy it now: AudioSmith keeps it only in the Keychain and does not show it again."))
+			settingFoot(c, "api-new-key-foot", func() { a.apiNewKeyRow(c) })
 		}
 		require := cfg.RequireKey
 		settingRow(c, "api-require", i18n.T("Require the key on this Mac too"), i18n.T("Every client must send the key, also programs on this Mac. Health and the API reference stay open."), func() {
@@ -98,16 +99,15 @@ func (a *app) apiSettings(c *ui.Context) {
 				a.updateSettings(func(s *settings.Settings) { s.API.RequireKey = require })
 			}
 		})
-		ui.Field(c, i18n.T("Browser origins allowed"), func() {
+		settingRow(c, "api-origins-head", i18n.T("Browser origins allowed"), i18n.T("One per line, such as http://localhost:5173. Web pages from other origins cannot call the API."), func() {})
+		settingFoot(c, "api-origins-foot", func() {
 			ui.TextArea(c.Key("api-origins"), &a.apiForm.origins).Height(px(t, 52)).Font(monoFont).Label(i18n.T("Browser origins allowed"))
-		})
-		ui.Row(c.Key("api-origins-row")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			muted(i18n.T("One per line, such as http://localhost:5173. Web pages from other origins cannot call the API."))
-			ui.Spacer(c)
-			origins := splitLines(a.apiForm.origins)
-			if ui.Button(c.Key("api-origins-save"), i18n.T("Save")).Disabled(slices.Equal(origins, cfg.Origins)).Clicked() {
-				a.updateSettings(func(s *settings.Settings) { s.API.Origins = origins })
-			}
+			ui.Row(c.Key("api-origins-row")).Justify(ui.End).Children(func() {
+				origins := splitLines(a.apiForm.origins)
+				if ui.Button(c.Key("api-origins-save"), i18n.T("Save")).Disabled(slices.Equal(origins, cfg.Origins)).Clicked() {
+					a.updateSettings(func(s *settings.Settings) { s.API.Origins = origins })
+				}
+			})
 		})
 
 		// LAN sharing.
@@ -124,32 +124,42 @@ func (a *app) apiSettings(c *ui.Context) {
 			}
 		})
 		if a.apiShareE != "" {
-			ui.Text(c, a.apiShareE).TextColor(t.Danger).Wrap()
+			settingFoot(c, "api-share-err", func() { ui.Text(c, a.apiShareE).TextColor(t.Danger).Wrap() })
 		}
 		if sh := a.apiShare; sh != nil {
-			ui.Column(c.Key("api-share-info")).Gap(px(t, 6)).Padding(px(t, 12)).Radius(8).Background(t.Surface).Children(func() {
-				ui.Row(c).Gap(px(t, 12)).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, i18n.T("PIN")).TextColor(t.TextMuted)
-					ui.Text(c, sh.PIN[:3]+" "+sh.PIN[3:]).Font(monoFont).FontSize(px(t, 22)).Bold()
-				})
-				if len(sh.URLs) == 0 {
-					muted(i18n.T("This Mac has no address on a local network."))
+			settingFoot(c, "api-share-foot", func() { a.apiShareInfo(c, sh) })
+		}
+	})
+	a.apiAgentSettings(c)
+}
+
+// apiShareInfo is LAN sharing's PIN and addresses.
+func (a *app) apiShareInfo(c *ui.Context, sh *api.Share) {
+	t := c.Theme()
+	muted := func(s string) { ui.Text(c, s).FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap() }
+	ui.Column(c.Key("api-share-info")).Gap(px(t, 6)).Padding(px(t, 12)).Radius(8).Background(t.Surface).Children(func() {
+		ui.Row(c).Gap(px(t, 12)).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, i18n.T("PIN")).TextColor(t.TextMuted)
+			ui.Text(c, sh.PIN[:3]+" "+sh.PIN[3:]).Font(monoFont).FontSize(px(t, 22)).Bold()
+		})
+		if len(sh.URLs) == 0 {
+			muted(i18n.T("This Mac has no address on a local network."))
+		}
+		for i, u := range sh.URLs {
+			ui.Row(c.Key("share-url-" + strconv.Itoa(i))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, u+"/v1").Font(monoFont).Grow(1).SingleLine()
+				if ui.Button(c.Key("copy"), i18n.T("Copy")).Clicked() {
+					c.Services().WriteClipboard(u + "/v1")
+					a.toast(i18n.T("Copied"))
 				}
-				for i, u := range sh.URLs {
-					ui.Row(c.Key("share-url-" + strconv.Itoa(i))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, u+"/v1").Font(monoFont).Grow(1).SingleLine()
-						if ui.Button(c.Key("copy"), i18n.T("Copy")).Clicked() {
-							c.Services().WriteClipboard(u + "/v1")
-							a.toast(i18n.T("Copied"))
-						}
-					})
-				}
-				muted(i18n.T("Send the PIN as the X-AudioSmith-Pin header, or add ?pin=%s to the URL. Anyone on this network with the PIN can make speech with your voices.", sh.PIN))
 			})
 		}
-
-		// Agents.
+		muted(i18n.T("Send the PIN as the X-AudioSmith-Pin header, or add ?pin=%s to the URL. Anyone on this network with the PIN can make speech with your voices.", sh.PIN))
 	})
+}
+
+// apiAgentSettings are the agents' (MCP) settings and the API reference.
+func (a *app) apiAgentSettings(c *ui.Context) {
 	settingGroup(c, i18n.T("Agents (MCP)"), func() {
 		settingRow(c, "api-mcp-output", i18n.T("Audio for agents"), i18n.T("How generate_speech hands back audio: in the answer, as a WAV file in the folder below, or both."), func() {
 			if ui.Segmented(c.Key("api-output-seg"), &a.apiForm.output, i18n.T("Both"), i18n.T("Inline"), i18n.T("File")).Label(i18n.T("Audio for agents")).Changed() {
@@ -170,9 +180,7 @@ func (a *app) apiSettings(c *ui.Context) {
 		// Reference.
 	})
 	settingGroup(c, i18n.T("API reference"), func() {
-		ui.Row(c.Key("api-ref")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			muted(i18n.T("The OpenAPI description is at %s.", a.apiBaseURL()+"/openapi.json"))
-			ui.Spacer(c)
+		settingRowNote(c, "api-ref", i18n.T("OpenAPI description"), a.apiBaseURL()+"/openapi.json", func() {
 			if ui.Button(c.Key("api-ref-open"), i18n.T("Open the reference")).Disabled(a.apiPort == 0).Clicked() {
 				a.navigate("/api-reference")
 			}
@@ -180,21 +188,27 @@ func (a *app) apiSettings(c *ui.Context) {
 				go mygo.Shell.OpenExternal(a.apiBaseURL() + "/docs")
 			}
 		})
-		ui.Collapsible(c.Key("api-ops"), i18n.T("Endpoints"), &a.apiForm.ops, func() {
-			ui.Column(c).Gap(px(t, 2)).Children(func() {
-				tag := ""
-				for i, op := range api.Operations() {
-					if op.Tag != tag {
-						tag = op.Tag
-						ui.Text(c.Key("tag-"+tag), tag).Bold().FontSize(px(t, 12)).TextColor(t.TextMuted).Padding(px(t, 6), 0, px(t, 2), 0)
-					}
-					ui.Row(c.Key("op-" + strconv.Itoa(i))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, op.Method).Font(monoFont).FontSize(px(t, 11)).Bold().Width(px(t, 52)).TextColor(methodColor(t, op.Method))
-						ui.Text(c, op.Path).Font(monoFont).FontSize(px(t, 12)).Width(px(t, 230)).SingleLine()
-						ui.Text(c, op.Summary).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).SingleLine()
-					})
+		settingBlock(c, "api-ops-block", func() { a.apiOperations(c) })
+	})
+}
+
+// apiOperations is the folded list of the API's endpoints.
+func (a *app) apiOperations(c *ui.Context) {
+	t := c.Theme()
+	ui.Collapsible(c.Key("api-ops"), i18n.T("Endpoints"), &a.apiForm.ops, func() {
+		ui.Column(c).Gap(px(t, 2)).Children(func() {
+			tag := ""
+			for i, op := range api.Operations() {
+				if op.Tag != tag {
+					tag = op.Tag
+					ui.Text(c.Key("tag-"+tag), tag).Bold().FontSize(px(t, 12)).TextColor(t.TextMuted).Padding(px(t, 6), 0, px(t, 2), 0)
 				}
-			})
+				ui.Row(c.Key("op-" + strconv.Itoa(i))).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, op.Method).Font(monoFont).FontSize(px(t, 11)).Bold().Width(px(t, 52)).TextColor(methodColor(t, op.Method))
+					ui.Text(c, op.Path).Font(monoFont).FontSize(px(t, 12)).Width(px(t, 230)).SingleLine()
+					ui.Text(c, op.Summary).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).SingleLine()
+				})
+			}
 		})
 	})
 }
@@ -214,12 +228,16 @@ func methodColor(t *ui.Theme, m string) ui.Color {
 
 // apiBindings is the per-agent voices list.
 func (a *app) apiBindings(c *ui.Context) {
+	labels, ids := a.apiVoiceOptions()
+	settingRow(c, "api-bindings", i18n.T("Each agent's voice"), i18n.T("Agents are told apart by the X-AudioSmith-Client header (Integrations' setups send it), else by their MCP name."), func() {})
+	settingFoot(c, "api-bindings-foot", func() { a.apiBindingList(c, labels, ids) })
+}
+
+// apiBindingList is the agents' voices, the row adding one, and the
+// agents seen.
+func (a *app) apiBindingList(c *ui.Context, labels, ids []string) {
 	t := c.Theme()
 	cfg := a.prefs.API
-	labels, ids := a.apiVoiceOptions()
-	ui.Text(c, i18n.T("Each agent's voice")).Bold()
-	ui.Text(c, i18n.T("An agent sends its name in the X-AudioSmith-Client header (the configurations of Integrations do), or AudioSmith uses the name it gives MCP.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted).Wrap()
 	for i, b := range cfg.Bindings {
 		ui.Row(c.Key("binding-" + b.Client)).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, b.Client).Font(monoFont).Width(px(t, 160)).SingleLine()
@@ -319,4 +337,20 @@ func (a *app) revealAPIDir() {
 		mkdirAll(dir)
 		mygo.Shell.OpenPath(dir)
 	})
+}
+
+// apiNewKeyRow is a key just made: shown once, to copy.
+func (a *app) apiNewKeyRow(c *ui.Context) {
+	t := c.Theme()
+	ui.Row(c.Key("api-new-key")).Gap(px(t, 8)).AlignItems(ui.Center).Padding(px(t, 8)).Radius(6).Background(t.Surface).Children(func() {
+		ui.Text(c, a.apiNewKey).Font(monoFont).Grow(1).SingleLine()
+		if ui.Button(c.Key("api-key-copy"), i18n.T("Copy")).Clicked() {
+			c.Services().WriteClipboard(a.apiNewKey)
+			a.toast(i18n.T("Copied"))
+		}
+		if ui.Button(c.Key("api-key-hide"), i18n.T("Done")).Clicked() {
+			a.apiNewKey = ""
+		}
+	})
+	caption(c, i18n.T("Copy it now: AudioSmith keeps it only in the Keychain and does not show it again."))
 }

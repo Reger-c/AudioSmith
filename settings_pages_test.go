@@ -262,6 +262,8 @@ func TestAboutPage(t *testing.T) {
 		}
 	}
 	a.navigate("/settings/advanced") // the self-check is in Advanced's diagnostics
+	tt.SetSize(1100, 2600)           // the whole section, its foot included
+	tt.Frame()
 	tt.Frame()
 	if err := tt.Click("Run the check"); err != nil {
 		t.Fatal(err)

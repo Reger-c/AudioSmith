@@ -178,6 +178,23 @@ func fieldButton(c *ui.Context, ic icons.Icon, label string, size float32) ui.El
 // Settings' groups: a small title over a rounded box in the sidebar's
 // colour, faint hairlines between its rows; each row its name, a line of
 // what it does under it, its control at the right edge.
+//
+// The rhythm (DIPs at 100 %, thread #96): the box's sides groupPadX, its
+// top and foot groupPadY, every row and block groupRowPadY above and
+// below its content (so the text sits groupPadX from the box's edges all
+// round), a hairline between rows and blocks; a group's title
+// groupTitleGap above its box; a control groupCtrlGap from the text
+// beside it, groupWrapGap under it when it wraps below the name. Notes
+// and lists inside a group are blocks of their own (settingNote,
+// settingBlock), never bare text against the box or a row.
+const (
+	groupPadX     = sp4
+	groupPadY     = sp1
+	groupRowPadY  = sp3
+	groupTitleGap = sp2
+	groupCtrlGap  = sp4
+	groupWrapGap  = sp3
+)
 
 // subHeading heads a part of a Settings section that was a section of its
 // own (Pronunciation in Studio, Permissions in Dictation): over its groups.
@@ -198,20 +215,21 @@ func settingGroup(c *ui.Context, title string, fn func()) {
 	k := tok(t)
 	if settingDepth > 0 {
 		// Inside a group (a part built by a function of its own): its
-		// rows go on in the same box, under a small title of their own.
+		// rows go on in the same box, under a small title of their own,
+		// nearer the rows under it than the one above.
 		if title != "" {
 			settingLine(c)
-			sectionTitleText(c, title).Margin(px(t, sp3), 0, px(t, 2), 0)
+			sectionTitleText(c, title).Margin(px(t, sp4), 0, -px(t, sp1), 0)
 			settingCount = 0
 		}
 		fn()
 		return
 	}
-	ui.Column(c).Gap(px(t, 6)).Shrink(0).Children(func() {
+	ui.Column(c).Gap(px(t, groupTitleGap)).Shrink(0).Children(func() {
 		if title != "" {
 			sectionTitleText(c, title).Margin(0, 0, 0, px(t, sp1))
 		}
-		ui.Column(c).Padding(px(t, 2), px(t, sp3)).Radius(px(t, radiusCard)).Background(k.Sidebar).Children(func() {
+		ui.Column(c).Padding(px(t, groupPadY), px(t, groupPadX)).Radius(px(t, radiusCard)).Background(k.Sidebar).Children(func() {
 			outer := settingCount
 			settingDepth++
 			settingCount = 0
@@ -234,11 +252,12 @@ func settingLine(c *ui.Context) {
 
 // groupRow is a row of a group: name and its line (note, its colour
 // col: the zero colour for the secondary grey), the controls at the right
-// edge; selectable notes are states to copy (a path, a version).
+// edge, or under the name when both do not fit; selectable notes are
+// states to copy (a path, a version).
 func groupRow(c *ui.Context, key, title, note string, col ui.Color, selectable bool, control func()) {
 	t := c.Theme()
 	settingLine(c)
-	ui.Row(c.Key(key)).Wrap().GapX(px(t, sp4)).GapY(px(t, 6)).AlignItems(ui.Center).MinHeight(px(t, 40)).Padding(px(t, sp2), 0).Children(func() {
+	ui.Row(c.Key(key)).Wrap().GapX(px(t, groupCtrlGap)).GapY(px(t, groupWrapGap)).AlignItems(ui.Center).MinHeight(px(t, 44)).Padding(px(t, groupRowPadY), 0).Children(func() {
 		ui.Column(c).Grow(1).Basis(px(t, 160)).MinWidth(px(t, 140)).Gap(px(t, 2)).Children(func() {
 			ui.Text(c, title).MinWidth(0)
 			if note != "" {
@@ -262,18 +281,41 @@ func settingRowState(c *ui.Context, key, title, state string, col ui.Color, cont
 }
 
 // settingBlock is a part of a group that is no row (a list, a note, a
-// table): fn under a hairline like a row.
+// table): fn under a hairline like a row, as far from it as a row's text.
 func settingBlock(c *ui.Context, key string, fn func()) {
 	t := c.Theme()
 	settingLine(c)
-	ui.Column(c.Key(key)).Gap(px(t, sp2)).Padding(px(t, sp2), 0).Children(fn)
+	pad := px(t, sp2)
+	if settingDepth > 0 {
+		pad = px(t, groupRowPadY)
+	}
+	ui.Column(c.Key(key)).Gap(px(t, sp2)).Padding(pad, 0).Children(fn)
+}
+
+// settingGroupBlock is a group holding one block: a list, a table or a
+// form that is no row.
+func settingGroupBlock(c *ui.Context, title, key string, fn func()) {
+	settingGroup(c, title, func() { settingBlock(c, key, fn) })
+}
+
+// settingNote is a line of explanation or state in a group (an intro, "No
+// … yet", an error) as a block of its own; outside a group, the caption
+// alone. It returns the caption (TextColor for an error).
+func settingNote(c *ui.Context, key, text string) ui.Element {
+	if settingDepth == 0 {
+		return caption(c.Key(key), text)
+	}
+	var n ui.Element
+	settingBlock(c, key, func() { n = caption(c, text) })
+	return n
 }
 
 // settingFoot is a line that belongs to the row above it, without a
-// hairline of its own (a field that goes with a setting, a note on it).
+// hairline of its own (a field that goes with a setting, a note on it):
+// nearer that row's text than the next row's.
 func settingFoot(c *ui.Context, key string, fn func()) {
 	t := c.Theme()
-	ui.Column(c.Key(key)).Gap(px(t, sp1)).Padding(0, 0, px(t, sp2), 0).Children(fn)
+	ui.Column(c.Key(key)).Gap(px(t, sp1)).Margin(-px(t, sp1), 0, 0, 0).Padding(0, 0, px(t, groupRowPadY), 0).Children(fn)
 }
 
 // settingMore is a fold for an explanation too long for a line ("About

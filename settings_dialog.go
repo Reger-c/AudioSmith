@@ -83,14 +83,16 @@ func (a *app) openSettings(sub string) {
 // revealAnchor marks where a part of a section that was a section of its
 // own begins: opened by its old path, the section scrolls to it.
 func (a *app) revealAnchor(c *ui.Context, id string) {
-	ui.Box(c.Key("reveal-" + id)).Height(0).Shrink(0).Children(func() {
+	t := c.Theme()
+	// Height 0, and the section's gap above it taken back: the part keeps
+	// one gap above it, as any group (thread #96).
+	ui.Box(c.Key("reveal-"+id)).Height(0).Shrink(0).Margin(-px(t, settingsGap), 0, 0, 0).Children(func() {
 		if a.settingsReveal != id {
 			return
 		}
 		a.settingsReveal = ""
 		// As tall as the view: scrolled into view as little as shows it,
 		// its top (the part's) comes to the top.
-		t := c.Theme()
 		ui.Box(c).Absolute().Top(-px(t, sp3)).Left(0).Width(1).Height(max(a.sectionH-px(t, sp2), 1)).PassThrough().ScrollIntoView()
 	})
 }
@@ -112,6 +114,8 @@ const (
 	settingsW    = 800
 	settingsNavW = 200
 	settingsHMax = 620
+	// settingsGap is the gap between a section's groups.
+	settingsGap = sp5
 )
 
 // settingsH is the height Settings takes at most: settingsHMax (tests
@@ -192,7 +196,7 @@ func (a *app) settingsDialog(c *ui.Context) {
 					})
 					r.Title(title) // the page takes the focus: its name for VoiceOver
 					ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-						ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, sp5)).Children(func() {
+						ui.Column(c).Padding(px(t, sp1), px(t, sp6), px(t, sp6)).Gap(px(t, settingsGap)).Children(func() {
 							// What a section lays out by (pageWidth): its own width.
 							a.sectionW = dw - min(px(t, settingsNavW), dw*0.3) - 1 - px(t, 2*sp6)
 							a.sectionH = min(h-2*margin, px(t, settingsH)) - px(t, 52)

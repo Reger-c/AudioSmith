@@ -93,8 +93,8 @@ func (a *app) networkSettings(c *ui.Context) {
 	a.revealAnchor(c, "network")
 	t := c.Theme()
 	settingGroup(c, i18n.T("Downloads"), func() {
-		ui.Text(c, i18n.T("Models, ffmpeg and yt-dlp download through these settings. The engine itself never connects to the network.")).
-			FontSize(px(t, 12)).TextColor(t.TextMuted)
+		settingNote(c, "net-intro", i18n.T("For models, ffmpeg and yt-dlp. The engine itself never goes online."))
+		// The family's wording (actnowkit mirror.TextSourceNote), then the token.
 		sourceNote := i18n.T("Models come from Hugging Face, ffmpeg and yt-dlp from GitHub. Every download is checked (signature or checksum), so a mirror cannot change what you get.") + " " +
 			i18n.T("Mirrors never receive your token; gated models always come from huggingface.co.")
 		settingRow(c, "source", i18n.T("Download from"), sourceNote, func() {
@@ -162,17 +162,26 @@ func (a *app) networkSettings(c *ui.Context) {
 				a.testNetwork(nil)
 			}
 		})
-		for _, r := range a.netChecks {
-			ui.Row(c.Key("net-" + r.host)).Gap(px(t, 8)).Children(func() {
-				mark, col := icons.CheckCircle, t.Success
-				detail := i18n.T("%d ms", r.latency.Milliseconds())
-				if !r.ok {
-					mark, col, detail = icons.CloseCircle, t.Danger, r.err
-				}
-				ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0)
-				ui.Text(c, strings.TrimPrefix(r.host, "https://")).Width(px(t, 160))
-				ui.Text(c, detail).TextColor(t.TextMuted).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-			})
+		if len(a.netChecks) == 0 {
+			return
 		}
+		settingFoot(c, "net-results", func() { a.netResults(c) })
 	})
+}
+
+// netResults are the connection test's hosts, each with its time or error.
+func (a *app) netResults(c *ui.Context) {
+	t := c.Theme()
+	for _, r := range a.netChecks {
+		ui.Row(c.Key("net-" + r.host)).Gap(px(t, 8)).Children(func() {
+			mark, col := icons.CheckCircle, t.Success
+			detail := i18n.T("%d ms", r.latency.Milliseconds())
+			if !r.ok {
+				mark, col, detail = icons.CloseCircle, t.Danger, r.err
+			}
+			ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0)
+			ui.Text(c, strings.TrimPrefix(r.host, "https://")).Width(px(t, 160))
+			ui.Text(c, detail).TextColor(t.TextMuted).FontSize(px(t, 12)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+		})
+	}
 }

@@ -84,20 +84,22 @@ func (a *app) dubbingSettings(c *ui.Context) {
 	t := c.Theme()
 	d := a.prefs.Dubbing
 	settingGroup(c, i18n.T("Import from links"), func() {
-		caption(c, i18n.T("Paste a YouTube (or other) link on the Dub page to dub the video. This needs yt-dlp, a free downloader (about 35 MB), which AudioSmith downloads from GitHub or the ActNow mirror and checks before using. Links to this Mac or the local network, live streams and playlists are refused."))
+		settingNote(c, "ytdlp-intro", i18n.T("Dub a video from a YouTube (or other) link on the Dub page. It needs yt-dlp (about 35 MB, from GitHub or the ActNow mirror, verified). Links to this Mac or the local network, live streams and playlists are refused."))
 		y := &a.ytdlp
 		switch {
 		case y.installing:
-			ui.Row(c.Key("ytdlp-progress")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-				frac := 0.0
-				if y.size > 0 {
-					frac = float64(y.done) / float64(y.size)
-				}
-				ui.Progress(c, frac).Grow(1)
-				caption(c, i18n.T("%.0f of %.0f MB", float64(y.done)/1e6, float64(y.size)/1e6)).SingleLine()
-				if ui.Button(c.Key("ytdlp-cancel"), i18n.T("Cancel")).Clicked() && y.cancel != nil {
-					y.cancel()
-				}
+			settingBlock(c, "ytdlp-progress", func() {
+				ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+					frac := 0.0
+					if y.size > 0 {
+						frac = float64(y.done) / float64(y.size)
+					}
+					ui.Progress(c, frac).Grow(1)
+					caption(c, i18n.T("%.0f of %.0f MB", float64(y.done)/1e6, float64(y.size)/1e6)).SingleLine()
+					if ui.Button(c.Key("ytdlp-cancel"), i18n.T("Cancel")).Clicked() && y.cancel != nil {
+						y.cancel()
+					}
+				})
 			})
 		case d.URLImport && d.YtDlp != "":
 			settingRowNote(c, "ytdlp-on", i18n.T("Importing from links is on"), i18n.T("yt-dlp %s · %s", dub.YtDlpVersion, shortPath(d.YtDlp)), func() {
@@ -113,9 +115,11 @@ func (a *app) dubbingSettings(c *ui.Context) {
 			})
 		}
 		if y.err != "" {
-			ui.Row(c).Gap(px(t, 6)).Children(func() {
-				iconMark(c, icons.DangerCircle, t.Danger, "")
-				caption(c, y.err).TextColor(t.Danger).Grow(1).MinWidth(0)
+			settingFoot(c, "ytdlp-err", func() {
+				ui.Row(c).Gap(px(t, 6)).Children(func() {
+					iconMark(c, icons.DangerCircle, t.Danger, "")
+					caption(c, y.err).TextColor(t.Danger).Grow(1).MinWidth(0)
+				})
 			})
 		}
 
@@ -157,7 +161,7 @@ func (a *app) dubbingSettings(c *ui.Context) {
 			}
 		}
 		tcur := langNames[max(slices.Index(langs, target), 0)]
-		settingRow(c, "dub-target", i18n.T("Dub into"), i18n.T("The first target language of a new dub.")+" "+dubAutoTargetHint(), func() {
+		settingRow(c, "dub-target", i18n.T("Dub into"), dubAutoTargetHint(), func() {
 			if ui.Select(c.Key("dub-target"), &tcur, langNames).Label(i18n.T("Dub into")).Changed() {
 				l := langs[slices.Index(langNames, tcur)]
 				a.updateSettings(func(s *settings.Settings) {

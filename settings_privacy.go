@@ -25,18 +25,9 @@ func (a *app) privacySettings(c *ui.Context) {
 
 	})
 	settingGroup(c, i18n.T("What leaves this Mac"), func() {
-		muted(i18n.T("Speech is made and recognised on this Mac. AudioSmith connects to the network only for these:"))
-		ui.Column(c.Key("priv-list")).Gap(px(t, 4)).Padding(0, 0, 0, px(t, 8)).Children(func() {
-			for _, s := range []string{
-				i18n.T("Model downloads from Hugging Face or its mirror (Settings → Models & network)."),
-				i18n.T("ffmpeg and yt-dlp, when you download them (Settings → Audio tools, Dubbing)."),
-				i18n.T("Videos from links you paste on the Dub page."),
-				i18n.T("Writing help and translation, only with a cloud provider you set up (Settings → Writing help)."),
-				i18n.T("The Local API, which listens on this Mac only unless you share it on your network."),
-				i18n.T("Checking for updates: once a day AudioSmith reads the version file of its newest version on actnow.dev, AudioSmith's website (with beta updates on, the betas' one too); nothing about you is sent. Turn it off in Settings → About."),
-			} {
-				ui.Text(c, "• "+s).FontSize(px(t, 12))
-			}
+		settingBlock(c, "priv-leaves", func() {
+			muted(i18n.T("Speech is made and recognised on this Mac. AudioSmith connects to the network only for these:"))
+			a.privacyList(c)
 		})
 		local := a.prefs.Privacy.LocalOnlyLLM
 		settingRow(c, "priv-local-llm", i18n.T("Local language models only"), i18n.T("Writing help and translation use only local models (Ollama, LM Studio, the engine), never a cloud provider."), func() {
@@ -60,7 +51,7 @@ func (a *app) privacySettings(c *ui.Context) {
 	})
 	settingGroup(c, i18n.T("History"), func() {
 		a.historySettings(c) // takes_view.go: the history's cap
-		muted(i18n.T("Starred takes and takes in a project are always kept."))
+		settingFoot(c, "priv-history-note", func() { muted(i18n.T("Starred takes and takes in a project are always kept.")) })
 	})
 }
 
@@ -99,89 +90,111 @@ func audioLength(sec float64) string {
 // usageSettings is Settings → Usage.
 func (a *app) usageSettings(c *ui.Context) {
 	a.revealAnchor(c, "usage")
-	t := c.Theme()
 	if a.usage == nil && !a.usageLoading && a.usageErr == "" {
 		a.loadUsageStats()
 	}
 	settingGroup(c, i18n.T("Usage"), func() {
-		ui.Text(c, i18n.T("Computed from your library on this Mac. AudioSmith never sends it anywhere.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
-		if a.usageErr != "" {
-			ui.Text(c, a.usageErr).TextColor(t.Danger)
-			return
-		}
-		u := a.usage
-		if u == nil {
-			ui.Spinner(c)
-			return
-		}
-		stat := func(n, label string) {
-			ui.Column(c).Gap(px(t, 2)).Padding(px(t, 10)).Radius(8).Background(t.Surface).Children(func() {
-				ui.Text(c, n).FontSize(px(t, 20)).Bold()
-				ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted)
-			})
-		}
-		ui.Grid(c.Key("usage-grid")).ColumnTracks(ui.Fr(1), ui.Fr(1), ui.Fr(1)).GapX(px(t, 10)).GapY(px(t, 10)).Children(func() {
-			stat(fmt.Sprint(u.Takes), i18n.T("Takes generated"))
-			stat(audioLength(u.AudioSeconds), i18n.T("Audio generated"))
-			stat(fmt.Sprint(u.Days), i18n.T("Days with a take"))
-			stat(fmt.Sprint(u.Voices), i18n.T("Saved voices (%d cloned, %d designed)", u.Cloned, u.Designed))
-			stat(fmt.Sprint(u.Starred), i18n.T("Starred takes"))
-			stat(fmt.Sprint(u.Renders), i18n.T("Stories and audiobooks (%s)", audioLength(u.RenderSeconds)))
-			stat(fmt.Sprint(u.Dubs), i18n.T("Dubs (%s of source)", audioLength(u.DubSeconds)))
-			stat(fmt.Sprint(u.Transcripts), i18n.T("Transcripts (%s)", audioLength(u.TranscriptSeconds)))
-			stat(fmt.Sprint(u.Workflows), i18n.T("Workflows"))
+		settingNote(c, "usage-note", i18n.T("Computed from your library on this Mac. AudioSmith never sends it anywhere."))
+		settingBlock(c, "usage-body", func() { a.usageBody(c) })
+	})
+}
+
+// usageBody is the statistics: counts, then takes by model and language.
+func (a *app) usageBody(c *ui.Context) {
+	t := c.Theme()
+	if a.usageErr != "" {
+		ui.Text(c, a.usageErr).TextColor(t.Danger)
+		return
+	}
+	u := a.usage
+	if u == nil {
+		ui.Spinner(c)
+		return
+	}
+	stat := func(n, label string) {
+		ui.Column(c).Gap(px(t, 2)).Padding(px(t, 10)).Radius(8).Background(t.Surface).Children(func() {
+			ui.Text(c, n).FontSize(px(t, 20)).Bold()
+			ui.Text(c, label).FontSize(px(t, 12)).TextColor(t.TextMuted)
 		})
-		if u.Takes > 0 && u.AudioSeconds > 0 && u.GenSeconds > 0 {
-			ui.Text(c, i18n.T("On average a take was made %.1f× faster than real time.", u.AudioSeconds/u.GenSeconds)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	}
+	ui.Grid(c.Key("usage-grid")).ColumnTracks(ui.Fr(1), ui.Fr(1), ui.Fr(1)).GapX(px(t, 10)).GapY(px(t, 10)).Children(func() {
+		stat(fmt.Sprint(u.Takes), i18n.T("Takes generated"))
+		stat(audioLength(u.AudioSeconds), i18n.T("Audio generated"))
+		stat(fmt.Sprint(u.Days), i18n.T("Days with a take"))
+		stat(fmt.Sprint(u.Voices), i18n.T("Saved voices (%d cloned, %d designed)", u.Cloned, u.Designed))
+		stat(fmt.Sprint(u.Starred), i18n.T("Starred takes"))
+		stat(fmt.Sprint(u.Renders), i18n.T("Stories and audiobooks (%s)", audioLength(u.RenderSeconds)))
+		stat(fmt.Sprint(u.Dubs), i18n.T("Dubs (%s of source)", audioLength(u.DubSeconds)))
+		stat(fmt.Sprint(u.Transcripts), i18n.T("Transcripts (%s)", audioLength(u.TranscriptSeconds)))
+		stat(fmt.Sprint(u.Workflows), i18n.T("Workflows"))
+	})
+	if u.Takes > 0 && u.AudioSeconds > 0 && u.GenSeconds > 0 {
+		ui.Text(c, i18n.T("On average a take was made %.1f× faster than real time.", u.AudioSeconds/u.GenSeconds)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	}
+	if !u.First.IsZero() {
+		ui.Text(c, i18n.T("First take: %s", i18n.Date(u.First))).FontSize(px(t, 12)).TextColor(t.TextMuted)
+	}
+	table := func(key, title string, rows []struct {
+		name string
+		n    int
+		sec  float64
+	}) {
+		if len(rows) == 0 {
+			return
 		}
-		if !u.First.IsZero() {
-			ui.Text(c, i18n.T("First take: %s", i18n.Date(u.First))).FontSize(px(t, 12)).TextColor(t.TextMuted)
-		}
-		table := func(key, title string, rows []struct {
+		sectionTitle(c, title)
+		ui.Grid(c.Key(key)).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 70)), ui.Fixed(px(t, 110))).GapX(px(t, 12)).GapY(px(t, 4)).Children(func() {
+			for _, r := range rows {
+				ui.Text(c, r.name)
+				ui.Text(c, fmt.Sprint(r.n)).TextColor(t.TextMuted).TextAlign(ui.End)
+				ui.Text(c, audioLength(r.sec)).TextColor(t.TextMuted).TextAlign(ui.End)
+			}
+		})
+	}
+	var byModel, byLang []struct {
+		name string
+		n    int
+		sec  float64
+	}
+	for _, m := range u.ByModel {
+		byModel = append(byModel, struct {
 			name string
 			n    int
 			sec  float64
-		}) {
-			if len(rows) == 0 {
-				return
-			}
-			sectionTitle(c, title)
-			ui.Grid(c.Key(key)).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 70)), ui.Fixed(px(t, 110))).GapX(px(t, 12)).GapY(px(t, 4)).Children(func() {
-				for _, r := range rows {
-					ui.Text(c, r.name)
-					ui.Text(c, fmt.Sprint(r.n)).TextColor(t.TextMuted).TextAlign(ui.End)
-					ui.Text(c, audioLength(r.sec)).TextColor(t.TextMuted).TextAlign(ui.End)
-				}
-			})
+		}{catalog.Builtin().DisplayName(m.Key), m.N, m.Seconds})
+	}
+	for _, l := range u.ByLanguage {
+		name := i18n.T("Not set")
+		if l.Key != "" {
+			name = langName(l.Key) // transcribe_models.go: flag and name in the UI's language
 		}
-		var byModel, byLang []struct {
+		byLang = append(byLang, struct {
 			name string
 			n    int
 			sec  float64
-		}
-		for _, m := range u.ByModel {
-			byModel = append(byModel, struct {
-				name string
-				n    int
-				sec  float64
-			}{catalog.Builtin().DisplayName(m.Key), m.N, m.Seconds})
-		}
-		for _, l := range u.ByLanguage {
-			name := i18n.T("Not set")
-			if l.Key != "" {
-				name = langName(l.Key) // transcribe_models.go: flag and name in the UI's language
-			}
-			byLang = append(byLang, struct {
-				name string
-				n    int
-				sec  float64
-			}{name, l.N, l.Seconds})
-		}
-		table("usage-models", i18n.T("Takes by model"), byModel)
-		table("usage-langs", i18n.T("Takes by language"), byLang)
-		if ui.Button(c.Key("usage-refresh"), i18n.T("Refresh")).Clicked() {
-			a.usage = nil
-			a.loadUsageStats()
+		}{name, l.N, l.Seconds})
+	}
+	table("usage-models", i18n.T("Takes by model"), byModel)
+	table("usage-langs", i18n.T("Takes by language"), byLang)
+	if ui.Button(c.Key("usage-refresh"), i18n.T("Refresh")).Clicked() {
+		a.usage = nil
+		a.loadUsageStats()
+	}
+}
+
+// privacyList is what connects to the network, a line each.
+func (a *app) privacyList(c *ui.Context) {
+	t := c.Theme()
+	ui.Column(c.Key("priv-list")).Gap(px(t, 4)).Padding(0, 0, 0, px(t, 8)).Children(func() {
+		for _, s := range []string{
+			i18n.T("Model downloads from Hugging Face or its mirror (Settings → Models & network)."),
+			i18n.T("ffmpeg and yt-dlp, when you download them (Settings → Audio tools, Dubbing)."),
+			i18n.T("Videos from links you paste on the Dub page."),
+			i18n.T("Writing help and translation, only with a cloud provider you set up (Settings → Writing help)."),
+			i18n.T("The Local API, which listens on this Mac only unless you share it on your network."),
+			i18n.T("Checking for updates: once a day AudioSmith reads the newest version's file on actnow.dev; nothing about you is sent. Turn it off in Settings → About."),
+		} {
+			ui.Text(c, "• "+s).FontSize(px(t, 12))
 		}
 	})
 }

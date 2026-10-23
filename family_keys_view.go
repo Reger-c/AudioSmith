@@ -93,7 +93,22 @@ func (a *app) keyNotes(c *ui.Context, ks keySlot, typed string) {
 	if !v.known || in.Vendor == "" || in.ReadOnly {
 		return
 	}
+	shows := !in.Shared || in.Shared && len(in.Others) > 0 && strings.TrimSpace(typed) != "" || in.Different && in.From != ""
+	if !shows {
+		return
+	}
+	if settingDepth > 0 {
+		// In a Settings group: a foot of the key's row, not text against it.
+		settingFoot(c, "key-notes", func() { a.keyNoteLines(c, ks, v, typed) })
+		return
+	}
+	a.keyNoteLines(c, ks, v, typed)
+}
+
+// keyNoteLines are keyNotes' lines.
+func (a *app) keyNoteLines(c *ui.Context, ks keySlot, v *keyView, typed string) {
 	t := c.Theme()
+	in := v.info
 	if !in.Shared {
 		if ui.Checkbox(c.Key("key-share"), &v.share, i18n.T("Let other ActNow apps on this Mac use this key")).Disabled(v.busy).Changed() && v.share && in.Own {
 			a.shareFamilyKey(ks) // the key AudioSmith had: shared now
@@ -118,7 +133,7 @@ func (a *app) keySecurityHelp(c *ui.Context) {
 	if a.lib.keys == nil || len(a.familyUI()) == 0 {
 		return
 	}
-	caption(c.Key("key-security"), i18n.T("Shared keys are stored in your login keychain. Like each app's own keys, other programs you run can read them with the security tool."))
+	settingNote(c, "key-security", i18n.T("Shared keys are stored in your login keychain. Like each app's own keys, other programs you run can read them with the security tool.")) // the family's wording (actnowkit credentials.TextSecurityHelp)
 }
 
 // keyAlerts asks before removing a key other apps use (spec §8.3): Stop

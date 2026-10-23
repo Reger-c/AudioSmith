@@ -7,7 +7,6 @@ package main
 // the menu bar".
 
 import (
-	"github.com/hehehai/actnowkit/sounds"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -16,7 +15,6 @@ import (
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/dictation"
 	"github.com/hehehai/AudioSmith/internal/i18n"
-	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/lang"
 	"github.com/hehehai/AudioSmith/internal/llm"
 	"github.com/hehehai/AudioSmith/internal/settings"
@@ -323,7 +321,7 @@ func (a *app) dictationSettings(c *ui.Context) {
 			}
 		})
 		if d.Enabled {
-			a.shortcutRow(c)
+			settingBlock(c, "dict-shortcut-block", func() { a.shortcutRow(c) })
 		}
 		settingRow(c, "dict-mode", i18n.T("Mode"), i18n.T("Toggle: press once to start, again to stop. Hold: dictate while the keys are held; a quick tap keeps listening."), func() {
 			if ui.Segmented(c.Key("dict-mode-seg"), &f.mode, i18n.T("Toggle"), i18n.T("Hold")).Label(i18n.T("Mode")).Changed() {
@@ -382,25 +380,40 @@ func (a *app) dictationSettings(c *ui.Context) {
 			}
 		})
 		n := utf8.RuneCountInString(f.vocab)
-		settingRow(c, "dict-vocab", i18n.T("Vocabulary"), i18n.T("Names, jargon and spellings to expect, separated by commas or lines. Models that take a prompt use them; clean-up keeps them."), func() {})
-		ui.TextArea(c.Key("dict-vocab-area"), &f.vocab).Lines(2, 5).Placeholder(i18n.T("AudioSmith, MLX, Kubernetes, Ana Lucía")).Label(i18n.T("Vocabulary"))
-		ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			color := t.TextMuted
-			if n > settings.MaxVocabulary {
-				color = t.Danger
-			}
-			ui.Text(c, i18n.T("%d / %d characters", n, settings.MaxVocabulary)).FontSize(px(t, 11)).TextColor(color).Grow(1)
-			if ui.Button(c.Key("dict-vocab-save"), i18n.T("Save")).Disabled(f.vocab == d.Vocabulary || n > settings.MaxVocabulary).Clicked() {
-				v := f.vocab
-				a.updateSettings(func(s *settings.Settings) { s.Dictation.Vocabulary = v })
-				a.toast(i18n.T("Vocabulary saved"))
-			}
-		})
-
+		settingRow(c, "dict-vocab", i18n.T("Vocabulary"), i18n.T("Names and terms to expect, separated by commas or lines; clean-up keeps them."), func() {})
+		settingFoot(c, "dict-vocab-foot", func() { a.vocabField(c, n) })
 	})
+	a.dictTextSettings(c)
+}
+
+// vocabField is the vocabulary's text area, its count and Save.
+func (a *app) vocabField(c *ui.Context, n int) {
+	t := c.Theme()
+	f := &a.dictSet
+	d := a.prefs.Dictation
+	ui.TextArea(c.Key("dict-vocab-area"), &f.vocab).Lines(2, 5).Placeholder(i18n.T("AudioSmith, MLX, Kubernetes, Ana Lucía")).Label(i18n.T("Vocabulary"))
+	ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+		color := t.TextMuted
+		if n > settings.MaxVocabulary {
+			color = t.Danger
+		}
+		ui.Text(c, i18n.T("%d / %d characters", n, settings.MaxVocabulary)).FontSize(px(t, 11)).TextColor(color).Grow(1)
+		if ui.Button(c.Key("dict-vocab-save"), i18n.T("Save")).Disabled(f.vocab == d.Vocabulary || n > settings.MaxVocabulary).Clicked() {
+			v := f.vocab
+			a.updateSettings(func(s *settings.Settings) { s.Dictation.Vocabulary = v })
+			a.toast(i18n.T("Vocabulary saved"))
+		}
+	})
+}
+
+// dictTextSettings is Dictation's Text group: clean-up, the result,
+// sounds, Try it.
+func (a *app) dictTextSettings(c *ui.Context) {
+	t := c.Theme()
+	f := &a.dictSet
 	settingGroup(c, i18n.T("Text"), func() {
 		ok, who := a.llmAvailable()
-		cleanDesc := i18n.T("No language model is set up: only the built-in polish runs (capitals, punctuation, fillers). Set one up in Writing help.")
+		cleanDesc := i18n.T("No language model: only the built-in polish runs. Set one up in Writing help.")
 		if ok {
 			cleanDesc = i18n.T("%s removes fillers and applies self-corrections; after 4 seconds the polished text is used instead.", who)
 		}
@@ -449,8 +462,10 @@ func (a *app) dictationSettings(c *ui.Context) {
 				a.dictToggle()
 			}
 		})
-		ui.Text(c, i18n.T("Not yet: live text while you speak, and dictating while AudioSmith plays audio (echo cancellation).")).
-			FontSize(px(t, 11)).TextColor(t.TextMuted)
+		settingFoot(c, "dict-not-yet", func() {
+			ui.Text(c, i18n.T("Not yet: live text while you speak, and dictating while AudioSmith plays audio (echo cancellation).")).
+				FontSize(px(t, fsMicro)).TextColor(t.TextMuted)
+		})
 	})
 }
 
@@ -541,45 +556,4 @@ func dictationGlyphs(acc string) string {
 		return ""
 	}
 	return dictation.GlyphsOf(acc)
-}
-
-// dictSoundRows are a line per sound of dictation under Sounds: its
-// picker (dictation_soundpicker.go) and Try.
-func (a *app) dictSoundRows(c *ui.Context) {
-	t := c.Theme()
-	rows := []struct {
-		ev          sounds.Event
-		label, name string
-		try         string
-	}{
-		{dictStartEvent, i18n.T("When listening starts"), i18n.T("Start sound"), i18n.T("Try the start sound")},
-		{dictStopEvent, i18n.T("When listening stops"), i18n.T("Stop sound"), i18n.T("Try the stop sound")},
-		{dictErrorEvent, i18n.T("When something goes wrong"), i18n.T("Error sound"), i18n.T("Try the error sound")},
-	}
-	prefs := a.dictSoundPrefs()
-	ui.Column(c.Key("dict-sound-rows")).Gap(px(t, 4)).Padding(0, 0, 0, px(t, 16)).Children(func() {
-		for _, r := range rows {
-			ev := r.ev
-			settingRow(c, "dict-sound-"+ev.ID, r.label, "", func() {
-				choice := prefs.Choice(ev)
-				soundPicker(c.Key("pick-"+ev.ID), soundPickerSpec{
-					Name:      r.name,
-					Event:     ev,
-					Choice:    choice,
-					Volume:    prefs.Volume,
-					Catalog:   a.dictSoundCat,
-					System:    a.systemSounds(),
-					Label:     a.dictSoundLabel(ev),
-					Choose:    func(ch string) { a.chooseDictSound(ev, ch) },
-					Preview:   func(ch string) { a.dictPreview(ev, ch) },
-					Stop:      a.dictPlayer.StopPreview,
-					Playing:   a.dictPlayer.Previewing,
-					SetVolume: a.setDictSoundVolume,
-				})
-				if iconButton(c.Key("try-"+ev.ID), icons.TurntableMusicNoteLineDuotone, r.try).Clicked() {
-					a.dictPreview(ev, choice)
-				}
-			})
-		}
-	})
 }

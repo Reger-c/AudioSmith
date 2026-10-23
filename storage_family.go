@@ -51,10 +51,8 @@ func orphanCount(orphans []models.Orphan) (n int, bytes int64) {
 
 // familyStorage shows r's family part under the model folder's.
 func (a *app) familyStorage(c *ui.Context, r *storageReport) {
-	t := c.Theme()
 	if u := r.usage; len(a.famOthers) > 0 && u.Shared > 0 && len(u.SharedWith) > 0 {
-		ui.Text(c, i18n.T("Only AudioSmith: %s · Shared with %s: %s", humanBytes(u.Mine), listJoin(u.SharedWith), humanBytes(u.Shared))).
-			FontSize(px(t, 12)).TextColor(t.TextMuted)
+		settingNote(c, "st-shared", i18n.T("Only AudioSmith: %s · Shared with %s: %s", humanBytes(u.Mine), listJoin(u.SharedWith), humanBytes(u.Shared)))
 	}
 	if r.orphans == 0 {
 		return

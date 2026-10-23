@@ -189,8 +189,7 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 		a.ffScanned = true
 		a.scanFFmpeg()
 	}
-	ui.Text(c, i18n.T("AudioSmith reads and writes audio and video with macOS (AVFoundation). ffmpeg, a free media tool, adds MP3, Opus and FLAC export, WebM and MKV videos, and subtitles burnt into a video. It is optional, and runs as a separate program.")).
-		FontSize(px(t, 12)).TextColor(t.TextMuted)
+	caption(c, i18n.T("AudioSmith uses macOS for audio and video. ffmpeg, optional and free, adds MP3, Opus and FLAC export, WebM and MKV, and burnt-in subtitles; it runs as a separate program."))
 
 	m := a.prefs.Media
 	settingGroup(c, i18n.T("ffmpeg"), func() {
@@ -221,7 +220,7 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 					a.removeFFmpeg()
 				}
 			})
-			ui.Column(c.Key("ff-caps")).Gap(px(t, 4)).Children(func() {
+			settingFoot(c, "ff-caps", func() {
 				for _, cp := range ffCapabilities(tool) {
 					mark, col := icons.CheckCircle, t.Success
 					if !cp.ok {
@@ -242,7 +241,7 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 	})
 	settingGroup(c, i18n.T("On this Mac"), func() {
 		if a.ffScanned && len(a.ffSystem) == 0 {
-			ui.Text(c, i18n.T("No ffmpeg found in Homebrew's or MacPorts' folders. With Homebrew: brew install ffmpeg")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			settingNote(c, "ff-sys-none", i18n.T("No ffmpeg found in Homebrew's or MacPorts' folders. With Homebrew: brew install ffmpeg"))
 		}
 		for _, p := range a.ffSystem {
 			settingRow(c, "ff-sys-"+p, shortPath(p), "", func() {
@@ -252,38 +251,46 @@ func (a *app) audioToolsSettings(c *ui.Context) {
 				}
 			})
 		}
-		ui.Row(c).Gap(px(t, 8)).Children(func() {
-			if ui.Button(c.Key("ff-rescan"), i18n.T("Look again")).Clicked() {
-				a.scanFFmpeg()
-			}
-			if a.win != nil && ui.Button(c.Key("ff-choose"), i18n.T("Choose a file…")).Clicked() {
-				a.chooseFFmpeg()
-			}
+		settingBlock(c, "ff-sys-actions", func() {
+			ui.Row(c).Gap(px(t, 8)).Children(func() {
+				if ui.Button(c.Key("ff-rescan"), i18n.T("Look again")).Clicked() {
+					a.scanFFmpeg()
+				}
+				if a.win != nil && ui.Button(c.Key("ff-choose"), i18n.T("Choose a file…")).Clicked() {
+					a.chooseFFmpeg()
+				}
+			})
 		})
 	})
 }
 
 // ffmpegDownloadSection offers the pinned build (see ffmpegDownloadOffered).
 func (a *app) ffmpegDownloadSection(c *ui.Context) {
+	settingGroup(c, i18n.T("Get ffmpeg"), func() { a.ffmpegDownloadRows(c) })
+}
+
+// ffmpegDownloadRows are the pinned build's download and its state.
+func (a *app) ffmpegDownloadRows(c *ui.Context) {
 	t := c.Theme()
 	m, tool := a.prefs.Media, a.mediaTool()
-	sectionTitle(c, i18n.T("Get ffmpeg"))
 	b := ffmpeg.Pinned
 	st := &a.ffInstall
 	desc := i18n.T("ffmpeg %s for Apple silicon from %s on GitHub or the ActNow mirror (%s), checked by SHA-256 before use.", b.Version, b.Name, humanBytes(b.Size())) + " " +
 		i18n.T("Its licence is %s: AudioSmith does not include it, and runs it as a separate program.", b.Licence)
 	switch {
 	case st.running:
-		ui.Row(c.Key("ff-progress")).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
-			frac := 0.0
-			if st.size > 0 {
-				frac = float64(st.done) / float64(st.size)
-			}
-			ui.Progress(c, frac).Grow(1)
-			ui.Text(c, i18n.T("%.0f of %.0f MB", float64(st.done)/1e6, float64(st.size)/1e6)).FontSize(px(t, 12)).TextColor(t.TextMuted)
-			if ui.Button(c.Key("ff-cancel"), i18n.T("Cancel")).Clicked() && st.cancel != nil {
-				st.cancel()
-			}
+		settingBlock(c, "ff-progress", func() {
+			ui.Row(c).Gap(px(t, 8)).AlignItems(ui.Center).Children(func() {
+				frac := 0.0
+				if st.size > 0 {
+					frac = float64(st.done) / float64(st.size)
+				}
+				ui.Progress(c, frac).Grow(1)
+				ui.Text(c, i18n.T("%.0f of %.0f MB", float64(st.done)/1e6, float64(st.size)/1e6)).FontSize(px(t, 12)).TextColor(t.TextMuted)
+				if ui.Button(c.Key("ff-cancel"), i18n.T("Cancel")).Clicked() && st.cancel != nil {
+					st.cancel()
+				}
+			})
 		})
 	default:
 		settingRowNote(c, "ff-download", i18n.T("Download ffmpeg"), desc, func() {
@@ -294,7 +301,7 @@ func (a *app) ffmpegDownloadSection(c *ui.Context) {
 		})
 	}
 	if st.err != "" {
-		ui.Text(c, st.err).FontSize(px(t, 12)).TextColor(t.Danger)
+		settingFoot(c, "ff-err", func() { ui.Text(c, st.err).FontSize(px(t, 12)).TextColor(t.Danger) })
 	}
 
 }

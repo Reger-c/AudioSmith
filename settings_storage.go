@@ -428,11 +428,11 @@ func (a *app) storageSettings(c *ui.Context) {
 			})
 		}
 		if a.moveErr != "" {
-			ui.Text(c, a.moveErr).FontSize(px(t, 12)).TextColor(t.Danger)
+			settingNote(c, "st-move-err", a.moveErr).TextColor(t.Danger)
 		}
 
 	})
-	settingGroup(c, i18n.T("What takes room"), func() {
+	settingGroupBlock(c, i18n.T("What takes room"), "st-room", func() {
 		if r == nil {
 			ui.Row(c).Gap(px(t, 8)).Children(func() {
 				ui.Spinner(c)
@@ -491,15 +491,17 @@ func (a *app) storageSettings(c *ui.Context) {
 			})
 		}
 		if r != nil {
-			muted(i18n.T("AudioSmith's models: %s of %s in the folder · free on its disk: %s", humanBytes(r.ours), humanBytes(r.modelsAll), humanBytes(r.freeModel)))
-			ui.Grid(c.Key("st-models-list")).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 90))).GapX(px(t, 12)).GapY(px(t, 4)).Children(func() {
-				for i, m := range r.models {
-					if i >= 8 {
-						break
+			settingBlock(c, "st-models-use", func() {
+				muted(i18n.T("AudioSmith's models: %s of %s in the folder · free on its disk: %s", humanBytes(r.ours), humanBytes(r.modelsAll), humanBytes(r.freeModel)))
+				ui.Grid(c.Key("st-models-list")).ColumnTracks(ui.Fr(1), ui.Fixed(px(t, 90))).GapX(px(t, 12)).GapY(px(t, 4)).Children(func() {
+					for i, m := range r.models {
+						if i >= 8 {
+							break
+						}
+						ui.Text(c, m.title).FontSize(px(t, 12))
+						ui.Text(c, humanBytes(m.bytes)).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.End)
 					}
-					ui.Text(c, m.title).FontSize(px(t, 12))
-					ui.Text(c, humanBytes(m.bytes)).FontSize(px(t, 12)).TextColor(t.TextMuted).TextAlign(ui.End)
-				}
+				})
 			})
 			a.familyStorage(c, r) // storage_family.go
 		}

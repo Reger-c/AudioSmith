@@ -323,3 +323,44 @@ const soundPanelW = 280
 
 // soundPickerW is the picker button's width.
 const soundPickerW = 176
+
+// dictSoundRows are a line per sound of dictation under Sounds: its
+// picker (dictation_soundpicker.go) and Try.
+func (a *app) dictSoundRows(c *ui.Context) {
+	t := c.Theme()
+	rows := []struct {
+		ev          sounds.Event
+		label, name string
+		try         string
+	}{
+		{dictStartEvent, i18n.T("When listening starts"), i18n.T("Start sound"), i18n.T("Try the start sound")},
+		{dictStopEvent, i18n.T("When listening stops"), i18n.T("Stop sound"), i18n.T("Try the stop sound")},
+		{dictErrorEvent, i18n.T("When something goes wrong"), i18n.T("Error sound"), i18n.T("Try the error sound")},
+	}
+	prefs := a.dictSoundPrefs()
+	ui.Column(c.Key("dict-sound-rows")).Padding(0, 0, 0, px(t, sp4)).Children(func() {
+		for _, r := range rows {
+			ev := r.ev
+			settingRow(c, "dict-sound-"+ev.ID, r.label, "", func() {
+				choice := prefs.Choice(ev)
+				soundPicker(c.Key("pick-"+ev.ID), soundPickerSpec{
+					Name:      r.name,
+					Event:     ev,
+					Choice:    choice,
+					Volume:    prefs.Volume,
+					Catalog:   a.dictSoundCat,
+					System:    a.systemSounds(),
+					Label:     a.dictSoundLabel(ev),
+					Choose:    func(ch string) { a.chooseDictSound(ev, ch) },
+					Preview:   func(ch string) { a.dictPreview(ev, ch) },
+					Stop:      a.dictPlayer.StopPreview,
+					Playing:   a.dictPlayer.Previewing,
+					SetVolume: a.setDictSoundVolume,
+				})
+				if iconButton(c.Key("try-"+ev.ID), icons.TurntableMusicNoteLineDuotone, r.try).Clicked() {
+					a.dictPreview(ev, choice)
+				}
+			})
+		}
+	})
+}

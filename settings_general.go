@@ -20,7 +20,7 @@ import (
 func (a *app) generalSettings(c *ui.Context) {
 	t := c.Theme()
 	settingGroup(c, "", func() {
-		settingRow(c, "language", i18n.T("Language"), i18n.T("The language of the app. Following the system uses English unless the system's language is supported."), func() {
+		settingRow(c, "language", i18n.T("Language"), i18n.T("Following the system uses English if its language is not supported."), func() {
 			opts := languageOptions()
 			if ui.Select(c.Key("language-select"), &a.settingsForm.language, opts).Label(i18n.T("Language")).Width(px(t, 200)).Changed() {
 				tag := ""
@@ -104,10 +104,9 @@ func (a *app) modelSettings(c *ui.Context) {
 // model licences accepted, each with Withdraw.
 func (a *app) licenceSettings(c *ui.Context) {
 	a.revealAnchor(c, "licences")
-	t := c.Theme()
 	settingGroup(c, i18n.T("Licences"), func() {
 		if len(a.accepted) == 0 {
-			ui.Text(c, i18n.T("You have not accepted any model licence.")).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			settingNote(c, "acc-none", i18n.T("You have not accepted any model licence."))
 		}
 		for _, acc := range a.accepted {
 			who := i18n.T("every model under it")

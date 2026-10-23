@@ -26,8 +26,14 @@ func (a *app) sharedScope(c *ui.Context, key string) {
 	if !a.sharedUI() {
 		return
 	}
+	settingFoot(c, "scope-foot-"+key, func() { a.sharedScopeLine(c, key) })
+}
+
+// sharedScopeLine is sharedScope's line: whom the setting applies to,
+// and the link that changes it.
+func (a *app) sharedScopeLine(c *ui.Context, key string) {
 	t := c.Theme()
-	ui.Row(c.Key("scope-"+key)).Wrap().GapX(px(t, sp2)).GapY(px(t, 2)).AlignItems(ui.Center).Margin(px(t, -6), 0, 0, 0).Children(func() {
+	ui.Row(c.Key("scope-" + key)).Wrap().GapX(px(t, sp2)).GapY(px(t, 2)).AlignItems(ui.Center).Children(func() {
 		if a.prefs.Family.Follows(key) {
 			caption(c, i18n.T("Applies to all ActNow apps"))
 			if scopeLink(c.Key("scope-own"), i18n.T("Use a different setting for this app")).Clicked() {

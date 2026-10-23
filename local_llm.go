@@ -180,8 +180,7 @@ func (a *app) localLLMSettings(c *ui.Context) {
 		return
 	}
 	settingGroup(c, i18n.T("On this Mac (AudioSmith)"), func() {
-		ui.Text(c, i18n.T("AudioSmith can run a language model itself, offline: it translates dubs and cleans up text without sending anything off your Mac.")).
-			FontSize(px(t, 12)).TextColor(t.TextMuted)
+		settingNote(c, "llm-local-intro", i18n.T("Runs offline inside AudioSmith: nothing leaves your Mac."))
 		cur := a.localLLMEntry()
 		var labels []string
 		for _, e := range opts {

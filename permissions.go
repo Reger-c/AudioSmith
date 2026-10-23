@@ -64,8 +64,8 @@ func (a *app) permissionsSettings(c *ui.Context) {
 		a.recheckPermissions()
 	}
 	subHeading(c, i18n.T("Permissions"))
-	caption(c, i18n.T("AudioSmith works on this Mac: these permissions are used only for what each row says, and audio never leaves it."))
-	settingGroup(c, i18n.T("Permissions"), func() {
+	caption(c, i18n.T("Used only for what each row says; audio never leaves this Mac."))
+	settingGroup(c, "", func() {
 		badge := func(text string, ok bool) {
 			if ok {
 				statusMark(c, icons.CheckCircle, t.Success, text)

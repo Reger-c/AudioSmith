@@ -367,9 +367,15 @@ func (a *app) bugReportURL() string {
 
 // aboutSettings is Settings → Diagnostics and about.
 func (a *app) aboutSettings(c *ui.Context) {
-	t := c.Theme()
 	a.loadSysInfo()
-	settingGroup(c, i18n.T("About"), func() {
+	settingGroup(c, "", func() { a.aboutBlocks(c) })
+	a.softwareUpdateSettings(c) // thread #50
+}
+
+// aboutBlocks are About's versions and links, then the licence notes.
+func (a *app) aboutBlocks(c *ui.Context) {
+	t := c.Theme()
+	settingBlock(c, "about-block", func() {
 		ver := a.version
 		if ver == "" {
 			ver = i18n.T("development build")
@@ -419,15 +425,15 @@ func (a *app) aboutSettings(c *ui.Context) {
 			ui.Text(c, i18n.T("Third-party licences")).TextColor(t.TextMuted)
 			ui.Link(c, thirdPartyNotices, a.noticesURL)
 		})
-		ui.Text(c, i18n.T("AudioSmith runs every model on this Mac. Each model keeps its own licence: see Settings → Models & network.")).
-			FontSize(px(t, 12)).TextColor(t.TextMuted)
+	})
+	settingBlock(c, "about-notes", func() {
+		caption(c, i18n.T("AudioSmith runs every model on this Mac. Each model keeps its own licence: see Settings → Models & network."))
 		// 0.3: the icons' attribution (CC BY 4.0; NOTICE has it too).
 		ui.Row(c.Key("about-icons")).Gap(px(t, 6)).AlignItems(ui.Center).Wrap().Children(func() {
 			caption(c, i18n.T("Icons: Solar by 480 Design, under CC BY 4.0 (@iconify-json/solar %s).", icons.SolarVersion))
 			ui.Link(c, i18n.T("Licence"), "https://creativecommons.org/licenses/by/4.0/").FontSize(px(t, fsCaption))
 		})
 	})
-	a.softwareUpdateSettings(c) // thread #50
 }
 
 // diagnosticsSettings is Settings → Advanced's foot: the engine (its
@@ -435,7 +441,6 @@ func (a *app) aboutSettings(c *ui.Context) {
 // and reporting a problem.
 func (a *app) diagnosticsSettings(c *ui.Context) {
 	a.revealAnchor(c, "diagnostics")
-	t := c.Theme()
 	eng := a.engineSummary()
 	settingGroup(c, i18n.T("Diagnostics"), func() {
 		state := map[engineState]string{engineStarting: i18n.T("Starting"), engineReady: i18n.T("Ready"), engineFailed: i18n.T("Stopped")}[eng.State]
@@ -470,22 +475,34 @@ func (a *app) diagnosticsSettings(c *ui.Context) {
 				a.runSelfCheck()
 			}
 		})
-		for _, ch := range a.checks {
-			ui.Row(c.Key("check-" + ch.id)).Gap(px(t, 8)).AlignItems(ui.Start).Children(func() {
-				mark, col := icons.CheckCircle, t.Success
-				switch ch.status {
-				case "warn":
-					mark, col = icons.DangerTriangle, t.Warning
-				case "fail":
-					mark, col = icons.CloseCircle, t.Danger
-				}
-				ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0).Margin(px(t, 2), 0, 0)
-				ui.Text(c, ch.title).Width(px(t, 150))
-				ui.Text(c, ch.detail).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).MinWidth(0)
-			})
+		if len(a.checks) > 0 {
+			settingFoot(c, "about-checks", func() { a.selfCheckList(c) })
 		}
-
 	})
+	a.reportSettings(c)
+}
+
+// selfCheckList is the self-check's results, a line each.
+func (a *app) selfCheckList(c *ui.Context) {
+	t := c.Theme()
+	for _, ch := range a.checks {
+		ui.Row(c.Key("check-" + ch.id)).Gap(px(t, 8)).AlignItems(ui.Start).Children(func() {
+			mark, col := icons.CheckCircle, t.Success
+			switch ch.status {
+			case "warn":
+				mark, col = icons.DangerTriangle, t.Warning
+			case "fail":
+				mark, col = icons.CloseCircle, t.Danger
+			}
+			ui.Icon(c, mark.Linear).Size(px(t, 14), px(t, 14)).TextColor(col).Shrink(0).Margin(px(t, 2), 0, 0)
+			ui.Text(c, ch.title).Width(px(t, 150))
+			ui.Text(c, ch.detail).FontSize(px(t, 12)).TextColor(t.TextMuted).Grow(1).MinWidth(0)
+		})
+	}
+}
+
+// reportSettings is Advanced's Report a problem group.
+func (a *app) reportSettings(c *ui.Context) {
 	settingGroup(c, i18n.T("Report a problem"), func() {
 		settingRow(c, "about-copy", i18n.T("Copy diagnostics"), i18n.T("Versions, the machine, folders and the self-check: no text, audio or keys."), func() {
 			if ui.Button(c.Key("about-copy"), i18n.T("Copy")).Clicked() {
