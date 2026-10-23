@@ -13,7 +13,8 @@ import (
 // update channel (thread #52): a beta copy (Beta badge, switch on, the
 // note that turning it off never goes back) and a release copy, in
 // English and Chinese, light and dark, at 1100 wide and tall enough for
-// the whole section:
+// the whole section; and a copy built on the Mac, which cannot update
+// itself:
 //
 //	AUDIOSMITH_SNAPSHOTS=/tmp/beta go test -run TestSnapshotsBeta .
 func TestSnapshotsBeta(t *testing.T) { runSnapshots(t, snapshotsBeta) }
@@ -37,6 +38,30 @@ func snapshotsBeta(t *testing.T, out string) {
 			}
 			s.save(e.tt, name)
 		}
+	}
+	// A copy built on the Mac (no updates: the note at the top, the
+	// switches off and disabled) at about the width the user's window
+	// had (thread #97), in English and Chinese, and in the smallest
+	// window at 125 %.
+	for _, run := range b1Runs {
+		switch {
+		case run.size == "1100" && !run.dark:
+			run.size, run.w = "1000", 1000
+		case run.size == "min125" && !run.dark:
+		default:
+			continue
+		}
+		run.h = 900
+		s := &b1Shooter{t: t, out: out, run: run}
+		i18n.SetLocale("en")
+		e := newUpdatesApp(t, "0.4.0-beta.6", false)
+		s.setup(e.a, e.tt)
+		e.a.navigate("/settings/about")
+		e.tt.Frame()
+		e.tt.Frame()
+		// Down to Software updates, at the foot of the page.
+		e.tt.Scroll(float32(run.w)*0.6, float32(run.h)/3, 0, 4000)
+		s.save(e.tt, "local-settings-about")
 	}
 }
 

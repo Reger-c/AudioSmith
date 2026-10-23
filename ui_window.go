@@ -254,14 +254,23 @@ func settingLine(c *ui.Context) {
 // col: the zero colour for the secondary grey), the controls at the right
 // edge, or under the name when both do not fit; selectable notes are
 // states to copy (a path, a version).
+//
+// The row of controls may shrink below its widest control (MinWidth(0)):
+// a picker with a long choice (Models & network's mirror) then shrinks
+// and ends in "…" instead of running off the window. It never reaches
+// into the text: the text takes the room the controls leave and wraps in
+// it (TestSettingRowsControlsBesideText).
 func groupRow(c *ui.Context, key, title, note string, col ui.Color, selectable bool, control func()) {
 	t := c.Theme()
 	settingLine(c)
+	var text, ctrl ui.Element
+	var texts [2]ui.Element
 	ui.Row(c.Key(key)).Wrap().GapX(px(t, groupCtrlGap)).GapY(px(t, groupWrapGap)).AlignItems(ui.Center).MinHeight(px(t, 44)).Padding(px(t, groupRowPadY), 0).Children(func() {
-		ui.Column(c).Grow(1).Basis(px(t, 160)).MinWidth(px(t, 140)).Gap(px(t, 2)).Children(func() {
-			ui.Text(c, title).MinWidth(0)
+		text = ui.Column(c).Grow(1).Basis(px(t, 160)).MinWidth(px(t, 140)).Gap(px(t, 2)).Children(func() {
+			texts[0] = ui.Text(c, title).MinWidth(0)
 			if note != "" {
 				n := caption(c, note).MinWidth(0)
+				texts[1] = n
 				if selectable {
 					n.Selectable()
 				}
@@ -270,9 +279,17 @@ func groupRow(c *ui.Context, key, title, note string, col ui.Color, selectable b
 				}
 			}
 		})
-		ui.Row(c).Wrap().Gap(px(t, sp2)).AlignItems(ui.Center).Justify(ui.End).Shrink(1).MinWidth(0).Children(control)
+		ctrl = ui.Row(c).Wrap().Gap(px(t, sp2)).AlignItems(ui.Center).Justify(ui.End).Shrink(1).MinWidth(0).Children(control)
 	})
+	if groupRowLaid != nil {
+		groupRowLaid(key, text, ctrl, texts)
+	}
 }
+
+// groupRowLaid, when set (tests), sees each group row's text column, row
+// of controls and texts (title, note: the zero Element for none) as they
+// are built: their Bounds are the last frame's.
+var groupRowLaid func(key string, text, ctrl ui.Element, texts [2]ui.Element)
 
 // settingRowState is settingRowNote whose line is a state in its colour
 // (a permission missing, in Warning).

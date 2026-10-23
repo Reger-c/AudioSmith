@@ -291,7 +291,10 @@ func TestSoftwareUpdateSettings(t *testing.T) {
 	e.a.navigate("/settings/about")
 	e.tt.Frame()
 	e.tt.Frame()
-	e.has(t, "Software updates", "Development builds and copies built on this Mac don't update themselves; copies from actnow.dev do.")
+	e.has(t, "Software updates", "This copy was built on this Mac and can't update itself, so the options below are off. Copies downloaded from actnow.dev update themselves.", "Download the latest version from actnow.dev")
+	if e.tt.HasText("Development builds and copies built on this Mac don't update themselves; copies from actnow.dev do.") {
+		t.Error("the reason is said twice")
+	}
 	e.click(t, "Check for updates automatically")
 	if e.a.prefs.Updates.AutoCheck != nil {
 		t.Error("a disabled switch turned automatic checks off")

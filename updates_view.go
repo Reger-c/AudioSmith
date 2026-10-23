@@ -209,13 +209,22 @@ func (a *app) updatePanelFooter(c *ui.Context) {
 // softwareUpdateSettings is the Software updates section of Settings →
 // Diagnostics and about: when AudioSmith last checked, Check for
 // Updates…, checking automatically, installing without asking, the beta
-// channel and the changelog. Builds that can't update themselves show the
-// switches off and disabled.
+// channel and the changelog. Builds that can't update themselves (built
+// on the Mac, ad hoc) say so at the top, with the download page, and show
+// the switches off and disabled; Check for Updates… stays: its panel says
+// the same and links to the download page (as the app menu's item does).
 func (a *app) softwareUpdateSettings(c *ui.Context) {
 	u := a.updates
 	st := u.st
 	on := u.enabled()
 	settingGroup(c, i18n.T("Software updates"), func() {
+		if !on {
+			settingBlock(c, "about-update-off", func() {
+				t := c.Theme()
+				caption(c, i18n.T("This copy was built on this Mac and can't update itself, so the options below are off. Copies downloaded from actnow.dev update themselves.")).TextColor(tok(t).Text)
+				ui.Link(c, i18n.T("Download the latest version from actnow.dev"), downloadURL).FontSize(px(t, fsCaption))
+			})
+		}
 		if st.Phase == akup.Ready {
 			settingRowNote(c, "about-relaunch", i18n.T("Update installed"), i18n.T("The new version runs once AudioSmith restarts."), func() {
 				if primaryButton(c.Key("about-relaunch"), i18n.T("Restart AudioSmith")).Clicked() {
@@ -227,9 +236,9 @@ func (a *app) softwareUpdateSettings(c *ui.Context) {
 		if st.CheckedAt.After(last) {
 			last = st.CheckedAt
 		}
-		note := i18n.T("Development builds and copies built on this Mac don't update themselves; copies from actnow.dev do.")
+		note := ""
 		switch {
-		case !on:
+		case !on: // the note at the top says why
 		case st.Phase == akup.Checking:
 			note = i18n.T("Checking for updates…")
 		case st.Phase == akup.Available && st.Release != nil:
