@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hehehai/AudioSmith/internal/dsp"
 	"github.com/hehehai/AudioSmith/internal/dsp/analysis"
@@ -74,10 +75,34 @@ func (s *Dubs) fetch(ctx context.Context, sc *stageCtx) error {
 	if c, ok := cookies.LoadAndDelete(p.ID); ok {
 		o.Cookies = c.(string)
 	}
-	video, captions, err := y.Download(ctx, p.Source.URL, filepath.Join(sc.dir(), "download"), o, func(f float64) {
-		sc.progress("downloading", f, "")
+	if info.Title != "" {
+		// Name the dub, its card and its source after the video while it
+		// downloads.
+		sc.save(ctx, func(p *dub.Project) {
+			if p.Title == "" || p.Title == p.Source.URL {
+				p.Title = info.Title
+			}
+			if p.Source.Name == "" || p.Source.Name == p.Source.URL {
+				p.Source.Name = info.Title
+			}
+		})
+	}
+	dir := filepath.Join(sc.dir(), "download")
+	var last time.Time
+	var lastPhase dub.DownloadPhase
+	video, captions, err := y.Download(ctx, p.Source.URL, dir, o, func(d dub.DownloadProgress) {
+		// A few reports a second; a new phase at once.
+		if now := time.Now(); d.Phase != lastPhase || now.Sub(last) >= 250*time.Millisecond {
+			last, lastPhase = now, d.Phase
+			if sc.report != nil {
+				sc.report(FetchProgress(d))
+			}
+		}
 	})
 	if err != nil {
+		if ctx.Err() != nil {
+			os.RemoveAll(dir) // what was fetched so far
+		}
 		return urlErr(err)
 	}
 	fi, _ := os.Stat(video)
@@ -98,6 +123,27 @@ func (s *Dubs) fetch(ctx context.Context, sc *stageCtx) error {
 		}
 		p.AutoRetarget() // a defaulted target is not the spoken language
 	})
+}
+
+// Stages of a dub.fetch job's progress.
+const (
+	FetchDownloading = "downloading"
+	FetchMerging     = "merging"
+	FetchFinishing   = "finishing"
+)
+
+// FetchProgress is a URL download's progress as its job's: Bytes and
+// TotalBytes of the whole download, ETA, and the fraction (-1 while not
+// known, or merging).
+func FetchProgress(d dub.DownloadProgress) jobs.Progress {
+	pr := jobs.Progress{Stage: FetchDownloading, Fraction: d.Fraction, Bytes: d.Done, TotalBytes: d.Total, ETA: d.ETA}
+	switch d.Phase {
+	case dub.DownloadMerging:
+		pr = jobs.Progress{Stage: FetchMerging, Fraction: -1}
+	case dub.DownloadFinishing:
+		pr = jobs.Progress{Stage: FetchFinishing, Fraction: -1}
+	}
+	return pr
 }
 
 func urlErr(err error) error {

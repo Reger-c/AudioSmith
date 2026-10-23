@@ -1,0 +1,6 @@
+ASI 0 NA "A live-to-file clip"
+ASP downloading 1024 NA NA 20480.5 NA dl/x/source.mp4
+ASP downloading 524288 NA NA 262144.0 NA dl/x/source.mp4
+ASP downloading 2097152 NA NA 524288.0 NA dl/x/source.mp4
+ASP finished 3145728 NA NA NA NA dl/x/source.mp4
+ASF /tmp/dl/x/source.mp4

@@ -1,0 +1,7 @@
+yt-dlp 2026.08.19 (yt-dlp_macos) output with Download's arguments
+(progressArgs), recorded on a Mac on 2026-10-23 from
+https://www.youtube.com/watch?v=jNQXAC9IVRw ("Me at the zoo"):
+single.txt with -f 133, two-streams.txt with the merging format and
+--write-subs (the captions come first). unknown-size.txt is written by
+hand: a format without a size (no total, no estimate, none announced).
+Paths are shortened to /tmp.
