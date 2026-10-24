@@ -171,7 +171,8 @@ func TestHoldCancel(t *testing.T) {
 	}
 	g.end(next, "", nil)
 
-	// The held context ending (the caller's) frees the slot without release.
+	// #101 M1: the held context ending (the caller's) does not free the
+	// slot while the work under it may still run: release does.
 	cctx, cancel = context.WithCancel(ctx)
 	r := waitHold(t, holdAsync(cctx, s, LaneGPU, PriorityInteractive))
 	if r.err != nil {
@@ -180,14 +181,15 @@ func TestHoldCancel(t *testing.T) {
 	after, _ := s.Submit(ctx, spec("after", LaneGPU, PriorityNormal))
 	g.none(t)
 	cancel()
-	if j := g.next(t); j.ID != after {
-		t.Fatalf("ran %s", j.Title)
-	}
 	if r.ctx.Err() == nil {
 		t.Error("held context still alive")
 	}
-	g.end(after, "", nil)
+	g.none(t)
 	r.release()
+	if j := g.next(t); j.ID != after {
+		t.Fatalf("ran %s", j.Title)
+	}
+	g.end(after, "", nil)
 
 	// Already cancelled: no wait.
 	if _, _, err := s.Hold(cctx, LaneGPU, PriorityInteractive); !errors.Is(err, context.Canceled) {
@@ -277,4 +279,32 @@ func TestHoldClose(t *testing.T) {
 		t.Errorf("hold after close: %v", err)
 	}
 	g.none(t)
+}
+
+// #101 M1: a hold whose context ended and that is never released frees
+// its slot after HoldGrace, not before.
+func TestHoldGraceWithoutRelease(t *testing.T) {
+	rec := newRecorder()
+	s := New(Options{Store: NewMemStore(), Publish: rec.publish, HoldGrace: 150 * time.Millisecond, Logf: t.Logf})
+	g := newGate()
+	s.Register("work", g)
+	t.Cleanup(func() { s.Close() })
+	ctx := context.Background()
+	s.Start(ctx)
+	cctx, cancel := context.WithCancel(ctx)
+	r := waitHold(t, holdAsync(cctx, s, LaneGPU, PriorityInteractive))
+	if r.err != nil {
+		t.Fatal(r.err)
+	}
+	after, _ := s.Submit(ctx, spec("after", LaneGPU, PriorityNormal))
+	cancel()
+	start := time.Now()
+	if j := g.next(t); j.ID != after {
+		t.Fatalf("ran %s", j.Title)
+	}
+	if d := time.Since(start); d < 100*time.Millisecond {
+		t.Errorf("the slot came back %s after the context ended, before the grace", d)
+	}
+	g.end(after, "", nil)
+	r.release() // late: a no-op
 }

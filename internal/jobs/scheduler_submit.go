@@ -64,7 +64,7 @@ func (s *Sched) SubmitGraph(ctx context.Context, nodes []Node) (map[string]strin
 		return nil, ErrClosed
 	}
 	if len(unknown) > 0 {
-		if err := s.lookupDone(ctx); err != nil {
+		if err := s.lookupDone(ctx, unknown); err != nil {
 			return nil, err
 		}
 		s.mu.Lock()

@@ -15,15 +15,27 @@ func (s *Sched) Cancel(ctx context.Context, id string) error {
 	s.mu.Lock()
 	e, ok := s.jobs[id]
 	if !ok {
-		_, isDone := s.done[id]
+		st, isDone := s.done[id]
 		s.mu.Unlock()
-		if isDone {
+		if isDone && st != StateInterrupted {
 			return nil
 		}
-		if _, err := s.load(ctx, id); err != nil {
+		j, err := s.load(ctx, id)
+		if err != nil {
 			return err
 		}
-		return nil // finished in an earlier run
+		if j.State != StateInterrupted {
+			return nil // finished in an earlier run
+		}
+		// Interrupted, and no longer in memory: it becomes Cancelled.
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if e, ok = s.jobs[id]; !ok {
+			e = &entry{job: j, base: j.Attempt}
+			s.jobs[id] = e
+		}
+		s.cancelLocked(e)
+		return nil
 	}
 	defer s.mu.Unlock()
 	s.cancelLocked(e)
@@ -76,7 +88,7 @@ func (s *Sched) Retry(ctx context.Context, id string) error {
 	unknown := s.unknownDeps([]*entry{e})
 	s.mu.Unlock()
 	if len(unknown) > 0 {
-		if err := s.lookupDone(ctx); err != nil {
+		if err := s.lookupDone(ctx, unknown); err != nil {
 			return err
 		}
 	}
@@ -109,8 +121,19 @@ func (s *Sched) Retry(ctx context.Context, id string) error {
 	return nil
 }
 
-// load reads one job from the store (one not in memory).
+// load reads one job from the store (one not in memory): by id when the
+// store can (JobLoader), else by reading every job.
 func (s *Sched) load(ctx context.Context, id string) (Job, error) {
+	if l, ok := s.opts.Store.(JobLoader); ok {
+		j, found, err := l.LoadJob(ctx, id)
+		if err != nil {
+			return Job{}, err
+		}
+		if !found {
+			return Job{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+		}
+		return j, nil
+	}
 	all, err := s.opts.Store.LoadJobs(ctx, Filter{States: []State{
 		StateWaiting, StateQueued, StateRunning, StateSucceeded, StateFailed, StateCancelled, StateInterrupted}})
 	if err != nil {

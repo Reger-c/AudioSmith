@@ -496,3 +496,21 @@ func TestConcurrentUse(t *testing.T) {
 		t.Errorf("%d takes", len(l))
 	}
 }
+
+// #101 L2: LoadJob reads one job by id, whatever its state.
+func TestLoadJob(t *testing.T) {
+	s := openTest(t, t.TempDir())
+	js := s.Jobs().(jobs.JobLoader)
+	j := jobs.Job{ID: "j1", Spec: jobs.Spec{Kind: "k", Lane: jobs.LaneCPU, After: []string{"j0"}}, State: jobs.StateSucceeded,
+		Created: time.UnixMilli(1000), Finished: time.UnixMilli(2000), Result: json.RawMessage(`{}`)}
+	if err := s.Jobs().SaveJob(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := js.LoadJob(ctx, "j1")
+	if err != nil || !ok || got.State != jobs.StateSucceeded || !slices.Equal(got.After, []string{"j0"}) {
+		t.Fatalf("LoadJob: %+v %v %v", got, ok, err)
+	}
+	if _, ok, err := js.LoadJob(ctx, "none"); ok || err != nil {
+		t.Errorf("LoadJob of an unknown id: %v %v", ok, err)
+	}
+}

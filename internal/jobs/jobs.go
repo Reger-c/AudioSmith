@@ -208,6 +208,13 @@ type Store interface {
 	DeleteJobs(ctx context.Context, finishedBefore time.Time) error
 }
 
+// JobLoader is implemented by stores that can read one job by id (the
+// SQLite store, MemStore); the scheduler then looks up jobs that are no
+// longer in memory without reading the whole table.
+type JobLoader interface {
+	LoadJob(ctx context.Context, id string) (j Job, found bool, err error)
+}
+
 // LaneSlots is the default concurrency of each lane.
 var LaneSlots = map[Lane]int{
 	LaneGPU:    1,

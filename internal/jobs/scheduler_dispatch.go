@@ -26,7 +26,8 @@ func (s *Sched) depState(id string) (State, bool) {
 
 // evaluate settles a waiting job against its dependencies: queued when
 // all succeeded, failed or cancelled (and so its dependents) when one
-// failed or was cancelled. Caller holds mu.
+// failed, was interrupted (it will not run again on its own, so this job
+// would wait forever) or was cancelled. Caller holds mu.
 func (s *Sched) evaluate(e *entry, publish bool) {
 	if e.job.State != StateWaiting {
 		return
@@ -36,12 +37,19 @@ func (s *Sched) evaluate(e *entry, publish bool) {
 		st, ok := s.depState(d)
 		switch {
 		case !ok:
+			s.unlink(e)
 			s.finishLocked(e, StateFailed, &Error{Code: CodeDependency, Message: "A job it depends on is gone: " + d})
 			return
 		case st == StateFailed:
+			s.unlink(e)
 			s.finishLocked(e, StateFailed, &Error{Code: CodeDependency, Message: "A job it depends on failed"})
 			return
+		case st == StateInterrupted:
+			s.unlink(e)
+			s.finishLocked(e, StateFailed, &Error{Code: CodeDependency, Message: "A job it depends on was interrupted"})
+			return
 		case st == StateCancelled:
+			s.unlink(e)
 			s.finishLocked(e, StateCancelled, &Error{Code: CodeCancelled, Message: "A job it depends on was cancelled"})
 			return
 		case st != StateSucceeded:
@@ -49,11 +57,25 @@ func (s *Sched) evaluate(e *entry, publish bool) {
 		}
 	}
 	if ready {
+		s.unlink(e)
 		e.job.State = StateQueued
 		if publish {
 			s.out(e, nil, true)
 		}
 		s.poke()
+	}
+}
+
+// unlink drops e from the dependents of its dependencies: once it leaves
+// Waiting they have nothing more to tell it. Caller holds mu.
+func (s *Sched) unlink(e *entry) {
+	for _, d := range e.job.After {
+		l := slices.DeleteFunc(s.dependents[d], func(id string) bool { return id == e.job.ID })
+		if len(l) == 0 {
+			delete(s.dependents, d)
+		} else {
+			s.dependents[d] = l
+		}
 	}
 }
 
@@ -70,19 +92,26 @@ func (s *Sched) finishLocked(e *entry, st State, jerr *Error) {
 // from memory. Caller holds mu.
 func (s *Sched) retire(e *entry) {
 	s.done[e.job.ID] = e.job.State
+	if i := slices.Index(s.finished, e.job.ID); i >= 0 { // interrupted, then cancelled
+		s.finished = slices.Delete(s.finished, i, i+1)
+	}
 	s.finished = append(s.finished, e.job.ID)
 	for len(s.finished) > s.opts.KeepFinished {
 		id := s.finished[0]
 		s.finished = s.finished[1:]
-		if old, ok := s.jobs[id]; ok && old.job.State.Terminal() {
+		if old, ok := s.jobs[id]; ok && ended(old.job.State) {
 			delete(s.jobs, id)
 		}
 	}
 }
 
+// ended reports whether a job in state st will not run again without a
+// Retry: terminal, or interrupted.
+func ended(st State) bool { return st.Terminal() || st == StateInterrupted }
+
 // settleDependents re-evaluates the waiting jobs that depend on id. Caller holds mu.
 func (s *Sched) settleDependents(id string) {
-	for _, d := range s.dependents[id] {
+	for _, d := range slices.Clone(s.dependents[id]) {
 		if e, ok := s.jobs[d]; ok {
 			s.evaluate(e, true)
 		}
@@ -90,6 +119,15 @@ func (s *Sched) settleDependents(id string) {
 	if st, ok := s.depState(id); ok && st.Terminal() {
 		delete(s.dependents, id)
 	}
+}
+
+// interruptLocked ends a run as Interrupted: Retry may re-queue it, and
+// the jobs waiting on it fail (they would wait forever). Caller holds mu.
+func (s *Sched) interruptLocked(e *entry, jerr *Error) {
+	e.job.State, e.job.Err, e.job.Finished = StateInterrupted, jerr, s.opts.Now()
+	s.retire(e)
+	s.out(e, nil, true)
+	s.settleDependents(e.job.ID)
 }
 
 // poke wakes the dispatcher.
@@ -282,8 +320,7 @@ func (s *Sched) finishRun(e *entry, run int, res json.RawMessage, err, cause err
 			return
 		}
 		if jerr.Code == CodeInterrupted {
-			e.job.State, e.job.Err, e.job.Finished = StateInterrupted, jerr, now
-			s.out(e, nil, true)
+			s.interruptLocked(e, jerr)
 		} else {
 			s.finishLocked(e, StateFailed, jerr)
 		}

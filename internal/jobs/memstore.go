@@ -17,7 +17,10 @@ type MemStore struct {
 	saves int
 }
 
-var _ Store = (*MemStore)(nil)
+var (
+	_ Store     = (*MemStore)(nil)
+	_ JobLoader = (*MemStore)(nil)
+)
 
 // NewMemStore returns an empty store.
 func NewMemStore() *MemStore { return &MemStore{jobs: map[string]Job{}} }
@@ -52,6 +55,19 @@ func (m *MemStore) LoadJobs(ctx context.Context, f Filter) ([]Job, error) {
 		out = out[:f.Limit]
 	}
 	return out, nil
+}
+
+func (m *MemStore) LoadJob(ctx context.Context, id string) (Job, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return Job{}, false, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	j, ok := m.jobs[id]
+	if !ok {
+		return Job{}, false, nil
+	}
+	return cloneJob(j), true, nil
 }
 
 func (m *MemStore) DeleteJobs(ctx context.Context, finishedBefore time.Time) error {

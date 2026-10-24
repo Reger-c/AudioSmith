@@ -16,7 +16,10 @@ import (
 // changes are logged to job_events by triggers (see the migration).
 type jobRepo struct{ db *sqlite.DB }
 
-var _ jobs.Store = (*jobRepo)(nil)
+var (
+	_ jobs.Store     = (*jobRepo)(nil)
+	_ jobs.JobLoader = (*jobRepo)(nil)
+)
 
 // nonTerminal are the states Filter{States: nil} selects.
 var nonTerminal = []jobs.State{jobs.StateWaiting, jobs.StateQueued, jobs.StateRunning, jobs.StateInterrupted}
@@ -178,6 +181,22 @@ func (r *jobRepo) LoadJobs(ctx context.Context, f jobs.Filter) ([]jobs.Job, erro
 		out = append(out, j)
 	}
 	return out, nil
+}
+
+// LoadJob reads one job by id, whatever its state.
+func (r *jobRepo) LoadJob(ctx context.Context, id string) (jobs.Job, bool, error) {
+	rows, err := r.db.Query(ctx, `SELECT `+jobColumns+` FROM jobs j WHERE j.id = ?`, id)
+	if err != nil {
+		return jobs.Job{}, false, wrap("jobs", err)
+	}
+	if len(rows.Values) == 0 {
+		return jobs.Job{}, false, nil
+	}
+	j, err := scanJob(rows.Values[0])
+	if err != nil {
+		return jobs.Job{}, false, err
+	}
+	return j, true, nil
 }
 
 // DeleteJobs removes terminal jobs that finished before t, with their

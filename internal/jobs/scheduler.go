@@ -58,7 +58,16 @@ type Options struct {
 	// KeepFinished bounds the finished jobs kept in memory for Get/List
 	// (default 200); older ones are read back from the Store.
 	KeepFinished int
-	Logf         func(format string, args ...any)
+	// CloseTimeout bounds how long Close waits for executors to return
+	// after cancelling them (default 4 s; negative: no bound). Jobs whose
+	// executor is still running then are recorded Interrupted
+	// (CodeShutdown) and left behind.
+	CloseTimeout time.Duration
+	// HoldGrace is how long a lane hold keeps its slot after its context
+	// ended without release (default 10 s): the work done under it, such
+	// as an engine request being cancelled, may still run.
+	HoldGrace time.Duration
+	Logf      func(format string, args ...any)
 }
 
 // Sched implements Scheduler. Make it with New.
@@ -142,6 +151,12 @@ func New(opts Options) *Sched {
 	if opts.KeepFinished == 0 {
 		opts.KeepFinished = 200
 	}
+	if opts.CloseTimeout == 0 {
+		opts.CloseTimeout = 4 * time.Second
+	}
+	if opts.HoldGrace == 0 {
+		opts.HoldGrace = 10 * time.Second
+	}
 	if opts.Logf == nil {
 		opts.Logf = log.Printf
 	}
@@ -211,19 +226,22 @@ func (s *Sched) Start(ctx context.Context) error {
 			e.job.Err = &Error{Code: CodeInterrupted, Message: "AudioSmith stopped while the job ran"}
 		}
 		s.jobs[j.ID] = e
-		for _, d := range j.After {
-			s.dependents[d] = append(s.dependents[d], j.ID)
-		}
 		if e.job.State == StateWaiting {
+			for _, d := range j.After {
+				s.dependents[d] = append(s.dependents[d], j.ID)
+			}
 			waiting = append(waiting, e)
 		}
 		s.out(e, nil, changed)
+		if e.job.State == StateInterrupted {
+			s.retire(e) // kept for Retry, dropped from memory like finished jobs
+		}
 	}
 	unknown := s.unknownDeps(waiting)
 	s.mu.Unlock()
 
 	if len(unknown) > 0 {
-		if err := s.lookupDone(ctx); err != nil {
+		if err := s.lookupDone(ctx, unknown); err != nil {
 			s.opts.Logf("jobs: dependencies: %v", err)
 		}
 	}
@@ -257,12 +275,27 @@ func (s *Sched) unknownDeps(es []*entry) []string {
 	return out
 }
 
-// lookupDone reads the states of every finished job from the store into
-// s.done (the dependencies of jobs from an earlier run). Slow path.
-func (s *Sched) lookupDone(ctx context.Context) error {
-	old, err := s.opts.Store.LoadJobs(ctx, Filter{States: []State{StateSucceeded, StateFailed, StateCancelled}})
-	if err != nil {
-		return err
+// lookupDone reads the states of the finished jobs ids (the dependencies
+// of jobs from an earlier run) from the store into s.done: one by one
+// when the store can (JobLoader), else every finished job. Slow path.
+func (s *Sched) lookupDone(ctx context.Context, ids []string) error {
+	var old []Job
+	if l, ok := s.opts.Store.(JobLoader); ok {
+		for _, id := range ids {
+			j, found, err := l.LoadJob(ctx, id)
+			if err != nil {
+				return err
+			}
+			if found && ended(j.State) {
+				old = append(old, j)
+			}
+		}
+	} else {
+		all, err := s.opts.Store.LoadJobs(ctx, Filter{States: []State{StateSucceeded, StateFailed, StateCancelled, StateInterrupted}})
+		if err != nil {
+			return err
+		}
+		old = all
 	}
 	s.mu.Lock()
 	for _, j := range old {
@@ -276,7 +309,10 @@ func (s *Sched) lookupDone(ctx context.Context) error {
 
 // Close stops dispatching, cancels the running jobs (they become
 // Interrupted with CodeShutdown), waits for their executors, and returns
-// once every update is saved and published.
+// once every update is saved and published. It never waits much longer
+// than Options.CloseTimeout: an executor that ignores its context is left
+// running (its job is recorded Interrupted and its late report dropped),
+// and an outbox stuck on the store is abandoned with an error.
 func (s *Sched) Close() error {
 	s.mu.Lock()
 	if s.closed {
@@ -297,17 +333,71 @@ func (s *Sched) Close() error {
 		s.timer.Stop()
 	}
 	s.mu.Unlock()
-	s.executors.Wait()
+	limit := s.opts.CloseTimeout
+	deadline := time.Now().Add(limit)
+	if !waitFor(s.executors.Wait, limit) {
+		s.abandonRunning()
+	}
 	s.stopRoot()
 	if started {
-		<-s.loopDone
+		<-s.loopDone // the loop only waits for mu: quick once root is done
 	}
 	s.outMu.Lock()
 	s.outStop = true
 	s.outCond.Broadcast()
 	s.outMu.Unlock()
-	<-s.outDone
-	return nil
+	if limit < 0 {
+		<-s.outDone
+		return nil
+	}
+	select {
+	case <-s.outDone:
+		return nil
+	case <-time.After(max(time.Until(deadline), 0) + time.Second):
+		return errors.New("jobs: closing: the store did not take the last updates in time")
+	}
+}
+
+// abandonRunning records the jobs whose executors did not return within
+// CloseTimeout as Interrupted (CodeShutdown, so Idempotent ones re-run at
+// the next Start) and drops whatever those executors report later.
+func (s *Sched) abandonRunning() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range s.jobs {
+		if e.job.State != StateRunning {
+			continue
+		}
+		e.run++ // the executor's finishRun and reports are stale now
+		s.running[e.job.Lane]--
+		e.cancel = nil
+		e.job.State, e.job.Finished = StateInterrupted, s.opts.Now()
+		e.job.Err = &Error{Code: CodeShutdown, Message: "AudioSmith quit while the job ran (it did not stop in time)"}
+		s.opts.Logf("jobs: %s (%s) did not stop within %s of quitting; left behind", e.job.ID, e.job.Kind, s.opts.CloseTimeout)
+		s.out(e, nil, true)
+	}
+}
+
+// waitFor runs wait and reports whether it returned within d (d < 0: it
+// waits for it). A wait that does not return keeps its goroutine.
+func waitFor(wait func(), d time.Duration) bool {
+	if d < 0 {
+		wait()
+		return true
+	}
+	done := make(chan struct{})
+	go func() {
+		wait()
+		close(done)
+	}()
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-done:
+		return true
+	case <-t.C:
+		return false
+	}
 }
 
 // Flush waits until every change so far is saved and published.

@@ -23,8 +23,9 @@ import (
 // Holder is implemented by schedulers that can hold a lane slot (Sched).
 type Holder interface {
 	// Hold waits for a slot of lane, queued at prio among the lane's jobs,
-	// and keeps it until release is called or the returned context ends
-	// (it ends with ctx, and when the scheduler closes). The returned
+	// and keeps it until release is called, or until Options.HoldGrace
+	// after the returned context ended (it ends with ctx, and when the
+	// scheduler closes) without release. The returned
 	// context holds lane (Holds). If ctx already holds lane, Hold returns
 	// ctx and a no-op release at once. While it waits, ctx ending returns
 	// ctx's error; the scheduler closing returns ErrClosed.
@@ -98,10 +99,25 @@ func (s *Sched) Hold(ctx context.Context, lane Lane, prio Priority) (context.Con
 		}
 		return nil, nil, ErrClosed
 	}
-	stop := context.AfterFunc(hctx, release) // a context that ends frees the slot too
+	// A context that ends frees the slot too, but only after HoldGrace:
+	// the work under it (an engine request asked to cancel) may run on
+	// until it confirms, and the caller's release frees it then.
+	var late *time.Timer
+	stop := context.AfterFunc(hctx, func() {
+		s.mu.Lock()
+		if !h.done {
+			late = time.AfterFunc(s.opts.HoldGrace, release)
+		}
+		s.mu.Unlock()
+	})
 	return hctx, func() {
 		stop()
 		release()
+		s.mu.Lock()
+		if late != nil {
+			late.Stop()
+		}
+		s.mu.Unlock()
 		cancel(nil)
 	}, nil
 }
