@@ -199,6 +199,9 @@ type renderer struct {
 	logf      func(string, ...any)
 	// cacheMax caps the chunk cache, in bytes.
 	cacheMax int64
+	// pruneAt is when pruneCache last walked the cache.
+	pruneMu sync.Mutex
+	pruneAt time.Time
 	// watermark marks finished renders (watermark.go).
 	watermark WatermarkFunc
 	// engine runs the other engine requests of renders (story tracks:
