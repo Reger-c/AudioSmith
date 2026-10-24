@@ -243,6 +243,11 @@ func (a *app) checkOllama() {
 	})
 }
 
+// ollamaHTTP asks the local Ollama, without a proxy. One client: a new
+// Transport per call kept its idle connection open as long as Ollama did
+// (#101 L10).
+var ollamaHTTP = &http.Client{Transport: &http.Transport{Proxy: nil, IdleConnTimeout: 30 * time.Second}}
+
 // ollamaModels lists the models of the Ollama on this Mac (its own API,
 // which answers even before a model is pulled).
 func ollamaModels(ctx context.Context) ([]string, error) {
@@ -252,7 +257,7 @@ func ollamaModels(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := (&http.Client{Transport: &http.Transport{Proxy: nil}}).Do(req)
+	resp, err := ollamaHTTP.Do(req)
 	if err != nil {
 		return nil, err
 	}

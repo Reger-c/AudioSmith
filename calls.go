@@ -369,7 +369,13 @@ func (a *app) callTick() {
 				}
 				done <- live
 			})
-			if !<-done {
+			select {
+			case live := <-done:
+				if !live {
+					return
+				}
+			case <-time.After(10 * time.Second): // the app quit: posts are dropped (#101 L7)
+				a.post(func() { a.callTicker = false })
 				return
 			}
 		}

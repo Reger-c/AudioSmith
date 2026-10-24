@@ -3,6 +3,7 @@ package hub
 // The local cache: status of other tools' downloads, engine copies.
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -117,5 +118,13 @@ func TestStatusInAcrossFolders(t *testing.T) {
 	c := New(Options{CacheDir: from, AlsoIn: []string{to}})
 	if l, _ := c.Status(t.Context(), e); l.State != Downloaded {
 		t.Errorf("client: %+v", l)
+	}
+}
+
+// #101 L10: the clients made per use drop their idle connections.
+func TestHTTPClientIdleTimeout(t *testing.T) {
+	tr, ok := NewHTTPClient("direct", time.Minute).Transport.(*http.Transport)
+	if !ok || tr.IdleConnTimeout <= 0 {
+		t.Fatalf("transport %+v", tr)
 	}
 }

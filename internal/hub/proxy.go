@@ -218,7 +218,11 @@ func NewHTTPClient(mode string, responseHeader time.Duration) *http.Client {
 		TLSHandshakeTimeout:   15 * time.Second,
 		ResponseHeaderTimeout: responseHeader,
 		MaxIdleConnsPerHost:   16,
-		ForceAttemptHTTP2:     true,
+		// Clients are made per use in places: their idle connections
+		// (and goroutines) go after a while, not when the server closes
+		// them (#101 L10).
+		IdleConnTimeout:   90 * time.Second,
+		ForceAttemptHTTP2: true,
 	}}
 }
 
