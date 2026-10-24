@@ -1,4 +1,5 @@
 import AudioSmithProtocol
+import AudioSmithStream
 import AVFoundation
 import Foundation
 @preconcurrency import MLX
@@ -110,64 +111,70 @@ extension MediaWorker {
         let (url, bits) = try outputURL(p.output)
         let dir = try sealDirectory(p.model, p.modelPath)
         let media = try await openMedia(p.input)
-        var native: [Float] = []
-        let (rate, channels) = try readAudio(media, sampleRate: nil, channels: nil) { native.append(contentsOf: $0) }
-        var x16: [Float] = []
-        _ = try readAudio(media, sampleRate: AudioSeal.sampleRate, channels: 1) { x16.append(contentsOf: $0) }
-        guard !native.isEmpty, !x16.isEmpty else { throw EngineError.unsupportedMedia(media.url.path, "it has no audio samples") }
-        let frames = native.count / channels
+        let (rate, channels) = nativeFormat(media)
         let progress = JobProgress(out: out, job: job)
-        progress.audioSeconds = Double(frames) / Double(rate)
+        progress.audioSeconds = media.probe.duration
         let started = Date()
 
-        // The watermark at 16 kHz, window by window (in batches).
+        // The watermark at 16 kHz, window by window (in batches), as the
+        // 16 kHz mix is read, into a temporary file (WatermarkStream.swift).
         let size = 10 * AudioSeal.sampleRate, overlap = AudioSeal.sampleRate
-        var wm16 = [Float](repeating: 0, count: x16.count)
+        let spill = try FloatSpill()
+        defer { spill.remove() }
+        let estimate = max(media.probe.duration * Double(AudioSeal.sampleRate), 1)
         sealLock.lock()
         defer { sealLock.unlock() }
         let model = try audioSeal(dir, out: out, job: job)
+        var count16 = 0
         try using(device: sealDevice) {
-            var first = true
-            for group in batches(x16, size: size, overlap: overlap) {
+            let windows = WindowedWatermark(size: size, overlap: overlap, compute: { group in
                 try Task.checkCancellation()
                 let parts = model.watermark(group.map(\.samples), message: p.message)
-                for (w, part) in zip(group, parts) {
-                    for j in 0 ..< (w.end - w.start) {
-                        let k = w.start + j
-                        // Crossfade the overlap with the previous window.
-                        if !first, j < overlap {
-                            let t = Float(j) / Float(overlap)
-                            wm16[k] = wm16[k] * (1 - t) + part[j] * t
-                        } else {
-                            wm16[k] = part[j]
-                        }
-                    }
-                    first = false
-                    progress.fraction = Double(w.end) / Double(x16.count)
-                }
+                return parts
+            }, sink: { try spill.append($0) }, done: { end in
+                progress.fraction = min(Double(end) / estimate, 1)
                 progress.send("watermarking")
-            }
+            })
+            _ = try readAudio(media, sampleRate: AudioSeal.sampleRate, channels: 1) { try windows.feed($0) }
+            try windows.finish()
+            count16 = windows.count
         }
         MLX.Memory.clearCache()
-        var wm = try resampleMono(wm16, from: AudioSeal.sampleRate, to: rate)
-        if wm.count < frames { wm.append(contentsOf: [Float](repeating: 0, count: frames - wm.count)) }
+        guard count16 > 0 else { throw EngineError.unsupportedMedia(media.url.path, "it has no audio samples") }
 
-        // Added to every channel; the SNR is the mix's power over the watermark's.
+        // Resampled to the input's rate and added to every channel as the
+        // input is read again; the SNR is the mix's power over the watermark's.
+        let wm = try StreamResampler(count: count16, from: AudioSeal.sampleRate, to: rate) { try spill.read($0) }
         var signal = 0.0, noise = 0.0
-        var outSamples = native
-        for f in 0 ..< frames {
-            let d = alpha * wm[f]
-            noise += Double(d * d)
-            for c in 0 ..< channels {
-                let i = f * channels + c
-                signal += Double(native[i] * native[i]) / Double(channels)
-                outSamples[i] = max(-1, min(1, native[i] + d))
-            }
-        }
+        var frames = 0
         progress.send("writing", force: true)
         let writer = try WAVWriter(url: url, sampleRate: rate, channels: channels, bits: bits)
         do {
-            try writer.append(outSamples[...])
+            var carry: [Float] = []
+            _ = try readAudio(media, sampleRate: nil, channels: nil) { chunk in
+                var native = chunk
+                if !carry.isEmpty {
+                    native = carry + chunk
+                    carry = []
+                }
+                let n = native.count / channels
+                if native.count > n * channels { carry = Array(native[(n * channels)...]) }
+                guard n > 0 else { return }
+                let w = try wm.next(n)
+                var outSamples = [Float](repeating: 0, count: n * channels)
+                for f in 0 ..< n {
+                    let d = alpha * w[f]
+                    noise += Double(d * d)
+                    for c in 0 ..< channels {
+                        let i = f * channels + c
+                        signal += Double(native[i] * native[i]) / Double(channels)
+                        outSamples[i] = max(-1, min(1, native[i] + d))
+                    }
+                }
+                try writer.append(outSamples[...])
+                frames += n
+            }
+            guard frames > 0 else { throw EngineError.unsupportedMedia(media.url.path, "it has no audio samples") }
             try writer.finish()
         } catch {
             writer.cancel()
