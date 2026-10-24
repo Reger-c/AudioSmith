@@ -120,7 +120,7 @@ func TestStoryEmotionExp(t *testing.T) {
 		}
 		stories = append(stories, s)
 	}
-	bin := engine.Find("resources")
+	bin := engine.Find("../resources")
 	if bin == "" {
 		t.Fatal("no engine: set AUDIOSMITH_ENGINE")
 	}

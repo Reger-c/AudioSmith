@@ -14,17 +14,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hehehai/AudioSmith/assets"
+
 	_ "github.com/egoist/mygo/audio/vorbis" // the bundled previews are Ogg Vorbis
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 )
 
-//go:embed assets/voice-previews
-var previewFS embed.FS
+var previewFS = assets.VoicePreviews
 
 // previewDir is where the clips are in previewFS.
-const previewDir = "assets/voice-previews"
+const previewDir = "voice-previews"
 
 // previewLimit is how much of a saved voice's audio a preview plays.
 const previewLimit = 6 * time.Second

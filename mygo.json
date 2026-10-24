@@ -3,6 +3,7 @@
   "identifier": "dev.hehehai.audiosmith",
   "version": "0.4.0-beta.7",
   "copyright": "Copyright © 2026 hehehai and the AudioSmith contributors. Licensed under the GNU AGPL-3.0.",
+  "main": "./app",
   "out": "build",
   "resources": [
     "LICENSE",

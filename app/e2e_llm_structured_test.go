@@ -208,7 +208,7 @@ func TestLLMStructured(t *testing.T) {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	bin := engine.Find("resources")
+	bin := engine.Find("../resources")
 	if bin == "" {
 		t.Fatal("no engine: run scripts/build-engine.sh or set AUDIOSMITH_ENGINE")
 	}

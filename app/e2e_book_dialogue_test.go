@@ -82,7 +82,7 @@ func TestBookDialogueE2E(t *testing.T) {
 		t.Skip("set AUDIOSMITH_BOOKDLG_OUT")
 	}
 	os.MkdirAll(out, 0o755)
-	bin := engine.Find("resources")
+	bin := engine.Find("../resources")
 	if bin == "" {
 		t.Fatal("no engine: set AUDIOSMITH_ENGINE")
 	}

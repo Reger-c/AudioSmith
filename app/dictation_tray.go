@@ -6,7 +6,7 @@ package main
 // shortcut keeps working; the Dock icon or the menu brings it back.
 
 import (
-	_ "embed"
+	"github.com/hehehai/AudioSmith/assets"
 
 	"github.com/egoist/mygo"
 	"github.com/hehehai/AudioSmith/internal/dictation"
@@ -29,10 +29,8 @@ type trayState struct {
 // a larger dot takes the spark's place (assets/tray/tray-active.svg).
 // The PNGs come from the kit; the SVGs render the same shapes.
 var (
-	//go:embed assets/tray/tray.png
-	trayIcon []byte
-	//go:embed assets/tray/tray-active.png
-	trayActiveIcon []byte
+	trayIcon       = assets.TrayIcon
+	trayActiveIcon = assets.TrayActiveIcon
 )
 
 // openTray makes the menu bar icon.

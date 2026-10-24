@@ -25,7 +25,7 @@ func TestEndToEnd(t *testing.T) {
 	if os.Getenv("AUDIOSMITH_E2E") == "" {
 		t.Skip("set AUDIOSMITH_E2E=1 to run the real engine")
 	}
-	enginePath := engine.Find("resources")
+	enginePath := engine.Find("../resources")
 	if enginePath == "" {
 		t.Fatal("no engine: run scripts/build-engine.sh")
 	}

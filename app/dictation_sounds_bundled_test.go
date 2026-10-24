@@ -12,10 +12,10 @@ import (
 // repository): the catalogue loads, every file is there and matches its
 // SHA-256, and it has dictation's defaults. Without the copy it is skipped.
 func TestBundledSounds(t *testing.T) {
-	if _, err := os.Stat("resources/sounds/catalog.json"); err != nil {
+	if _, err := os.Stat("../resources/sounds/catalog.json"); err != nil {
 		t.Skip("no resources/sounds (scripts/sync-sounds.sh): a source build")
 	}
-	cat, err := sounds.Load(os.DirFS("resources"), "sounds")
+	cat, err := sounds.Load(os.DirFS("../resources"), "sounds")
 	if err != nil {
 		t.Fatal(err)
 	}

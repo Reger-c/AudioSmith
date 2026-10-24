@@ -120,7 +120,7 @@ func TestTranslationsFit(t *testing.T) {
 		t.Skip("audit; set AUDIOSMITH_TEXTFIT_AUDIT=1 (meaningful on macOS)")
 	}
 	load := func(name string) map[string]string {
-		b, err := os.ReadFile("internal/i18n/locales/" + name)
+		b, err := os.ReadFile("../internal/i18n/locales/" + name)
 		if err != nil {
 			t.Fatal(err)
 		}

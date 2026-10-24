@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,12 +23,33 @@ type goPackage struct {
 	module, version, moduleDir string
 }
 
+// mainPackage is the app's main package, mygo.json's "main" (MyGo's
+// default ".").
+func mainPackage(root string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, "mygo.json"))
+	if err != nil {
+		return "", err
+	}
+	var cfg struct{ Main string }
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return "", fmt.Errorf("mygo.json: %v", err)
+	}
+	if cfg.Main == "" {
+		return ".", nil
+	}
+	return cfg.Main, nil
+}
+
 // linkedPackages lists the packages of the app's binary: go list -deps of
 // the main package for darwin/arm64. Test files and tools are not built
 // into it, so their modules are not listed.
 func linkedPackages(root string) ([]goPackage, error) {
 	const format = `{{if not .Standard}}{{.ImportPath}}|{{.Dir}}|{{with .Module}}{{.Path}}|{{.Version}}|{{.Dir}}{{end}}{{end}}`
-	cmd := exec.Command("go", "list", "-deps", "-f", format, ".")
+	main, err := mainPackage(root)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command("go", "list", "-deps", "-f", format, main)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), goEnv...)
 	var stderr bytes.Buffer

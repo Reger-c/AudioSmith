@@ -120,7 +120,7 @@ func TestCuratedVoicesE2E(t *testing.T) {
 		t.Skip("set AUDIOSMITH_E2E=1, CURATE_MODE and CURATE_OUT")
 	}
 	os.MkdirAll(out, 0o755)
-	bin := engine.Find("resources")
+	bin := engine.Find("../resources")
 	if bin == "" {
 		t.Fatal("no engine: set AUDIOSMITH_ENGINE")
 	}

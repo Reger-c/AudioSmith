@@ -33,7 +33,7 @@ func TestModelLifecycle(t *testing.T) {
 	if os.Getenv("AUDIOSMITH_E2E") == "" || ids == "" {
 		t.Skip("set AUDIOSMITH_E2E=1 and AUDIOSMITH_E2E_MODELS to download real models")
 	}
-	bin := engine.Find("resources")
+	bin := engine.Find("../resources")
 	if bin == "" {
 		t.Fatal("no engine: run scripts/build-engine.sh")
 	}

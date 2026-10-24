@@ -1,6 +1,6 @@
 # Starter voices
 
-`*.asvoice` files here are embedded in the app (starter_voices.go) and
+`*.asvoice` files here are embedded in the app (assets/assets.go, used by app/starter_voices.go) and
 imported into a new library once, so a new user can make an audiobook or
 a dub with a Base model (which speaks only with a saved voice) before they
 clone or design one (thread #41, option A).

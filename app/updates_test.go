@@ -537,7 +537,7 @@ func TestReleaseConfig(t *testing.T) {
 			GitHub    string `json:"github"`
 		} `json:"updates"`
 	}
-	data, err := os.ReadFile("mygo.json")
+	data, err := os.ReadFile("../mygo.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,7 +551,7 @@ func TestReleaseConfig(t *testing.T) {
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`).MatchString(cfg.Version) {
 		t.Errorf("version %q", cfg.Version)
 	}
-	log, err := os.ReadFile("CHANGELOG.md")
+	log, err := os.ReadFile("../CHANGELOG.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +560,7 @@ func TestReleaseConfig(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^## \[?` + regexp.QuoteMeta(cfg.Version) + `(\]|\s|$)`).Match(log) {
 		t.Errorf("CHANGELOG.md has no \"## %s\" section, which mygo build makes the update's release notes", cfg.Version)
 	}
-	zh, err := os.ReadFile("CHANGELOG.zh-Hans.md")
+	zh, err := os.ReadFile("../CHANGELOG.zh-Hans.md")
 	if err != nil {
 		t.Fatal(err)
 	}

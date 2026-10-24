@@ -77,7 +77,7 @@ func TestStoryAB(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.MkdirAll(out, 0o755)
-	bin := engine.Find("resources")
+	bin := engine.Find("../resources")
 	if bin == "" {
 		t.Fatal("no engine: set AUDIOSMITH_ENGINE or run scripts/build-engine.sh")
 	}

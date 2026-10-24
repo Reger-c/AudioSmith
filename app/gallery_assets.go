@@ -11,7 +11,6 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -24,17 +23,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hehehai/AudioSmith/assets"
+
 	"github.com/egoist/mygo/audio/vorbis"
 	"github.com/hehehai/AudioSmith/internal/dsp"
 	"github.com/hehehai/AudioSmith/internal/dsp/wav"
 	"github.com/hehehai/AudioSmith/internal/gallery"
 )
 
-//go:embed assets/gallery-voices
-var galleryVoicesFS embed.FS
+var galleryVoicesFS = assets.GalleryVoices
 
 // galleryVoicesDir is where the clips are in galleryVoicesFS.
-const galleryVoicesDir = "assets/gallery-voices"
+const galleryVoicesDir = "gallery-voices"
 
 // galleryClip is curated voice id's bundled clip of kind "ref" or
 // "preview", or nil.

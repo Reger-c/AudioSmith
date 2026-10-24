@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -16,9 +17,9 @@ import (
 // and the files it ships, with the third-party notices, whose contents
 // internal/tools/thirdparty checks), the CLA and its workflow.
 func TestProjectLicence(t *testing.T) {
-	read := func(name string) string {
+	read := func(name string) string { // name from the module root
 		t.Helper()
-		data, err := os.ReadFile(name)
+		data, err := os.ReadFile(filepath.Join("..", name))
 		if err != nil {
 			t.Fatal(err)
 		}

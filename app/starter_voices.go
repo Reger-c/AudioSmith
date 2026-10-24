@@ -1,30 +1,30 @@
 package main
 
 // Starter voices: designed voices that ship with the app
-// (resources/voices/*.asvoice, see its README), imported into the library
+// (assets/starter-voices/*.asvoice, see its README), imported into the library
 // once, so a new user has a saved voice for the Base models the presets
 // recommend for audiobooks and dubbing (thread #41, option A).
 
 import (
 	"context"
-	"embed"
 	"io/fs"
 	"os"
 	"path"
 	"slices"
 
+	"github.com/hehehai/AudioSmith/assets"
+
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
-//go:embed resources/voices
-var starterFS embed.FS
+var starterFS = assets.StarterVoices
 
 // starterFiles are the bundled starter voices by file name (tests
 // replace it).
 var starterFiles = func() map[string][]byte {
 	out := map[string][]byte{}
-	names, _ := fs.Glob(starterFS, "resources/voices/*.asvoice")
+	names, _ := fs.Glob(starterFS, "starter-voices/*.asvoice")
 	for _, n := range names {
 		if b, err := starterFS.ReadFile(n); err == nil {
 			out[path.Base(n)] = b

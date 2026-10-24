@@ -161,7 +161,7 @@ func TestDubCrossLingual(t *testing.T) {
 	}
 	defer save()
 
-	bin := engine.Find("resources")
+	bin := engine.Find("../resources")
 	if bin == "" {
 		t.Fatal("no engine: set AUDIOSMITH_ENGINE")
 	}

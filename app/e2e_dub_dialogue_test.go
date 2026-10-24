@@ -112,7 +112,7 @@ func TestDubDialogueE2E(t *testing.T) {
 		dlgReport(t, dir, st)
 		return
 	}
-	bin := engine.Find("resources")
+	bin := engine.Find("../resources")
 	if bin == "" {
 		t.Fatal("no engine: set AUDIOSMITH_ENGINE")
 	}

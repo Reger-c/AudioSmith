@@ -1,7 +1,7 @@
 # Voice previews
 
 Short clips of the models' built-in speakers, embedded in the app
-(voice_preview.go) so the voice pickers can play a voice (▶) before its
+(assets/assets.go; app/voice_preview.go plays them) so the voice pickers can play a voice (▶) before its
 model is downloaded (thread #60).
 
 - One line per speaker in its main language (~3 s), e.g. 「你好，很高兴认识你，这是我的声音。」

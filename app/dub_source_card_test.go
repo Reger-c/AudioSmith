@@ -18,7 +18,7 @@ func TestDubProbeErrorText(t *testing.T) {
 		"vimeo": "The site wants a sign-in (or its cookies) for this video.", "douyin": "The site wants a sign-in (or its cookies) for this video.",
 		"twitter": "This video is unavailable.", "private": "This video is unavailable.", "unsupported": "This site is not supported for importing.",
 	} {
-		b, err := os.ReadFile(filepath.Join("internal/dub/testdata/ytdlp-info", name+".err"))
+		b, err := os.ReadFile(filepath.Join("../internal/dub/testdata/ytdlp-info", name+".err"))
 		if err != nil {
 			t.Fatal(err)
 		}

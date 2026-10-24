@@ -14,7 +14,7 @@ import (
 
 // The layering of internal/ (docs/architecture.md §1 and "Code structure
 // rules"). Package names here are paths under internal/, "a/**" is a and
-// the packages under it, "main" is the app at the module root. Imports
+// the packages under it, "main" is the app in app/. Imports
 // are read from every non-test file whatever its build constraints.
 const mygoUI = "github.com/egoist/mygo/ui"
 
@@ -128,6 +128,9 @@ func TestImports(t *testing.T) {
 		var from string
 		switch dir := f.dir(); {
 		case dir == ".":
+			failf("%s is at the module root, which holds no Go files: the app (package main) is in app/, its embedded files in assets/.", f.path)
+			continue
+		case dir == "app":
 			from = "main"
 		case strings.HasPrefix(dir, "internal/"):
 			from = strings.TrimPrefix(dir, "internal/")
