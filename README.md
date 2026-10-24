@@ -24,7 +24,7 @@ AudioSmith turns text into speech, clones and designs voices, gives a story a ca
 
 [Features](#features) · [Install](#install) · [Models](#models) · [Privacy](#privacy) · [Build from source](#build-from-source) · [Licence](#licence-and-credits)
 
-> **0.4.0-beta.1 is the first signed release, and it is a beta.** It is signed with a Developer ID, notarized by Apple and updates itself. Expect rough edges; see [Known limits](#known-limits).
+> **The current version, 0.4.0-beta.7, is a beta.** Releases are signed with a Developer ID, notarized by Apple and update themselves. Expect rough edges; see [Known limits](#known-limits) and [the changelog](https://actnow.dev/audiosmith/changelog).
 
 ## Features
 
@@ -46,13 +46,15 @@ AudioSmith turns text into speech, clones and designs voices, gives a story a ca
 
 | Discover voices | My voices |
 |---|---|
-| <img src="docs/images/discover.webp" alt="Discover voices: about 1,200 voices to preview"> | <img src="docs/images/voices.webp" alt="My voices: saved, designed and cloned voices"> |
+| <img src="docs/images/discover.webp" alt="Discover voices: chosen voices to preview"> | <img src="docs/images/voices.webp" alt="My voices: saved, designed and cloned voices"> |
 
-- **Discover** about 1,200 ready-made voices, preview them and save the ones you like.
-- **Clone** a voice from a recording or from any audio or video file. AudioSmith picks the best stretch, transcribes it and removes the noise. A recorded consent statement marks a voice as your own.
-- **Design** a voice from a sentence in English or Chinese ("a warm narrator in her thirties, calm and clear").
+- **Discover** 37 chosen voices, mostly Chinese and English: designed voices whose reference ships with the app, ready to speak at once, and the best built-in speakers. Preview them and save the ones you like.
+- **Clone** a voice from a recording or from any audio or video file. AudioSmith picks the best stretch and transcribes it. A recorded consent statement marks a voice as your own.
+- **Checked references:** every reference is rated (good, fine, needs work) with a tip or two, and cleaned: noise removed only when there is some, silence trimmed, loudness evened out. The original is kept.
+- **Design** a voice from a sentence in English or Chinese ("a warm narrator in her thirties, calm and clear"), or start from one of eight presets.
 - **Hear before you pick:** every voice list (Studio, Stories, Audiobook, Dub) has a ▶ on each voice: built-in speakers play a short bundled sample, even before their model is downloaded; your own voices play their sample.
 - **Portable voices:** a model's built-in speaker or a designed voice can be turned into a clone that every cloning model can speak with. It sounds close to the original, not the same, and says so.
+- **Deleting a voice** says where it is used, and Undo in the toast brings it back for about 10 seconds.
 - Voices are `.asvoice` files you can share. VoiceStudio's `.ovsvoice` files import too.
 
 ### Stories
@@ -61,7 +63,8 @@ AudioSmith turns text into speech, clones and designs voices, gives a story a ca
 
 - **Write `Name: line`** and AudioSmith casts the characters. Stage directions such as `MOM (softly):` become the line's direction instead of being read out.
 - **Dialogue that flows:** the gaps follow the conversation (Dialogue, Reading or Relaxed). A character's consecutive lines are said in one go, and each voice is brought to one loudness.
-- **AI director:** the writing assistant (Qwen3 4B, on this Mac) fills in the scene, a persona for each character and a direction for each line. Models that take instructions hear them; the others read the lines as written, and the page says so.
+- **AI director:** the writing assistant (Qwen3 4B, on this Mac) reads the whole story and gives each line one of 13 emotions with a strength, kept coherent across the scene; you can change any of them. Models that take instructions hear them; the others read the lines as written, and the page says so.
+- **Whole dialogue:** a dialogue model speaks the characters' lines a scene at a time, so each line answers the one before it. *Dialogue · Light* (SoulX-Podcast) needs 16 GB of memory, *Dialogue · One take* (MOSS-TTSD) 24 GB. Narration stays on the story's model.
 - Export a WAV, an M4B, or one stem per character.
 
 ### Audiobook
@@ -69,6 +72,7 @@ AudioSmith turns text into speech, clones and designs voices, gives a story a ca
 <img src="docs/images/audiobook.webp" alt="An audiobook with chapters and a cover" width="100%">
 
 - **Import** an EPUB, TXT, Markdown or DOCX book. Chapters come from its headings.
+- **Dialogue passages:** mark a scene with `[dialogue]` … `[/dialogue]` (`[对话]` in Chinese) and one `Name: line` per turn, and a dialogue model speaks it with the characters answering each other. Without the model the passage is read line by line.
 - **Loudness** per chapter for ACX (Audible) or podcasts. A read-along player follows the text.
 - **Export** an M4B with chapters, cover and tags, a cue sheet, or one file per chapter.
 - **Resume** after quitting. After an edit, only the changed lines are rendered again.
@@ -77,13 +81,14 @@ AudioSmith turns text into speech, clones and designs voices, gives a story a ca
 
 <img src="docs/images/dub-steps.webp" alt="A dub of an English video into Chinese and Spanish, step by step: source, transcript, translation, cast, voices, export" width="100%">
 
-- **Drop in a video or audio file,** or paste a link (yt-dlp, which you turn on). New dubs are made in Chinese; when the video is already Chinese they switch to English. Add more languages as you like.
+- **Drop in a video or audio file,** or paste a link (yt-dlp, which you turn on). Before anything downloads, the page shows the cover, the site, the title and the length, then the download's real progress. New dubs are made in Chinese; when the video is already Chinese they switch to English. Add more languages as you like.
 - **Four steps:**
   1. Separate the voices from the background (HTDemucs).
   2. Transcribe and tell the speakers apart (Transcription with speakers, or Qwen3-ASR with Sortformer).
   3. Translate with the local writing assistant, Ollama, a cloud model, DeepL, Google or Microsoft. A glossary keeps names right.
-  4. Speak each line in its speaker's cloned voice, fitted to the original timing.
-- **Edit** lines on a timeline, compare A/B, preview the video, and re-dub only what changed.
+  4. Speak each line in its speaker's cloned voice, fitted to the original timing, also from another language (a Japanese speaker speaking Chinese). Such lines are heard again: one in the wrong language or with the wrong words is made again, or marked Listen.
+- **Conversations recorded together:** for dubs into Chinese or English with two speakers or more, *Dialogue · Light* records each conversation as a whole, so answers sound like answers, then fits every line to its time. On by default for new dubs; needs 16 GB of memory.
+- **Edit** lines on a timeline (pinch or ⌘ with the wheel to zoom, swipe to pan), compare A/B, preview the video, and re-dub only what changed. A 2-hour video with 2,000 lines stays quick.
 - **Export** an MP4 with one audio track per language and soft subtitles, or M4A, WAV, SRT, VTT, ASS and stems. Batch dubs a whole folder, and can watch one.
 
 ### Transcribe and dictation
@@ -92,7 +97,7 @@ AudioSmith turns text into speech, clones and designs voices, gives a story a ca
 
 - **Transcribe** recordings and videos with word timings. Qwen3-ASR handles Chinese, English and 28 more languages; Whisper covers the rest and translates speech into English.
 - **Transcription with speakers** says who says what (S1, S2…) in one pass; click a speaker to name it. Copy, TXT, SRT, VTT and JSON exports carry the names.
-- **Dictation anywhere:** press ⌘⇧Space in any app, speak, and the text is typed where your cursor is, about 0.2–0.3 s after you stop. Your clipboard is kept. A menu bar icon and a small pill show when it listens.
+- **Dictation anywhere:** press ⌘⇧Space in any app, speak, and the text is typed where your cursor is, about 0.2–0.3 s after you stop. Your clipboard is kept. A menu bar icon, a small pill and sounds you can choose show when it listens.
 
 ### Workflows and batch
 
@@ -107,7 +112,7 @@ AudioSmith turns text into speech, clones and designs voices, gives a story a ca
 
 - **OpenAI-compatible API** on `http://127.0.0.1:3901/v1`: speech, transcriptions, translations, models and voices. Point any OpenAI SDK at it.
 - **AudioSmith's own API** (`/api`) drives every page: voices, stories, audiobooks, dubs, batch, workflows, exports. Jobs report progress over SSE, and `/ws/tts` streams speech.
-- **MCP server** over HTTP (`/mcp`) and stdio (`AudioSmith --mcp-stdio`), with 33 tools. Deleting needs `confirm: true`, and cloning needs consent.
+- **MCP server** over HTTP (`/mcp`) and stdio (`AudioSmith --mcp-stdio`), with 33 tools. Deleting needs `confirm: true`; cloning needs consent and works only from this Mac (or with the API key).
 - **Integrations page:** one prompt sets up Claude Code, Codex or Cursor (server and agent skill); there are snippets for n8n, curl, Python, JavaScript and the OpenAI Agents SDK.
 
 ```sh
@@ -126,14 +131,15 @@ The full reference is [docs/local-api.md](docs/local-api.md), and `/docs` in the
 - **Tools:** compare voices A/B, speak a recording again in another voice, fit text to a duration, probe a file, check a watermark.
 - **Invisible watermark:** generated audio carries an AudioSeal mark, on by default (Settings → Privacy), and Tools can detect it.
 - **Calls:** an AI phone agent on your own Twilio account. It always says it is an AI, and uses only designed or consented voices. Off until you set it up.
-- **The app:** Projects and History libraries, one job queue that resumes after a restart, the command palette (⌘K), ⌘1–9 for the main pages, light and dark themes, English and 简体中文.
+- **The app:** a sidebar with search (⌘F) and sections that fold; what is running shows as cards at its foot, and the Tasks page lists every job. Projects and History libraries, one job queue that resumes after a restart, the command palette (⌘K), ⌘1–9 for the main pages, light and dark themes, English and 简体中文.
+- **Memory:** models you have not used for 30 minutes are unloaded (Settings → Models & network → Memory) and load again when needed.
 
 ## Install
 
 **Requirements**
 - macOS 15 or later, on Apple silicon (M1 or later).
-- Memory: 8 GB runs the Fast pack; 16 GB is recommended; 24 GB runs the Quality pack (high-fidelity cloning, voice design, dubbing and the writing assistant).
-- Disk: 1.3–17 GB for models, depending on the pack.
+- Memory: 8 GB runs the Fast pack; 16 GB is recommended, and needed for *Dialogue · Light*; 24 GB runs the Quality pack (high-fidelity cloning, voice design, dubbing and the writing assistant) and *Dialogue · One take*.
+- Disk: 1.3–17 GB for models, depending on the pack; the dialogue models add 2.4 GB and 10.9 GB.
 
 **Steps**
 1. Download the DMG from [actnow.dev/download/audiosmith](https://actnow.dev/download/audiosmith), AudioSmith's page on our website. AudioSmith is free; the download needs a free account. Rather not sign up? [Build it from source](#build-from-source). The current version is a beta; [the changelog](https://actnow.dev/audiosmith/changelog) lists every version.
@@ -147,11 +153,13 @@ The full reference is [docs/local-api.md](docs/local-api.md), and `/docs` in the
 | **Quality** | + high-fidelity cloning, voice design, dubbing, speakers, writing assistant; 24 GB | 13.4 / 14.9 GB |
 | **Max** | + Multilingual all-rounder (non-commercial) and Whisper; 48 GB | 15.5 / 17.0 GB |
 
-**Updates.** Once a day AudioSmith checks actnow.dev for a new version, shows its notes, and installs it when you say so (no account needed). Updates are signed and checked before they install, and usually download only what changed. **AudioSmith → Check for Updates…** checks at once.
+**Updates.** Once a day AudioSmith checks actnow.dev for a new version (no account needed). A new one shows as "Update available" at the foot of the sidebar, with its notes; it installs when you say so. Updates are signed and checked before they install, and usually download only what changed. **AudioSmith → Check for Updates…** checks at once; **Settings → About → Software updates** has the other choices.
 
-**Beta updates.** Settings → Diagnostics and about → **Receive beta updates**. It is on in a beta (such as 0.4.0-beta.1) and off in a release until you choose. Turning it off never goes back to an older version: a beta stays until a newer release is out.
+**Beta updates.** Settings → About → Software updates → **Receive beta updates**. It is on in a beta (such as 0.4.0-beta.7) and off in a release until you choose. Turning it off never goes back to an older version: a beta stays until a newer release is out.
 
-**Downloads** come from the official sites or their mirrors, whichever is faster, through the system proxy: models from huggingface.co or hf-mirror.com, ffmpeg and yt-dlp from github.com or mirror.actnow.dev (ActNow's mirror), each checked against its pinned SHA-256. In mainland China, pick **Mirrors only** in **Settings → Network** if downloads stall.
+**Downloads** come from the official sites or their mirrors, whichever is faster, through the system proxy: models from huggingface.co or hf-mirror.com, ffmpeg and yt-dlp from github.com or mirror.actnow.dev (ActNow's mirror), each checked before use. In mainland China, pick **Mirrors only** under **Settings → Models & network → Download from** if downloads stall.
+
+**Models** are kept in `~/Library/Application Support/ActNow/models`, shared with the other ActNow apps, and left out of Time Machine (Settings → Advanced turns backups back on).
 
 **Permissions** are asked only when a feature needs them: the **Microphone** for recording a voice, dictation and live transcription, and **Accessibility** for dictation to type into other apps.
 
@@ -173,9 +181,11 @@ AudioSmith names models for what they do. Their technical names, sizes and licen
 | **Chinese & English transcription** | Qwen3-ASR 0.6B | transcription and dictation, 30 languages | Apache-2.0 |
 | **Multilingual transcription** | Whisper large-v3 turbo | other languages; speech into English | MIT |
 | **Transcription with speakers** | MOSS-Transcribe-Diarize 0.9B | who says what, in one pass | Apache-2.0 |
+| **Dialogue · Light** | SoulX-Podcast 1.7B | conversations recorded together, up to 4 speakers; 2.4 GB, 16 GB memory | Apache-2.0 |
+| **Dialogue · One take** | MOSS-TTSD v1.0 | a scene as one recording, up to 5 speakers; 10.9 GB, 24 GB memory | Apache-2.0 |
 | **Writing assistant** | Qwen3 4B Instruct 2507 | translation, clean-up, the AI director | Apache-2.0 |
 | Word timing · Speech detection · Noise removal | Qwen3-ForcedAligner 0.6B · Silero VAD · DeepFilterNet 3 | | Apache-2.0 · MIT · MIT/Apache-2.0 |
-| Voice separation · Speaker turns | HTDemucs · Sortformer (fallback, ≤ 4 speakers) | | MIT · NVIDIA Open Model License |
+| Fast voice separation · Speaker turns | HTDemucs · Sortformer (fallback, ≤ 4 speakers) | | MIT · NVIDIA Open Model License |
 | Invisible watermark | AudioSeal | | MIT |
 
 Measured on a MacBook Air M4 with 24 GB:
@@ -186,13 +196,14 @@ Measured on a MacBook Air M4 with 24 GB:
 | High-fidelity clone | about real time: 940 Chinese characters → 3.5 min of audio in about 3¼ min |
 | Standard voices | about 1.7× real time |
 | Transcription with speakers | a 10-minute recording in about 4 minutes |
+| Dialogue · Light / One take | about 0.7× / 0.8× real time |
 | Writing assistant | 36–40 tokens/s |
 
 ## Privacy
 
 - **Speech is made and recognised on your Mac.** The engine never connects to the network; it loads the models the app downloaded.
-- **AudioSmith connects only for:** model downloads (Hugging Face or its mirror), ffmpeg and yt-dlp when you download them, videos from links you paste, a cloud writing or translation provider only if you set one up, and the daily update check (nothing about you is sent).
-- **No analytics:** no usage data, crash reports or identifiers, and no setting to turn them on.
+- **AudioSmith connects only for:** model downloads (Hugging Face or its mirror), ffmpeg and yt-dlp when you download them, videos (and their covers) from links you paste, a cloud writing or translation provider only if you set one up, and the daily update check (nothing about you is sent).
+- **No analytics:** no usage data, crash reports or identifiers, and no setting to turn them on. The app's log stays on this Mac, masks keys and tokens, and never holds your scripts, transcripts or prompts.
 - **The Local API listens on 127.0.0.1** unless you share it on your network (with a PIN).
 - **Keep text on this Mac:** one switch limits writing help and translation to local models.
 - Your library is in `~/Library/Application Support/AudioSmith` (it can move to another disk). Keys live in the login Keychain.
@@ -208,19 +219,21 @@ go tool mygo dev                # run with live reload
 go tool mygo build              # build/darwin-arm64/AudioSmith.app and a DMG
 ```
 
-- The UI is Go with [MyGo](https://github.com/egoist/mygo), in `app/` (`go run ./app` runs it without bundling). The models run in a Swift helper, `audiosmith-engine`, on [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) and mlx-swift.
+- The UI is Go with [MyGo](https://github.com/egoist/mygo), in `app/` (`go run ./app` runs it without bundling); the files it embeds are in `assets/`. The models run in a Swift helper, `audiosmith-engine`, on [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) and mlx-swift.
 - `CGO_ENABLED=0 go test ./...` runs the whole UI headless on any OS, with the engine faked; `scripts/mac.sh` builds and tests on a Mac from Linux.
 - More: [architecture](docs/architecture.md), [engine protocol](docs/protocol-v2.md), [Local API and MCP](docs/local-api.md), [releasing](docs/release.md).
 
 ## Known limits
 
-- **Beta.** 0.4.0-beta.1 is the first signed release.
+- **Beta.** 0.4.0 is not final yet; expect changes between betas.
 - **ffmpeg is optional and not bundled.** Without it AudioSmith reads and writes WAV, AIFF, M4A, MOV and MP4, and reads MP3. With it (Homebrew's, or one you choose) it also exports MP3, Opus and FLAC, reads WebM and MKV, and burns subtitles into videos.
-- **Dictation** types the text when you stop, not word by word.
+- **Dictation** types the text when you stop, not word by word. The first dictation after a long pause can take about a second longer while its model loads.
+- **Dialogue models** are evaluated for Chinese and English only; other languages are read line by line. Dub's conversations use *Dialogue · Light* only, and *Dialogue · One take* needs 24 GB of memory.
+- **Links that need a sign-in** (such as X or Douyin) need a cookies.txt export from your browser.
 - **The interface** is in English and Simplified Chinese.
 - **The watermark** does not survive time-stretching beyond about ±5 %, so dubs are marked after fitting.
 - **Calls** need your own Twilio account and a public tunnel.
-- Builds you make yourself are ad-hoc signed: they don't update themselves, and macOS forgets their Accessibility permission after each rebuild.
+- Builds you make yourself are ad-hoc signed: they don't update themselves, macOS forgets their Accessibility permission after each rebuild, and dictation plays the system sounds (the ActNow sound library ships only with releases).
 
 ## Contributing
 
@@ -234,7 +247,7 @@ AudioSmith is free software: you can redistribute it and/or modify it under the 
 
 Model weights keep their own licences (see [Models](#models)); OmniVoice's is non-commercial. Third-party material and libraries are listed in [NOTICE](NOTICE), with their full licence texts in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (the app carries both).
 
-- Models by the Qwen team (Qwen3-TTS, Qwen3-ASR, Qwen3 4B), hexgrad (Kokoro), Resemble AI (Chatterbox), k2-fsa (OmniVoice), OpenMOSS (MOSS-Transcribe-Diarize), OpenAI (Whisper), Meta (HTDemucs, AudioSeal), NVIDIA (Sortformer), Silero and DeepFilterNet. MLX conversions by mlx-community and others.
+- Models by the Qwen team (Qwen3-TTS, Qwen3-ASR, Qwen3 4B), hexgrad (Kokoro), Resemble AI (Chatterbox), k2-fsa (OmniVoice), Soul AI Lab (SoulX-Podcast), OpenMOSS (MOSS-TTSD, MOSS-Transcribe-Diarize), OpenAI (Whisper), Meta (HTDemucs, AudioSeal), NVIDIA (Sortformer), Silero and DeepFilterNet. MLX conversions by mlx-community and others.
 - Runs on [MLX](https://github.com/ml-explore/mlx), [mlx-swift](https://github.com/ml-explore/mlx-swift) and [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift).
 - The interface is built with [MyGo](https://github.com/egoist/mygo) (MIT).
 - Icons: [Solar](https://icon-sets.iconify.design/solar/) by 480 Design, CC BY 4.0 (see [NOTICE](NOTICE)).
