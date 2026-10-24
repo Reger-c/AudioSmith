@@ -37,7 +37,7 @@ func TestRealIdleUnloadListen(t *testing.T) {
 	}
 	dir := t.TempDir()
 	speech := filepath.Join(dir, "speech.wav")
-	if out, err := exec.Command("say", "-o", speech, "--data-format=LEI16@16000", "Send the draft to Anna before the meeting tomorrow morning.").CombinedOutput(); err != nil {
+	if out, err := exec.Command("say", "-o", speech, "--data-format=LEI16@16000", "Send the draft before the meeting tomorrow morning.").CombinedOutput(); err != nil {
 		t.Fatalf("say: %v %s", err, out)
 	}
 	const idle = 5 * time.Second
@@ -78,7 +78,7 @@ func TestRealIdleUnloadListen(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(strings.ToLower(string(raw)), "anna") {
+		if !strings.Contains(strings.ToLower(string(raw)), "draft") {
 			t.Errorf("transcript %s", raw)
 		}
 		return time.Since(start), loading
