@@ -232,6 +232,11 @@ func (a *app) loadSample(p *lfPage) {
 // bookCast are the names the manuscript casts with [voice:NAME] and in
 // its dialogue passages (audiobook_dialogue.go).
 func bookCast(p *lfPage) []string {
+	if p.cast != nil && p.lfc.deferring {
+		// A large manuscript's compile is pending: the cast it last found
+		// (longform_compile.go finds it again with the compile).
+		return p.cast
+	}
 	if p.cast == nil || p.castRev != p.scriptRev {
 		p.cast, p.castRev = castNamesOf(p.doc.Script), p.scriptRev
 	}

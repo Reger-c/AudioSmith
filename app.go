@@ -108,6 +108,7 @@ func (a *app) toast(msg string) {
 
 // quit releases what the app holds; it runs in App.OnQuit.
 func (a *app) quit() {
+	a.flushLongform() // longform_compile.go: a large document's pending draft
 	a.pl.Stop()
 	a.stopAPI()        // M5: api.go (thread #20)
 	a.closeDictation() // M2: dictation.go

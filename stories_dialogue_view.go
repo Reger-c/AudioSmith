@@ -13,6 +13,7 @@ package main
 import (
 	"slices"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/egoist/mygo/ui"
@@ -98,16 +99,49 @@ func storyLanguage(d *services.LongformDoc) string {
 	if d.Language != "" {
 		return d.Language
 	}
-	han := false
+	script := ""
+	if d.Kind == core.ProjectAudiobook {
+		script = d.Script[:min(len(d.Script), 64<<10)] // a book: how it starts
+	}
+	// Asked several times a frame (review #102: 75 % of a frame of 2000
+	// lines): the answer for the texts last looked at, which keep their
+	// memory while kept, so comparing them is quick.
+	langMemo.Lock()
+	defer langMemo.Unlock()
+	m := &langMemo
+	if m.ok && m.script == script && len(m.texts) == len(d.Lines) && slices.EqualFunc(d.Lines, m.texts, func(l services.StoryLine, s string) bool { return l.Text == s }) {
+		return m.lang
+	}
 	texts := make([]string, 0, len(d.Lines)+1)
 	for _, l := range d.Lines {
 		texts = append(texts, l.Text)
 	}
-	if d.Kind == core.ProjectAudiobook {
-		texts = append(texts, d.Script[:min(len(d.Script), 64<<10)]) // a book: how it starts
+	m.texts, m.script, m.ok = slices.Clone(texts), script, true
+	if script != "" {
+		texts = append(texts, script)
 	}
+	m.lang = textsLanguage(texts)
+	return m.lang
+}
+
+// langMemo is storyLanguage's last answer.
+var langMemo struct {
+	sync.Mutex
+	texts  []string
+	script string
+	lang   string
+	ok     bool
+}
+
+// textsLanguage is what texts look like: "zh" with Han, "ja"/"ko" with
+// kana or Hangul, else "en".
+func textsLanguage(texts []string) string {
+	han := false
 	for _, l := range texts {
 		for _, r := range l {
+			if r < 0x1100 {
+				continue // before Hangul Jamo, the first of the four scripts
+			}
 			switch {
 			case unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r):
 				return "ja"
