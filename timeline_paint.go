@@ -55,7 +55,12 @@ func timelinePaint(p *ui.Painter, r ui.Rect, k *tokens, s *timelineState, m tlMo
 		if end < s.offset || start > s.offset+span {
 			continue
 		}
+		// Zoomed in, a block cut by the lane's edge is drawn up to it.
 		bx, bw := x(start), max(x(end)-x(start), 1)
+		if bx < r.X {
+			bw, bx = max(bw-(r.X-bx), 1), r.X
+		}
+		bw = max(min(bw, r.X+r.W-bx), 1)
 		// Lines are grey blocks; the chosen one is in the accent,
 		// overlaps in the danger colour.
 		col, fill := text, float32(0.08)
@@ -81,9 +86,7 @@ func timelinePaint(p *ui.Painter, r ui.Rect, k *tokens, s *timelineState, m tlMo
 			p.Stroke(rect, text.Alpha(0.14), 3, 1)
 		}
 		if b.Label != "" {
-			// A block cut by the lane's edge keeps its number in the part that shows.
-			vx0, vx1 := max(bx, r.X), min(bx+bw, r.X+r.W)
-			lx, lw, lroom, lbl = append(lx, vx0+3), append(lw, float32(len(b.Label)*tlLabelCharPx)), append(lroom, vx1-vx0), append(lbl, b.Label)
+			lx, lw, lroom, lbl = append(lx, bx+3), append(lw, float32(len(b.Label)*tlLabelCharPx)), append(lroom, bw), append(lbl, b.Label)
 		}
 	}
 	for i, ok := range tlLabels(lx, lw, lroom) {
