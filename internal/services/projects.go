@@ -5,11 +5,13 @@ package services
 // of record the Projects page lists.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
@@ -22,7 +24,15 @@ type Library struct {
 	store    store.Store
 	bus      *core.Bus
 	now      func() time.Time
+	// docMu serializes the read-modify-writes of documents (SaveDocIf,
+	// UpdateDoc, Rename): two of them never lose each other's change.
+	docMu sync.Mutex
 }
+
+// ErrChanged is SaveDocIf's refusal: the project was saved by someone
+// else (the page, an agent) after the caller read it (#101 M7). It wraps
+// core.ErrBusy (HTTP 409).
+var ErrChanged = fmt.Errorf("the project was changed elsewhere since it was read: %w", core.ErrBusy)
 
 func newLibrary(cfg Config, p *Projects) *Library {
 	return &Library{projects: p, store: cfg.Store, bus: cfg.Bus, now: cfg.Now}
@@ -54,6 +64,52 @@ func SummaryOf(detail string) ProjectSummary {
 // lines, an audiobook's voices) follow, so the library and "where this
 // voice has been used" see them.
 func (l *Library) SaveDoc(ctx context.Context, p core.Project, doc LongformDoc) (core.Project, error) {
+	return l.SaveDocIf(ctx, p, doc, nil)
+}
+
+// SaveDocIf is SaveDoc refusing with ErrChanged when unchanged, given the
+// project as stored now and its document, says it is not what the caller
+// read (a body compare: BodyIs). nil, or a new project (p.ID ""), saves
+// without asking.
+func (l *Library) SaveDocIf(ctx context.Context, p core.Project, doc LongformDoc, unchanged func(cur core.Project, curDoc LongformDoc) bool) (core.Project, error) {
+	l.docMu.Lock()
+	defer l.docMu.Unlock()
+	if unchanged != nil && p.ID != "" {
+		cur, curDoc, err := l.LoadDoc(ctx, p.ID)
+		if err != nil {
+			return cur, err
+		}
+		if !unchanged(cur, curDoc) {
+			return cur, ErrChanged
+		}
+	}
+	return l.saveDoc(ctx, p, doc)
+}
+
+// BodyIs is a SaveDocIf check: the stored body is the one read.
+func BodyIs(read core.Project) func(core.Project, LongformDoc) bool {
+	return func(cur core.Project, _ LongformDoc) bool { return bytes.Equal(cur.Body, read.Body) }
+}
+
+// UpdateDoc changes a Stories or Audiobook project's document in place:
+// fn gets it as stored now, and no other save comes between the read and
+// the write. fn's error aborts.
+func (l *Library) UpdateDoc(ctx context.Context, id string, fn func(p *core.Project, d *LongformDoc) error) (core.Project, LongformDoc, error) {
+	l.docMu.Lock()
+	defer l.docMu.Unlock()
+	p, d, err := l.LoadDoc(ctx, id)
+	if err != nil {
+		return p, d, err
+	}
+	if err := fn(&p, &d); err != nil {
+		return p, d, err
+	}
+	saved, err := l.saveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d)
+	return saved, d, err
+}
+
+// saveDoc is SaveDoc. Caller holds docMu.
+func (l *Library) saveDoc(ctx context.Context, p core.Project, doc LongformDoc) (core.Project, error) {
 	doc.Version = LongformVersion
 	if doc.Kind == "" {
 		doc.Kind = p.Kind
@@ -154,14 +210,17 @@ func (l *Library) Rename(ctx context.Context, id, title string) (core.Project, e
 	if err != nil {
 		return p, err
 	}
-	p.Title = title
 	if p.Kind == core.ProjectStory || p.Kind == core.ProjectAudiobook {
 		var d LongformDoc
 		if json.Unmarshal(p.Body, &d) == nil {
-			d.Title = title
-			return l.SaveDoc(ctx, p, d)
+			saved, _, err := l.UpdateDoc(ctx, id, func(p *core.Project, d *LongformDoc) error {
+				p.Title, d.Title = title, title
+				return nil
+			})
+			return saved, err
 		}
 	}
+	p.Title = title
 	return l.projects.Save(ctx, p)
 }
 

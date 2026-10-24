@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 
@@ -70,12 +71,38 @@ func (a *app) projectChanged(ev core.ProjectChanged) {
 				p.savedJSON, p.saveName, p.render = docJSON(&p.doc), ev.Project.Title, render
 			}
 		}
-		if !ev.Deleted && p.project == ev.Project.ID && p.doc.Title != ev.Project.Title {
-			// Renamed elsewhere (the Projects page).
+		if !ev.Deleted && p.project == ev.Project.ID && ev.Project.Title != p.saveName && p.saveName != "" {
+			// Renamed elsewhere (the Projects page): the saved version
+			// has the new title, and so does the page; what the page has
+			// not saved stays unsaved (#101 M6).
 			p.doc.Title, p.saveName = ev.Project.Title, ev.Project.Title
-			p.savedJSON = docJSON(&p.doc)
+			p.savedJSON = retitled(p.savedJSON, ev.Project.Title)
 		}
 	}
+}
+
+// retitled is a saved document (docJSON) with another title; "" stays "".
+func retitled(saved, title string) string {
+	var d services.LongformDoc
+	if saved == "" || json.Unmarshal([]byte(saved), &d) != nil {
+		return saved
+	}
+	d.Title = title
+	return docJSON(&d)
+}
+
+// sameAsSaved reports whether a stored document is the one a page saved
+// or opened last (savedJSON), as SaveDoc stores it.
+func sameAsSaved(saved string, cur services.LongformDoc) bool {
+	var d services.LongformDoc
+	if json.Unmarshal([]byte(saved), &d) != nil {
+		return false
+	}
+	d.Version, cur.Version = services.LongformVersion, services.LongformVersion
+	if d.Kind == "" {
+		d.Kind = cur.Kind
+	}
+	return docJSON(&d) == docJSON(&cur)
 }
 
 // unsaved reports whether a page has changes its project lacks.
@@ -91,8 +118,13 @@ func (p *lfPage) empty() bool {
 	return len(p.doc.Lines) == 0 && strings.TrimSpace(p.doc.Script) == "" && strings.TrimSpace(p.doc.ImportText) == ""
 }
 
-// saveLf saves a page as its project, or as a new one (copy).
-func (a *app) saveLf(p *lfPage, copy bool) {
+// saveLf saves a page as its project, or as a new one (copy). A project
+// saved elsewhere since the page opened or saved it (an agent, thread
+// #35) is not overwritten: the page asks (lfConfirm "changed", #101 M7).
+func (a *app) saveLf(p *lfPage, copy bool) { a.saveLfAs(p, copy, false) }
+
+// saveLfAs is saveLf; force overwrites a project changed elsewhere.
+func (a *app) saveLfAs(p *lfPage, copy, force bool) {
 	// The title is the project's name (an older page may only have a
 	// name to save under).
 	name := strings.TrimSpace(p.doc.Title)
@@ -110,10 +142,18 @@ func (a *app) saveLf(p *lfPage, copy bool) {
 	if copy {
 		pr.ID = ""
 	}
+	var unchanged func(core.Project, services.LongformDoc) bool
+	if base := p.savedJSON; !copy && !force && pr.ID != "" && base != "" {
+		unchanged = func(_ core.Project, cur services.LongformDoc) bool { return sameAsSaved(base, cur) }
+	}
 	lib := a.lib.svc.Library
 	a.background(func() {
-		saved, err := lib.SaveDoc(context.Background(), pr, doc)
+		saved, err := lib.SaveDocIf(context.Background(), pr, doc, unchanged)
 		a.post(func() {
+			if errors.Is(err, services.ErrChanged) {
+				p.confirm, p.confirmOpen = "changed", true
+				return
+			}
 			if err != nil {
 				a.toast(i18n.T("Could not save: %v", err))
 				return

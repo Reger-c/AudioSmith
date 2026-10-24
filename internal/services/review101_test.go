@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -206,5 +207,47 @@ func TestDubDeleteWaitsForStage(t *testing.T) {
 	}
 	if _, err := os.Stat(e.dubs.Dir(p.ID)); !os.IsNotExist(err) {
 		t.Errorf("folder: %v", err)
+	}
+}
+
+// #101 M7: read-modify-writes of a document never lose each other's
+// change (UpdateDoc), and a save based on an older read is refused
+// (SaveDocIf with BodyIs).
+func TestLibraryDocConflicts(t *testing.T) {
+	e := newLongformEnv(t, t.TempDir(), false)
+	defer e.close()
+	lib := e.svc.Library
+	d := NewLongformDoc(core.ProjectStory, "m/kokoro")
+	d.Title = "The Lighthouse"
+	p, err := lib.SaveDoc(ctx, core.Project{}, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := range 20 {
+		wg.Go(func() {
+			if _, _, err := lib.UpdateDoc(ctx, p.ID, func(_ *core.Project, d *LongformDoc) error {
+				d.Lines = append(d.Lines, StoryLine{ID: fmt.Sprint(i), Text: "line"})
+				return nil
+			}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	read, got, _ := lib.LoadDoc(ctx, p.ID)
+	if len(got.Lines) != 20 {
+		t.Fatalf("%d lines kept of 20", len(got.Lines))
+	}
+	if _, err := lib.SaveDocIf(ctx, read, got, BodyIs(read)); err != nil {
+		t.Fatalf("a save on the latest read: %v", err)
+	}
+	lib.Rename(ctx, p.ID, "Night Light") // saved elsewhere meanwhile
+	got.Speed = 1.2
+	if _, err := lib.SaveDocIf(ctx, read, got, BodyIs(read)); !errors.Is(err, ErrChanged) || !errors.Is(err, core.ErrBusy) {
+		t.Fatalf("a save on an old read: %v", err)
+	}
+	if cur, _, _ := lib.LoadDoc(ctx, p.ID); cur.Title != "Night Light" {
+		t.Errorf("title %q", cur.Title)
 	}
 }

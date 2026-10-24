@@ -213,6 +213,10 @@ func (a *app) setLfDoc(p *lfPage, d services.LongformDoc, project, saved string)
 	}
 	p.doc, p.project, p.savedJSON = d, project, saved
 	p.saveName = d.Title
+	var sd services.LongformDoc
+	if saved != "" && json.Unmarshal([]byte(saved), &sd) == nil && sd.Title != "" {
+		p.saveName = sd.Title // the title saved: a draft may have changed it
+	}
 	p.sel = -1
 	p.fp = ""
 	p.scriptRev++

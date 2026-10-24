@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -255,7 +256,12 @@ func (b *apiBackend) UpdateLongform(ctx context.Context, req api.LongformUpdate)
 		return api.LongformJSON{}, err
 	}
 	bookDialogueDefault(&d)
-	saved, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d)
+	// Refused when the project was saved meanwhile (the page, another
+	// request): this edit was made on what it was before (#101 M7).
+	saved, err := b.lib.svc.Library.SaveDocIf(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d, services.BodyIs(p))
+	if errors.Is(err, services.ErrChanged) {
+		return api.LongformJSON{}, errBusy("The project was saved elsewhere (in AudioSmith, or by another request) while this edit ran: read it again with get_longform and retry.")
+	}
 	if err != nil {
 		return api.LongformJSON{}, err
 	}

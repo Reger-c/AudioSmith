@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,7 +34,31 @@ func (b *apiBackend) RenderLongform(ctx context.Context, req api.LongformRender)
 	if err != nil {
 		return api.JobJSON{}, err
 	}
+	before := maps.Clone(d.VoiceCast)
 	given := b.castBookUncast(p, &d, voices) // api_studio_longform_dialogue.go
+	// record writes what this render adds to the project — the voices
+	// given, its id — into the project as it is now (#101 M7: an edit
+	// saved meanwhile stays).
+	record := func(render string) error {
+		_, _, err := b.lib.svc.Library.UpdateDoc(ctx, p.ID, func(_ *core.Project, cur *services.LongformDoc) error {
+			for name, v := range d.VoiceCast {
+				if _, had := before[name]; had {
+					continue
+				}
+				if _, set := cur.VoiceCast[name]; !set {
+					if cur.VoiceCast == nil {
+						cur.VoiceCast = map[string]string{}
+					}
+					cur.VoiceCast[name] = v
+				}
+			}
+			if render != "" {
+				cur.Render = render
+			}
+			return nil
+		})
+		return err
+	}
 	spec, probs := b.compileFor(&d, voices)
 	var blocking []api.ProblemJSON
 	for _, pr := range probs {
@@ -88,7 +113,7 @@ func (b *apiBackend) RenderLongform(ctx context.Context, req api.LongformRender)
 	}
 	if spec.Audition {
 		if len(given) > 0 {
-			if _, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d); err != nil {
+			if err := record(""); err != nil {
 				return api.JobJSON{}, err
 			}
 		}
@@ -96,8 +121,7 @@ func (b *apiBackend) RenderLongform(ctx context.Context, req api.LongformRender)
 		return withGiven(j, given), err
 	}
 	// The project remembers its last render (and the voices given), as the page does.
-	d.Render = r.ID
-	if _, err := b.lib.svc.Library.SaveDoc(ctx, core.Project{ID: p.ID, Kind: p.Kind, Title: p.Title}, d); err != nil {
+	if err := record(r.ID); err != nil {
 		return api.JobJSON{}, err
 	}
 	j, err := b.renderTask(ctx, r.ID)

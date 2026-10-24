@@ -243,6 +243,17 @@ func (a *app) lfConfirm(c *ui.Context, p *lfPage) {
 		if ui.AlertDialog(c, &p.confirmOpen, i18n.T("Clear the script?"), msg, i18n.T("Cancel"), i18n.T("Clear")) == 1 {
 			a.clearLf(p)
 		}
+	case p.confirm == "changed":
+		// Saving found the project saved elsewhere (#101 M7).
+		title := strings.TrimSpace(p.saveName)
+		switch ui.AlertDialog(c, &p.confirmOpen, i18n.T("“%s” was changed elsewhere", title),
+			i18n.T("It was saved from another place, such as an agent through the Local API, after you opened it here. Your changes on this page are not saved yet."),
+			i18n.T("Cancel"), i18n.T("Save as a copy"), i18n.T("Replace it with mine")) {
+		case 1:
+			a.saveLf(p, true)
+		case 2:
+			a.saveLfAs(p, false, true)
+		}
 	case strings.HasPrefix(p.confirm, "delete:"):
 		id := strings.TrimPrefix(p.confirm, "delete:")
 		if ui.AlertDialog(c, &p.confirmOpen, i18n.T("Delete this project permanently?"), i18n.T("Its finished renders and exported files are kept."),
