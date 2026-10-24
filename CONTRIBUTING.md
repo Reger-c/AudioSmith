@@ -10,7 +10,7 @@ Thank you for helping. Bug reports, ideas, translations and pull requests are al
 
 ## Setting up
 
-AudioSmith runs on macOS 15 or later with Apple silicon. Building the app needs Xcode 26 (Swift 6.2) and Go 1.27.3 (`GOTOOLCHAIN=auto` downloads it); see [Build from source](README.md#build-from-source). The Go side, including the whole UI, also builds and tests headless on Linux, with the engine faked. Read [docs/architecture.md](docs/architecture.md) before a larger change: it says where things live and the rules the code follows.
+AudioSmith runs on macOS 15 or later with Apple silicon. Building the app needs Xcode 26 (Swift 6.2) and Go 1.27.3 (`GOTOOLCHAIN=auto` downloads it); see [Build from source](README.md#build-from-source). The Go side, including the whole UI, also builds and tests headless on Linux, with the engine faked. Read [docs/architecture.md](docs/architecture.md) before a larger change: it says where things live and the rules the code follows. The app itself (package main: the UI and the wiring) is in `app/`, the files it embeds in `assets/`, everything else in `internal/`; `go run ./app` runs it from the repository root, `go tool mygo dev` with hot reload.
 
 ## Checks
 
@@ -66,6 +66,8 @@ The bot commits to that branch with the workflow's token: don't require pull req
 - **报告问题：** 设置 → 诊断与关于 → 报告问题，会打开一个已填好诊断信息（不含文字、音频和密钥）的 issue；也可以直接[新建 issue](https://github.com/hehehai/AudioSmith/issues/new)，写清发生了什么、你期望什么、怎么复现。
 - **较大的改动**（新功能、新模型、改引擎协议）请先开 issue 讨论方案。
 - **PR：** 一个 PR 只做一件事，基于 `main`，并附上测试；说明对用户有什么变化、你是怎么验证的；改界面请附前后对比截图。
+
+**代码位置：** 应用本身（package main：界面和装配）在 `app/`，它嵌入的文件在 `assets/`，其余在 `internal/`；在仓库根目录用 `go run ./app` 运行，`go tool mygo dev` 带热重载。
 
 **提交前运行检查：** 见上面 [Checks](#checks) 的命令（`go test`、`go tool mygo vet .`、macOS 交叉编译、`gofmt`、`scripts/vendor-mygo.sh --check`，改了 workflow 再跑 actionlint，改了界面跑 `scripts/snapshots.sh check`）。界面文字用英文写在 `i18n.T` 里，并在 `internal/i18n/locales/zh-Hans.json` 补上中文。增删或升级依赖（Go 模块、`engine/Package.resolved` 里的 Swift 包、mlx-audio-swift 的版本、MyGo、RapiDoc、试听音频）后，运行 `scripts/third-party-notices.sh`（Swift 依赖版本变了加 `--fetch`）并提交生成的 `THIRD-PARTY-NOTICES.txt`，否则 `TestNoticesCurrent` 会失败；只引入与 AGPL-3.0 兼容的许可。
 

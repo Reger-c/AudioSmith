@@ -7,6 +7,9 @@
 - Settings → Models & network → Memory: “Unload idle models” offers after 5, 15, 30 or 60 minutes, or Never. If you had never changed it, it moves from Never to 30 minutes once; a choice you made is kept.
 - A model is never unloaded while a job uses it, during a dictation or during a live call; the 30 minutes count from its last use.
 
+### For contributors
+- The app's Go code (package main) moved from the repository root to `app/` (mygo.json `"main": "./app"`); the files it embeds moved to the `assets` package (`assets/`, starter voices now in `assets/starter-voices`). Run it with `go run ./app`, test it with `go test ./app`; `go tool mygo build`, `mygo dev` and `mygo vet .` work as before.
+
 ## 0.4.0-beta.7 — 2026-10-24
 
 ### Dub timeline: zoom and pan

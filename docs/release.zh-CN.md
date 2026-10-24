@@ -19,7 +19,7 @@ English: [release.md](release.md)
 
 官网的脚本是**放进仓库的副本**，不在发布时现下载：`scripts/actnow-publish.sh` 与官网的 `https://actnow.dev/actnow-publish.sh` 逐字节相同，所以发布跑的是审过的那一份，测试也能拿它对着假官网跑。用 `scripts/vendor-actnow-publish.sh` 更新它（看一遍 diff，再改 `scripts/release_publish_test.go` 里的 sha256，内容一变那个测试就失败）；`--check` 把它和官网的比对，工作流每次运行都会比一次，不一致只警告。
 
-仓库里**不保存任何发布相关的配置**：`mygo.json` 没有 `updates` 段，也没有签名身份。工作流在构建前用 `scripts/release-config.sh` 临时加上。所以其他所有构建（`go run`、`mygo dev`、`scripts/mac.sh go tool mygo build`、CI）都是 ad-hoc 签名、不会自动更新（`mygo.Updater.Enabled()` 为 false，设置 → 诊断与关于 里也会这样提示）。
+仓库里**不保存任何发布相关的配置**：`mygo.json` 没有 `updates` 段，也没有签名身份。工作流在构建前用 `scripts/release-config.sh` 临时加上。所以其他所有构建（`go run ./app`、`mygo dev`、`scripts/mac.sh go tool mygo build`、CI）都是 ad-hoc 签名、不会自动更新（`mygo.Updater.Enabled()` 为 false，设置 → 诊断与关于 里也会这样提示）。
 
 ## 一次性准备
 

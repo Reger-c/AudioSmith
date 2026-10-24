@@ -19,7 +19,7 @@ This follows MyGo's guides: [auto-updates](https://github.com/egoist/mygo/blob/m
 
 The website's script is vendored, not downloaded at release time: `scripts/actnow-publish.sh` is the site's `https://actnow.dev/actnow-publish.sh` byte for byte, so a release runs the copy that was reviewed, and tests run it against a fake site. `scripts/vendor-actnow-publish.sh` refreshes it (review the diff, and update the sha256 in `scripts/release_publish_test.go`, which fails on any other change); `--check` compares it with the site's, which every workflow run does, warning only.
 
-Nothing about releases is in the repository: `mygo.json` has no `updates` section and no signing identity. The workflow adds them for its build (`scripts/release-config.sh`). So every other build — `go run`, `mygo dev`, `scripts/mac.sh go tool mygo build`, CI — is signed ad hoc and never updates itself (`mygo.Updater.Enabled()` is false; Settings → Diagnostics and about says so).
+Nothing about releases is in the repository: `mygo.json` has no `updates` section and no signing identity. The workflow adds them for its build (`scripts/release-config.sh`). So every other build — `go run ./app`, `mygo dev`, `scripts/mac.sh go tool mygo build`, CI — is signed ad hoc and never updates itself (`mygo.Updater.Enabled()` is false; Settings → Diagnostics and about says so).
 
 ## What you set up once
 

@@ -6,7 +6,8 @@
 
 ```
 github.com/hehehai/AudioSmith
-├── *.go                 package main: the UI (views + view state) and the wiring
+├── app/                 package main: the UI (views + view state) and the wiring (mygo.json "main": "./app")
+├── assets/              package assets: the files the app embeds (tray icons, voice previews, curated and starter voices) and the app icon
 ├── internal/
 │   ├── core/            domain types, service interfaces, event bus, sentinel errors   (leaf)
 │   ├── services/        TakeService, VoiceService, ProjectService, DraftService
@@ -49,8 +50,12 @@ github.com/hehehai/AudioSmith
 │   │   └── persona/     the .asvoice voice file (and VoiceStudio .ovsvoice import)
 │   ├── archtest/        tests of the code's structure: file sizes, import layering ("Code structure rules")
 │   └── tools/           developer commands (standard library only): snapcmp (snapshot comparison), declhash (pure-move check)
-└── engine/              the Swift helper (audiosmith-engine), Fixtures/, Tests/
+├── engine/              the Swift helper (audiosmith-engine), Fixtures/, Tests/
+├── resources/           shipped as they are in the bundle's Resources (mygo); darwin-arm64/engine is staged by scripts/build-engine.sh
+└── scripts/, docs/, third_party/ (vendored MyGo + patches)
 ```
+
+The module root holds no Go files (`internal/archtest` checks it): the app is `./app` (refactor batch B13), and `go:embed` cannot reach a parent directory, so what the app embeds is in `assets/` as package `assets`. File names without a directory in this document (`shell.go`, `dub*.go`) are the app's, in `app/`.
 
 ### Import rules
 
@@ -110,7 +115,7 @@ Event types live next to their publisher, and their topic starts with the publis
 
 ### Why the UI stays in package main
 
-- **MyGo's conventions.** `mygo dev`, `mygo build` and `ui.View` build the root `main` package. `go tool mygo vet .` runs `go vet ./...` and the UI-lifetime checks over every package, so nothing would be lost by moving.
+- **MyGo's conventions.** `mygo dev` and `mygo build` build the package mygo.json's `"main"` names (`./app`); MyGo does not require UI code to be in package main. `go tool mygo vet .` (from the module root) runs `go vet ./...` and the UI-lifetime checks over every package, so nothing would be lost by moving views out.
 - **Views need the window** (`*mygo.Window` for `Update` and dialogs, `ui.Context`, the view state), all on the main thread. The **domain** is what must be goroutine-safe and testable, and it lives in `internal/`.
 - **Areas** have their own files and state structs, embedded in `app`; they talk through the seams of §3.4.
 - **Reusable widgets go in `internal/widgets`** when they grow (M1+). `internal/ui` is avoided because it would shadow `mygo/ui`.
@@ -306,16 +311,16 @@ The engine builds on upstream Blaizzy/mlx-audio-swift (pinned commit, see README
 | All Go tests | `CGO_ENABLED=0 go test ./...` | Views in `ui.Tester` with fake engines; the real scheduler and supervisor against a scripted engine; the hub against a fake HF; protocol fixtures; i18n key parity. The SQLite library is downloaded and cached on first run (`MYGO_SQLITE_LIBRARY` overrides it; see `.github/workflows/ci.yml`). |
 | MyGo vet | `go tool mygo vet .` | `go vet ./...` and the UI-lifetime checks |
 | Race | `go test -race ./...` | needs cgo |
-| Snapshots | `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots .` or `scripts/snapshots.sh render /tmp/shots` | every page, light/dark, en/zh-Hans. Reproducible: two runs of one commit write the same bytes (`snapshot_env_test.go` runs each test in a `testing/synctest` bubble from a fixed time, on fixed data directories, free space and ports). A new snapshot test calls `runSnapshots` and makes its folders with `testDir` |
+| Snapshots | `AUDIOSMITH_SNAPSHOTS=/tmp/shots go test -run TestSnapshots ./app` or `scripts/snapshots.sh render /tmp/shots` | every page, light/dark, en/zh-Hans. Reproducible: two runs of one commit write the same bytes (`snapshot_env_test.go` runs each test in a `testing/synctest` bubble from a fixed time, on fixed data directories, free space and ports). A new snapshot test calls `runSnapshots` and makes its folders with `testDir` |
 | Snapshots before/after | `scripts/snapshots.sh check [BASE]` | renders BASE (default: the merge base with main) and the working tree and compares them with `internal/tools/snapcmp` (pixel for pixel; `scripts/snapshots-volatile.txt` lists the few allowed to differ a little, and why). `scripts/snapshots.sh twice` checks reproducibility |
-| Pure moves | `go run ./internal/tools/declhash . > before.txt` (base) / `> after.txt` (branch), `diff` | empty for a refactor that only moves code; `DIR/...` for a tree |
+| Pure moves | `go run ./internal/tools/declhash app > before.txt` (base; `.` before B13) / `> after.txt` (branch), `diff` | empty for a refactor that only moves code; `DIR/...` for a tree |
 | Structure | `go test ./internal/archtest` | file sizes, import layering (part of `go test ./...`) |
 | Swift fixtures | `scripts/test-engine.sh` | Mac: the Swift wire types against `engine/Fixtures` |
 | Engine smoke | `scripts/smoke-engine.sh` | Mac: the engine binary alone |
-| Real engine | `AUDIOSMITH_E2E=1 go test -run 'TestEndToEnd' -v .` and `… -run TestRealEngineConformance ./internal/engine` | Mac, built engine, Kokoro in the HF cache |
-| Model lifecycle | `AUDIOSMITH_E2E=1 AUDIOSMITH_E2E_MODELS=kokoro-82m-bf16,omnivoice-bf16 go test -run TestModelLifecycle -v -timeout 40m .` | Mac + network: download, cancel, resume, licence, generate offline under `sandbox-exec`, delete |
+| Real engine | `AUDIOSMITH_E2E=1 go test -run 'TestEndToEnd' -v ./app` and `… -run TestRealEngineConformance ./internal/engine` | Mac, built engine, Kokoro in the HF cache |
+| Model lifecycle | `AUDIOSMITH_E2E=1 AUDIOSMITH_E2E_MODELS=kokoro-82m-bf16,omnivoice-bf16 go test -run TestModelLifecycle -v -timeout 40m ./app` | Mac + network: download, cancel, resume, licence, generate offline under `sandbox-exec`, delete |
 | Model smoke | `scripts/smoke-models.sh [ids]` | Mac + network: every catalogue model, per-model report |
 | Dictation latency, long render, real media | `AUDIOSMITH_E2E=1 go test -run 'TestDictationLatency|TestLongRender|TestRealEngineMedia' -v ./...` | Mac (see README) |
 | Keychain, proxy | `AUDIOSMITH_MAC=1 go test -run TestMacKeychainAndProxy -v ./internal/hub` | Mac |
 | ActNow family start (real LaunchServices) | `AUDIOSMITH_MAC=1 ACTNOW_FAMILY_DIR=/tmp/x/ActNow HF_HUB_CACHE=/tmp/x/hub [AUDIOSMITH_APP=build/darwin-arm64/AudioSmith.app] go test -run TestMacFamily -v ./internal/family`, then `go run github.com/hehehai/actnowkit/cmd/actnow-conformance check\|discover\|claims` with the same env | Mac, throwaway dirs only |
-| ActNow family reuse, spec §16.1 scenario 1 (real LaunchServices, a real download of Silero VAD as "Dicta") | `AUDIOSMITH_MAC=1 ACTNOW_FAMILY_DIR=/tmp/x/ActNow HF_HUB_CACHE=/tmp/x/hub go test -run TestMacReuseScenario -v .` | Mac, throwaway dirs only |
+| ActNow family reuse, spec §16.1 scenario 1 (real LaunchServices, a real download of Silero VAD as "Dicta") | `AUDIOSMITH_MAC=1 ACTNOW_FAMILY_DIR=/tmp/x/ActNow HF_HUB_CACHE=/tmp/x/hub go test -run TestMacReuseScenario -v ./app` | Mac, throwaway dirs only |
