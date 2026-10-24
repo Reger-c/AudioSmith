@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Faster with long projects
+- Dub: the editor builds only the lines in view; a 2-hour video's 2,000 lines no longer slow every frame (190 ms → under 1 ms a frame).
+- Audiobook and Stories: a long manuscript (a novel) is checked and its draft saved once you pause typing, away from the window, not at every key; typing in 500,000 characters is as quick as in a short text.
+- Studio and Audiobook editors: wrapping long text remembers what it measured, so opening, resizing and typing in a long manuscript no longer stall (rows still never pass the editor's edge).
+- The invisible watermark is added while the audio streams through, so watermarking an hours-long dub no longer holds the whole recording in memory several times.
+- The engine keeps up to 6 models loaded (small ones don't count) and lets the memory budget decide, so a story render no longer reloads a model at every line.
+- Finished tasks older than 30 days are removed at startup; voice previews no longer copy their audio every frame; the render cache is tidied at most once a minute.
+
 ### Security
 - Voice names are cleaned wherever they come in (imported .asvoice and .ovsvoice files, the Local API, MCP, the app, Discover voices): line breaks and control characters become spaces, and a name keeps at most 80 characters. Names saved earlier are cleaned the next time they are saved.
 - The agents' skill and setup prompt list voice names as data (quoted, cut short), not as text an agent could take for instructions.
