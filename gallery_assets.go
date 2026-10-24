@@ -43,7 +43,11 @@ func galleryClip(id, kind string) []byte {
 	if name == id || strings.ContainsAny(name, "/\\") {
 		return nil
 	}
-	b, err := fs.ReadFile(galleryVoicesFS, path.Join(galleryVoicesDir, name+"."+kind+".ogg"))
+	file := path.Join(galleryVoicesDir, name+"."+kind+".ogg")
+	if kind == "preview" {
+		return embeddedClip(galleryVoicesFS, file) // cards ask at every frame
+	}
+	b, err := fs.ReadFile(galleryVoicesFS, file)
 	if err != nil {
 		return nil
 	}

@@ -24,9 +24,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"hash/fnv"
 	"slices"
-	"strconv"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -88,7 +86,8 @@ type lfPage struct {
 	blocks   []services.DialogueBlockInfo // a manuscript's dialogue passages (audiobook_dialogue.go)
 	cast     []string                     // bookCast, at castRev
 	castRev  int
-	deco     bookDeco // the manuscript's passage styling (audiobook_dialogue_editor.go)
+	lfc      lfCompile // a large document's deferred compile (longform_compile.go)
+	deco     bookDeco  // the manuscript's passage styling (audiobook_dialogue_editor.go)
 
 	// View state.
 	lines       ui.ListState
@@ -219,6 +218,7 @@ func (a *app) setLfDoc(p *lfPage, d services.LongformDoc, project, saved string)
 	}
 	p.sel = -1
 	p.fp = ""
+	p.lfc.compiled, p.lfc.deferring = false, false
 	p.scriptRev++
 	p.render = ""
 	if p.ed != nil {
@@ -235,51 +235,6 @@ func docJSON(d *services.LongformDoc) string {
 	c.Render = ""
 	b, _ := json.Marshal(c)
 	return string(b)
-}
-
-// autosaveLf hands a page's document to the draft service when it
-// changed, and recompiles it.
-func (a *app) autosaveLf(p *lfPage) {
-	fp := a.lfFingerprint(p)
-	if fp == p.fp {
-		return
-	}
-	p.fp = fp
-	a.compileLf(p)
-	a.bookDialogueDefault(p)
-	d := lfDraft{Version: 1, Doc: p.doc, Project: p.project, Saved: p.savedJSON, Render: p.render, Auto: p.auto}
-	if js := docJSON(&p.doc) + "|" + p.doc.Render + "|" + p.project + "|" + p.render + "|" + strconv.FormatBool(p.auto); js != p.draftJSON {
-		p.draftJSON = js
-		a.lib.svc.Drafts.Save(p.draftKey(), d)
-	}
-}
-
-// lfFingerprint changes whenever the document, or a voice it may use,
-// does: the manuscript by its revision (it is large).
-func (a *app) lfFingerprint(p *lfPage) string {
-	d := p.doc
-	d.Script = ""
-	h := fnv.New64a()
-	b, _ := json.Marshal(d)
-	h.Write(b)
-	h.Write([]byte(strconv.Itoa(p.scriptRev) + "|" + p.project + "|" + p.render))
-	for _, v := range a.voices {
-		h.Write([]byte(v.ID + v.UpdatedAt.String()))
-	}
-	return strconv.FormatUint(h.Sum64(), 36)
-}
-
-// compileLf compiles a page's document (stats, problems, the spec).
-func (a *app) compileLf(p *lfPage) {
-	d := p.doc
-	spec, probs, blocks := services.CompileBook(&d, a.lfResolver(&d))
-	spec.Project = p.project
-	p.spec, p.problems, p.blocks = spec, probs, blocks
-	if p.kind == core.ProjectAudiobook {
-		p.stats = services.StatsOf(d.Script, d.Speed)
-	} else {
-		p.stats = services.StatsOf(services.StoryScript(d.Lines), d.Speed)
-	}
 }
 
 // --- the encoder -------------------------------------------------------------

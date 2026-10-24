@@ -166,17 +166,34 @@ type bookDeco struct {
 	backgrounds []editor.LineBackground
 	marks       []editor.GutterMark
 	inlays      []editor.Inlay
+	lines       int // the manuscript's lines when made
 }
 
 // manuscriptDeco styles the passages of the manuscript editor.
 func (a *app) manuscriptDeco(c *ui.Context, p *lfPage) {
 	t := c.Theme()
 	st := p.ed
-	src := st.Buffer.String()
+	// The document's script is the editor's text from here on, read once
+	// (syncManuscript); the deco takes it from the document.
+	a.syncManuscript(p)
 	e, ready := a.bookDialogueModel(p)
-	key := strconv.FormatUint(st.Buffer.Version(), 10) + "|" + p.fp + "|" + strconv.FormatBool(ready) + "|" + e.ID + "|" + i18n.Locale() + "|" + strconv.FormatBool(t.Dark)
+	key := strconv.FormatUint(st.Buffer.Version(), 10) + "|" + p.fp + "|" + strconv.Itoa(p.lfc.rev) + "|" + strconv.FormatBool(ready) + "|" + e.ID + "|" + i18n.Locale() + "|" + strconv.FormatBool(t.Dark)
+	if p.deco.key != key && p.deco.key != "" && p.lfc.stale(st.Buffer.Version()) && p.deco.lines == st.Buffer.LineCount() {
+		// Typing in a line of a large manuscript whose compile is pending:
+		// the passages are on the lines they were on until it lands (its
+		// revision is in the key).
+		p.deco.key = key
+	}
 	if p.deco.key != key {
-		p.deco = bookDeco{key: key}
+		// The text only when it changed (review #102: 600 KB a frame).
+		src := p.doc.Script
+		// While a large manuscript's compile is pending (longform_compile.go),
+		// its passages' spans are those of the text before: the passages
+		// keep their summaries, which the editor moves with the edits, and
+		// are matched to them by their order.
+		stale := p.lfc.stale(st.Buffer.Version())
+		inlays := p.deco.inlays
+		p.deco = bookDeco{key: key, lines: st.Buffer.LineCount()}
 		blocks, _ := markup.DialogueBlocks(src)
 		starts := []int{0}
 		for i := 0; i < len(src); i++ {
@@ -189,8 +206,11 @@ func (a *app) manuscriptDeco(c *ui.Context, p *lfPage) {
 			return max(i-1, 0)
 		}
 		k := tok(t)
-		for _, b := range blocks {
+		for i, b := range blocks {
 			info, compiled := blockInfo(p, b)
+			if stale && len(blocks) == len(p.blocks) {
+				info, compiled = p.blocks[i], true
+			}
 			warn := !b.Closed() || compiled && len(info.Uncast) > 0
 			bg, dot := k.Accent.Alpha(0.05), k.Accent.Alpha(0.35)
 			if warn {
@@ -201,11 +221,15 @@ func (a *app) manuscriptDeco(c *ui.Context, p *lfPage) {
 			for l := first; l <= last; l++ {
 				p.deco.marks = append(p.deco.marks, editor.GutterMark{Line: l, Color: dot})
 			}
-			if compiled {
+			if compiled && !stale {
 				p.deco.inlays = append(p.deco.inlays, editor.Inlay{Offset: b.Open.End, Text: "  " + blockSummary(info, e.DisplayName(), ready)})
 			}
 		}
-		st.SetInlays(p.deco.inlays)
+		if stale {
+			p.deco.inlays = inlays
+		} else {
+			st.SetInlays(p.deco.inlays)
+		}
 	}
 	st.LineBackgrounds, st.GutterMarks = p.deco.backgrounds, p.deco.marks
 	if st.OnCompletion == nil {

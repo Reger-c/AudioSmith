@@ -188,7 +188,9 @@ func openDB(ctx context.Context, path string) (*sqlite.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, pragma := range []string{"PRAGMA journal_mode = WAL", "PRAGMA synchronous = NORMAL", "PRAGMA foreign_keys = ON"} {
+	// cache_size: 16 MB of pages rather than 2 (dub documents and recipes
+	// are large rows; review #102).
+	for _, pragma := range []string{"PRAGMA journal_mode = WAL", "PRAGMA synchronous = NORMAL", "PRAGMA foreign_keys = ON", "PRAGMA cache_size = -16384"} {
 		if _, err := db.Query(ctx, pragma); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("sqlitestore: %s: %w", pragma, err)
@@ -248,8 +250,15 @@ func (s *Store) Documents() store.Documents { return s.documents }
 func (s *Store) Favorites() store.Favorites { return s.favorites }
 func (s *Store) Jobs() jobs.Store           { return s.jobs }
 
-// Close closes the database; operations in flight are cancelled.
-func (s *Store) Close() error { return s.db.Close() }
+// Close closes the database; operations in flight are cancelled. It has
+// SQLite gather the statistics its queries may lack first (PRAGMA
+// optimize, quick: it looks at the tables queries used).
+func (s *Store) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	s.db.Query(ctx, "PRAGMA optimize")
+	cancel()
+	return s.db.Close()
+}
 
 // --- value helpers ----------------------------------------------------
 

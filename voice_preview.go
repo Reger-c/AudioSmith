@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/egoist/mygo/audio/vorbis" // the bundled previews are Ogg Vorbis
@@ -37,10 +38,25 @@ func builtinPreview(e catalog.Entry, speaker string) []byte {
 	if speaker == "" || e.Family == "" || strings.ContainsAny(speaker, "/\\") {
 		return nil
 	}
-	b, err := fs.ReadFile(previewFS, path.Join(previewDir, previewName(e.Family, speaker)+".ogg"))
-	if err != nil {
-		return nil
+	return embeddedClip(previewFS, path.Join(previewDir, previewName(e.Family, speaker)+".ogg"))
+}
+
+// embeddedClips are the bundled preview clips read so far, by path (nil
+// for none): pickers and gallery cards ask for them at every frame, and
+// fs.ReadFile copies a clip each time (review #102: 300–900 KB a frame).
+// Shared: never change the bytes.
+var embeddedClips sync.Map
+
+// embeddedClip is the bundled file name of fsys, read once, or nil.
+func embeddedClip(fsys embed.FS, name string) []byte {
+	if b, ok := embeddedClips.Load(name); ok {
+		return b.([]byte)
 	}
+	b, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		b = nil
+	}
+	embeddedClips.Store(name, b)
 	return b
 }
 

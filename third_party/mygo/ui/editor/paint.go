@@ -88,6 +88,7 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 	ed.r = r
 	ed.layout(r.W, r.H, p.Scale())
 	more := false
+	v.shownRows = int(r.H/v.lineHeight) + 2
 	if !v.measureWraps(ed.anchorLine, 4*time.Millisecond) {
 		more = true
 	}

@@ -3,9 +3,14 @@ import Foundation
 @preconcurrency import MLX
 
 /// The models a gpu worker keeps resident, of every task (TTS, STT,
-/// alignment, VAD, enhancement). The least recently used beyond a cap are
-/// dropped (AUDIOSMITH_MAX_MODELS, default 3); the app's supervisor also
-/// unloads idle ones to stay within its memory budget. Jobs are serialized
+/// alignment, VAD, enhancement). Memory decides what stays: a load first
+/// drops idle models to fit the budget (makeRoom), and the app's supervisor
+/// unloads idle ones to stay within its memory budget. A cap on their
+/// number (AUDIOSMITH_MAX_MODELS, default 6) is a safety net that small
+/// models (under smallModelBytes: aligners, VAD) do not count against: a
+/// story render turns between TTS, the aligner, the recognizer and the
+/// dialogue model at every segment, and a cap of 3 reloaded one each time
+/// (review #102). Jobs are serialized
 /// by the Server (gpu concurrency 1): MLX models must not run from two jobs
 /// at once.
 final class ModelStore: @unchecked Sendable {
@@ -26,7 +31,7 @@ final class ModelStore: @unchecked Sendable {
     /// maxResident overrides AUDIOSMITH_MAX_MODELS (the listen worker keeps one).
     init(out: Writer, maxResident: Int? = nil) {
         self.out = out
-        self.maxResident = maxResident ?? Int(ProcessInfo.processInfo.environment["AUDIOSMITH_MAX_MODELS"] ?? "") ?? 3
+        self.maxResident = maxResident ?? Int(ProcessInfo.processInfo.environment["AUDIOSMITH_MAX_MODELS"] ?? "") ?? 6
         // Keep MLX's buffer cache small: this process lives as long as the
         // app, and an uncapped cache grows to gigabytes (spike: OmniVoice 6–8 GB → 4.9 GB).
         MLX.Memory.cacheLimit = 256 * 1024 * 1024
@@ -130,11 +135,16 @@ final class ModelStore: @unchecked Sendable {
         }
     }
 
+    /// Models smaller than this do not count against maxResident (except
+    /// for a worker that keeps one).
+    static let smallModelBytes: Int64 = 512 << 20
+
     private func insert(_ model: String, _ r: Resident) {
         lock.withLock {
             resident[model] = r
-            while resident.count > maxResident,
-                  let lru = resident.filter({ $0.value.inUse == 0 }).min(by: { $0.value.lastUsed < $1.value.lastUsed })?.key {
+            let counted = { (r: Resident) in self.maxResident <= 1 || r.bytes >= Self.smallModelBytes }
+            while resident.values.filter(counted).count > maxResident,
+                  let lru = resident.filter({ $0.value.inUse == 0 && counted($0.value) }).min(by: { $0.value.lastUsed < $1.value.lastUsed })?.key {
                 resident[lru] = nil
                 log("dropped \(lru): more than \(maxResident) models resident")
             }

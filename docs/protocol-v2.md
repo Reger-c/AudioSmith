@@ -30,7 +30,7 @@ Protocol v1 (the MVP: flat `cmd`/`event` objects, one job, cancel without an id)
 | stdout hygiene | stdout carries only protocol lines. The engine dups the real stdout for itself and points fd 1 at stderr, so stray prints from libraries can't corrupt the stream (the v1 engine already does this). |
 | Paths | Files are passed as absolute paths. The app owns every directory it names. Inputs are read-only; outputs are written to a temporary name in the same directory, then renamed. |
 | End | When stdin closes, the engine cancels its jobs and exits 0. `engine.shutdown` does the same after it answers. If it does not exit within 5 s, the app kills it. |
-| Environment | The app may add variables (`engine.Config.Env`), e.g. proxies. `HF_TOKEN` is used for downloads while the engine still downloads (§4.7). `AUDIOSMITH_MAX_MODELS` caps resident models (default 3). |
+| Environment | The app may add variables (`engine.Config.Env`), e.g. proxies. `HF_TOKEN` is used for downloads while the engine still downloads (§4.7). `AUDIOSMITH_MAX_MODELS` caps resident models (default 6; models under 512 MB do not count; memory decides first). |
 
 ## 3. Messages
 

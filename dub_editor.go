@@ -161,7 +161,13 @@ func (a *app) dubLines(c *ui.Context) {
 	}
 	var after func()
 	a.dubDlgNow = a.dubDialogue()
-	ui.List(c.Key("dub-lines"), &a.dubList2, len(p.Segments)).Grow(1).MinHeight(px(t, 220)).Gap(px(t, 2)).ItemKey(a.dubList2.Key).Rows(func(r ui.ListRow) {
+	// Basis(0): the list takes the room left in the workspace (220 at
+	// least), not the height of all its lines, so it scrolls itself and
+	// builds only the lines in view; the workspace's scroll is for short
+	// windows only (review #102: 2000 lines took 190 ms a frame). It runs
+	// into the workspace's bottom padding (the negative margin), where the
+	// next line showed cut off when the workspace scrolled the lines.
+	ui.List(c.Key("dub-lines"), &a.dubList2, len(p.Segments)).Basis(0).Grow(1).MinHeight(px(t, 220)).Margin(0, 0, -px(t, sp2), 0).Gap(px(t, 2)).ItemKey(a.dubList2.Key).Rows(func(r ui.ListRow) {
 		if r.Index >= len(a.dub.Segments) {
 			return
 		}

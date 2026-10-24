@@ -127,6 +127,7 @@ func (a *app) toast(msg string) {
 // the Local API, calls, the family, the engines (unless OnWillQuit did),
 // the notifications and the logs, bounded, off the main thread.
 func (a *app) quit() {
+	a.flushLongform() // longform_compile.go: a large document's pending draft
 	a.pl.Stop()
 	a.closeDictation() // M2: dictation.go
 	a.closeDubs()      // M4: dub.go

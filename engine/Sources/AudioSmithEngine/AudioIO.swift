@@ -115,6 +115,12 @@ func openMedia(_ path: String?) async throws -> Media {
     return Media(url: url, asset: asset, audioTracks: audio, probe: p)
 }
 
+/// The rate and channels readAudio reads media at when it is asked to
+/// keep the source's: the first audio track's, at most 2 channels.
+func nativeFormat(_ media: Media) -> (sampleRate: Int, channels: Int) {
+    (media.probe.sampleRate ?? 48000, min(media.probe.channels ?? 2, 2))
+}
+
 /// Reads a window of an audio track as interleaved float samples at
 /// sampleRate/channels (nil keeps the source's), calling sink with each
 /// buffer and progress with the fraction read. Cancellable.
@@ -126,8 +132,9 @@ func readAudio(
     guard track >= 0, track < media.audioTracks.count else {
         throw EngineError.badRequest("\(media.url.lastPathComponent) has \(media.audioTracks.count) audio track(s), not \(track + 1)")
     }
-    let rate = sampleRate ?? media.probe.sampleRate ?? 48000
-    let ch = channels ?? min(media.probe.channels ?? 2, 2)
+    let native = nativeFormat(media)
+    let rate = sampleRate ?? native.sampleRate
+    let ch = channels ?? native.channels
     let reader: AVAssetReader
     do {
         reader = try AVAssetReader(asset: media.asset)

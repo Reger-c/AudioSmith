@@ -48,9 +48,22 @@ func eachBlock(ctx context.Context, path string, fn func([]float32) error) error
 	}
 }
 
+// pruneEvery is how often pruneCache walks the chunk cache at most: every
+// render ends with it (a dub's every line), and walking 10,000 chunks
+// takes 10 ms or more (review #102). The cache may pass its cap by what
+// renders write meanwhile.
+const pruneEvery = time.Minute
+
 // pruneCache keeps the chunk cache under its cap, dropping the least
-// recently used chunks.
+// recently used chunks; at most once every pruneEvery.
 func (r *renderer) pruneCache() {
+	r.pruneMu.Lock()
+	if !r.pruneAt.IsZero() && time.Since(r.pruneAt) < pruneEvery {
+		r.pruneMu.Unlock()
+		return
+	}
+	r.pruneAt = time.Now()
+	r.pruneMu.Unlock()
 	limit := r.cacheMax
 	if limit <= 0 {
 		limit = 2 << 30

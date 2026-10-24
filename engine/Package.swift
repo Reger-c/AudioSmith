@@ -63,12 +63,21 @@ let package = Package(
             path: "Sources/AudioSmithDialogue",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // Streaming audio helpers without MLX (watermark.embed's windows
+        // and resampler, review #102), so the tests can check them.
+        .target(
+            name: "AudioSmithStream",
+            dependencies: ["AudioSmithProtocol"],
+            path: "Sources/AudioSmithStream",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "AudioSmithEngine",
             dependencies: [
                 "AudioSmithProtocol",
                 "AudioSmithText",
                 "AudioSmithDialogue",
+                "AudioSmithStream",
                 .product(name: "MLXAudioCore", package: "mlx-audio-swift"),
                 // S3Gen's public types (SoulX-Podcast's flow, HiFT, CAM++
                 // and S3 tokenizer).
@@ -95,7 +104,7 @@ let package = Package(
         // and dialogue helpers (scripts/test-engine.sh).
         .testTarget(
             name: "AudioSmithEngineTests",
-            dependencies: ["AudioSmithProtocol", "AudioSmithText", "AudioSmithDialogue"],
+            dependencies: ["AudioSmithProtocol", "AudioSmithText", "AudioSmithDialogue", "AudioSmithStream"],
             path: "Tests/AudioSmithEngineTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
