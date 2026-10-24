@@ -95,8 +95,8 @@ type proc struct {
 
 	writeSem chan struct{} // one write at a time (a channel: waiting for it heeds ctx)
 	mu       sync.Mutex
-	pending map[string]*call
-	closed  bool
+	pending  map[string]*call
+	closed   bool
 
 	helloDone   atomic.Bool
 	intentional atomic.Bool // stopped on purpose: no failure, no restart
