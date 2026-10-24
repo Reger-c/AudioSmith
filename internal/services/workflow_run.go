@@ -232,12 +232,12 @@ func (s *Workflows) prune(id string, items []workflow.Item) {
 // Cancel stops a workflow's run: its jobs are cancelled, the steps they
 // were on go back to waiting, and the run can resume later.
 func (s *Workflows) Cancel(ctx context.Context, id string) error {
-	if s.cfg.Scheduler == nil {
-		return nil
-	}
-	active, err := s.cfg.Scheduler.List(ctx, jobs.Filter{Owner: WorkflowOwner + id}) // interrupted ones too
-	if err != nil {
-		return err
+	var active []jobs.Job
+	if s.cfg.Scheduler != nil {
+		var err error
+		if active, err = s.cfg.Scheduler.List(ctx, jobs.Filter{Owner: WorkflowOwner + id}); err != nil { // interrupted ones too
+			return err
+		}
 	}
 	var errs []error
 	for _, j := range active {
