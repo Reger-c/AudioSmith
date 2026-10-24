@@ -25,6 +25,7 @@ func (a *app) loadRenders() {
 		if err := svc.Reconcile(ctx); err != nil {
 			a.post(func() { a.toast(i18n.T("Could not read the renders: %v", err)) })
 		}
+		a.lib.pruneJobs(ctx) // jobs_prune.go: after Reconcile, which reads the jobs of renders left running
 		l, err := svc.List(ctx, store.RenderQuery{Limit: 50})
 		a.post(func() {
 			if err != nil {
