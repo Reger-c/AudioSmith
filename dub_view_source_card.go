@@ -12,6 +12,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -67,6 +68,9 @@ func (a *app) dubSourceMedia(c *ui.Context, w, h float32) {
 		ui.WebView(c, v.wv).Width(w).Height(h).Radius(px(t, radiusCard))
 	} else {
 		bmp := a.coverBitmap(a.dubCoverPath(p))
+		if bmp == nil && dubAudioOnly(p) {
+			h = min(h, px(t, 96)) // sound alone: a band, not a screen
+		}
 		box := ui.Box(c.Key("dub-cover")).Width(w).Height(h).Radius(px(t, radiusCard)).Background(k.Subtle).Center().Clip()
 		box.Children(func() {
 			switch {
@@ -79,7 +83,7 @@ func (a *app) dubSourceMedia(c *ui.Context, w, h float32) {
 				})
 			default:
 				ic := dubIcon
-				if !p.Source.HasVideo && p.Media.Audio != "" || p.Source.Meta != nil && !p.Source.Meta.HasVideo() {
+				if dubAudioOnly(p) {
 					ic = icons.Soundwave
 				}
 				ui.Icon(c, ic.Linear).Size(px(t, 40), px(t, 40)).TextColor(k.Text3)
@@ -139,6 +143,22 @@ func dubPlayable(path, codec string) bool {
 		}
 	}
 	return codec == ""
+}
+
+// dubAudioOnly reports a source known to have no picture: by the site's
+// format, by what reading the file found, else by its extension.
+func dubAudioOnly(p *dub.Project) bool {
+	switch {
+	case p.Source.Meta != nil && p.Source.Meta.Error == "":
+		return !p.Source.Meta.HasVideo()
+	case p.Source.HasVideo || p.Source.Video != nil:
+		return false
+	case p.Media.Audio != "" || p.Source.Duration > 0:
+		return true // read: no picture
+	case p.Source.Path != "":
+		return !slices.Contains(dub.VideoExts, strings.ToLower(strings.TrimPrefix(filepath.Ext(p.Source.Path), ".")))
+	}
+	return false
 }
 
 // dubCoverPath is the picture the centre shows before the video: the
@@ -276,7 +296,7 @@ func dubSourceFacts(p *dub.Project) string {
 		parts = append(parts, dubPicture(v.Width, v.Height)+" "+strings.ToUpper(v.Codec))
 	case m != nil && m.Width > 0 && m.Height > 0:
 		parts = append(parts, dubPicture(m.Width, m.Height))
-	case p.Source.Path != "" && !p.Source.HasVideo && p.Media.Audio != "", m != nil && !m.HasVideo():
+	case dubAudioOnly(p):
 		parts = append(parts, i18n.T("Audio only"))
 	}
 	switch {
