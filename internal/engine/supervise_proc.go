@@ -27,23 +27,33 @@ func (s *supervisor) startProcess(w *worker, bin string) (*proc, error) {
 	cmd := exec.Command(bin, "--role", string(w.role))
 	cmd.Dir = filepath.Dir(bin)
 	cmd.Env = append(os.Environ(), s.cfg.Env...)
-	stdin, err := cmd.StdinPipe()
+	// stdin is our own pipe, not StdinPipe's wrapper: its *os.File takes
+	// write deadlines (write).
+	stdinR, stdin, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
+	cmd.Stdin = stdinR
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		stdinR.Close()
+		stdin.Close()
 		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
+		stdinR.Close()
+		stdin.Close()
 		return nil, err
 	}
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	stdinR.Close() // the child has its copy
+	if err != nil {
+		stdin.Close()
 		return nil, fmt.Errorf("starting %s: %w", bin, err)
 	}
 	p := &proc{s: s, w: w, cmd: cmd, stdin: stdin, tail: newLineTail(40), exited: make(chan struct{}),
-		pending: map[string]*call{}, pollNow: make(chan struct{}, 1)}
+		pending: map[string]*call{}, pollNow: make(chan struct{}, 1), writeSem: make(chan struct{}, 1)}
 	var logFile *os.File
 	if s.cfg.LogDir != "" {
 		logFile = openLog(filepath.Join(s.cfg.LogDir, "engine-"+string(w.role)+".log"))
@@ -315,7 +325,14 @@ func (p *proc) kill() {
 	}
 }
 
-func (p *proc) write(m proto.Message) error {
+// write sends one request line. It heeds ctx while it waits for the
+// writes before it and while it writes, and gives up after WriteTimeout:
+// an engine that stops reading its stdin (stuck, or suspended) would
+// otherwise block every later request, job.cancel and engine.shutdown
+// included (#101 M5). A write that stopped part-way, or that timed out,
+// leaves the stream unusable: the process is killed (FailStuck) and
+// restarted.
+func (p *proc) write(ctx context.Context, m proto.Message) error {
 	line, err := proto.Encode(m)
 	if err != nil {
 		return err
@@ -323,12 +340,53 @@ func (p *proc) write(m proto.Message) error {
 	if len(line) > proto.MaxLine {
 		return fmt.Errorf("request of %d bytes is over the protocol's limit", len(line))
 	}
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	if _, err := p.stdin.Write(line); err != nil {
+	select {
+	case p.writeSem <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-p.exited:
+		return ErrWorkerExited
+	}
+	defer func() { <-p.writeSem }()
+	f, ok := p.stdin.(interface{ SetWriteDeadline(time.Time) error })
+	if !ok {
+		if _, err := p.stdin.Write(line); err != nil {
+			return fmt.Errorf("writing to the engine: %v: %w", err, ErrWorkerExited)
+		}
+		return nil
+	}
+	dl := time.Now().Add(p.s.cfg.WriteTimeout)
+	f.SetWriteDeadline(dl)
+	// ctx ending stops the write at once; wait for that to be done
+	// before the next write sets its own deadline.
+	expired := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(expired)
+		f.SetWriteDeadline(time.Now())
+	})
+	n, err := p.stdin.Write(line)
+	if !stop() {
+		<-expired
+	}
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
 		return fmt.Errorf("writing to the engine: %v: %w", err, ErrWorkerExited)
 	}
-	return nil
+	if n == 0 && ctx.Err() != nil {
+		return ctx.Err() // nothing written: the stream is intact
+	}
+	msg := fmt.Sprintf("the engine stopped reading its requests (%s took over %s)", m.Method, p.s.cfg.WriteTimeout)
+	if ctx.Err() != nil {
+		msg = fmt.Sprintf("a request (%s) was cut off part-way", m.Method)
+	}
+	p.s.cfg.Logf("engine %s: %s: restarting the worker", p.w.role, msg)
+	p.killFor(FailStuck, msg, false)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return fmt.Errorf("writing to the engine: %s: %w", msg, ErrWorkerExited)
 }
 
 // call sends a request and waits for its response (see Supervisor.Call).
@@ -352,7 +410,7 @@ func (p *proc) call(ctx context.Context, id, method string, params any, notify f
 	}
 	p.pending[id] = c
 	p.mu.Unlock()
-	if err := p.write(req); err != nil {
+	if err := p.write(ctx, req); err != nil {
 		p.drop(id)
 		return nil, err
 	}

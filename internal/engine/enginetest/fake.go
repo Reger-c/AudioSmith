@@ -31,6 +31,7 @@ package enginetest
 //	role=R         claim role R in hello
 //	crash-start    exit 3 at once
 //	hang-cancel    ignore job.cancel (the job keeps running)
+//	stall-stdin    stop reading stdin after engine.hello (a stuck engine)
 //	mem=N          device memory in hello, bytes
 //	replay=PATH    replay a fixture transcript (engine/Fixtures/*.jsonl)
 //	deny-mic       capture.start fails with permission_denied
@@ -150,6 +151,9 @@ func runFakeEngine() {
 			continue
 		}
 		f.handle(m)
+		if _, stall := opts["stall-stdin"]; stall && m.Method == proto.MethodHello {
+			select {} // never reads again; stdin closing goes unnoticed too
+		}
 	}
 	// stdin closed: cancel the jobs, exit.
 	f.mu.Lock()

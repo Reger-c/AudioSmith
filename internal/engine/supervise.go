@@ -40,6 +40,12 @@ func NewSupervisor(cfg Config) Supervisor {
 	if cfg.CancelGrace == 0 {
 		cfg.CancelGrace = 5 * time.Second
 	}
+	if cfg.WriteTimeout == 0 {
+		cfg.WriteTimeout = 10 * time.Second
+	}
+	if cfg.StopTimeout == 0 {
+		cfg.StopTimeout = 3 * time.Second
+	}
 	if cfg.StatsEvery == 0 {
 		cfg.StatsEvery = 2 * time.Second
 	}
@@ -87,8 +93,8 @@ type proc struct {
 	tail   *lineTail
 	exited chan struct{}
 
-	writeMu sync.Mutex
-	mu      sync.Mutex
+	writeSem chan struct{} // one write at a time (a channel: waiting for it heeds ctx)
+	mu       sync.Mutex
 	pending map[string]*call
 	closed  bool
 
@@ -402,15 +408,22 @@ func (s *supervisor) Stop() {
 	var wg sync.WaitGroup
 	for _, p := range procs {
 		wg.Go(func() {
+			// Bounded at every step (#101 H1/M5): the shutdown request's
+			// write heeds its context, the exit is awaited StopTimeout,
+			// and a process that SIGKILL does not end at once is left.
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			p.call(ctx, "", proto.MethodShutdown, nil, nil, false)
 			cancel()
 			p.stdin.Close()
 			select {
 			case <-p.exited:
-			case <-time.After(5 * time.Second):
+			case <-time.After(s.cfg.StopTimeout):
 				p.kill()
-				<-p.exited
+				select {
+				case <-p.exited:
+				case <-time.After(time.Second):
+					s.cfg.Logf("engine %s: still running 1 s after SIGKILL; not waiting for it", p.w.role)
+				}
 			}
 		})
 	}

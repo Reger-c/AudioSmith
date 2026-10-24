@@ -105,6 +105,13 @@ type Config struct {
 	// CancelGrace is how long a cancelled job may take to end before its
 	// worker is killed and restarted (default 5 s).
 	CancelGrace time.Duration
+	// WriteTimeout bounds one request's write to the engine's stdin
+	// (default 10 s): an engine that stops reading is killed (FailStuck)
+	// and restarted instead of blocking every caller, cancel and shutdown.
+	WriteTimeout time.Duration
+	// StopTimeout is how long Stop waits for a process to exit after
+	// engine.shutdown and closing its stdin before killing it (default 3 s).
+	StopTimeout time.Duration
 	// StatsEvery is how often engine.stats is polled while jobs run
 	// (default 2 s); it is also polled when a job starts and ends.
 	// Negative: never (tests).
