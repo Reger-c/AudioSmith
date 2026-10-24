@@ -55,20 +55,33 @@ func TestScriptEditorWrapsInside(t *testing.T) {
 		a, _, tt := newTestApp(t)
 		(&b1Shooter{t: t, run: run}).setup(a, tt)
 		a.text = longScript(run)
-		tt.Frame()
-		tt.Frame()
 		name := fmt.Sprintf("%s %s", run.lang, run.suffix())
-		box, ok := tt.Find(i18n.T("Script"))
-		if !ok {
-			t.Fatalf("%s: no script editor", name)
+		// The editor measures its rows within a time budget a frame (MyGo
+		// patch 0011), so a slow machine (CI) may need a few frames before
+		// every row in view is painted: wait until the left half shows text.
+		var (
+			img *image.RGBA
+			box ui.Rect
+			k   float32
+		)
+		for i := 0; i < 30; i++ {
+			tt.Frame()
+			b, ok := tt.Find(i18n.T("Script"))
+			if !ok {
+				t.Fatalf("%s: no script editor", name)
+			}
+			box = b
+			img = tt.Image()
+			k = float32(img.Bounds().Dx()) / float32(run.w)
+			if i >= 1 && areaInk(img, ui.Rect{X: box.X + 16, Y: box.Y + 16, W: box.W/2 - 16, H: box.H - 32}, k) {
+				break
+			}
 		}
-		img := tt.Image()
-		k := float32(img.Bounds().Dx()) / float32(run.w)
 		if ink := gutterInk(img, box, k); ink != "" {
 			t.Errorf("%s: text drawn in the editor's right gutter (%s)", name, ink)
 		}
-		if ink := gutterInk(img, ui.Rect{X: box.X, Y: box.Y, W: box.W / 2, H: box.H}, k); ink == "" {
-			t.Errorf("%s: no text at the middle of the editor: the test sees nothing", name)
+		if !areaInk(img, ui.Rect{X: box.X + 16, Y: box.Y + 16, W: box.W/2 - 16, H: box.H - 32}, k) {
+			t.Errorf("%s: no text in the editor's left half: the test sees nothing", name)
 		}
 	}
 }
@@ -97,6 +110,23 @@ func gutterInk(img *image.RGBA, box ui.Rect, k float32) string {
 		return ""
 	}
 	return fmt.Sprintf("%d pixels, first at %v, the gutter is x %d–%d", n, first, x0, x1)
+}
+
+// areaInk tells whether pixels unlike the background (taken at the
+// area's bottom-right corner) show anywhere in r, k image pixels a DIP.
+func areaInk(img *image.RGBA, r ui.Rect, k float32) bool {
+	x0, x1 := int(r.X*k), int((r.X+r.W)*k)
+	y0, y1 := int(r.Y*k), int((r.Y+r.H)*k)
+	bg := img.RGBAAt(x1-1, y1-1)
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			c := img.RGBAAt(x, y)
+			if absDiff(c.R, bg.R)+absDiff(c.G, bg.G)+absDiff(c.B, bg.B) > 60 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func absDiff(a, b uint8) int {
