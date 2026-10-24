@@ -61,7 +61,7 @@ func (s *Dubs) fetch(ctx context.Context, sc *stageCtx) error {
 		return urlErr(err)
 	}
 	sc.progress("downloading", -1, "")
-	info, err := y.Info(ctx, p.Source.URL)
+	info, err := s.metaOrInfo(ctx, y, p) // the probe's, when it read the link
 	if err != nil {
 		return urlErr(err)
 	}
@@ -74,18 +74,6 @@ func (s *Dubs) fetch(ctx context.Context, sc *stageCtx) error {
 	}
 	if c, ok := cookies.LoadAndDelete(p.ID); ok {
 		o.Cookies = c.(string)
-	}
-	if info.Title != "" {
-		// Name the dub, its card and its source after the video while it
-		// downloads.
-		sc.save(ctx, func(p *dub.Project) {
-			if p.Title == "" || p.Title == p.Source.URL {
-				p.Title = info.Title
-			}
-			if p.Source.Name == "" || p.Source.Name == p.Source.URL {
-				p.Source.Name = info.Title
-			}
-		})
 	}
 	dir := filepath.Join(sc.dir(), "download")
 	var last time.Time

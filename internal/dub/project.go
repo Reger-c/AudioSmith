@@ -98,6 +98,9 @@ type Source struct {
 	HasVideo bool       `json:"hasVideo,omitempty"`
 	Video    *VideoInfo `json:"video,omitempty"`
 	Audio    string     `json:"audio,omitempty"` // audio codec
+	// Meta is what a URL's site says of the video (Dubs.Probe, before
+	// the download); nil when not read (a file, a project made before).
+	Meta *SourceMeta `json:"meta,omitempty"`
 }
 
 // Source kinds.

@@ -207,7 +207,7 @@ func VerifyYtDlp(path string) error {
 	return nil
 }
 
-// VideoInfo is what yt-dlp says about a URL.
+// URLInfo is what yt-dlp says about a URL.
 type URLInfo struct {
 	ID         string   `json:"id"`
 	Title      string   `json:"title"`
@@ -218,33 +218,35 @@ type URLInfo struct {
 	Extractor  string   `json:"extractor_key"`
 	Language   string   `json:"language"`
 	Captions   []string `json:"-"` // languages with captions written by people
+	// Meta is what the Dub page shows of it (At not set), with the format
+	// Download would take.
+	Meta SourceMeta `json:"-"`
 }
 
-// Info asks yt-dlp about a URL (no download) and refuses playlists and
-// live streams.
+// Info asks yt-dlp about a URL (no download), with the format Download
+// would choose, and refuses playlists and live streams.
 func (y YtDlp) Info(ctx context.Context, u string) (URLInfo, error) {
 	var info URLInfo
 	if y.Path == "" {
 		return info, &URLError{Code: CodeNoYtDlp}
 	}
-	args := append(y.base(), "--dump-single-json", "--no-playlist", "--", u)
-	out, err := y.run(ctx, args, nil)
+	args := append(y.base(), "--dump-single-json", "--no-playlist")
+	args = append(args, y.formatArgs(y.FFmpeg)...)
+	if y.FFmpeg == "" {
+		// Without ffmpeg the download takes one file with both picture
+		// and sound; most sites (YouTube) offer none: the streams then
+		// say what there is, and that the download needs ffmpeg.
+		args[len(args)-1] += "/bv*+ba/bv*/ba"
+	}
+	out, err := y.run(ctx, append(args, "--", u), nil)
 	if err != nil {
 		return info, err
 	}
-	var raw struct {
-		URLInfo
-		Subtitles map[string]json.RawMessage `json:"subtitles"`
+	info, err = parseInfo(out)
+	if err != nil {
+		return info, err
 	}
-	if err := json.Unmarshal(out, &raw); err != nil {
-		return info, &URLError{Code: CodeYtDlp, Detail: err.Error()}
-	}
-	info = raw.URLInfo
-	for l := range raw.Subtitles {
-		if l != "live_chat" {
-			info.Captions = append(info.Captions, l)
-		}
-	}
+	info.Meta.NeedsFFmpeg = y.FFmpeg == "" && strings.Contains(info.Meta.Format, "+")
 	switch {
 	case info.Type == "playlist" || info.Type == "multi_video":
 		return info, &URLError{Code: CodeURLPlaylist}
@@ -252,6 +254,28 @@ func (y YtDlp) Info(ctx context.Context, u string) (URLInfo, error) {
 		return info, &URLError{Code: CodeURLLive}
 	}
 	return info, nil
+}
+
+// parseInfo reads yt-dlp's --dump-single-json.
+func parseInfo(out []byte) (URLInfo, error) {
+	var raw rawInfo
+	if err := json.Unmarshal(out, &raw); err != nil {
+		return URLInfo{}, &URLError{Code: CodeYtDlp, Detail: err.Error()}
+	}
+	info := raw.URLInfo
+	info.Meta = metaOf(raw)
+	info.Captions = info.Meta.Captions
+	return info, nil
+}
+
+// formatArgs choose the format: with ffmpeg (which merges separate video
+// and audio streams) up to 1080p H.264 MP4, else the best single file.
+func (y YtDlp) formatArgs(ffmpeg string) []string {
+	if ffmpeg == "" {
+		return []string{"-f", "b[ext=mp4][vcodec^=avc1]/b[ext=mp4]/b"}
+	}
+	return []string{"--ffmpeg-location", ffmpeg, "--merge-output-format", "mp4", "-f",
+		"bv*[height<=1080][ext=mp4][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba/bv*+ba/b"}
 }
 
 // DownloadOptions choose what Download fetches.
@@ -284,17 +308,11 @@ func (y YtDlp) Download(ctx context.Context, u, dir string, o DownloadOptions, p
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", err
 	}
-	format := "b[ext=mp4][vcodec^=avc1]/b[ext=mp4]/b"
-	args := y.base()
 	if o.FFmpeg == "" {
 		o.FFmpeg = y.FFmpeg
 	}
-	if o.FFmpeg != "" {
-		format = "bv*[height<=1080][ext=mp4][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba/bv*+ba/b"
-		args = append(args, "--ffmpeg-location", o.FFmpeg, "--merge-output-format", "mp4")
-	}
-	args = append(args, "--no-playlist", "--no-part", "--restrict-filenames",
-		"-f", format, "-o", filepath.Join(dir, "source.%(ext)s"))
+	args := append(y.base(), y.formatArgs(o.FFmpeg)...)
+	args = append(args, "--no-playlist", "--no-part", "--restrict-filenames", "-o", filepath.Join(dir, "source.%(ext)s"))
 	args = append(args, progressArgs()...)
 	args = append(args, "--print", "after_move:"+progFile+"%(filepath)s")
 	if o.Captions != "" {
@@ -349,7 +367,9 @@ func (y YtDlp) base() []string {
 	return args
 }
 
-var errorLine = regexp.MustCompile(`^ERROR:\s*(?:\[[^\]]*\]\s*)?`)
+// errorLine is the start of yt-dlp's error lines: "ERROR: [youtube]
+// abc123: " (the site and the video's id).
+var errorLine = regexp.MustCompile(`^ERROR:\s*(?:\[[^\]]*\]\s*(?:[^\s:]+:\s+)?)?`)
 
 // run runs yt-dlp, feeding stdout's and stderr's lines to line (when
 // set, one line at a time) and returning stdout. Cancelling ctx kills

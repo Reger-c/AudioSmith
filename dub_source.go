@@ -54,6 +54,7 @@ func (a *app) dubSourceFile(path string) {
 			p.Source = src
 			p.Title = strings.TrimSuffix(src.Name, filepath.Ext(src.Name))
 		})
+		a.dubAfterSaves(a.dub.ID, a.dubProbe)
 		return
 	}
 	a.newDub(src)
@@ -73,6 +74,37 @@ func (a *app) dubImportURL() {
 	a.dubErr = ""
 	a.newDub(dub.Source{Kind: dub.SourceURL, URL: u, Name: u, WantCaptions: a.dubCaptions})
 	a.dubURL = ""
+}
+
+// dubProbe reads what project id's source is (Dubs.Probe: a link's
+// details and cover, a file's length, picture and poster) in the
+// background; the page shows it as it is saved.
+func (a *app) dubProbe(id string) {
+	if a.dubSvc == nil || a.dubProbes[id] {
+		return
+	}
+	if a.dubProbes == nil {
+		a.dubProbes = map[string]bool{}
+	}
+	a.dubProbes[id] = true
+	svc := a.dubSvc
+	a.async(func() {
+		svc.Probe(context.Background(), id)
+		a.post(func() { delete(a.dubProbes, id) })
+	})
+}
+
+// dubProbing reports whether the open project's source is being read.
+func (a *app) dubProbing() bool { return a.dub != nil && a.dubProbes[a.dub.ID] }
+
+// dubAfterSaves runs fn(id) on the main thread once the saves queued so
+// far are done.
+func (a *app) dubAfterSaves(id string, fn func(string)) {
+	if a.dubSaveQ == nil {
+		fn(id)
+		return
+	}
+	a.dubSaveQ.push(func() { a.post(func() { fn(id) }) })
 }
 
 // dubChooseCookies picks a cookies.txt for the next URL import.

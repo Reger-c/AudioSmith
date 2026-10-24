@@ -313,6 +313,11 @@ func (p *Project) Clone() *Project {
 		v := *p.Source.Video
 		q.Source.Video = &v
 	}
+	if p.Source.Meta != nil {
+		m := *p.Source.Meta
+		m.Captions = slices.Clone(m.Captions)
+		q.Source.Meta = &m
+	}
 	q.Stages = maps.Clone(p.Stages)
 	if p.Run != nil {
 		r := *p.Run

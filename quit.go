@@ -39,6 +39,9 @@ func (a *app) willQuit(h *engineHost) {
 	// family_coord.go: the family's runtime file goes first, the engines'
 	// last updates are not written after it.
 	a.quitFamilyRuntime()
+	if a.dubSvc != nil {
+		a.dubSvc.CancelProbes() // yt-dlp asked about a link (#106): its process group goes with it
+	}
 	a.flushForQuit()
 	h.Stop()
 }

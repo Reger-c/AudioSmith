@@ -284,6 +284,7 @@ func (a *app) dubAuditionUpdated(j jobs.Job) {
 type dubVideoState struct {
 	wv       *mygo.WebView
 	project  string
+	loaded   string // what the page shows: the project's video, proxy and poster
 	lastSync time.Time
 	show     bool
 }
@@ -312,8 +313,11 @@ func dubMediaHandler(svc func() *services.Dubs) http.Handler {
 			if p.Media.Proxy != "" {
 				file = s.Path(p.ID, p.Media.Proxy)
 			}
-		case "poster":
+		case "poster": // the file's frame, else the site's cover (#106)
 			file = s.Path(p.ID, p.Media.Poster)
+			if m := p.Source.Meta; file == "" && m != nil {
+				file = s.Path(p.ID, m.Thumbnail)
+			}
 		}
 		if file == "" {
 			http.NotFound(w, r)
@@ -345,12 +349,13 @@ func dubVideoHTML(id string, poster bool) string {
 		`<script>const v=document.getElementById('v');window.asSync=function(t,play){if(Math.abs(v.currentTime-t)>0.15){v.currentTime=t}if(play&&v.paused){v.play().catch(()=>{})}if(!play&&!v.paused){v.pause()}}</script></body></html>`
 }
 
-// dubEnsureVideo makes the preview's web view for the open project (in a
-// window only; tests show the poster).
+// dubEnsureVideo makes the preview's web view for the open project once
+// its video is on disk and playable (in a window only; tests show the
+// poster), and loads it again when the file or its poster changed.
 func (a *app) dubEnsureVideo() {
 	v := &a.dubVideo
 	p := a.dub
-	if a.win == nil || p == nil || !p.Source.HasVideo || p.Media.Audio == "" {
+	if a.win == nil || p == nil || !dubVideoReady(p) {
 		return
 	}
 	if v.wv == nil {
@@ -360,9 +365,13 @@ func (a *app) dubEnsureVideo() {
 		}
 		v.wv = wv
 	}
-	if v.project != p.ID {
-		v.project = p.ID
-		v.wv.Page().LoadHTML(dubVideoHTML(p.ID, p.Media.Poster != ""), dubMediaScheme+"://localhost/")
+	// Again when the file changes (downloaded, then its preview copy) or
+	// its poster comes.
+	poster := p.Media.Poster != "" || p.Source.Meta != nil && p.Source.Meta.Thumbnail != ""
+	key := p.ID + "\x00" + p.Source.Path + "\x00" + p.Media.Proxy + "\x00" + p.Media.Poster + fmt.Sprint(poster)
+	if v.project != p.ID || v.loaded != key {
+		v.project, v.loaded = p.ID, key
+		v.wv.Page().LoadHTML(dubVideoHTML(p.ID, poster), dubMediaScheme+"://localhost/")
 	}
 }
 

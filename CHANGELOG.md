@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Dub: see the video before it downloads
+- Paste a link and the Dub page shows what it is within seconds, before anything downloads: the cover, the site (YouTube, Bilibili, Vimeo, TikTok and the others yt-dlp knows), the title, channel, length, picture size, estimated download size, date, views, the description (Expand shows all of it) and the caption languages. It is kept in the dub, so it shows again without the network.
+- While the video downloads, a thin bar under the cover gives the size and time left; once it is downloaded, the centre shows the video itself, with play, while transcribing and the steps after it report in the footer.
+- A link that cannot be read (a private or removed video, one that needs a sign-in, a site that is not supported) says so before any download, with the site's reason, and Try again. Cancel stops the reading as it stops a download.
+- A dropped video or audio file shows its poster, length, picture and size the same way.
+- The cover is fetched by the app itself, through the same proxy as the download, from public addresses only, at most 5 MB, and kept only if it is a JPEG, PNG or WebP picture.
+
 ### Faster with long projects
 - Dub: the editor builds only the lines in view; a 2-hour video's 2,000 lines no longer slow every frame (190 ms → under 1 ms a frame).
 - Audiobook and Stories: a long manuscript (a novel) is checked and its draft saved once you pause typing, away from the window, not at every key; typing in 500,000 characters is as quick as in a short text.
