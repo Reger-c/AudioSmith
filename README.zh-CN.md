@@ -208,7 +208,7 @@ go tool mygo dev                # 热重载运行
 go tool mygo build              # 生成 build/darwin-arm64/AudioSmith.app 和 DMG
 ```
 
-- 界面用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写；模型在 Swift 辅助进程 `audiosmith-engine` 里运行，基于 [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) 和 mlx-swift。
+- 界面用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写，代码在 `app/`（`go run ./app` 不打包直接运行）；模型在 Swift 辅助进程 `audiosmith-engine` 里运行，基于 [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift) 和 mlx-swift。
 - `CGO_ENABLED=0 go test ./...` 可以在任何系统上无界面地跑完整个 UI 的测试（引擎用假实现）；`scripts/mac.sh` 可以从 Linux 在 Mac 上构建和测试。
 - 更多（英文）：[架构](docs/architecture.md)、[引擎协议](docs/protocol-v2.md)、[本地 API 与 MCP](docs/local-api.md)、[发布流程](docs/release.zh-CN.md)。
 
