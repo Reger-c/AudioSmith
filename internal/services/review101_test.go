@@ -251,3 +251,56 @@ func TestLibraryDocConflicts(t *testing.T) {
 		t.Errorf("title %q", cur.Title)
 	}
 }
+
+// flakyDocs fails Put while fail is set.
+type flakyDocs struct {
+	mu   sync.Mutex
+	fail bool
+	docs map[string][]byte
+}
+
+func (f *flakyDocs) Get(_ context.Context, key string) ([]byte, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.docs[key]
+	return d, ok, nil
+}
+
+func (f *flakyDocs) Put(_ context.Context, key string, doc []byte) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fail {
+		return errors.New("disk full")
+	}
+	f.docs[key] = doc
+	return nil
+}
+
+func (f *flakyDocs) Delete(_ context.Context, key string) error { return nil }
+
+// #101 L9: a draft whose write failed is not dropped: it stays pending,
+// the next Flush (or the retry after the delay) writes it.
+func TestDraftWriteFailureKeepsIt(t *testing.T) {
+	docs := &flakyDocs{fail: true, docs: map[string][]byte{}}
+	d := &Drafts{docs: docs, bus: core.NewBus(), delay: 30 * time.Millisecond, logf: t.Logf,
+		pending: map[string]*draft{}, saved: map[string][]byte{}}
+	d.Save("k", "edit")
+	if err := d.Flush(ctx); err == nil {
+		t.Fatal("the failed write was not reported")
+	}
+	var got string
+	if ok, _ := d.Load(ctx, "k", &got); !ok || got != "edit" {
+		t.Fatalf("lost after a failed write: %q %v", got, ok)
+	}
+	docs.mu.Lock()
+	docs.fail = false
+	docs.mu.Unlock()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if b, ok, _ := docs.Get(ctx, DraftPrefix+"k"); ok && string(b) == `"edit"` {
+			return // the retry wrote it
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("never written after the store recovered")
+}

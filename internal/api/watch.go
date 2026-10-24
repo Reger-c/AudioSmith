@@ -14,7 +14,10 @@ import (
 // watcher hands the queue's job events to the requests waiting for them,
 // by job owner ("take:<id>") or by job id. One bus subscription serves
 // every request; the handler never blocks (bus rule): each watch queues
-// its events without bound and the request reads them at its pace.
+// its events and the request reads them at its pace. A request that
+// stops reading while its connection stays open is cut off once its
+// queue passes watchMaxEvents or watchMaxBytes (#101 L5): it would grow
+// without bound (audio chunks).
 type watcher struct {
 	mu      sync.Mutex
 	byKey   map[string]map[*watch]struct{}
@@ -123,12 +126,20 @@ func (w *watcher) add(key string) *watch {
 	return x
 }
 
+// The bounds of one watch's queue (variables: tests lower them).
+var (
+	watchMaxEvents = 10000
+	watchMaxBytes  = 64 << 20 // of chunks
+)
+
 // watch is one request's queue of job events.
 type watch struct {
 	mu     sync.Mutex
 	q      []jobs.Updated
+	bytes  int
 	signal chan struct{}
 	closed bool
+	lagged bool // cut off: the reader fell behind the bounds
 	stopFn func()
 	once   sync.Once
 }
@@ -139,6 +150,10 @@ func (x *watch) push(u jobs.Updated) {
 	x.mu.Lock()
 	if !x.closed {
 		x.q = append(x.q, u)
+		x.bytes += len(u.Chunk)
+		if len(x.q) > watchMaxEvents || x.bytes > watchMaxBytes {
+			x.q, x.bytes, x.closed, x.lagged = nil, 0, true, true
+		}
 	}
 	x.mu.Unlock()
 	select {
@@ -167,7 +182,10 @@ func (x *watch) stop() {
 	})
 }
 
-var errWatchClosed = errors.New("api: server stopping")
+var (
+	errWatchClosed = errors.New("api: server stopping")
+	errWatchLagged = errors.New("api: the client stopped reading the events; the stream was cut off")
+)
 
 // next waits for the next event, until ctx ends or timeout passes (0 =
 // none): then it returns ok false and the context's error, or nil for a
@@ -185,11 +203,15 @@ func (x *watch) next(ctx context.Context, timeout time.Duration) (jobs.Updated, 
 			u := x.q[0]
 			x.q[0] = jobs.Updated{}
 			x.q = x.q[1:]
+			x.bytes -= len(u.Chunk)
 			x.mu.Unlock()
 			return u, true, nil
 		}
-		closed := x.closed
+		closed, lagged := x.closed, x.lagged
 		x.mu.Unlock()
+		if lagged {
+			return jobs.Updated{}, false, errWatchLagged
+		}
 		if closed {
 			return jobs.Updated{}, false, errWatchClosed
 		}

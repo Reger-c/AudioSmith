@@ -384,6 +384,11 @@ func (y YtDlp) run(ctx context.Context, args []string, line func(string)) ([]byt
 	err := cmd.Wait()
 	cmd.Stdout.(*lineWriter).flush()
 	cmd.Stderr.(*lineWriter).flush()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// yt-dlp exited well; something it started still held a pipe
+		// after WaitDelay (#101 L4): not a failure.
+		err = nil
+	}
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

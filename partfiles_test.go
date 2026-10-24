@@ -22,10 +22,19 @@ func TestCleanPartFiles(t *testing.T) {
 	past := time.Now().Add(-2 * time.Hour)
 	os.Chtimes(old, past, past)
 	os.Chtimes(keep, past, past)
-	if n := cleanPartFiles(dir, time.Hour); n != 1 {
+	// #101 L3: deeper down too (the engine's writes in dubs/<id>/renders/<lang>/, the cache).
+	deep := filepath.Join(dir, "dubs", "01JZ", "renders", "es", ".line-3.wav.88.part")
+	cache := t.TempDir()
+	chunk := filepath.Join(cache, "chunks", "ab", ".c.wav.9.part")
+	for _, p := range []string{deep, chunk} {
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte("x"), 0o644)
+		os.Chtimes(p, past, past)
+	}
+	if n := cleanPartFiles(time.Hour, dir, cache); n != 3 {
 		t.Fatalf("removed %d", n)
 	}
-	for p, want := range map[string]bool{old: false, young: true, keep: true} {
+	for p, want := range map[string]bool{old: false, young: true, keep: true, deep: false, chunk: false} {
 		if _, err := os.Stat(p); (err == nil) != want {
 			t.Errorf("%s: there %v, want %v", filepath.Base(p), err == nil, want)
 		}

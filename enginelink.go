@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/engine"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
 	"github.com/hehehai/AudioSmith/internal/hub"
@@ -236,7 +238,15 @@ func gb(n float64) int64 { return int64(n * (1 << 30)) }
 func (a *app) startEngine() {
 	a.engState, a.engError, a.engTail = engineStarting, "", ""
 	sup, sched, post := a.eng.sup, a.eng.sched, a.enginePost
+	tools := a.ytdlpDir()
 	a.async(func() {
+		// Before the jobs left from the last run start: a yt-dlp a crash
+		// left running would write the same files (#101 L4).
+		if _, err := os.Stat(tools); err == nil {
+			if killed := dub.KillOrphans(tools); len(killed) > 0 {
+				log.Printf("yt-dlp: stopped %d runs left by an earlier AudioSmith (pids %v)", len(killed), killed)
+			}
+		}
 		ctx := context.Background()
 		err := sup.Start(ctx)
 		if err == nil {

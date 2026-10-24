@@ -91,11 +91,22 @@ func (s *Drafts) flushKey(ctx context.Context, key string) error {
 	}
 	d.timer.Stop()
 	err := s.docs.Put(ctx, DraftPrefix+key, d.data)
+	s.mu.Lock()
 	if err == nil {
-		s.mu.Lock()
 		s.saved[key] = d.data
-		s.mu.Unlock()
+	} else if s.pending[key] == nil {
+		// Not written: it stays pending (a later Flush writes it) and is
+		// tried again after the delay, unless a newer Save came (#101 L9).
+		s.pending[key] = d
+		if !s.closed {
+			d.timer = time.AfterFunc(s.delay, func() {
+				if err := s.flushKey(context.Background(), key); err != nil {
+					s.logf("draft %s: %v", key, err)
+				}
+			})
+		}
 	}
+	s.mu.Unlock()
 	s.write.Unlock()
 	if err != nil {
 		return err
