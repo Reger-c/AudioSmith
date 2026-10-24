@@ -516,3 +516,26 @@ func TestWorkflowExportM4AAndText(t *testing.T) {
 		t.Errorf("no encoder: %s %q", run.State, run.Code)
 	}
 }
+
+// #101 H2: a step whose job ends interrupted (the engine stopped twice)
+// does not leave the run going on for ever: it ends, and runs again.
+func TestWorkflowInterruptedStepEndsTheRun(t *testing.T) {
+	e := newWorkflowEnv(t)
+	tp, _ := workflow.TemplateByID("translate-narrate")
+	w := tp.Make("", "Interview", time.Now(), workflow.TemplateOptions{Model: "tts"})
+	w.Normalize()
+	nodeOf(w, workflow.KindSource).P.Clips = []workflow.Clip{{Name: "interview.wav", Path: e.clip, Size: 1}}
+	w = e.save(t, w)
+	e.eng.Fail[proto.MethodSTTTranscribe] = jobs.CodeInterrupted
+	run := e.run(t, w.ID, RunOptions{})
+	if run.State == workflow.RunRunning {
+		t.Fatalf("run %s", run.State)
+	}
+	if active, _ := e.wf.Active(ctx, w.ID); len(active) != 0 {
+		t.Fatalf("%d jobs still active", len(active))
+	}
+	delete(e.eng.Fail, proto.MethodSTTTranscribe)
+	if run = e.run(t, w.ID, RunOptions{}); run.State != workflow.RunDone {
+		t.Errorf("again: %s", run.State)
+	}
+}

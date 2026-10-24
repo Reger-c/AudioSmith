@@ -35,12 +35,14 @@ func (e *WorkflowInvalidError) Error() string {
 
 func (e *WorkflowInvalidError) Unwrap() error { return core.ErrInvalid }
 
-// Active lists a workflow's unfinished jobs.
+// Active lists a workflow's unfinished jobs: waiting, queued or running.
+// Interrupted ones are not: they do not run again without a Retry, and a
+// run should not stay "running" because of them (#101 H2).
 func (s *Workflows) Active(ctx context.Context, id string) ([]jobs.Job, error) {
 	if s.cfg.Scheduler == nil {
 		return nil, nil
 	}
-	return s.cfg.Scheduler.List(ctx, jobs.Filter{Owner: WorkflowOwner + id})
+	return s.cfg.Scheduler.List(ctx, jobs.Filter{Owner: WorkflowOwner + id, States: activeStates})
 }
 
 // RunOptions tune a run.
@@ -230,7 +232,10 @@ func (s *Workflows) prune(id string, items []workflow.Item) {
 // Cancel stops a workflow's run: its jobs are cancelled, the steps they
 // were on go back to waiting, and the run can resume later.
 func (s *Workflows) Cancel(ctx context.Context, id string) error {
-	active, err := s.Active(ctx, id)
+	if s.cfg.Scheduler == nil {
+		return nil
+	}
+	active, err := s.cfg.Scheduler.List(ctx, jobs.Filter{Owner: WorkflowOwner + id}) // interrupted ones too
 	if err != nil {
 		return err
 	}
