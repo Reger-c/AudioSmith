@@ -95,7 +95,11 @@ func (a *app) batchChanged(p *dub.Project) {
 	if p.Batch == "" || b.docs == nil {
 		return
 	}
-	if old := b.docs[p.ID]; old != nil && !old.TracksReady() && p.TracksReady() && p.Run == nil {
+	// Finished: the tracks are ready and the run is over. The two come in
+	// separate saves (the mix's tracks, then the stage's end, which ends
+	// the run), so the change of both together is what counts.
+	finished := func(p *dub.Project) bool { return p.TracksReady() && p.Run == nil }
+	if old := b.docs[p.ID]; old != nil && !finished(old) && finished(p) {
 		a.notify(core.SeveritySuccess, i18n.T("Batch dub finished"), firstOf(p.Title, filepath.Base(p.Source.Path)), "/batch")
 	}
 	b.docs[p.ID] = p
