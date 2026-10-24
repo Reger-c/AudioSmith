@@ -152,7 +152,12 @@ func runFakeEngine() {
 		}
 		f.handle(m)
 		if _, stall := opts["stall-stdin"]; stall && m.Method == proto.MethodHello {
-			select {} // never reads again; stdin closing goes unnoticed too
+			// Never reads again; stdin closing goes unnoticed too. A sleep
+			// loop, not select {}: with no other goroutine the runtime would
+			// call that a deadlock and exit (CGO_ENABLED=0 builds).
+			for {
+				time.Sleep(time.Hour)
+			}
 		}
 	}
 	// stdin closed: cancel the jobs, exit.
