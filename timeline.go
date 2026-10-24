@@ -7,7 +7,16 @@ package main
 // with the keyboard: ←/→ select, Enter enters precise mode, where ←/→
 // nudge the start by 0.01 s (⌘: 0.1 s), ⇧ the end, ⌥ the whole block;
 // S snaps the start to the nearest onset (⇧S the end), Delete deletes it.
-// Overlapping blocks are red. Zoom 1–16×; scrolling pans.
+// Overlapping blocks are red.
+//
+// Zoom (thread #107), as Logic, Final Cut and Audacity have it: a pinch,
+// ⌘ or ⌥ with the wheel, ⌘= and ⌘−, anchored at the pointer, from fit
+// (1×) to tlMaxPxPerSec; ⌘0 or a double click on the readout fits. Pan: a
+// sideways swipe (with the system's inertia), ⇧ with the wheel, a drag
+// with the middle button, or the overview strip under the lane, which
+// shows the window over the whole source. A plain vertical wheel scrolls
+// the page. Playing while zoomed, the view turns a page as the playhead
+// reaches its edge, unless the user panned in the last tlFollowPause.
 //
 // It is one element painted by Draw and driven by HandleInput: the
 // pointer and keys reach it before the next frame, and a drag changes
@@ -15,9 +24,9 @@ package main
 // change (one undo step).
 
 import (
-	"fmt"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/hehehai/AudioSmith/internal/dub"
@@ -27,22 +36,34 @@ import (
 
 // Timeline limits.
 const (
-	tlMaxZoom   = 16
-	tlSnapPx    = 8  // snapping distance
-	tlEdgePx    = 5  // grab zone of a block's edge
-	tlMinGrabPx = 16 // narrower blocks only select
-	tlResizePx  = 24 // narrower blocks only move
+	// tlMaxPxPerSec is the closest zoom: 2-DIP waveform bars are then
+	// 20 ms, the peaks' second level (dub.PeaksPerSecond is 100).
+	tlMaxPxPerSec = 100
+	tlMinMaxZoom  = 4  // a short source still zooms this far
+	tlNoWidthZoom = 16 // the limit before the lane is laid out
+	tlSnapPx      = 8  // snapping distance
+	tlEdgePx      = 5  // grab zone of a block's edge
+	tlMinGrabPx   = 16 // narrower blocks only select
+	tlResizePx    = 24 // narrower blocks only move
+	tlLabelGap    = 14 // DIPs between two block labels: more than a number's width
+	tlLabelCharPx = 6  // a digit of a label at 10 DIPs
+	tlFollowPause = 4 * time.Second
 )
 
 // timelineState is a lane's view state.
 type timelineState struct {
-	zoom   float64 // 1 (fit) … 16
+	zoom   float64 // 1 (fit) … maxZoom
 	offset float64 // seconds at the left edge
 	sel    string  // the selected block
 	edit   bool    // precise editing (Enter)
 	drag   *tlDrag
-	width  float32 // the lane's width as last drawn
+	pan    *tlPan    // a middle-button drag, or the overview's
+	panned time.Time // when the user last panned or zoomed
+	width  float32   // the lane's width as last drawn
+	ovW    float32   // the overview's
 	focus  ui.Handle
+	bars   tlBars // the waveform as last drawn
+	ovBars tlBars // the overview's
 }
 
 // tlDrag is a drag in progress.
@@ -62,6 +83,15 @@ const (
 	tlSeek
 )
 
+// tlPan is a pan in progress: the pointer's x and the offset as it
+// began; grab is the seconds between the overview window's left edge and
+// the pointer.
+type tlPan struct {
+	x0   float32
+	off0 float64
+	grab float64
+}
+
 // tlBlock is a block of the lane.
 type tlBlock struct {
 	ID         string
@@ -79,6 +109,7 @@ type tlModel struct {
 	Peaks    *dub.Peaks
 	Onsets   []float64
 	Playhead float64 // seconds; < 0 = none
+	Playing  bool    // the view follows the playhead
 }
 
 // tlEvents are what a lane asks of its owner.
@@ -95,9 +126,17 @@ type tlEvents struct {
 	Command func(name string) bool
 }
 
+// maxZoom is the closest zoom: tlMaxPxPerSec, at least tlMinMaxZoom.
+func (s *timelineState) maxZoom(d float64) float64 {
+	if s.width <= 0 || d <= 0 {
+		return tlNoWidthZoom
+	}
+	return max(d*tlMaxPxPerSec/float64(s.width), tlMinMaxZoom)
+}
+
 // span is the seconds the lane shows.
 func (s *timelineState) span(d float64) float64 {
-	return d / min(max(s.zoom, 1), tlMaxZoom)
+	return d / min(max(s.zoom, 1), s.maxZoom(d))
 }
 
 // clampOffset keeps the view inside the source.
@@ -105,9 +144,9 @@ func (s *timelineState) clampOffset(d float64) {
 	s.offset = min(max(s.offset, 0), max(d-s.span(d), 0))
 }
 
-// setZoom zooms around the time at.
+// setZoom zooms to z around the time at, which stays where it shows.
 func (s *timelineState) setZoom(z, at, d float64) {
-	if d <= 0 {
+	if d <= 0 || math.IsNaN(z) {
 		return
 	}
 	old := s.span(d)
@@ -115,22 +154,95 @@ func (s *timelineState) setZoom(z, at, d float64) {
 	if old > 0 {
 		frac = (at - s.offset) / old
 	}
-	s.zoom = min(max(z, 1), tlMaxZoom)
+	s.zoom = min(max(z, 1), s.maxZoom(d))
 	s.offset = at - frac*s.span(d)
 	s.clampOffset(d)
 }
 
-// reveal scrolls so the block id is in view.
-func (s *timelineState) reveal(m tlModel, id string) {
-	for _, b := range m.Blocks {
-		if b.ID == id {
-			span := s.span(m.Duration)
-			if b.Start < s.offset || b.End > s.offset+span {
-				s.offset = b.Start - span*0.1
-				s.clampOffset(m.Duration)
-			}
-		}
+// zoomAt zooms by factor around the lane's x, as a pinch or ⌘+wheel.
+func (s *timelineState) zoomAt(factor float64, x float32, d float64) {
+	if s.width <= 0 {
+		return
 	}
+	s.setZoom(s.zoom*factor, s.offset+float64(x/s.width)*s.span(d), d)
+}
+
+// zoomKey zooms by factor around the playhead when it shows, else the
+// middle, as the buttons and ⌘=/⌘− do.
+func (s *timelineState) zoomKey(factor float64, m tlModel) {
+	span := s.span(m.Duration)
+	at := s.offset + span/2
+	if m.Playhead >= s.offset && m.Playhead <= s.offset+span {
+		at = m.Playhead
+	}
+	s.setZoom(s.zoom*factor, at, m.Duration)
+}
+
+// fit shows the whole source.
+func (s *timelineState) fit() { s.zoom, s.offset = 1, 0 }
+
+// panBy moves the view by dx DIPs of the lane.
+func (s *timelineState) panBy(dx float32, d float64) {
+	if s.width <= 0 {
+		return
+	}
+	s.offset += float64(dx/s.width) * s.span(d)
+	s.clampOffset(d)
+}
+
+// follow turns the page as the playhead reaches the view's edge while it
+// plays, unless the user panned or zoomed in the last tlFollowPause.
+func (s *timelineState) follow(m tlModel, now time.Time) {
+	d := m.Duration
+	if !m.Playing || s.zoom <= 1 || s.drag != nil || s.pan != nil || m.Playhead < 0 || now.Sub(s.panned) < tlFollowPause {
+		return
+	}
+	span := s.span(d)
+	if m.Playhead < s.offset || m.Playhead > s.offset+span*0.97 {
+		s.offset = m.Playhead - span*0.03
+		s.clampOffset(d)
+	}
+}
+
+// tlZoomLabel is the readout: 1×, 2.5×, 12×.
+func tlZoomLabel(z float64) string {
+	if z < 9.95 {
+		return strconv.FormatFloat(math.Round(z*10)/10, 'f', -1, 64) + "×"
+	}
+	return strconv.Itoa(int(math.Round(z))) + "×"
+}
+
+// tlLabels picks the block labels to draw, left to right: a label at x
+// (its left edge) w DIPs wide in a block room DIPs wide shows when it fits
+// its block (at least 18 DIPs) and starts tlLabelGap past the last one
+// shown, so dense lines
+// at a low zoom keep every block's outline but every other number or
+// fewer.
+func tlLabels(x, w, room []float32) []bool {
+	show := make([]bool, len(x))
+	end := float32(math.Inf(-1))
+	for i := range x {
+		if w[i] <= 0 || room[i] < max(w[i]+6, 18) || x[i] < end+tlLabelGap {
+			continue
+		}
+		show[i], end = true, x[i]+w[i]
+	}
+	return show
+}
+
+// tlBars keeps the waveform's bars for one view, so frames that show the
+// same reuse them.
+type tlBars struct {
+	peaks    *dub.Peaks
+	from, to float64
+	v        []float32
+}
+
+func (b *tlBars) get(p *dub.Peaks, from, to float64, n int) []float32 {
+	if b.peaks != p || b.from != from || b.to != to || len(b.v) != n {
+		b.peaks, b.from, b.to, b.v = p, from, to, p.Bars(from, to, n)
+	}
+	return b.v
 }
 
 // timelineLane draws a lane and handles its input.
@@ -140,26 +252,28 @@ func timelineLane(c *ui.Context, key string, s *timelineState, m tlModel, ev tlE
 	if d <= 0 {
 		return
 	}
-	if s.zoom < 1 {
-		s.zoom = 1
-	}
+	s.zoom = min(max(s.zoom, 1), s.maxZoom(d))
 	s.clampOffset(d)
+	s.follow(m, c.Now())
 	k := tok(t)
 	ui.Row(c.Key(key + "-tools")).Gap(px(t, 2)).AlignItems(ui.Center).Shrink(0).Children(func() {
 		// Zoom out, the zoom, zoom in, fit: the order of the Workflows canvas.
 		if iconButton(c.Key("zoom-out"), icons.MagnifierZoomOut, i18n.T("Zoom out")).Disabled(s.zoom <= 1).Clicked() {
-			s.setZoom(s.zoom/2, s.offset+s.span(d)/2, d)
+			s.zoomKey(0.5, m)
 		}
-		ui.Text(c, strconv.Itoa(int(s.zoom))+"×").FontSize(px(t, fsCaption)).TextColor(k.Text2).Shrink(0).Padding(0, px(t, 4))
-		if iconButton(c.Key("zoom-in"), icons.MagnifierZoomIn, i18n.T("Zoom in")).Disabled(s.zoom >= tlMaxZoom).Clicked() {
-			at := s.offset + s.span(d)/2
-			if m.Playhead >= 0 {
-				at = m.Playhead
-			}
-			s.setZoom(s.zoom*2, at, d)
+		level := ui.Box(c.Key("zoom-level")).Shrink(0).Padding(0, px(t, 4)).
+			Tooltip(i18n.T("⌘+scroll or pinch to zoom · ⇧+scroll or swipe sideways to pan · double-click to fit (⌘0)"))
+		level.Children(func() {
+			ui.Text(c, tlZoomLabel(s.zoom)).FontSize(px(t, fsCaption)).TextColor(k.Text2)
+		})
+		if level.DoubleClicked() {
+			s.fit()
+		}
+		if iconButton(c.Key("zoom-in"), icons.MagnifierZoomIn, i18n.T("Zoom in")).Disabled(s.zoom >= s.maxZoom(d)).Clicked() {
+			s.zoomKey(2, m)
 		}
 		if iconButton(c.Key("zoom-fit"), icons.FullScreenSquare, i18n.T("Fit all")).Disabled(s.zoom <= 1).Clicked() {
-			s.zoom, s.offset = 1, 0
+			s.fit()
 		}
 		ui.Spacer(c)
 		if s.edit {
@@ -168,344 +282,23 @@ func timelineLane(c *ui.Context, key string, s *timelineState, m tlModel, ev tlE
 		ui.Text(c, tlClock(s.offset)+" – "+tlClock(min(s.offset+s.span(d), d))+" / "+tlClock(d)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Shrink(0)
 	})
 	if s.zoom > 1 {
-		// Panning.
-		pos := s.offset
-		if ui.Slider(c.Key(key+"-pan"), &pos, 0, max(d-s.span(d), 0.001)).Label(i18n.T("Scroll the timeline")).Changed() {
-			s.offset = pos
-			s.clampOffset(d)
-		}
+		timelineOverview(c, key+"-pan", s, m)
 	}
-	accent, danger, muted := k.Accent, k.Danger, k.Text3
-	surface, border, text := k.Subtle, k.Line, k.Text
-	lane := ui.Box(c.Key(key)).Height(px(t, 86)).Shrink(0).Radius(px(t, radiusControl)).Background(surface).Border(1, border).Focusable().Bind(&s.focus).
+	lane := ui.Box(c.Key(key)).Height(px(t, 86)).Shrink(0).Radius(px(t, radiusControl)).Background(k.Subtle).Border(1, k.Line).Focusable().Bind(&s.focus).
 		Label(i18n.T("Timeline"))
-	lane.Draw(func(p *ui.Painter, r ui.Rect) {
-		s.width = r.W
-		span := s.span(d)
-		x := func(sec float64) float32 { return r.X + float32((sec-s.offset)/span)*r.W }
-		// Grid: tenths of the view.
-		for i := 1; i < 10; i++ {
-			gx := r.X + r.W*float32(i)/10
-			p.Line(gx, r.Y, gx, r.Y+r.H, 1, border.Alpha(0.5))
-		}
-		// The waveform.
-		if m.Peaks != nil {
-			n := max(int(r.W/2), 1)
-			bars := m.Peaks.Bars(s.offset, s.offset+span, n)
-			mid := r.Y + r.H/2
-			w := r.W / float32(n)
-			for i, v := range bars {
-				h := v * (r.H - 8) / 2
-				if h < 0.5 {
-					continue
-				}
-				p.Fill(ui.Rect{X: r.X + float32(i)*w, Y: mid - h, W: max(w-0.5, 0.5), H: 2 * h}, text.Alpha(0.28), 0)
-			}
-		}
-		// Onsets.
-		for _, o := range m.Onsets {
-			if o < s.offset || o > s.offset+span {
-				continue
-			}
-			ox := x(o)
-			p.Line(ox, r.Y+r.H-7, ox, r.Y+r.H-1, 1, muted)
-		}
-		// Blocks.
-		for _, b := range m.Blocks {
-			start, end := b.Start, b.End
-			if s.drag != nil && s.drag.id == b.ID && s.drag.mode != tlSeek {
-				start, end = s.drag.curS, s.drag.curE
-			}
-			if end < s.offset || start > s.offset+span {
-				continue
-			}
-			bx, bw := x(start), max(x(end)-x(start), 1)
-			// Lines are grey blocks; the chosen one is in the accent,
-			// overlaps in the danger colour.
-			col, fill := text, float32(0.08)
-			if b.Muted {
-				fill = 0.04
-			}
-			if b.ID == s.sel {
-				col, fill = accent, 0.18
-			}
-			if b.Overlap {
-				col, fill = danger, 0.16
-			}
-			rect := ui.Rect{X: bx, Y: r.Y + 10, W: bw, H: r.H - 20}
-			p.Fill(rect, col.Alpha(fill), 3)
-			if b.ID == s.sel {
-				p.Stroke(rect, col, 3, 2)
-				if s.edit {
-					p.Line(bx, rect.Y-4, bx, rect.Y+rect.H+4, 2, col)
-				}
-			} else if b.Flag {
-				p.Stroke(rect, k.Warning, 3, 1)
-			} else {
-				p.Stroke(rect, text.Alpha(0.14), 3, 1)
-			}
-			if bw >= 18 && b.Label != "" {
-				p.Text(bx+3, rect.Y+2, b.Label, 10, text.Alpha(0.8))
-			}
-		}
-		// The playhead.
-		if m.Playhead >= s.offset && m.Playhead <= s.offset+span {
-			px := x(m.Playhead)
-			p.Line(px, r.Y, px, r.Y+r.H, 2, accent)
-		}
-	})
+	lane.Draw(func(p *ui.Painter, r ui.Rect) { timelinePaint(p, r, k, s, m) })
 	lane.HandleInput(func(e ui.InputEvent) bool {
 		return timelineInput(s, m, ev, e)
 	})
 }
 
-// timelineInput handles the lane's pointer and keys.
-func timelineInput(s *timelineState, m tlModel, ev tlEvents, e ui.InputEvent) bool {
-	if e.Kind == ui.InputCommand {
-		return ev.Command != nil && ev.Command(e.Text)
-	}
-	d := m.Duration
-	if s.width <= 0 || d <= 0 {
-		return false
-	}
-	span := s.span(d)
-	toSec := func(x float32) float64 { return s.offset + float64(x/s.width)*span }
-	pxPerSec := float64(s.width) / span
-	switch e.Kind {
-	case ui.InputPointerDown:
-		if e.Button != 0 {
-			return false
-		}
-		at := toSec(e.X)
-		// The block under the pointer, its edges first.
-		for i := len(m.Blocks) - 1; i >= 0; i-- {
-			b := m.Blocks[i]
-			bw := (b.End - b.Start) * pxPerSec
-			x0 := float32((b.Start - s.offset) * pxPerSec)
-			x1 := float32((b.End - s.offset) * pxPerSec)
-			if e.X < x0-tlEdgePx || e.X > x1+tlEdgePx {
-				continue
-			}
-			s.sel = b.ID
-			if ev.Select != nil {
-				ev.Select(b.ID)
-			}
-			if e.Clicks >= 2 && ev.Play != nil {
-				ev.Play(b.ID)
-				return true
-			}
-			mode := tlMove
-			switch {
-			case bw >= tlResizePx && math.Abs(float64(e.X-x0)) <= tlEdgePx:
-				mode = tlStart
-			case bw >= tlResizePx && math.Abs(float64(e.X-x1)) <= tlEdgePx:
-				mode = tlEnd
-			case bw < tlMinGrabPx || e.X < x0 || e.X > x1:
-				return true
-			}
-			s.drag = &tlDrag{id: b.ID, mode: mode, x0: e.X, start: b.Start, end: b.End, curS: b.Start, curE: b.End}
-			return true
-		}
-		s.drag = &tlDrag{mode: tlSeek}
-		if ev.Seek != nil {
-			ev.Seek(min(max(at, 0), d))
-		}
-		return true
-	case ui.InputPointerMove:
-		g := s.drag
-		if g == nil || g.mode == tlSeek {
-			return g != nil
-		}
-		dt := float64(e.X-g.x0) / pxPerSec
-		if math.Abs(float64(e.X-g.x0)) > 2 {
-			g.moved = true
-		}
-		snap := e.Mods&ui.Alt == 0
-		switch g.mode {
-		case tlMove:
-			ns := min(max(g.start+dt, 0), d-(g.end-g.start))
-			if snap {
-				if t, ok := tlSnap(m, g.id, ns, pxPerSec); ok {
-					ns = t
-				} else if t, ok := tlSnap(m, g.id, ns+(g.end-g.start), pxPerSec); ok {
-					ns = t - (g.end - g.start)
-				}
-			}
-			g.curS, g.curE = ns, ns+(g.end-g.start)
-		case tlStart:
-			ns := min(max(g.start+dt, 0), g.end-dub.MinSegment)
-			if snap {
-				if t, ok := tlSnap(m, g.id, ns, pxPerSec); ok && t < g.end-dub.MinSegment {
-					ns = t
-				}
-			}
-			g.curS = ns
-		case tlEnd:
-			ne := max(min(g.end+dt, d), g.start+dub.MinSegment)
-			if snap {
-				if t, ok := tlSnap(m, g.id, ne, pxPerSec); ok && t > g.start+dub.MinSegment {
-					ne = t
-				}
-			}
-			g.curE = ne
-		}
-		return true
-	case ui.InputPointerUp:
-		g := s.drag
-		s.drag = nil
-		if g == nil || g.mode == tlSeek || !g.moved || ev.Change == nil {
-			return g != nil
-		}
-		// Alt allows overlap; otherwise the block stays between its neighbours.
-		ev.Change(g.id, g.curS, g.curE, e.Mods&ui.Alt == 0)
-		return true
-	case ui.InputScroll:
-		if s.zoom > 1 {
-			delta := float64(e.DX)
-			if delta == 0 {
-				delta = float64(e.DY)
-			}
-			s.offset += delta / pxPerSec
-			s.clampOffset(d)
-			return true
-		}
-	case ui.InputKeyDown:
-		return timelineKey(s, m, ev, e)
-	}
-	return false
-}
-
-// timelineKey handles the lane's keys.
-func timelineKey(s *timelineState, m tlModel, ev tlEvents, e ui.InputEvent) bool {
-	i := -1
-	for k, b := range m.Blocks {
-		if b.ID == s.sel {
-			i = k
-		}
-	}
-	selectAt := func(k int) {
-		if k >= 0 && k < len(m.Blocks) {
-			s.sel = m.Blocks[k].ID
-			s.reveal(m, s.sel)
-			if ev.Select != nil {
-				ev.Select(s.sel)
-			}
-		}
-	}
-	switch e.Key {
-	case ui.KeyLeft, ui.KeyRight:
-		dir := 1.0
-		if e.Key == ui.KeyLeft {
-			dir = -1
-		}
-		if !s.edit || i < 0 {
-			if i < 0 {
-				selectAt(0)
-			} else {
-				selectAt(i + int(dir))
-			}
-			return true
-		}
-		step := 0.01
-		if e.Mods&ui.Cmd != 0 {
-			step = 0.1
-		}
-		edge := "start"
-		switch {
-		case e.Mods&ui.Alt != 0:
-			edge = "move"
-		case e.Mods&ui.Shift != 0:
-			edge = "end"
-		}
-		if ev.Nudge != nil {
-			ev.Nudge(s.sel, edge, dir*step)
-		}
-		return true
-	case ui.KeyEnter:
-		if i >= 0 {
-			s.edit = !s.edit
-		}
-		return true
-	case ui.KeyEscape:
-		if s.edit {
-			s.edit = false
-			return true
-		}
-	case ui.KeyS:
-		if i < 0 || ev.Change == nil || len(m.Onsets) == 0 {
-			return false
-		}
-		b := m.Blocks[i]
-		if e.Mods&ui.Shift != 0 {
-			if t, ok := tlNearest(m.Onsets, b.End); ok && t > b.Start+dub.MinSegment {
-				ev.Change(b.ID, b.Start, t, true)
-			}
-		} else if t, ok := tlNearest(m.Onsets, b.Start); ok && t < b.End-dub.MinSegment {
-			ev.Change(b.ID, t, b.End, true)
-		}
-		return true
-	case ui.KeyDelete, ui.KeyBackspace:
-		if i >= 0 && ev.Delete != nil {
-			ev.Delete(s.sel)
-			if i+1 < len(m.Blocks) {
-				s.sel = m.Blocks[i+1].ID
-			} else if i > 0 {
-				s.sel = m.Blocks[i-1].ID
-			}
-			return true
-		}
-	case ui.KeyEqual:
-		s.setZoom(s.zoom*2, s.offset+s.span(m.Duration)/2, m.Duration)
-		return true
-	case ui.KeyMinus:
-		s.setZoom(s.zoom/2, s.offset+s.span(m.Duration)/2, m.Duration)
-		return true
-	}
-	return false
-}
-
-// tlSnap finds what t snaps to (onsets, other blocks' edges, the
-// playhead) within tlSnapPx.
-func tlSnap(m tlModel, id string, t, pxPerSec float64) (float64, bool) {
-	best, bestD := 0.0, float64(tlSnapPx)/pxPerSec
-	found := false
-	try := func(c float64) {
-		if dd := math.Abs(c - t); dd <= bestD {
-			best, bestD, found = c, dd, true
-		}
-	}
-	for _, o := range m.Onsets {
-		try(o)
-	}
-	for _, b := range m.Blocks {
-		if b.ID != id {
-			try(b.Start)
-			try(b.End)
-		}
-	}
-	if m.Playhead >= 0 {
-		try(m.Playhead)
-	}
-	return best, found
-}
-
-// tlNearest is the onset nearest t (within 1 s).
-func tlNearest(onsets []float64, t float64) (float64, bool) {
-	best, bestD := 0.0, 1.0
-	found := false
-	for _, o := range onsets {
-		if d := math.Abs(o - t); d < bestD {
-			best, bestD, found = o, d, true
-		}
-	}
-	return best, found
-}
-
-// tlClock is m:ss.s.
-func tlClock(sec float64) string {
-	if sec < 0 {
-		sec = 0
-	}
-	m := int(sec) / 60
-	return fmt.Sprintf("%d:%04.1f", m, sec-float64(m*60))
+// timelineOverview is the strip that shows the view over the whole source
+// while zoomed: drag its window, or press beside it to jump there.
+func timelineOverview(c *ui.Context, key string, s *timelineState, m tlModel) {
+	t := c.Theme()
+	k := tok(t)
+	strip := ui.Box(c.Key(key)).Height(px(t, 18)).Shrink(0).Radius(px(t, 4)).Background(k.Subtle).Border(1, k.Line).
+		Focusable().Label(i18n.T("Scroll the timeline")).Cursor(ui.CursorGrab)
+	strip.Draw(func(p *ui.Painter, r ui.Rect) { overviewPaint(p, r, k, s, m) })
+	strip.HandleInput(func(e ui.InputEvent) bool { return overviewInput(s, m, e) })
 }

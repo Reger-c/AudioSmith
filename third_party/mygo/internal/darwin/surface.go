@@ -855,6 +855,14 @@ func registerSurfaceClass() {
 			}
 			s.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: x, Y: y, DX: -dx, DY: -dy, Precise: precise, Mods: eventMods(ev)})
 		}),
+		method("magnifyWithEvent:", func(self id, _ objc.SEL, ev id) {
+			s := b().surfaceOf(self)
+			if s == nil {
+				return
+			}
+			x, y := s.location(ev)
+			s.send(platform.SurfaceEvent{Kind: platform.PointerMagnify, X: x, Y: y, Magnify: msgFloat(ev, sel("magnification")), Mods: eventMods(ev)})
+		}),
 		method("keyDown:", func(self id, _ objc.SEL, ev id) {
 			s := b().surfaceOf(self)
 			if s == nil {

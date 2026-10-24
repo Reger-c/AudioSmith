@@ -75,7 +75,7 @@ func (a *app) dubPlayerBar(c *ui.Context) {
 // dubTimeline is the timeline lane of the open project.
 func (a *app) dubTimeline(c *ui.Context) {
 	p := a.dub
-	m := tlModel{Duration: p.Source.Duration, Peaks: a.dubPeaks, Onsets: p.Media.Onsets, Playhead: a.dubPosition()}
+	m := tlModel{Duration: p.Source.Duration, Peaks: a.dubPeaks, Onsets: p.Media.Onsets, Playhead: a.dubPosition(), Playing: a.dubPlaying()}
 	over := map[string]bool{}
 	for _, id := range p.Overlaps() {
 		over[id] = true

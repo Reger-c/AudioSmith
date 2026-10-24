@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Dub timeline: zoom and pan
+- Zoom the waveform timeline with a trackpad pinch, ⌘ or ⌥ with the scroll wheel, or ⌘= and ⌘−, around the pointer; ⌘0 or a double click on the zoom readout shows it all. It zooms from the whole source to 100 pixels a second.
+- Pan with a sideways two-finger swipe (with the system's inertia), ⇧ with the wheel, a middle-button drag, or the new overview strip under the zoom controls, which shows the part in view over the whole source; drag it, or click beside it to jump there.
+- While playing zoomed in, the view turns the page as the playhead reaches its edge, unless you panned in the last few seconds.
+- Dense lines no longer crowd the timeline with numbers: a number shows only where it fits and leaves room after the last one.
+
 ### Faster with long projects
 - Dub: the editor builds only the lines in view; a 2-hour video's 2,000 lines no longer slow every frame (190 ms → under 1 ms a frame).
 - Audiobook and Stories: a long manuscript (a novel) is checked and its draft saved once you pause typing, away from the window, not at every key; typing in 500,000 characters is as quick as in a short text.

@@ -228,6 +228,9 @@ const (
 	// the surface has the keyboard again, and the content moves the focus
 	// on from the web view's element.
 	WebViewTabOut
+	// PointerMagnify zooms by the factor 1+Magnify at X, Y, as a pinch on
+	// a touchpad does (macOS); positive Magnify zooms in.
+	PointerMagnify
 )
 
 // SurfaceEvent is input on a Surface, or a change of it.
@@ -242,6 +245,8 @@ type SurfaceEvent struct {
 	// other devices that scroll by pixels rather than by lines.
 	DX, DY  float64
 	Precise bool
+	// Magnify is PointerMagnify's change of scale.
+	Magnify float64
 	Key     Key
 	// PhysicalKey is the key by its position on an ANSI US keyboard,
 	// whatever the active layout types; KeyUnknown where the backend does

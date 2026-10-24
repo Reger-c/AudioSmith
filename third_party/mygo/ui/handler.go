@@ -43,6 +43,10 @@ const (
 	// describes to assistive technology (Element.Access), as a screen
 	// reader moves the selection of a text field of the app's own.
 	InputSelect
+	// InputMagnify zooms by the factor 1+Magnify around X, Y, as a pinch
+	// on a touchpad does (macOS only); positive Magnify zooms in. It goes
+	// to the element under the pointer, as InputScroll does.
+	InputMagnify
 )
 
 // InputEvent is input an element takes as it comes (HandleInput).
@@ -69,6 +73,8 @@ type InputEvent struct {
 	// down the content.
 	DX, DY  float32
 	Precise bool
+	// Magnify is InputMagnify's change of scale.
+	Magnify float32
 	// Start and End are the runes InputSelect selects.
 	Start, End int
 	// Time is when the event came, by the clock of the window's frames

@@ -24,7 +24,7 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		return true
 	}
 	switch ev.Kind {
-	case platform.PointerMove, platform.PointerDown, platform.PointerUp, platform.PointerScroll:
+	case platform.PointerMove, platform.PointerDown, platform.PointerUp, platform.PointerScroll, platform.PointerMagnify:
 		rt.mods = Modifiers(ev.Mods)
 	}
 	switch ev.Kind {
@@ -59,6 +59,9 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 	case platform.PointerScroll:
 		rt.pointerMove(x, y)
 		rt.scroll(float32(ev.DX), float32(ev.DY), Modifiers(ev.Mods), ev.Precise)
+	case platform.PointerMagnify:
+		rt.pointerMove(x, y)
+		rt.magnify(float32(ev.Magnify), Modifiers(ev.Mods))
 	case platform.KeyPressed:
 		rt.modsChanged(Modifiers(ev.Mods))
 		taken = rt.keyDownPhysical(Modifiers(ev.Mods), Key(ev.Key), Key(ev.PhysicalKey), ev.Repeat)
@@ -418,6 +421,16 @@ func (rt *engine) pointerUp(button, clicks int) {
 	}
 	rt.setHover(rt.hitChain(rt.pointerX, rt.pointerY))
 	rt.requestFrame()
+}
+
+// magnify gives a pinch to the innermost element under the pointer that
+// handles its input; nothing else zooms.
+func (rt *engine) magnify(m float32, mods Modifiers) {
+	chain := rt.appendHitChain(rt.chain[:0], rt.pointerX, rt.pointerY)
+	rt.chain = chain[:0]
+	if h := rt.handler(chain); h != nil {
+		rt.deliver(h, InputEvent{Kind: InputMagnify, Magnify: m, Mods: mods})
+	}
 }
 
 func (rt *engine) scroll(dx, dy float32, mods Modifiers, precise bool) {

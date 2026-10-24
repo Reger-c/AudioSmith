@@ -635,6 +635,18 @@ func (t *Tester) Scroll(x, y, dx, dy float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy)})
 }
 
+// ScrollWith scrolls by dx, dy DIPs with the pointer at (x, y) and mods
+// held, as Cmd with the wheel.
+func (t *Tester) ScrollWith(mods Modifiers, x, y, dx, dy float32) {
+	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Mods: platform.Modifiers(mods)})
+}
+
+// Magnify pinches by the change of scale m (0.1 zooms in by 10 %) with
+// the pointer at (x, y), as a touchpad does on macOS.
+func (t *Tester) Magnify(x, y, m float32) {
+	t.send(platform.SurfaceEvent{Kind: platform.PointerMagnify, X: float64(x), Y: float64(y), Magnify: float64(m)})
+}
+
 // HoldModifiers presses or lets go of modifier keys on their own, as holding
 // Cmd does, leaving mods held.
 func (t *Tester) HoldModifiers(mods Modifiers) {

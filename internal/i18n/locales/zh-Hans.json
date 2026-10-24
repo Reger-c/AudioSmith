@@ -3645,5 +3645,6 @@
   "Finishing the download…": "正在完成下载…",
   "%d s left": "还剩 %d 秒",
   "%d min left": "还剩 %d 分钟",
-  "%d h %d min left": "还剩 %d 小时 %d 分钟"
+  "%d h %d min left": "还剩 %d 小时 %d 分钟",
+  "⌘+scroll or pinch to zoom · ⇧+scroll or swipe sideways to pan · double-click to fit (⌘0)": "⌘+滚轮或双指捏合缩放 · ⇧+滚轮或双指横扫平移 · 双击全部显示（⌘0）"
 }
