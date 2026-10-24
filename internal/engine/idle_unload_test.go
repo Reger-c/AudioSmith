@@ -61,7 +61,7 @@ func TestIdleUnloadEveryWorkerButHeld(t *testing.T) {
 
 	release := s.Hold(proto.RoleListen)
 	waitLoadedOn(t, s, proto.RoleGPU, 0, 5*time.Second) // gpu: unloaded after the limit
-	time.Sleep(500 * time.Millisecond)                   // well over the limit
+	time.Sleep(500 * time.Millisecond)                  // well over the limit
 	if got := loadedOn(t, s, proto.RoleListen); len(got) != 1 {
 		t.Fatalf("a held worker's model was unloaded: %v", got)
 	}
