@@ -60,6 +60,7 @@ func (a *app) dubPage(c *ui.Context) {
 		w -= width
 	}
 	a.dubNarrow = w < px(t, 560)
+	a.dubWorkW = w
 	// Narrow, before the transcript: the workspace has nothing to show
 	// yet, so the step's panel takes its place.
 	embed := a.dub != nil && !inline && len(a.dub.Segments) == 0
@@ -93,7 +94,16 @@ func (a *app) dubPage(c *ui.Context) {
 			ui.Column(c).MinHeight(avail).Padding(px(t, sp3), px(t, sp6), px(t, sp2)).Gap(px(t, sp2)).Children(func() {
 				a.dubBanners(c)
 				if embed {
-					ui.Column(c.Key("dub-embed")).Gap(px(t, sp3)).MaxWidth(px(t, 520)).Children(func() { a.dubStepPanel(c) })
+					ui.Column(c.Key("dub-embed")).Gap(px(t, sp3)).MaxWidth(px(t, 520)).Children(func() {
+						// What the source is (#106), above the step's panel, which
+						// then leaves out its own card of it.
+						a.dubCardAbove = a.dubStep <= dubStepTranscribe && (a.dub.Source.Path != "" || a.dub.Source.URL != "")
+						if a.dubCardAbove {
+							a.dubSourceCentre(c, true)
+						}
+						a.dubStepPanel(c)
+						a.dubCardAbove = false
+					})
 					return
 				}
 				a.dubWorkspace(c)
@@ -300,6 +310,9 @@ func (a *app) dubStepState(step int) (done, running, failed bool) {
 			running = true
 		}
 	}
+	if step == dubStepSource && a.dubProbing() {
+		running = true // reading the link's details, as the footer says
+	}
 	for k, st := range p.Stages {
 		if st.Status != dub.StatusFailed {
 			continue
@@ -484,25 +497,9 @@ func (a *app) dubWorkspace(c *ui.Context) {
 	t := c.Theme()
 	p := a.dub
 	if len(p.Segments) == 0 {
-		ui.Column(c.Key("dub-wait")).Grow(1).Center().Gap(px(t, sp3)).Padding(px(t, sp6)).Children(func() {
-			k := tok(t)
-			if a.dubBusy() {
-				// A bar while a download says how far it is, else a spinner.
-				status := a.dubStatus()
-				if f := determinate(a.dubRunning()); f > 0 {
-					ui.Progress(c.Key("dub-wait-bar"), f).Width(px(t, 280)).Label(status)
-				} else {
-					ui.Spinner(c)
-				}
-				caption(c, status).TextAlign(ui.Center)
-				return
-			}
-			ui.Icon(c, icons.Subtitles.Linear).Size(px(t, 36), px(t, 36)).TextColor(k.Text3)
-			if p.Source.Path == "" && p.Source.URL == "" {
-				caption(c, i18n.T("Choose the video or audio to dub in the Source step.")).TextAlign(ui.Center)
-				return
-			}
-			caption(c, i18n.T("The transcript shows here once the source is transcribed.")).TextAlign(ui.Center)
+		// What the source is, then its video (#106); the footer says what runs.
+		ui.Column(c.Key("dub-wait")).Grow(1).AlignItems(ui.Center).Justify(ui.Center).Gap(px(t, sp3)).Padding(px(t, sp2), 0).Children(func() {
+			a.dubSourceCentre(c, false)
 		})
 		return
 	}

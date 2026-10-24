@@ -37,7 +37,7 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 				a.chooseDubSource()
 			}
 		})
-	} else {
+	} else if !a.dubCardAbove {
 		fillCard(c.Key("src-info")).Gap(px(t, 4)).Padding(px(t, sp3)).Children(func() {
 			name := p.Source.Name
 			if name == "" {
@@ -45,18 +45,12 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 			}
 			ui.Row(c).Gap(px(t, 6)).AlignItems(ui.Center).Children(func() {
 				ic := icons.Soundwave
-				if p.Source.HasVideo {
+				if p.Source.HasVideo || p.Media.Audio == "" && p.Source.Meta != nil && p.Source.Meta.HasVideo() {
 					ic = dubIcon
 				}
 				iconMark(c, ic, tok(t).Text2, "")
 				ui.Text(c, name).FontWeight(600).MaxLines(2).Ellipsis("…").Grow(1).MinWidth(0).Tooltip(name)
-				if iconButton(c.Key("src-remove"), icons.TrashBinMinimalistic, i18n.T("Remove source")).Disabled(locked).Clicked() {
-					if len(p.Segments) > 0 {
-						a.dubConfirm, a.dubConfirmOpen = "remove", true
-					} else {
-						a.dubRemoveSource()
-					}
-				}
+				a.dubRemoveSourceButton(c, locked)
 			})
 			var meta []string
 			if p.Source.Kind == dub.SourceURL {
@@ -138,6 +132,18 @@ func (a *app) dubSourcePanel(c *ui.Context) {
 			a.dubImportSubtitles()
 		}
 	})
+}
+
+// dubRemoveSourceButton is the source's 🗑 (it asks first when there is
+// a transcript to lose).
+func (a *app) dubRemoveSourceButton(c *ui.Context, locked bool) {
+	if iconButton(c.Key("src-remove"), icons.TrashBinMinimalistic, i18n.T("Remove source")).Disabled(locked).Clicked() {
+		if len(a.dub.Segments) > 0 {
+			a.dubConfirm, a.dubConfirmOpen = "remove", true
+		} else {
+			a.dubRemoveSource()
+		}
+	}
 }
 
 // dubTranscribePanel: the preparation stages, speakers and their names.

@@ -105,6 +105,12 @@ type dubState struct {
 	dubSide     panelState // the step's panel: beside the workspace, or a drawer
 	dubDlgNow   dubDlg     // the dialogue model as the line list shows it (dub_view_dialogue.go)
 	dubNarrow   bool       // the workspace is narrow: toolbars show icons, rows fold actions
+	dubWorkW    float32    // the workspace's width, as last laid out
+	// dubProbes are the projects whose source is being read (Dubs.Probe);
+	// dubDescOpen shows all of the video's description.
+	dubProbes    map[string]bool
+	dubDescOpen  bool
+	dubCardAbove bool // the source's card is drawn above the step's panel (narrow)
 
 	ytdlp ytdlpState
 	batch batchState
@@ -260,6 +266,7 @@ func (a *app) dubShow(p *dub.Project, active []jobs.Job) {
 	a.dubHist.Reset()
 	a.dubSel, a.dubCur, a.dubEdit, a.dubOpen = map[string]bool{}, "", "", ""
 	a.dubErr, a.dubErrCode, a.dubNeed, a.dubNotice = "", "", nil, ""
+	a.dubDescOpen = false
 	a.dubJobs = map[string]jobs.Job{}
 	for _, j := range active {
 		a.dubJobs[j.ID] = j
@@ -307,6 +314,7 @@ func (a *app) newDub(src dub.Source) {
 			}
 			a.dubShow(created, nil)
 			a.dubPutRecord(created)
+			a.dubProbe(created.ID) // what the source is, before anything runs
 		})
 	})
 }

@@ -21,8 +21,8 @@ func (a *app) dubPlayerBar(c *ui.Context) {
 	t := c.Theme()
 	k := tok(t)
 	p := a.dub
-	pl := &a.dubPlayer
 	if p.Source.HasVideo && a.dubVideo.show {
+		a.dubEnsureVideo() // again when the file changed (its preview copy came)
 		if a.dubVideo.wv != nil && a.dubVideo.project == p.ID {
 			ui.WebView(c, a.dubVideo.wv).Height(px(t, 220)).Radius(px(t, radiusControl))
 		} else {
@@ -31,6 +31,17 @@ func (a *app) dubPlayerBar(c *ui.Context) {
 			})
 		}
 	}
+	a.dubPlayControls(c, true)
+}
+
+// dubPlayControls: play, A/B (once there are dubs), the time, and the
+// video's switch (when toggle: the editor's; the source's centre shows
+// the video always).
+func (a *app) dubPlayControls(c *ui.Context, toggle bool) {
+	t := c.Theme()
+	k := tok(t)
+	p := a.dub
+	pl := &a.dubPlayer
 	ui.Row(c.Key("dub-player")).Gap(px(t, sp2)).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if playButton(c.Key("dub-play"), a.dubPlaying(), false, 32).Label(i18n.T("Play or pause")).Tooltip(i18n.T("Play or pause (Space)")).
 			Disabled(pl.loading || p.Media.Audio == "").Clicked() {
@@ -60,7 +71,7 @@ func (a *app) dubPlayerBar(c *ui.Context) {
 		}
 		ui.Text(c, tlClock(a.dubPosition())+" / "+tlClock(p.Source.Duration)).Font(monoFont).FontSize(px(t, fsMicro)).TextColor(k.Text2).SingleLine().Shrink(0)
 		ui.Spacer(c)
-		if p.Source.HasVideo {
+		if p.Source.HasVideo && toggle {
 			show := a.dubVideo.show
 			if ui.Toggle(c.Key("dub-video"), &show, i18n.T("Video")).Changed() {
 				a.dubVideo.show = show
@@ -178,6 +189,16 @@ func (a *app) dubFooter(c *ui.Context) {
 	t := c.Theme()
 	p := a.dub
 	ui.Row(c.Key("dub-footer")).Height(px(t, 52)).Shrink(0).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(0, px(t, sp6)).Children(func() {
+		if a.dubProbing() && !a.dubBusy() {
+			// Reading the link's details (#106): a few seconds; Cancel stops it.
+			ui.Spinner(c)
+			ui.Text(c, i18n.T("Reading the video's details…")).FontSize(px(t, fsCaption)).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
+			ui.Spacer(c)
+			if ui.Button(c.Key("dub-cancel"), i18n.T("Cancel")).Clicked() {
+				a.dubCancel()
+			}
+			return
+		}
 		if a.dubBusy() {
 			j := a.dubRunning()
 			ui.Spinner(c)

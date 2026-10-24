@@ -223,6 +223,9 @@ type Dubs struct {
 	// deleteWait bounds how long Delete waits for a project's cancelled
 	// jobs to end (0 = 15 s).
 	deleteWait time.Duration
+	// probes are the probes going on, by project (dub_probe.go).
+	probeMu sync.Mutex
+	probes  map[string]*probeRun
 }
 
 // NewDubs builds the service and registers its executors.
@@ -372,7 +375,14 @@ func (s *Dubs) Update(ctx context.Context, id string, fn func(*dub.Project) erro
 func (s *Dubs) Delete(ctx context.Context, id string) error {
 	s.runMu.Lock() // no run starts meanwhile
 	defer s.runMu.Unlock()
+	probe := s.cancelProbe(id)
 	s.Cancel(ctx, id)
+	if probe != nil {
+		select { // a probe ends at once when cancelled; it writes the cover into the folder
+		case <-probe:
+		case <-time.After(5 * time.Second):
+		}
+	}
 	if err := s.awaitStopped(ctx, id); err != nil {
 		return err
 	}
@@ -432,8 +442,9 @@ func (s *Dubs) Active(ctx context.Context, id string) ([]jobs.Job, error) {
 }
 
 // Cancel cancels a project's unfinished jobs (interrupted ones too) and
-// forgets its run.
+// its probe, and forgets its run.
 func (s *Dubs) Cancel(ctx context.Context, id string) error {
+	s.cancelProbe(id)
 	var active []jobs.Job
 	if s.cfg.Scheduler != nil {
 		var err error
