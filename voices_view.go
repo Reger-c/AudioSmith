@@ -143,6 +143,11 @@ func (a *app) voiceCard(c *ui.Context, v *core.Voice) {
 	card := ui.Row(c.Key("voice-"+v.ID)).Grow(1).Gap(px(t, sp2)).AlignItems(ui.Center).Padding(px(t, sp2), px(t, sp2), px(t, sp2), px(t, sp3)).
 		Radius(px(t, radiusCard)).Border(1, k.Line)
 	hovered := card.Hovered()
+	// The ⋯ menu stays built while it has the focus (a menu button takes
+	// it as it opens): the native menu takes the pointer, so the card is
+	// no longer hovered in the frame that reports the item chosen, and a
+	// menu not built then loses the choice (#108: Delete… did nothing).
+	actions := hovered || selected || card.FocusWithin()
 	switch {
 	case selected:
 		card.Background(k.Pressed).Border(1, k.Pressed)
@@ -180,7 +185,7 @@ func (a *app) voiceCard(c *ui.Context, v *core.Voice) {
 				a.playVoice(v)
 			}
 		}
-		if hovered || selected {
+		if actions {
 			id := v.ID
 			moreMenu(c.Key("voice-more"), "", func(m *ui.Menu) {
 				if m.Item(i18n.T("Use in Studio")).Chosen() {
