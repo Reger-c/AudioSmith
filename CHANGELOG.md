@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0-beta.7 — 2026-10-24
 
 ### Dub timeline: zoom and pan
 - Zoom the waveform timeline with a trackpad pinch, ⌘ or ⌥ with the scroll wheel, or ⌘= and ⌘−, around the pointer; ⌘0 or a double click on the zoom readout shows it all. It zooms from the whole source to 100 pixels a second.
@@ -35,6 +35,9 @@
 - Errors that were dropped silently in background work (cancelling jobs, export records, notifications, files the app writes or removes…) are logged.
 
 ### Fixes
+- Studio and Audiobook script editors: the last character of a line was cut in half at the right edge on the Mac (a Chinese comma or full stop measured half as wide on its own as within its line). Lines now wrap where they are drawn.
+- Importing a video from a link shows its real progress (percent, size, time left) on the page, in the footer and on the sidebar card, with the video's title; Stop on the card and Cancel in the footer really stop it (yt-dlp's helper process kept downloading before), and activity cards no longer show an empty bar.
+- A copy built on the Mac says, in Settings → About → Software updates, why it cannot update itself, with a link to the download page.
 - My voices: Delete… (and the other items) in a voice card's ⋯ menu did nothing — no dialog, no log line — unless the voice's editor was open: the menu went away with the pointer before the item chosen reached it.
 - Deleting a voice says where it is used (stories, books, dubs, workflows, the Studio, batch dubbing, calls, agents) and can be undone from its toast for about 10 seconds; its files wait in the library's trash until then. Places that named it show “Voice deleted” to choose another one, a story or book that uses it stops with a clear message, and the Studio says its voice went — never another voice in silence.
 - Quitting never hangs: edits not saved yet (drafts, the dub editor's changes) are written first, and jobs that do not stop when cancelled — such as a stuck download — are left after a few seconds (they continue or wait for Retry at the next start). An engine that stops reading its requests is restarted instead of blocking.
