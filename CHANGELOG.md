@@ -8,6 +8,16 @@
 - MCP voice cloning and design work only from this Mac (or with the API key), like the Local API's; over the LAN, a voice's audio is its sample, never the reference recording.
 - Built with Go 1.27.3 (security fixes in Go's standard library).
 
+### Fixes
+- Quitting never hangs: edits not saved yet (drafts, the dub editor's changes) are written first, and jobs that do not stop when cancelled — such as a stuck download — are left after a few seconds (they continue or wait for Retry at the next start). An engine that stops reading its requests is restarted instead of blocking.
+- A job after an interrupted one (the engine stopped twice in a stage) no longer waits forever: it fails, saying why, the dub or book is no longer shown as busy, and Resume continues it. Chains stuck this way in an earlier version recover at the start.
+- The language model's turn on the GPU lasts until its request has really stopped, so the next job is not refused as busy.
+- Models moved by a move that did not finish (cancelled, a model in use by another app, the app quit) no longer show as not downloaded; the move continues after a restart.
+- Deleting a dub waits for its running stage to stop; two runs of the same dub started at once make one.
+- Stories and Audiobook: a rename on the Projects page no longer marks unsaved changes as saved; saving over a project changed elsewhere (by an agent through the Local API) asks whether to save a copy or replace it, and the Local API refuses an edit made on an outdated read.
+- Moving the data folder measures it and cleans up a failed copy in the background, with the dialog saying so, instead of freezing the window.
+- Smaller fixes: a crash in background work is logged instead of closing the app; a draft that could not be written is tried again; unfinished temporary files are cleaned in every folder; downloads left running by a crash are stopped at the next start.
+
 ## 0.4.0-beta.6 — 2026-10-23
 
 ### The window in the ActNow family's layout
