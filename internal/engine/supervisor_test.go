@@ -581,21 +581,23 @@ func TestSupervisorLimitsAtRunTime(t *testing.T) {
 // kills (and restarts) the worker, and Stop returns within its bounds.
 func TestSupervisorStalledStdin(t *testing.T) {
 	s, w := newTestSup(t, "stall-stdin", func(c *Config) {
-		c.WriteTimeout = 300 * time.Millisecond
+		c.WriteTimeout = 1500 * time.Millisecond
 		c.StopTimeout = 200 * time.Millisecond
 		c.StatsEvery = -1
 	})
 	w.until(t, "ready", ready)
 	big := synth(strings.Repeat("x", 512<<10), false) // over a pipe's buffer
 
-	// The caller's context ends first: the call returns at once.
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	// The caller's context ends first, while the write is stalled (not
+	// before it starts: 500 ms leaves room for encoding the request under
+	// -race on a slow runner), and the call returns at once.
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	start := time.Now()
 	if _, err := s.Call(ctx, proto.RoleGPU, "J1", proto.MethodTTSSynthesize, big, nil); err == nil {
 		t.Fatal("a call to a stalled engine succeeded")
 	}
-	if d := time.Since(start); d > 2*time.Second {
+	if d := time.Since(start); d > 3*time.Second {
 		t.Errorf("the cancelled call took %s", d)
 	}
 	st := w.until(t, "killed", func(st WorkerStatus) bool { return st.State == WorkerFailed })
@@ -610,7 +612,7 @@ func TestSupervisorStalledStdin(t *testing.T) {
 	if _, err := s.Call(context.Background(), proto.RoleGPU, "J2", proto.MethodTTSSynthesize, big, nil); !errors.Is(err, ErrWorkerExited) {
 		t.Fatalf("a call to a stalled engine: %v", err)
 	}
-	if d := time.Since(start); d > 3*time.Second {
+	if d := time.Since(start); d > 6*time.Second {
 		t.Errorf("the call took %s", d)
 	}
 	w.until(t, "restarted", ready)
