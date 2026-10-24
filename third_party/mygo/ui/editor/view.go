@@ -54,6 +54,10 @@ type view struct {
 	approx     bool
 	tokScratch []Token
 	advScratch []float32 // lineAdvances'
+	wc         wrapCache
+	// shownRows is how many rows the editor shows, which measureWraps
+	// measures from its anchor whatever its budget.
+	shownRows int
 }
 
 // inlay is text shown in a line at an offset, as an inlay hint or a
@@ -414,6 +418,7 @@ func (v *view) endFrame() {
 		}
 	}
 	v.shaped.endFrame()
+	v.wc.sweep(v.text.LineCount())
 }
 
 // tokens returns the tokens of line n, whose text is s, and whether they
@@ -572,7 +577,7 @@ func (l *lineLayout) fromDisp(d int) int {
 // layoutRows wraps the displayed text of l into rows and shapes them.
 func (v *view) layoutRows(l *lineLayout) {
 	l.rows = l.rows[:0]
-	breaks := v.wrapBreaks(l.disp)
+	breaks := v.wrapBreaks(l.disp, true)
 	indent := float32(0)
 	if len(breaks) > 0 {
 		indent = v.wrapIndent(l.disp)
@@ -644,8 +649,13 @@ func (v *view) piece(l *lineLayout, p *rowPiece) *text.Layout {
 // breaking after whitespace or between a word and what is not, anywhere
 // in CJK, and inside a word too long for a row. The advances are those
 // the characters take in the line (lineAdvances); a row is then shaped
-// as it paints and given back characters until it fits (fitRow).
-func (v *view) wrapBreaks(s string) []int {
+// as it paints and given back characters until it fits (fitRow). What
+// it shapes, it keeps by the line's text (wrapCache): a line is shaped to
+// wrap once, and again only when it changes, or the advances kept when
+// the wrap width does. The breaks are the cache's, not to be changed.
+// paint tells that the line is laid out to paint: the rows fitRow shapes
+// are then kept for painting them.
+func (v *view) wrapBreaks(s string, paint bool) []int {
 	if !v.wrap || v.wrapWidth <= 0 {
 		return nil
 	}
@@ -653,8 +663,23 @@ func (v *view) wrapBreaks(s string) []int {
 	if v.widths.mono > 0 && float32(len(s))*v.widths.mono <= width {
 		return nil
 	}
-	adv := v.lineAdvances(s)
 	exact := v.widths.mono > 0 && isASCII(s)
+	var kept *wrapLine
+	var adv []float32
+	if exact {
+		// Summed from the widths of characters, which shapes nothing.
+		adv = v.lineAdvances(s)
+	} else {
+		v.wc.check(v.style, width, v.scale)
+		kept = v.wc.line(s)
+		if kept.broken {
+			return kept.breaks
+		}
+		if kept.adv == nil {
+			kept.adv = slices.Clone(v.lineAdvances(s))
+		}
+		adv = kept.adv
+	}
 	var breaks []int
 	indent := float32(0)
 	x := float32(0)
@@ -676,7 +701,7 @@ func (v *view) wrapBreaks(s string) []int {
 				rowIndent = 0
 			}
 			if !exact {
-				at = v.fitRow(s, start, at, rowIndent)
+				at = v.fitRow(s, start, at, rowIndent, paint)
 			}
 			breaks = append(breaks, at)
 			if indent == 0 {
@@ -692,6 +717,9 @@ func (v *view) wrapBreaks(s string) []int {
 		x += w
 		prev = r
 	}
+	if kept != nil {
+		kept.breaks, kept.broken = breaks, true
+	}
 	return breaks
 }
 
@@ -701,15 +729,15 @@ func (v *view) wrapBreaks(s string) []int {
 // changes at the row's edges (Pango rounds a letter's position in its
 // line, not its advance). It gives back a place to break at a time,
 // a character at a time in a word, and keeps a character at least.
-// Spaces ending the row hang past the width, as they did.
-func (v *view) fitRow(s string, start, at int, indent float32) int {
+// Spaces ending the row hang past the width, as they did. The widths of
+// rows shaped are kept (rowWidth).
+func (v *view) fitRow(s string, start, at int, indent float32, paint bool) int {
 	for range 64 {
 		row := strings.TrimRight(s[start:at], " ")
 		if row == "" {
 			return at
 		}
-		l := text.Shared().Shape(text.Params{Text: row, Style: v.style, NoWrap: true, KeepSpaces: true})
-		if indent+l.Width <= v.wrapWidth {
+		if indent+v.rowWidth(row, paint) <= v.wrapWidth {
 			return at
 		}
 		// The place to break before at, or else the character before it.
@@ -731,6 +759,23 @@ func (v *view) fitRow(s string, start, at int, indent float32) int {
 		at = back
 	}
 	return at
+}
+
+// rowWidth returns the width of a row's text shaped as it paints, as kept
+// by the cache, or shaped: into the layouts the frame paints from when
+// paint, else alone, for the lines measureWraps measures out of view.
+func (v *view) rowWidth(row string, paint bool) float32 {
+	if w, ok := v.wc.rowWidth(row); ok {
+		return w
+	}
+	var w float32
+	if paint {
+		w = v.shaped.get(row, v.style).Width
+	} else {
+		w = text.Shared().Shape(text.Params{Text: row, Style: v.style, NoWrap: true, KeepSpaces: true}).Width
+	}
+	v.wc.setRowWidth(row, w)
+	return w
 }
 
 // lineAdvances returns the advance of each character of the displayed
@@ -798,6 +843,10 @@ func isCJK(r rune) bool {
 
 // measureWraps measures the wraps of lines not measured yet, from those
 // around near, for at most budget, and reports whether all are measured.
+// The lines that show from near, as many as fill the rows the editor
+// shows (shownRows), are measured whatever the budget, so what shows is
+// right at once; the budget holds for the others, the time looked at
+// every few lines, as a line can take a millisecond to shape.
 func (v *view) measureWraps(near int, budget time.Duration) bool {
 	w := &v.heights.wraps
 	if !w.on {
@@ -808,9 +857,9 @@ func (v *view) measureWraps(near int, budget time.Duration) bool {
 		return true
 	}
 	start := time.Now()
-	measure := func(i, at int, s string) bool {
+	measure := func(i, at int, s string) {
 		if w.extra[i] != wrapUnknown {
-			return true
+			return
 		}
 		disp := s
 		if strings.IndexByte(s, '\t') >= 0 || len(v.inlaysIn(at, at+len(s))) > 0 {
@@ -818,17 +867,33 @@ func (v *view) measureWraps(near int, budget time.Duration) bool {
 			v.display(l)
 			disp = l.disp
 		}
-		w.set(i, len(v.wrapBreaks(disp))+1)
-		return true
+		w.set(i, len(v.wrapBreaks(disp, false))+1)
 	}
-	// Those around near first, so what shows is right at once.
-	v.text.EachLine(near-200, near+200, measure)
+	rows := 0
+	v.text.EachLine(max(near, 0), max(near, 0)+v.shownRows, func(i, at int, s string) bool {
+		measure(i, at, s)
+		rows += w.rows(i)
+		return rows < v.shownRows
+	})
 	count := 0
+	within := func() bool {
+		count++
+		return count&3 != 0 || time.Since(start) <= budget
+	}
+	// Those around near next, so what shows as it scrolls is right.
+	out := false
+	v.text.EachLine(near-200, near+200, func(i, at int, s string) bool {
+		measure(i, at, s)
+		out = !within()
+		return !out
+	})
+	if out {
+		return w.known >= n
+	}
 	v.text.EachLine(v.wrapAt, n, func(i, at int, s string) bool {
 		measure(i, at, s)
 		v.wrapAt = i + 1
-		count++
-		return count&255 != 0 || time.Since(start) <= budget
+		return within()
 	})
 	return w.known >= n
 }
