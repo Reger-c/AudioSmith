@@ -79,7 +79,17 @@ func (a *app) dubPage(c *ui.Context) {
 		// its notices, player, timeline and some lines, it scrolls.
 		_, winH := c.Size()
 		avail := winH - titleBarHeight - px(t, 40) - px(t, 52) - 4
-		ui.Scroll(c.Key("dub-work")).Grow(1).MinWidth(0).Children(func() {
+		// With lines, exactly the scroll's height once it was laid out, so
+		// the list of lines (which scrolls itself, dub_editor.go) reaches
+		// its foot; one more frame after the window's height changes.
+		if b := a.dubWork.Bounds(c); b.H > 0 && len(a.dub.Segments) > 0 && !embed {
+			avail = b.H
+		}
+		if winH != a.dubWorkWin {
+			a.dubWorkWin = winH
+			c.After(10 * time.Millisecond)
+		}
+		ui.Scroll(c.Key("dub-work")).Bind(&a.dubWork).Grow(1).MinWidth(0).Children(func() {
 			ui.Column(c).MinHeight(avail).Padding(px(t, sp3), px(t, sp6), px(t, sp2)).Gap(px(t, sp2)).Children(func() {
 				a.dubBanners(c)
 				if embed {

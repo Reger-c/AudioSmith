@@ -77,6 +77,8 @@ type dubState struct {
 	dubList2        ui.ListState
 	dubEdFocus      ui.Handle // the editor's own focus: the Edit menu's undo and redo come to it
 	dubSideFocus    ui.Handle // the step's panel (the editor leaves its focus alone)
+	dubWork         ui.Handle // the workspace's scroll, whose height the workspace fills
+	dubWorkWin      float32   // the window's height when the workspace was laid out
 	dubOpenProjects bool      // the projects popover
 
 	dubURL         string
