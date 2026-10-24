@@ -149,9 +149,11 @@ func TestDubDeleteWaitsForStage(t *testing.T) {
 	e := newDubEnv(t, 3)
 	p := e.create(t, nil)
 	release := make(chan struct{})
+	entered := make(chan struct{}, 1)
 	ignore := atomic.Bool{}
 	e.dubs.cfg.Translator = func(ctx context.Context, _ dub.Settings) (translate.Translator, error) {
 		if ignore.Load() {
+			entered <- struct{}{}
 			<-release
 		} else {
 			<-ctx.Done()
@@ -179,6 +181,13 @@ func TestDubDeleteWaitsForStage(t *testing.T) {
 		t.Fatal(err)
 	}
 	running(ids)
+	// The stage must be inside the call that ignores cancel: a job shown
+	// running may not have reached it yet, and would stop on the cancel.
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the translator was not called")
+	}
 	if err := e.dubs.Delete(ctx, p.ID); !errors.Is(err, core.ErrBusy) {
 		t.Fatalf("delete under a stuck stage: %v", err)
 	}
