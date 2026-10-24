@@ -150,7 +150,12 @@ type cloneIn struct {
 }
 
 func (s *Server) cloneVoice(ctx context.Context, req *sdk.CallToolRequest, in cloneIn) (*sdk.CallToolResult, any, error) {
+	// Saving voices is admin, as REST POST /api/voices (security review
+	// #100, L7): not for LAN clients with the PIN only.
 	c := s.caller(req)
+	if err := c.local(); err != nil {
+		return nil, nil, err
+	}
 	if !in.Consent {
 		return nil, nil, errors.New("consent_required: clone only voices whose owner agreed; confirm with consent: true")
 	}
@@ -175,7 +180,9 @@ type designIn struct {
 }
 
 func (s *Server) designVoice(ctx context.Context, req *sdk.CallToolRequest, in designIn) (*sdk.CallToolResult, any, error) {
-	s.caller(req)
+	if err := s.local(req); err != nil {
+		return nil, nil, err
+	}
 	d, err := s.o.API.DesignVoice(ctx, api.DesignParams{Name: in.Name, Description: in.Description, Language: in.Language, Seed: in.Seed, Model: in.Model})
 	if err != nil {
 		return nil, nil, toolError(err)

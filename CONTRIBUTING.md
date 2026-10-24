@@ -10,7 +10,7 @@ Thank you for helping. Bug reports, ideas, translations and pull requests are al
 
 ## Setting up
 
-AudioSmith runs on macOS 15 or later with Apple silicon. Building the app needs Xcode 26 (Swift 6.2) and Go 1.27.1 (`GOTOOLCHAIN=auto` downloads it); see [Build from source](README.md#build-from-source). The Go side, including the whole UI, also builds and tests headless on Linux, with the engine faked. Read [docs/architecture.md](docs/architecture.md) before a larger change: it says where things live and the rules the code follows.
+AudioSmith runs on macOS 15 or later with Apple silicon. Building the app needs Xcode 26 (Swift 6.2) and Go 1.27.3 (`GOTOOLCHAIN=auto` downloads it); see [Build from source](README.md#build-from-source). The Go side, including the whole UI, also builds and tests headless on Linux, with the engine faked. Read [docs/architecture.md](docs/architecture.md) before a larger change: it says where things live and the rules the code follows.
 
 ## Checks
 

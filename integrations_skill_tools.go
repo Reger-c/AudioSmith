@@ -54,20 +54,20 @@ func skillTools() []skillTool {
 				skillModel(catalog.DefaultSpeakers), "`S1: …`"), "speakers"),
 		}, After: i18n.T("Returns text, language, duration and transcript_id. The transcript is also kept on AudioSmith's Transcribe page.")},
 		{Name: "clone_voice", Lead: i18n.T("a new saved voice from a recording."), Args: []skillArg{
-			must(i18n.T("The new voice's name."), "name"),
+			must(i18n.T("The new voice's name: one line, up to 80 characters (AudioSmith cleans and cuts it)."), "name"),
 			arg(i18n.T("Absolute path of the recording: 5–15 s of clean speech by one person, without music or noise."), "path"),
 			arg(i18n.T("Or the recording as base64, with its file name."), "audio_base64", "filename"),
 			arg(i18n.T("What the recording says; empty: the engine listens."), "ref_text"),
 			arg(i18n.T("The speaker's language (BCP-47); a delivery hint kept with the voice (calm, whisper…)."), "language", "style"),
 			must(i18n.T("true only after the user has confirmed that the speaker agreed to being cloned; without it the tool refuses."), "consent"),
-		}, After: i18n.T("Then speak with it: generate_speech with its name as voice.")},
+		}, After: i18n.T("Then speak with it: generate_speech with its name as voice. Only on this Mac or with the API key: over the LAN with the PIN alone it answers unauthorized.")},
 		{Name: "design_voice", Lead: i18n.T("a new saved voice from a description."), Args: []skillArg{
 			must(i18n.T("The voice in plain words: gender, age, pitch, accent or dialect, style (\"a warm older British man\", \"女，青年，四川话\")."), "description"),
 			arg(i18n.T("Empty: made from the description."), "name"),
 			arg(i18n.T("The language it will speak."), "language"),
 			arg(i18n.T("Its identity: another seed gives another voice from the same description."), "seed"),
 			arg(i18n.T("A model that designs voices (list_models); empty: the first."), "model"),
-		}, After: i18n.T("Returns the voice and the words it could not map (unmatched).")},
+		}, After: i18n.T("Returns the voice and the words it could not map (unmatched). Only on this Mac or with the API key, like clone_voice.")},
 		{Name: "describe_voice", Lead: i18n.T("how AudioSmith reads a voice description, without saving anything."), Args: []skillArg{
 			must(i18n.T("Use it to refine a description before design_voice: rephrase the words it cannot map."), "description"),
 		}},

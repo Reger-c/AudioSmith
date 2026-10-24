@@ -476,6 +476,23 @@ func TestBindingsAndLAN(t *testing.T) {
 	if !res.IsError || !strings.Contains(textOf(res), api.CodeUnauthorized) {
 		t.Fatalf("LAN studio tool: %s", textOf(res))
 	}
+	// Saving voices is admin (security review #100, L7): refused, even
+	// with the audio as base64, and nothing is saved.
+	for tool, args := range map[string]map[string]any{
+		"clone_voice":  {"name": "LAN clone", "audio_base64": base64.StdEncoding.EncodeToString([]byte("lan audio")), "filename": "a.wav", "consent": true},
+		"design_voice": {"name": "LAN design", "description": "a warm older British man"},
+	} {
+		res = call(t, cs, tool, args)
+		if !res.IsError || !strings.Contains(textOf(res), api.CodeUnauthorized) {
+			t.Fatalf("LAN %s: %s", tool, textOf(res))
+		}
+	}
+	f.mu.Lock()
+	saved := len(f.voices)
+	f.mu.Unlock()
+	if saved != 1 {
+		t.Fatalf("LAN saved voices: %d", saved)
+	}
 	// Without the PIN: refused.
 	c := sdk.NewClient(&sdk.Implementation{Name: "x"}, nil)
 	if _, err := c.Connect(context.Background(), &sdk.StreamableClientTransport{Endpoint: lan.URL + "/mcp", MaxRetries: -1}, nil); err == nil {

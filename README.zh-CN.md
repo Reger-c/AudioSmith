@@ -199,7 +199,7 @@ AudioSmith 用“能做什么”来给模型起名。技术名称、大小和许
 
 ## 从源码构建
 
-需要 Xcode 26（Swift 6.2 及以上）和 Go 1.27.1（`GOTOOLCHAIN=auto` 会自动下载）。
+需要 Xcode 26（Swift 6.2 及以上）和 Go 1.27.3（`GOTOOLCHAIN=auto` 会自动下载）。
 
 ```sh
 scripts/fetch-engine-deps.sh    # 上游 mlx-audio-swift + AudioSmith 的补丁

@@ -831,7 +831,7 @@
         ],
         "summary": "A voice's audio",
         "operationId": "voiceAudio",
-        "description": "Its sample (designed, locked) or its reference.",
+        "description": "Its sample (designed, locked) or its reference. LAN clients with the PIN only get the sample, never the reference.",
         "parameters": [
           {
             "name": "id",

@@ -96,8 +96,10 @@ func (s *Server) voiceAudio(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	// LAN clients with the PIN only get the sample: the reference
+	// recording is a voiceprint (security review #100, L7).
 	name := v.Sample
-	if name == "" {
+	if name == "" && r.Header.Get(HeaderVia) != ViaLAN {
 		name = v.RefAudio
 	}
 	if name == "" {
@@ -118,7 +120,7 @@ type CloneParams struct {
 
 // CloneVoice saves a voice cloned from a file (copied into the library).
 func (s *Server) CloneVoice(ctx context.Context, p CloneParams) (core.Voice, error) {
-	name := strings.TrimSpace(p.Name)
+	name := core.CleanName(p.Name)
 	if name == "" {
 		return core.Voice{}, errInvalid("name", "The voice needs a name.")
 	}
@@ -195,12 +197,9 @@ func (s *Server) DesignVoice(ctx context.Context, p DesignParams) (Designed, err
 	}
 	r := vd.Recipe{Description: desc, Attrs: res.Attrs.Canonical(), Seed: vd.FoldSeed(seed)}.Normalize()
 	attrs, _ := json.Marshal(r.Attrs)
-	name := strings.TrimSpace(p.Name)
+	name := core.CleanName(p.Name)
 	if name == "" {
-		name = desc
-		if rs := []rune(name); len(rs) > 40 {
-			name = string(rs[:40]) + "…"
-		}
+		name = core.TruncateName(core.CleanName(desc), 41)
 	}
 	language := strings.TrimSpace(p.Language)
 	if language == "" {

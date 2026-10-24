@@ -199,7 +199,7 @@ Measured on a MacBook Air M4 with 24 GB:
 
 ## Build from source
 
-You need Xcode 26 (Swift 6.2 or later) and Go 1.27.1 (`GOTOOLCHAIN=auto` downloads it).
+You need Xcode 26 (Swift 6.2 or later) and Go 1.27.3 (`GOTOOLCHAIN=auto` downloads it).
 
 ```sh
 scripts/fetch-engine-deps.sh    # upstream mlx-audio-swift + AudioSmith's patches
