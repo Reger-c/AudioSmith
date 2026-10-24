@@ -29,7 +29,14 @@
 - MCP voice cloning and design work only from this Mac (or with the API key), like the Local API's; over the LAN, a voice's audio is its sample, never the reference recording.
 - Built with Go 1.27.3 (security fixes in Go's standard library).
 
+### Logs
+- An operations log in the app's log (source “ops”, one key=value line each): creating, renaming, deleting, importing and exporting voices, projects, dubs, transcripts, workflows and takes, with who asked (the app, the Local API, LAN, MCP); settings changes by name; each job's start, end, failure (with its error) and cancel (with who cancelled and how long it ran); downloads; Local API and MCP calls that change something, with their status; errors shown as toasts; the app's start and each step of its quit. Never script text, transcripts, prompts or secrets.
+- Logs and diagnostic bundles mask Local API keys, Twilio tokens, keys read from the Keychain and bearer tokens, and show the home folder as “~”; the engines' own log files are masked too.
+- Errors that were dropped silently in background work (cancelling jobs, export records, notifications, files the app writes or removes…) are logged.
+
 ### Fixes
+- My voices: Delete… (and the other items) in a voice card's ⋯ menu did nothing — no dialog, no log line — unless the voice's editor was open: the menu went away with the pointer before the item chosen reached it.
+- Deleting a voice says where it is used (stories, books, dubs, workflows, the Studio, batch dubbing, calls, agents) and can be undone from its toast for about 10 seconds; its files wait in the library's trash until then. Places that named it show “Voice deleted” to choose another one, a story or book that uses it stops with a clear message, and the Studio says its voice went — never another voice in silence.
 - Quitting never hangs: edits not saved yet (drafts, the dub editor's changes) are written first, and jobs that do not stop when cancelled — such as a stuck download — are left after a few seconds (they continue or wait for Retry at the next start). An engine that stops reading its requests is restarted instead of blocking.
 - A job after an interrupted one (the engine stopped twice in a stage) no longer waits forever: it fails, saying why, the dub or book is no longer shown as busy, and Resume continues it. Chains stuck this way in an earlier version recover at the start.
 - The language model's turn on the GPU lasts until its request has really stopped, so the next job is not refused as busy.

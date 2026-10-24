@@ -48,7 +48,7 @@ func (a *app) searchTakes() {
 				return // typed on meanwhile
 			}
 			if err != nil {
-				a.toast(i18n.T("Could not search: %v", err))
+				a.toastWarn(i18n.T("Could not search: %v", err))
 				return
 			}
 			res := map[string]bool{}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"slices"
 	"strings"
 
@@ -286,42 +285,6 @@ func (a *app) voicesDropped(paths []string) {
 			return
 		}
 	}
-}
-
-// askDeleteVoice asks before deleting a voice.
-func (a *app) askDeleteVoice(id string) {
-	a.deleteVoice, a.deleteOpen = id, true
-}
-
-func (a *app) voiceDeleteAlert(c *ui.Context) {
-	v := a.findVoice(a.deleteVoice)
-	if v == nil {
-		a.deleteOpen = false
-		return
-	}
-	if ui.AlertDialog(c, &a.deleteOpen, i18n.T("Delete “%s”?", v.Name), i18n.T("Its reference, samples and portrait are deleted too. Takes made with it stay. This cannot be undone."),
-		i18n.T("Cancel"), i18n.T("Delete voice")) == 1 {
-		a.deleteVoiceNow(v.ID)
-	}
-}
-
-// deleteVoiceNow deletes a voice in the background; VoiceChanged updates
-// the views.
-func (a *app) deleteVoiceNow(id string) {
-	if a.pl.Current() == "voice:"+id {
-		a.pl.Stop()
-	}
-	svc := a.lib.svc.Voices
-	a.background(func() {
-		err := svc.Delete(context.Background(), id)
-		a.post(func() {
-			if err != nil {
-				a.toast(i18n.T("Could not delete: %v", err))
-			} else {
-				a.toast(i18n.T("Voice deleted"))
-			}
-		})
-	})
 }
 
 // openVoiceEditor opens the voice library with v's editor.

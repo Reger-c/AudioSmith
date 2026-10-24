@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 )
 
 // app is AudioSmith's UI state: the view state of every page, and handles
@@ -19,9 +21,10 @@ import (
 //
 // Add fields to your area's struct, not here.
 type app struct {
-	modelsKind int          // the Models page's tab (modelKinds)
-	win        *mygo.Window // nil in tests
-	toasts     []string     // shown by the next build of the view
+	modelsKind   int          // the Models page's tab (modelKinds)
+	win          *mygo.Window // nil in tests
+	toasts       []string     // shown by the next build of the view
+	actionToasts []ui.Toast   // toasts with an action (Undo), shown by the next build
 	// postQueue replaces the window's queue in tests that run real
 	// goroutines (scheduler, supervisor): they pump it on the test's
 	// goroutine. nil: post runs fn at once (other tests).
@@ -117,8 +120,23 @@ func (a *app) background(fn func()) {
 	}()
 }
 
-// toast shows msg (already translated) as a toast.
+// toast shows msg (already translated) as a toast, and logs it.
 func (a *app) toast(msg string) {
+	oplog.Info("toast", "text", oplog.Msg(msg))
+	a.toasts = append(a.toasts, msg)
+}
+
+// toastAction shows a toast with an action, as Undo after a delete, and
+// logs it.
+func (a *app) toastAction(t ui.Toast) {
+	oplog.Info("toast", "text", oplog.Msg(t.Title), "action", t.Action)
+	a.actionToasts = append(a.actionToasts, t)
+}
+
+// toastWarn shows msg as a toast and logs it as a warning: an error the
+// user sees (#108).
+func (a *app) toastWarn(msg string) {
+	oplog.Warn("toast", "text", oplog.Msg(msg))
 	a.toasts = append(a.toasts, msg)
 }
 

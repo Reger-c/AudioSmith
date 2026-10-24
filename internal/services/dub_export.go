@@ -21,6 +21,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/lang"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 )
 
 // MethodBurn draws subtitles into a video (an app-level method: the app
@@ -67,6 +68,7 @@ func (s *Dubs) ExportJob(ctx context.Context, req ExportRequest) (string, error)
 	if err != nil {
 		return "", err
 	}
+	oplog.Info("dub.export", "id", req.Dub, "file", filepath.Base(req.Output), "by", oplog.Actor(ctx))
 	return s.cfg.Scheduler.Submit(ctx, jobs.Spec{Kind: KindDubExport, Lane: jobs.LaneCPU, Priority: jobs.PriorityInteractive,
 		Params: params, Title: i18n.T("Export %s", filepath.Base(req.Output)), Owner: DubExportOwner + req.Dub, MaxAttempts: 1})
 }

@@ -73,7 +73,19 @@ type Voices interface {
 	Delete(ctx context.Context, id string) error
 	// Usage counts the takes and project segments that use the voice.
 	Usage(ctx context.Context, id string) (core.VoiceUsage, error)
+	// Links are the takes and segments that point at the voice, which
+	// Delete unlinks; Relink points them at it again (undoing a delete,
+	// after Put restored the profile), those linked elsewhere since left.
+	Links(ctx context.Context, id string) (VoiceLinks, error)
+	Relink(ctx context.Context, id string, l VoiceLinks) error
 	VoiceDir() string
+}
+
+// VoiceLinks are the ids of the takes and project segments that use a
+// voice.
+type VoiceLinks struct {
+	Takes    []string `json:"takes,omitempty"`
+	Segments []string `json:"segments,omitempty"`
 }
 
 // Favorites stores sets of favorite keys by scope ("gallery": archetype

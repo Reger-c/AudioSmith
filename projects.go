@@ -90,7 +90,7 @@ func (a *app) refreshLibrary() {
 		a.post(func() {
 			s.loading = false
 			if err != nil {
-				a.toast(i18n.T("Could not read the library: %v", err))
+				a.toastWarn(i18n.T("Could not read the library: %v", err))
 				return
 			}
 			s.items, s.counts, s.loaded = items, counts, key
@@ -342,7 +342,7 @@ func (a *app) recordTakeExport(id, dst, format string) {
 		}
 		a.background(func() {
 			if _, err := lib.RecordExport(context.Background(), core.Export{Kind: "take", SourceID: id, Title: title, Path: dst, Format: format}); err != nil {
-				a.post(func() { a.toast(i18n.T("Could not record the export: %v", err)) })
+				a.post(func() { a.toastWarn(i18n.T("Could not record the export: %v", err)) })
 			}
 		})
 	})
@@ -369,7 +369,7 @@ func (a *app) renameItem(it store.LibraryItem, title string) {
 		_, err := lib.Rename(context.Background(), it.ID, title)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not rename: %v", err))
+				a.toastWarn(i18n.T("Could not rename: %v", err))
 			}
 			a.projects.dirty = true
 		})

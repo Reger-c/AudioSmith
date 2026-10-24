@@ -69,7 +69,7 @@ func (a *app) importVoice(path string) {
 		res, err := svc.Import(context.Background(), path)
 		a.post(func() {
 			if err != nil {
-				a.toast(importErrorText(filepath.Base(path), err))
+				a.toastWarn(importErrorText(filepath.Base(path), err))
 				return
 			}
 			v := res.Voice
@@ -165,7 +165,7 @@ func (a *app) exportVoice(id string, includeRef bool, licence string) {
 			case errors.Is(err, services.ErrNoPreview):
 				a.toast(i18n.T("This voice has no audio to build a preview from: generate a take with it first."))
 			case err != nil:
-				a.toast(i18n.T("Export failed: %v", err))
+				a.toastWarn(i18n.T("Export failed: %v", err))
 			default:
 				a.toast(i18n.T("Exported %s", filepath.Base(dst)))
 			}

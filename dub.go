@@ -221,7 +221,7 @@ func (a *app) loadDubs() {
 		l, err := svc.List(context.Background(), store.DubQuery{Limit: 200})
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not read the dubbing projects: %v", err))
+				a.toastWarn(i18n.T("Could not read the dubbing projects: %v", err))
 				return
 			}
 			a.dubList, a.dubLoaded = l, true
@@ -251,7 +251,7 @@ func (a *app) openDub(id string) {
 		active, _ := svc.Active(context.Background(), id)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not open the dub: %v", err))
+				a.toastWarn(i18n.T("Could not open the dub: %v", err))
 				return
 			}
 			a.dubShow(p, active)
@@ -309,7 +309,7 @@ func (a *app) newDub(src dub.Source) {
 		created, err := svc.Create(context.Background(), p)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not make the dub: %v", err))
+				a.toastWarn(i18n.T("Could not make the dub: %v", err))
 				return
 			}
 			a.dubShow(created, nil)
@@ -417,7 +417,7 @@ func (a *app) dubSave(fn func(*dub.Project)) {
 		a.post(func() {
 			a.dubSaving--
 			if err != nil {
-				a.toast(i18n.T("Could not save the dub: %v", err))
+				a.toastWarn(i18n.T("Could not save the dub: %v", err))
 			}
 			if a.dubSaving == 0 && a.dubStale != nil {
 				p := a.dubStale
@@ -460,7 +460,7 @@ func (a *app) deleteDub(id string) {
 		err := svc.Delete(context.Background(), id)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not delete the dub: %v", err))
+				a.toastWarn(i18n.T("Could not delete the dub: %v", err))
 				return
 			}
 			a.toast(i18n.T("Dub deleted"))

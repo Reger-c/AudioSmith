@@ -731,3 +731,33 @@ func TestConcurrentUse(t *testing.T) {
 		t.Errorf("%d unfinished jobs in the store", len(left))
 	}
 }
+
+// TestCancelledBy (#108): a cancel says who asked (WithActor), for a
+// running job, its dependents and a queued one.
+func TestCancelledBy(t *testing.T) {
+	s, g, rec := newTestSched(t, nil)
+	ctx := context.Background()
+	s.Start(ctx)
+	ids, _ := s.SubmitGraph(ctx, []Node{
+		{Key: "a", Spec: Spec{Kind: "work", Lane: LaneGPU}},
+		{Key: "b", Spec: Spec{Kind: "work", Lane: LaneGPU, After: []string{"a"}}},
+	})
+	queued, _ := s.Submit(ctx, spec("queued", LaneGPU, PriorityBackground))
+	g.next(t)
+	by := func(j Job) string {
+		var d struct{ By string }
+		json.Unmarshal(j.Err.Data, &d)
+		return d.By
+	}
+	s.Cancel(WithActor(ctx, "api"), ids["a"])
+	for _, id := range []string{ids["a"], ids["b"]} {
+		if j := rec.waitState(t, id, StateCancelled); by(j) != "api" {
+			t.Errorf("%s: by %q", id, by(j))
+		}
+	}
+	g.next(t)
+	s.Cancel(ctx, queued) // no actor: no Data
+	if j := rec.waitState(t, queued, StateCancelled); len(j.Err.Data) != 0 || ActorOf(ctx) != "" {
+		t.Errorf("queued: %s", j.Err.Data)
+	}
+}

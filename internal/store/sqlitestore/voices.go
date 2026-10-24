@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/store"
 )
 
 // --- voices -------------------------------------------------------------
@@ -153,6 +154,40 @@ WHERE s.voice_id = ? GROUP BY p.id ORDER BY p.updated_at DESC, p.id`, id)
 		u.Segments += pu.Segments
 	}
 	return u, nil
+}
+
+// Links lists the takes and segments whose voice_id is id.
+func (r *voiceRepo) Links(ctx context.Context, id string) (store.VoiceLinks, error) {
+	var l store.VoiceLinks
+	for _, q := range []struct {
+		sql string
+		out *[]string
+	}{{`SELECT id FROM takes WHERE voice_id = ? ORDER BY id`, &l.Takes}, {`SELECT id FROM segments WHERE voice_id = ? ORDER BY id`, &l.Segments}} {
+		rows, err := r.db.Query(ctx, q.sql, id)
+		if err != nil {
+			return l, wrap("voice links "+id, err)
+		}
+		for _, row := range rows.Values {
+			*q.out = append(*q.out, asString(row[0]))
+		}
+	}
+	return l, nil
+}
+
+// Relink sets voice_id back to id on the takes and segments of l that
+// have none now.
+func (r *voiceRepo) Relink(ctx context.Context, id string, l store.VoiceLinks) error {
+	for _, q := range []struct {
+		table string
+		ids   []string
+	}{{"takes", l.Takes}, {"segments", l.Segments}} {
+		for _, x := range q.ids {
+			if _, err := r.db.Execute(ctx, `UPDATE `+q.table+` SET voice_id = ? WHERE id = ? AND voice_id IS NULL`, id, x); err != nil {
+				return wrap("voice relink "+id, err)
+			}
+		}
+	}
+	return nil
 }
 
 // --- favorites ----------------------------------------------------------

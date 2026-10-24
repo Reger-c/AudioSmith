@@ -302,6 +302,7 @@ func (s *Dubs) Create(ctx context.Context, p *dub.Project) (*dub.Project, error)
 	s.mu.Lock()
 	err := s.put(ctx, p)
 	s.mu.Unlock()
+	logSave(ctx, "dub", true, "", p.ID, p.Title, err, "source", string(p.Source.Kind))
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +353,9 @@ func (s *Dubs) List(ctx context.Context, q store.DubQuery) ([]store.DubRecord, e
 func (s *Dubs) Update(ctx context.Context, id string, fn func(*dub.Project) error) (*dub.Project, error) {
 	s.mu.Lock()
 	p, err := s.Get(ctx, id)
+	var oldTitle string
 	if err == nil {
+		oldTitle = p.Title
 		err = fn(p)
 	}
 	if err == nil {
@@ -364,6 +367,9 @@ func (s *Dubs) Update(ctx context.Context, id string, fn func(*dub.Project) erro
 	if err != nil {
 		return nil, err
 	}
+	if p.Title != oldTitle {
+		logSave(ctx, "dub", false, oldTitle, id, p.Title, nil)
+	}
 	s.publish(p)
 	return p.Clone(), nil
 }
@@ -373,6 +379,12 @@ func (s *Dubs) Update(ctx context.Context, id string, fn func(*dub.Project) erro
 // that does not heed its cancel) makes it ErrBusy: removing the folder
 // under it would leave a stray one behind, or break the job (#101 M3).
 func (s *Dubs) Delete(ctx context.Context, id string) error {
+	err := s.delete(ctx, id)
+	logDelete(ctx, "dub", id, "", err)
+	return err
+}
+
+func (s *Dubs) delete(ctx context.Context, id string) error {
 	s.runMu.Lock() // no run starts meanwhile
 	defer s.runMu.Unlock()
 	probe := s.cancelProbe(id)

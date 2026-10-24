@@ -169,7 +169,7 @@ func (a *app) attachSample(voiceID string, t core.Take) {
 		saved, err := svc.SaveFiles(context.Background(), nv, core.VoiceFiles{Sample: path})
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not save the voice's sample: %v", err))
+				a.toastWarn(i18n.T("Could not save the voice's sample: %v", err))
 				return
 			}
 			a.playVoice(&saved)
@@ -196,7 +196,7 @@ func (a *app) playVoice(v *core.Voice) {
 		return
 	}
 	if err := a.pl.Toggle("voice:"+v.ID, path); err != nil {
-		a.toast(i18n.T("Could not play: %v", err))
+		a.toastWarn(i18n.T("Could not play: %v", err))
 	}
 }
 
@@ -231,7 +231,7 @@ func (a *app) renderSample(v *core.Voice) {
 	}
 	low, err := vd.Lower(designTarget(e), r, vd.Options{Lang: designTextLang(lang)})
 	if err != nil {
-		a.toast(err.Error())
+		a.toastWarn(err.Error())
 		return
 	}
 	id := v.ID

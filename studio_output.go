@@ -106,7 +106,7 @@ func (a *app) checkTake(t *core.Take) {
 		a.post(func() {
 			delete(a.checking, id)
 			if err != nil {
-				a.toast(i18n.T("Could not check the audio: %v", err))
+				a.toastWarn(i18n.T("Could not check the audio: %v", err))
 			}
 		})
 	})
@@ -272,7 +272,7 @@ func (a *app) setStarred(t *core.Take, on bool) {
 	svc := a.lib.svc.Takes
 	a.background(func() {
 		if err := svc.SetStarred(context.Background(), id, on); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not star the take: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not star the take: %v", err)) })
 		}
 	})
 }

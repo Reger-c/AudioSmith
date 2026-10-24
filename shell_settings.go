@@ -96,7 +96,7 @@ func (a *app) updateSettings(fn func(*settings.Settings)) {
 	st := a.settings
 	a.async(func() {
 		if err := st.Update(context.Background(), fn); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not save the settings: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not save the settings: %v", err)) })
 		}
 	})
 }
@@ -353,7 +353,7 @@ func (a *app) saveToken(tok string) {
 		a.post(func() {
 			switch {
 			case err != nil:
-				a.toast(i18n.T("Could not save the token: %v", err))
+				a.toastWarn(i18n.T("Could not save the token: %v", err))
 			case tok == "":
 				a.toast(i18n.T("Token removed"))
 			default:
@@ -373,7 +373,7 @@ func (a *app) loadAcceptances() {
 		list, err := gate.List(context.Background())
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not read the licences: %v", err))
+				a.toastWarn(i18n.T("Could not read the licences: %v", err))
 				return
 			}
 			a.accepted = list
@@ -385,7 +385,7 @@ func (a *app) revokeLicence(acc core.LicenceAcceptance) {
 	gate := a.licences
 	a.async(func() {
 		if err := gate.Revoke(context.Background(), acc.Licence, acc.Model); err != nil {
-			a.post(func() { a.toast(fmt.Sprint(err)) })
+			a.post(func() { a.toastWarn(fmt.Sprint(err)) })
 		}
 	})
 }

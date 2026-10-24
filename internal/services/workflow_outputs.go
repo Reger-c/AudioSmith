@@ -49,6 +49,12 @@ func Outputs(w *workflow.Workflow, run *workflow.Run) []WorkflowOutput {
 // template (workflow.DefaultTemplate when ""), audio as WAV, and returns
 // the files written.
 func (s *Workflows) ExportAll(ctx context.Context, id, dir, template string) ([]string, error) {
+	files, err := s.exportAll(ctx, id, dir, template)
+	logOp(ctx, "workflow.export", id, "", err, "files", len(files))
+	return files, err
+}
+
+func (s *Workflows) exportAll(ctx context.Context, id, dir, template string) ([]string, error) {
 	w, run, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, err

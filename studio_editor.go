@@ -277,7 +277,7 @@ func (a *app) importScriptFrom(path string) {
 		d, err := doc.Open(ctx, path, doc.Limits{})
 		a.post(func() {
 			if err != nil {
-				a.toast(importError(path, err))
+				a.toastWarn(importError(path, err))
 				return
 			}
 			s := studioScriptOf(d)

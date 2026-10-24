@@ -259,7 +259,7 @@ func (a *app) callAfter(c *ui.Context, call *services.Call) {
 				}
 				if iconButton(c.Key("cv-rec"), ic, label).Clicked() {
 					if err := a.pl.Toggle("call-rec:"+call.ID, p); err != nil {
-						a.toast(i18n.T("Could not play: %v", err))
+						a.toastWarn(i18n.T("Could not play: %v", err))
 					}
 				}
 			}

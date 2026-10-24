@@ -121,6 +121,18 @@ func keepFiles(v *core.Voice, old core.Voice) {
 }
 
 func (s *Voices) SaveFiles(ctx context.Context, v core.Voice, f core.VoiceFiles) (core.Voice, error) {
+	var oldName string
+	if v.ID != "" {
+		if old, err := s.store.Get(ctx, v.ID); err == nil {
+			oldName = old.Name
+		}
+	}
+	saved, err := s.saveFiles(ctx, v, f)
+	logSave(ctx, "voice", v.ID == "", oldName, saved.ID, saved.Name, err, "kind", string(saved.Kind))
+	return saved, err
+}
+
+func (s *Voices) saveFiles(ctx context.Context, v core.Voice, f core.VoiceFiles) (core.Voice, error) {
 	if err := validVoice(&v); err != nil {
 		return v, err
 	}
@@ -275,20 +287,6 @@ func lockSample(v *core.Voice) []string {
 	}
 	v.Locked, v.LockTake = false, ""
 	return out
-}
-
-func (s *Voices) Delete(ctx context.Context, id string) error {
-	s.mu.Lock()
-	v, err := s.store.Get(ctx, id)
-	if err == nil {
-		err = s.store.Delete(ctx, id)
-	}
-	s.mu.Unlock()
-	if err != nil {
-		return err
-	}
-	s.bus.Publish(core.VoiceChanged{Voice: v, Deleted: true})
-	return nil
 }
 
 // update applies fn to the stored profile and saves it; fn returns the

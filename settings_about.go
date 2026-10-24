@@ -8,6 +8,7 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
+	"github.com/hehehai/AudioSmith/internal/logs"
 	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/store/sqlitestore"
 	"github.com/hehehai/actnowkit/redact"
@@ -297,7 +299,7 @@ func writeBundle(path, diag string, prefs settings.Settings, logDir string) erro
 			}
 			w, cerr := zw.Create("logs/" + e.Name())
 			if cerr == nil {
-				_, cerr = io.Copy(w, src)
+				cerr = copyRedacted(w, src) // #100 L3: older files, and other writers', too
 			}
 			src.Close()
 			if cerr != nil {
@@ -331,7 +333,7 @@ func (a *app) saveBundle() {
 			err := writeBundle(dst, diag, prefs, logs)
 			a.post(func() {
 				if err != nil {
-					a.toast(i18n.T("Could not save the bundle: %v", err))
+					a.toastWarn(i18n.T("Could not save the bundle: %v", err))
 					return
 				}
 				a.toast(i18n.T("Saved %s", filepath.Base(dst)))
@@ -534,4 +536,19 @@ func betaBadge(c *ui.Context) ui.Element {
 	k := tok(t)
 	return ui.Text(c, i18n.T("Beta")).FontSize(px(t, fsMicro)).FontWeight(600).TextColor(k.AccentInk).SingleLine().
 		Padding(px(t, 1), px(t, 6)).Radius(px(t, 4)).Background(k.AccentSoft).Shrink(0)
+}
+
+// copyRedacted copies a log file line by line through logs.Redact.
+func copyRedacted(w io.Writer, r io.Reader) error {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64*1024), 4<<20)
+	bw := bufio.NewWriter(w)
+	for sc.Scan() {
+		bw.WriteString(logs.Redact(sc.Text()))
+		bw.WriteByte('\n')
+	}
+	if err := sc.Err(); err != nil {
+		return err
+	}
+	return bw.Flush()
 }

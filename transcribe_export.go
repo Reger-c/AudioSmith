@@ -48,7 +48,7 @@ func (a *app) exportTranscript(format string) {
 	}
 	data, err := services.Export(*t, format)
 	if err != nil {
-		a.toast(i18n.T("Export failed: %v", err))
+		a.toastWarn(i18n.T("Export failed: %v", err))
 		return
 	}
 	a.saveFile(i18n.T("Export the transcript"), transcriptFileName(*t, format), format, data)
@@ -61,7 +61,7 @@ func (a *app) exportAllTranscripts() {
 		l, err := svc.List(context.Background(), core.TranscriptQuery{})
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Export failed: %v", err))
+				a.toastWarn(i18n.T("Export failed: %v", err))
 				return
 			}
 			data := services.ExportAll(l, i18n.DateTime)
@@ -78,7 +78,7 @@ func (a *app) saveFile(title, name, ext string, data []byte) {
 		err := os.WriteFile(dst, data, 0o644)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Export failed: %v", err))
+				a.toastWarn(i18n.T("Export failed: %v", err))
 			} else {
 				a.toast(i18n.T("Exported %s", filepath.Base(dst)))
 			}

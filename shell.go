@@ -36,6 +36,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/licence"
 	"github.com/hehehai/AudioSmith/internal/logs"
 	"github.com/hehehai/AudioSmith/internal/notify"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -59,7 +60,9 @@ type shellState struct {
 	// nav is the sidebar's choice; navShown the router path it was last
 	// synced from (see syncNav).
 	nav, navShown string
-	lastSettings  string // settings section shown last
+	lastSettings  string    // settings section shown last
+	stopOpLog     func()    // stops the operations log's watcher (ops_watch.go)
+	quitStart     time.Time // when the quit began (quit.go's log)
 	// The settings dialog (0.3): open, and the router of its sections
 	// ("/general"), which navigate drives from "/settings/…" paths.
 	settingsOpen bool
@@ -136,6 +139,7 @@ func (a *app) openShell(lib *library) {
 	a.notes = notes
 	a.notices, _ = notes.List(context.Background())
 	a.logs = logs.New(logs.Options{Bus: a.bus})
+	a.stopOpLog = useOpLog(a.logs, a.bus) // ops_watch.go (#108)
 	a.licences = lib.licences
 	a.models = map[string]*modelState{}
 	a.jobList = map[string]jobs.Job{}
@@ -168,9 +172,12 @@ func (a *app) connectShell(logDir string) {
 	if logDir != "" {
 		a.logs.Close()
 		a.logs = logs.New(logs.Options{Dir: logDir, Bus: a.bus})
+		a.stopOpLog()
+		a.stopOpLog = useOpLog(a.logs, a.bus)
 		log.SetOutput(io.MultiWriter(os.Stderr, a.logs.Writer("app")))
 	}
 	mygo.App.OnOpenURL(func(u string) { a.post(func() { a.openURL(u) }) })
+	oplog.Info("app.start", "version", mygo.App.Version(), "pid", os.Getpid())
 }
 
 // navigate goes to a router path ("/models"); it does nothing when that
@@ -248,6 +255,10 @@ func (a *app) view(c *ui.Context) {
 		c.Toast(m)
 	}
 	a.toasts = nil
+	for _, t := range a.actionToasts {
+		c.AddToast(t)
+	}
+	a.actionToasts = nil
 	a.shortcuts(c)
 	if a.engineSummary().Busy {
 		// Keep the elapsed time current.

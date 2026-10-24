@@ -278,7 +278,7 @@ func (a *app) directStory(p *lfPage, all bool) {
 		a.post(func() {
 			p.directing = false
 			if err != nil {
-				a.toast(directorError(err))
+				a.toastWarn(directorError(err))
 				return
 			}
 			before := p.doc

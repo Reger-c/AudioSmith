@@ -207,6 +207,23 @@ func (s *Workflows) record(w *workflow.Workflow) store.WorkflowRecord {
 
 // Save creates or updates a workflow (the editor's autosave), normalised.
 func (s *Workflows) Save(ctx context.Context, w *workflow.Workflow) (*workflow.Workflow, error) {
+	var oldName string
+	created := true
+	if w.ID != "" {
+		if old, err := s.cfg.Store.Get(ctx, w.ID); err == nil {
+			oldName, created = old.Name, false
+		}
+	}
+	saved, err := s.save(ctx, w)
+	name, id := w.Name, w.ID
+	if saved != nil {
+		name, id = saved.Name, saved.ID
+	}
+	logSave(ctx, "workflow", created, oldName, id, name, err)
+	return saved, err
+}
+
+func (s *Workflows) save(ctx context.Context, w *workflow.Workflow) (*workflow.Workflow, error) {
 	w = w.Clone()
 	if w.ID == "" {
 		w.ID = core.NewID(s.cfg.Now())
@@ -281,6 +298,7 @@ func (s *Workflows) Delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	err := s.cfg.Store.Delete(ctx, id)
 	s.mu.Unlock()
+	logDelete(ctx, "workflow", id, "", err)
 	if err != nil {
 		return err
 	}

@@ -243,7 +243,7 @@ func (a *app) setUpdateState(st akup.State) {
 		}
 	case akup.Failed:
 		if u.userCheck && st.Step == "check" && !u.panelOpen {
-			a.toast(i18n.T("Cannot check for updates: %s", updateErrText(st.Err)))
+			a.toastWarn(i18n.T("Cannot check for updates: %s", updateErrText(st.Err)))
 		}
 		u.userCheck = false
 	}

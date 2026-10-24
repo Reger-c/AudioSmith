@@ -159,7 +159,7 @@ func (a *app) designGenerate() {
 	lang := d.speechLang()
 	low, err := vd.Lower(designTarget(e), d.recipe(), vd.Options{Lang: designTextLang(lang)})
 	if err != nil {
-		a.toast(err.Error())
+		a.toastWarn(err.Error())
 		return
 	}
 	t := core.Take{Text: strings.TrimSpace(d.script), Model: e.Repo, Voice: low.Voice, Seed: low.Seed,
@@ -202,7 +202,7 @@ func (a *app) designSave() {
 		saved, err := svc.SaveFiles(context.Background(), v, files)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not save the voice profile: %v", err))
+				a.toastWarn(i18n.T("Could not save the voice profile: %v", err))
 				return
 			}
 			a.voiceChanged(core.VoiceChanged{Voice: saved})

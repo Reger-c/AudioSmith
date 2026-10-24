@@ -23,7 +23,7 @@ func (a *app) loadRenders() {
 	a.background(func() {
 		ctx := context.Background()
 		if err := svc.Reconcile(ctx); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not read the renders: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not read the renders: %v", err)) })
 		}
 		a.lib.pruneJobs(ctx) // jobs_prune.go: after Reconcile, which reads the jobs of renders left running
 		l, err := svc.List(ctx, store.RenderQuery{Limit: 50})
@@ -95,7 +95,7 @@ func (a *app) renderEnded(r *lfRender) {
 			}
 			_ = au
 		} else if r.rec.State == core.RenderFailed {
-			a.toast(i18n.T("The preview failed: %s", renderErrorText(&r.body)))
+			a.toastWarn(i18n.T("The preview failed: %s", renderErrorText(&r.body)))
 		}
 		return
 	}
@@ -178,6 +178,9 @@ func problemText(p services.Problem) string {
 		}
 		return i18n.T("Choose a default voice, or give every line a voice.")
 	case services.ProblemMissingVoice:
+		if looksLikeID(p.Params["voice"]) { // a saved voice deleted since (#108)
+			return i18n.T("A voice it uses was deleted: choose another one.")
+		}
 		return i18n.T("The voice “%s” is gone or can't be used with this model: choose another.", p.Params["voice"])
 	case services.ProblemUnknownVoice:
 		return i18n.T("Unknown voice “%s”: the default voice reads it.", p.Params["voice"])
@@ -270,7 +273,7 @@ func (a *app) startLf(p *lfPage, what string) {
 	if spec.Audition {
 		for _, pr := range p.problems {
 			if pr.Blocking && pr.Code != services.ProblemNothingToSay && (pr.Line < 0 || what == "line:"+lineID(p, pr.Line)) {
-				a.toast(problemText(pr))
+				a.toastWarn(problemText(pr))
 				return
 			}
 		}
@@ -285,7 +288,7 @@ func (a *app) startLf(p *lfPage, what string) {
 				case errors.Is(err, core.ErrBusy):
 					a.toast(i18n.T("Another book is rendering. Stop it first."))
 				default:
-					a.toast(i18n.T("Could not start: %v", err))
+					a.toastWarn(i18n.T("Could not start: %v", err))
 				}
 				return
 			}
@@ -337,7 +340,7 @@ func (a *app) stopLf(p *lfPage) {
 	svc := a.lib.svc.Longform
 	a.background(func() {
 		if err := svc.Stop(context.Background(), id); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not stop: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not stop: %v", err)) })
 		}
 	})
 }
@@ -352,7 +355,7 @@ func (a *app) resumeLf(p *lfPage, id string) {
 				if errors.Is(err, core.ErrBusy) {
 					a.toast(i18n.T("Another book is rendering. Stop it first."))
 				} else {
-					a.toast(i18n.T("Could not resume: %v", err))
+					a.toastWarn(i18n.T("Could not resume: %v", err))
 				}
 				return
 			}
@@ -387,6 +390,20 @@ func (a *app) playAudition(r *lfRender) {
 		return
 	}
 	if err := a.pl.Toggle("audition:"+r.rec.ID, r.body.Chapters[0].File); err != nil {
-		a.toast(i18n.T("Can't play: %v", err))
+		a.toastWarn(i18n.T("Can't play: %v", err))
 	}
+}
+
+// looksLikeID reports whether s is an id the library makes (core.NewID:
+// 26 letters and digits), not a voice's name.
+func looksLikeID(s string) bool {
+	if len(s) != 26 {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= '0' && r <= '9' || r >= 'A' && r <= 'Z') {
+			return false
+		}
+	}
+	return true
 }

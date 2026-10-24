@@ -37,7 +37,7 @@ func (a *app) lfOutputs(c *ui.Context, p *lfPage) {
 		ui.Row(c).Gap(px(t, sp3)).AlignItems(ui.Center).Children(func() {
 			if playButton(c.Key("out-play"), a.pl.Playing(id), false, 36).Clicked() {
 				if err := a.pl.Toggle(id, out.Book); err != nil {
-					a.toast(i18n.T("Can't play: %v", err))
+					a.toastWarn(i18n.T("Can't play: %v", err))
 				}
 			}
 			ui.Column(c).Grow(1).MinWidth(0).Gap(px(t, 2)).Children(func() {
@@ -231,7 +231,7 @@ func (a *app) writeOutput(lib *services.Library, rec core.Render, kind, src, dst
 	err := writeRenderFile(context.Background(), lib, rec, kind, src, dst, ext, bits)
 	a.post(func() {
 		if err != nil {
-			a.toast(i18n.T("Export failed: %v", err))
+			a.toastWarn(i18n.T("Export failed: %v", err))
 		} else {
 			a.toast(i18n.T("Saved %s", filepath.Base(dst)))
 		}
@@ -255,7 +255,7 @@ func (a *app) writeChapters(lib *services.Library, rec core.Render, chs []servic
 	_, err := writeRenderChapters(context.Background(), lib, rec, chs, dir)
 	a.post(func() {
 		if err != nil {
-			a.toast(i18n.T("Export failed: %v", err))
+			a.toastWarn(i18n.T("Export failed: %v", err))
 		} else {
 			a.toast(i18n.N(len(chs), "Saved %d chapter", "Saved %d chapters", len(chs)))
 		}

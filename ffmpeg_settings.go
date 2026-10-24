@@ -17,6 +17,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/ffmpeg"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -137,7 +138,7 @@ func (a *app) removeFFmpeg() {
 	origin, dir := a.prefs.Media.Origin, a.ffmpegDir()
 	a.useFFmpeg("", "")
 	if origin == settings.MediaDownloaded {
-		a.background(func() { ffmpeg.Remove(dir) })
+		a.background(func() { oplog.Err("ffmpeg.remove", ffmpeg.Remove(dir)) })
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/hehehai/AudioSmith/internal/logs"
 )
 
 // The Hugging Face token, for gated repos. It is a secret: it lives in the
@@ -96,7 +98,9 @@ func (k Keychain) Get() (string, error) {
 		}
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	tok := strings.TrimSpace(string(out))
+	logs.AddSecret(tok) // never in a log line (#108)
+	return tok, nil
 }
 
 // Set saves token, replacing what was saved. The token goes to security
@@ -110,6 +114,7 @@ func (k Keychain) Set(token string) error {
 	if strings.ContainsAny(token, "\"\\\n\r") {
 		return errors.New("the token has characters a Hugging Face token never has")
 	}
+	logs.AddSecret(token)
 	label := k.Label
 	if label == "" {
 		label = "AudioSmith " + k.Account

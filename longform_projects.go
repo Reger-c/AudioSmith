@@ -155,7 +155,7 @@ func (a *app) saveLfAs(p *lfPage, copy, force bool) {
 				return
 			}
 			if err != nil {
-				a.toast(i18n.T("Could not save: %v", err))
+				a.toastWarn(i18n.T("Could not save: %v", err))
 				return
 			}
 			p.project = saved.ID
@@ -175,7 +175,7 @@ func (a *app) openLfProject(id string) {
 		pr, d, err := lib.LoadDoc(context.Background(), id)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not open: %v", err))
+				a.toastWarn(i18n.T("Could not open: %v", err))
 				return
 			}
 			p := a.lfPageOf(pr.Kind)
@@ -199,7 +199,7 @@ func (a *app) deleteLfProject(id string) {
 		err := svc.Delete(context.Background(), id)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not delete: %v", err))
+				a.toastWarn(i18n.T("Could not delete: %v", err))
 			} else {
 				a.toast(i18n.T("Project deleted"))
 			}

@@ -99,7 +99,7 @@ func (a *app) openExport(t *core.Take) {
 				return
 			}
 			if err != nil {
-				a.toast(i18n.T("Could not read the audio: %v", err))
+				a.toastWarn(i18n.T("Could not read the audio: %v", err))
 				return
 			}
 			f.info = &info

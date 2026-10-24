@@ -60,7 +60,7 @@ func (a *app) loadPronunciation() {
 		es, err := svc.Entries(context.Background())
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not read the pronunciation dictionary: %v", err))
+				a.toastWarn(i18n.T("Could not read the pronunciation dictionary: %v", err))
 				return
 			}
 			a.pron.entries, a.pron.loaded = es, true
@@ -84,7 +84,7 @@ func (a *app) savePronunciation() {
 			return
 		}
 		if err := svc.Save(context.Background(), entries); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not save the pronunciation dictionary: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not save the pronunciation dictionary: %v", err)) })
 			return
 		}
 		saver.saved = gen
@@ -154,7 +154,7 @@ func (a *app) previewPronunciation() {
 				case errors.As(err, &lic):
 					a.askLicence(entryFor(r.Model), a.previewPronunciation)
 				default:
-					a.toast(engineErrorText(err))
+					a.toastWarn(engineErrorText(err))
 				}
 				return
 			}
@@ -177,7 +177,7 @@ func (a *app) previewDone(jobID string, ok bool, why string) {
 		return
 	}
 	if err := a.pl.Toggle("preview:"+jobID, out); err != nil {
-		a.toast(i18n.T("Could not play: %v", err))
+		a.toastWarn(i18n.T("Could not play: %v", err))
 	}
 }
 
@@ -201,7 +201,7 @@ func (a *app) importPronunciation(mode lexicon.Mode) {
 		}
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not import: %v", err))
+				a.toastWarn(i18n.T("Could not import: %v", err))
 				return
 			}
 			a.toast(i18n.T("Imported: %d added, %d updated, %d skipped", rep.Added, rep.Updated, rep.Skipped))
@@ -229,7 +229,7 @@ func (a *app) exportPronunciation() {
 		}
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Export failed: %v", err))
+				a.toastWarn(i18n.T("Export failed: %v", err))
 			} else {
 				a.toast(i18n.T("Exported %s", dst))
 			}

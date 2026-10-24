@@ -28,7 +28,7 @@ func (a *app) playTranscriptAt(s float64) {
 	id := trPlayID(t.ID)
 	if a.pl.Current() != id {
 		if err := a.pl.Toggle(id, a.trSvc.AudioPath(*t)); err != nil {
-			a.toast(i18n.T("Cannot play: %v", err))
+			a.toastWarn(i18n.T("Cannot play: %v", err))
 			return
 		}
 	} else if !a.pl.Playing(id) {
@@ -44,7 +44,7 @@ func (a *app) toggleTranscriptPlayback() {
 		return
 	}
 	if err := a.pl.Toggle(trPlayID(t.ID), a.trSvc.AudioPath(*t)); err != nil {
-		a.toast(i18n.T("Cannot play: %v", err))
+		a.toastWarn(i18n.T("Cannot play: %v", err))
 	}
 }
 

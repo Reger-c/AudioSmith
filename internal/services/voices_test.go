@@ -383,3 +383,37 @@ func TestReferenceTextChecked(t *testing.T) {
 		t.Errorf("changed text: %v", err)
 	}
 }
+
+// TestVoiceTrash (#108): Trash keeps a deleted voice's files for Restore;
+// Delete (the Local API's) removes them at once.
+func TestVoiceTrash(t *testing.T) {
+	e := newEnv(t, nil)
+	vs := e.svc.Voices
+	ref := writeFile(t, filepath.Join(t.TempDir(), "clip.wav"), testWAV(2400))
+	v, err := vs.SaveFiles(ctx, core.Voice{Name: "Mara", Kind: core.VoiceCloned, RefText: "Hello."}, core.VoiceFiles{Reference: ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := vs.Trash(ctx, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vs.Get(ctx, v.ID); !errors.Is(err, core.ErrNotFound) || exists(vs.FilePath(v, v.RefAudio)) {
+		t.Fatalf("trashed: %v", err)
+	}
+	back, err := vs.Restore(ctx, v.ID)
+	if err != nil || back.Name != "Mara" || !exists(vs.FilePath(back, back.RefAudio)) {
+		t.Fatalf("restored %+v: %v", back, err)
+	}
+	if _, err := vs.Restore(ctx, v.ID); err == nil {
+		t.Error("restored twice")
+	}
+	if err := vs.Delete(ctx, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vs.Restore(ctx, v.ID); !errors.Is(err, ErrNotInTrash) {
+		t.Errorf("Delete kept it: %v", err)
+	}
+	if err := vs.Trash(ctx, "../x"); !errors.Is(err, core.ErrInvalid) {
+		t.Errorf("a path as id: %v", err)
+	}
+}

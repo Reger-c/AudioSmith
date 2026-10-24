@@ -4,6 +4,7 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"time"
@@ -34,31 +35,32 @@ func (s *Sched) Cancel(ctx context.Context, id string) error {
 			e = &entry{job: j, base: j.Attempt}
 			s.jobs[id] = e
 		}
-		s.cancelLocked(e)
+		s.cancelLocked(e, ActorOf(ctx))
 		return nil
 	}
 	defer s.mu.Unlock()
-	s.cancelLocked(e)
+	s.cancelLocked(e, ActorOf(ctx))
 	return nil
 }
 
-func (s *Sched) cancelLocked(e *entry) {
+func (s *Sched) cancelLocked(e *entry, by string) {
 	switch e.job.State {
 	case StateRunning:
 		if e.cancel != nil {
+			e.cancelBy = by
 			e.cancel(errUserCancel)
 		}
 		// Its dependents are cancelled now, not when it returns.
 		for _, d := range s.dependents[e.job.ID] {
 			if de, ok := s.jobs[d]; ok && !de.job.State.Terminal() {
-				s.cancelLocked(de)
+				s.cancelLocked(de, by)
 			}
 		}
 	case StateWaiting, StateQueued, StateInterrupted:
-		s.finishLocked(e, StateCancelled, &Error{Code: CodeCancelled, Message: "Cancelled"})
+		s.finishLocked(e, StateCancelled, cancelledError(by))
 		for _, d := range s.dependents[e.job.ID] {
 			if de, ok := s.jobs[d]; ok && !de.job.State.Terminal() {
-				s.cancelLocked(de)
+				s.cancelLocked(de, by)
 			}
 		}
 	}
@@ -205,4 +207,14 @@ func (s *Sched) Idle() bool {
 		}
 	}
 	return true
+}
+
+// cancelledError is a cancelled job's Err: Data says who cancelled it
+// ({"by": "api"}) when the Cancel's context did (WithActor).
+func cancelledError(by string) *Error {
+	e := &Error{Code: CodeCancelled, Message: "Cancelled"}
+	if by != "" {
+		e.Data, _ = json.Marshal(map[string]string{"by": by})
+	}
+	return e
 }

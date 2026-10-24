@@ -189,7 +189,7 @@ func (a *app) generateAPIKey() {
 		err := apiKeyStore.Set(key)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not save the key in the Keychain: %v", err))
+				a.toastWarn(i18n.T("Could not save the key in the Keychain: %v", err))
 				return
 			}
 			if srv != nil {
@@ -209,7 +209,7 @@ func (a *app) revokeAPIKey() {
 		err := apiKeyStore.Delete()
 		a.post(func() {
 			if err != nil && !errors.Is(err, hub.ErrNoKeychain) {
-				a.toast(i18n.T("Could not remove the key: %v", err))
+				a.toastWarn(i18n.T("Could not remove the key: %v", err))
 				return
 			}
 			if srv != nil {

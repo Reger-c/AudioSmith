@@ -120,7 +120,7 @@ func (a *app) saveVoiceEdit() {
 				e.saving = false
 			}
 			if err != nil {
-				a.toast(i18n.T("Could not save the voice profile: %v", err))
+				a.toastWarn(i18n.T("Could not save the voice profile: %v", err))
 				return
 			}
 			if a.edit == e {
@@ -139,7 +139,7 @@ func (a *app) voiceAction(fn func(ctx context.Context, svc core.VoiceService) (c
 		_, err := fn(context.Background(), svc)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not change the voice: %v", err))
+				a.toastWarn(i18n.T("Could not change the voice: %v", err))
 				return
 			}
 			if ok != "" {
@@ -155,7 +155,7 @@ func (a *app) setVoicePortrait(id, path string) {
 		png, err := portraitPNG(path)
 		a.post(func() {
 			if err != nil {
-				a.toast(portraitErrorText(err))
+				a.toastWarn(portraitErrorText(err))
 				return
 			}
 			v := a.findVoice(id)

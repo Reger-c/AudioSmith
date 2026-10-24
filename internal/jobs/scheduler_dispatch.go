@@ -305,7 +305,7 @@ func (s *Sched) finishRun(e *entry, run int, res json.RawMessage, err, cause err
 		e.job.Err = &Error{Code: CodeShutdown, Message: "AudioSmith quit while the job ran"}
 		s.out(e, nil, true)
 	case errors.Is(cause, errUserCancel):
-		s.finishLocked(e, StateCancelled, &Error{Code: CodeCancelled, Message: "Cancelled"})
+		s.finishLocked(e, StateCancelled, cancelledError(e.cancelBy))
 	default:
 		var jerr *Error
 		if !errors.As(err, &jerr) {

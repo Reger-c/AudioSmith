@@ -205,6 +205,7 @@ func (s *Transcripts) Update(ctx context.Context, id string, fn func(*core.Trans
 		s.mu.Unlock()
 		return t, err
 	}
+	oldTitle := t.Title
 	fn(&t)
 	t.ID = id
 	t.UpdatedAt = s.now()
@@ -212,6 +213,9 @@ func (s *Transcripts) Update(ctx context.Context, id string, fn func(*core.Trans
 	s.mu.Unlock()
 	if err != nil {
 		return t, err
+	}
+	if t.Title != oldTitle {
+		logSave(ctx, "transcript", false, oldTitle, id, t.Title, nil)
 	}
 	s.bus.Publish(core.TranscriptChanged{Transcript: t})
 	return t, nil
@@ -225,6 +229,7 @@ func (s *Transcripts) Delete(ctx context.Context, id string) error {
 		err = s.store.Delete(ctx, id)
 	}
 	s.mu.Unlock()
+	logDelete(ctx, "transcript", id, t.Title, err)
 	if err != nil {
 		return err
 	}

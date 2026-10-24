@@ -246,6 +246,12 @@ func (s *Longform) Active() (core.Render, bool) {
 
 // Delete removes a render's record and files; a running render is refused.
 func (s *Longform) Delete(ctx context.Context, id string) error {
+	err := s.delete(ctx, id)
+	logDelete(ctx, "render", id, "", err)
+	return err
+}
+
+func (s *Longform) delete(ctx context.Context, id string) error {
 	rec, body, err := s.load(ctx, id)
 	if err != nil {
 		return err

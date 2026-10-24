@@ -116,7 +116,7 @@ func (a *app) savePortable(pj portableJob, f portableFiles, then func(ok bool)) 
 				then(err == nil)
 			}
 			if err != nil {
-				a.toast(i18n.T("Could not save the portable copy: %v", err))
+				a.toastWarn(i18n.T("Could not save the portable copy: %v", err))
 				return
 			}
 			a.voiceChanged(core.VoiceChanged{Voice: saved})

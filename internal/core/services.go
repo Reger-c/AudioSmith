@@ -72,7 +72,15 @@ type VoiceService interface {
 	// may be another speaker), except a designed voice's (rendered from
 	// the voice itself).
 	SaveFiles(ctx context.Context, v Voice, f VoiceFiles) (Voice, error)
+	// Delete deletes a profile and its files. Trash deletes it too, but
+	// its files wait in the library's trash until Purge (or the next
+	// start), so that Restore can undo it.
 	Delete(ctx context.Context, id string) error
+	Trash(ctx context.Context, id string) error
+	Restore(ctx context.Context, id string) (Voice, error)
+	Purge(id string)
+	// PurgeTrash empties the trash (at start).
+	PurgeTrash(ctx context.Context)
 	// Import reads a .asvoice (or VoiceStudio .ovsvoice) package into a new
 	// profile. Imported consent is ConsentIncluded at most.
 	Import(ctx context.Context, path string) (VoiceImport, error)

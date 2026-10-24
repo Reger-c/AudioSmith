@@ -277,6 +277,6 @@ func (a *app) playRun(run *toolRun) {
 		return
 	}
 	if err := a.pl.Toggle(run.key, run.output); err != nil {
-		a.toast(i18n.T("Could not play: %v", err))
+		a.toastWarn(i18n.T("Could not play: %v", err))
 	}
 }

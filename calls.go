@@ -266,7 +266,7 @@ func (a *app) loadCalls() {
 		a.post(func() {
 			a.callLoaded = true
 			if err != nil {
-				a.toast(i18n.T("Could not read the calls: %v", err))
+				a.toastWarn(i18n.T("Could not read the calls: %v", err))
 				return
 			}
 			a.callList = list

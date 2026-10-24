@@ -43,7 +43,7 @@ func (a *app) wfSave() {
 		a.post(func() {
 			a.wfSaving = false
 			if err != nil {
-				a.toast(i18n.T("Could not save the workflow: %v", err))
+				a.toastWarn(i18n.T("Could not save the workflow: %v", err))
 			}
 			if a.wfPending {
 				a.wfPending = false

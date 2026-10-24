@@ -21,6 +21,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/family"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/settings"
 	"github.com/hehehai/AudioSmith/internal/store/sqlitestore"
 )
@@ -241,7 +242,7 @@ func (a *app) removePrevious() {
 		}
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not remove it: %v", err))
+				a.toastWarn(i18n.T("Could not remove it: %v", err))
 			}
 			a.stLoc = loc
 			a.stReport = nil
@@ -255,7 +256,7 @@ func (a *app) dismissMoveFailure() {
 	loc.Failed = ""
 	a.stLoc = loc
 	home := a.home()
-	a.background(func() { writeJSON(filepath.Join(home, locationFile), loc) })
+	a.background(func() { oplog.Err("storage.location.write", writeJSON(filepath.Join(home, locationFile), loc)) })
 }
 
 // resetLook restores the appearance and the language.
@@ -322,7 +323,7 @@ func (a *app) eraseAll() {
 		err := writeJSON(filepath.Join(home, resetFile), pendingReset{Everything: true, Also: []string{a.cacheDir(), logs}})
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not erase: %v", err))
+				a.toastWarn(i18n.T("Could not erase: %v", err))
 				return
 			}
 			appRelaunch()

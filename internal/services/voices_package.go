@@ -27,6 +27,12 @@ import (
 // exporter's claim: the voice is ConsentIncluded until the user records
 // the statement here.
 func (s *Voices) Import(ctx context.Context, path string) (core.VoiceImport, error) {
+	out, err := s.importFile(ctx, path)
+	logOp(ctx, "voice.import", out.Voice.ID, out.Voice.Name, err, "format", out.Format, "warnings", len(out.Warnings))
+	return out, err
+}
+
+func (s *Voices) importFile(ctx context.Context, path string) (core.VoiceImport, error) {
 	var out core.VoiceImport
 	var b *persona.Bundle
 	var err error
@@ -137,6 +143,12 @@ func (s *Voices) Import(ctx context.Context, path string) (core.VoiceImport, err
 
 // Export writes the voice as a .asvoice file at dst (atomically).
 func (s *Voices) Export(ctx context.Context, id, dst string, o core.VoiceExport) error {
+	err := s.export(ctx, id, dst, o)
+	logOp(ctx, "voice.export", id, "", err, "file", filepath.Base(dst), "reference", o.IncludeReference)
+	return err
+}
+
+func (s *Voices) export(ctx context.Context, id, dst string, o core.VoiceExport) error {
 	v, err := s.store.Get(ctx, id)
 	if err != nil {
 		return err

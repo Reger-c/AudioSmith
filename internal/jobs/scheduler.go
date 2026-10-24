@@ -112,6 +112,7 @@ var _ Scheduler = (*Sched)(nil)
 type entry struct {
 	job       Job
 	cancel    context.CancelCauseFunc // set while running
+	cancelBy  string                  // who cancelled it while running (WithActor)
 	run       int                     // bumps on every start: stale reports are dropped
 	notBefore time.Time               // automatic retry waits until then
 	base      int                     // Attempt when last (re)queued by hand: auto-retries count from it

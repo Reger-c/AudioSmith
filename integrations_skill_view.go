@@ -57,7 +57,7 @@ func (a *app) agentSkillCard(c *ui.Context, in integration) {
 				// A ZIP of the skill's folder: what claude.ai and Claude
 				// Desktop upload, and what any agent's skills folder unzips.
 				if data, err := agentSkillZip(in.Slug, env); err != nil {
-					a.toast(i18n.T("Could not save: %v", err))
+					a.toastWarn(i18n.T("Could not save: %v", err))
 				} else {
 					a.saveBlock(integBlock{Code: string(data), File: skillName + "-skill.zip"})
 				}
@@ -100,7 +100,7 @@ func (a *app) agentSkillCard(c *ui.Context, in integration) {
 		if primaryButton(c.Key("skill-install"), i18n.T("Install")).Clicked() {
 			a.skillAsk = false
 			if _, err := installSkill(dir, files); err != nil {
-				a.toast(i18n.T("Could not save: %v", err))
+				a.toastWarn(i18n.T("Could not save: %v", err))
 				return
 			}
 			a.toast(i18n.T("Skill installed: start a new chat in %s", ag.Name))

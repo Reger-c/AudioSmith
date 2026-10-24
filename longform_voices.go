@@ -51,7 +51,7 @@ func (a *app) lfVoiceLabel(ref string) string {
 	if v := a.findVoice(ref); v != nil {
 		return v.Name
 	}
-	return i18n.T("Missing voice")
+	return voiceGone() // voices_delete.go
 }
 
 // lfResolver resolves voice references and [voice:] names for a document's

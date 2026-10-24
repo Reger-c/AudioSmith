@@ -22,6 +22,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/services"
 )
 
@@ -387,5 +388,9 @@ func (a *app) dubRecordExport(res services.ExportResult) {
 	}
 	lib := a.lib.svc.Library
 	e := core.Export{Kind: "dub", SourceID: a.dub.ID, Title: a.dub.Title, Path: res.Output, Format: res.Format, Bytes: res.Bytes}
-	a.background(func() { lib.RecordExport(context.Background(), e) })
+	a.background(func() {
+		if _, err := lib.RecordExport(context.Background(), e); err != nil {
+			oplog.Warn("export.record", "error", err)
+		}
+	})
 }

@@ -90,7 +90,7 @@ func (a *app) designedReference(c *ui.Context, v *core.Voice) {
 				pid := "voiceref:" + v.ID
 				if playToggle(c.Key("editor-dref-play"), a.pl.Playing(pid), i18n.T("Play the reference"), i18n.T("Play the reference")).Clicked() {
 					if err := a.pl.Toggle(pid, a.voicePath(v, v.RefAudio)); err != nil {
-						a.toast(i18n.T("Could not play: %v", err))
+						a.toastWarn(i18n.T("Could not play: %v", err))
 					}
 				}
 				caption(c, i18n.T("%.1f s", v.RefSeconds)).Tooltip(v.RefText)

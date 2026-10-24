@@ -268,7 +268,7 @@ func (a *app) toggleVoicePreview(key string, p voicePreview) {
 		limit = 0
 	}
 	if err := a.pl.PlayPreview(p.id, p.data, p.path, limit); err != nil {
-		a.toast(i18n.T("Cannot play: %v", err))
+		a.toastWarn(i18n.T("Cannot play: %v", err))
 		return
 	}
 	vp.previewKey, vp.previewID = key, p.id

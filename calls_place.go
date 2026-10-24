@@ -252,7 +252,7 @@ func (a *app) placeCall() {
 			a.callBusy = false
 			if err != nil {
 				a.callErr = callErrorText(err)
-				a.toast(i18n.T("Couldn't start the call: %s", a.callErr))
+				a.toastWarn(i18n.T("Couldn't start the call: %s", a.callErr))
 				if c.ID != "" {
 					a.callFull[c.ID] = &c
 					a.callSel, a.callTab = c.ID, 1
@@ -290,7 +290,7 @@ func (a *app) hangupCall(id string) {
 	a.background(func() {
 		err := svc.Hangup(context.Background(), id)
 		if err != nil && !errors.Is(err, core.ErrNotFound) {
-			a.post(func() { a.toast(callErrorText(err)) })
+			a.post(func() { a.toastWarn(callErrorText(err)) })
 		}
 	})
 }
@@ -298,7 +298,7 @@ func (a *app) hangupCall(id string) {
 // takeoverCall pauses or resumes the agent.
 func (a *app) takeoverCall(id string, on bool) {
 	if err := a.callSvc.Takeover(id, on); err != nil {
-		a.toast(callErrorText(err))
+		a.toastWarn(callErrorText(err))
 	}
 }
 
@@ -309,7 +309,7 @@ func (a *app) sayInCall(id string) {
 		return
 	}
 	if err := a.callSvc.Say(id, text); err != nil {
-		a.toast(callErrorText(err))
+		a.toastWarn(callErrorText(err))
 		return
 	}
 	a.callSay = ""
@@ -322,7 +322,7 @@ func (a *app) deleteCall(id string) {
 		err := svc.Delete(context.Background(), id)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not delete the call: %v", err))
+				a.toastWarn(i18n.T("Could not delete the call: %v", err))
 			}
 		})
 	})

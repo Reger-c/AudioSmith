@@ -21,6 +21,7 @@ import (
 
 	"github.com/hehehai/AudioSmith/internal/core"
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
+	"github.com/hehehai/AudioSmith/internal/logs"
 )
 
 func (s *supervisor) startProcess(w *worker, bin string) (*proc, error) {
@@ -67,7 +68,7 @@ func (s *supervisor) startProcess(w *worker, bin string) (*proc, error) {
 			line := sc.Text()
 			p.tail.add(line)
 			if logFile != nil {
-				fmt.Fprintln(logFile, line)
+				fmt.Fprintln(logFile, logs.Redact(line)) // #100 L3: the file goes into diagnostic bundles
 			}
 			if strings.TrimSpace(line) != "" {
 				s.emit(core.LogEntry{Time: time.Now(), Level: stderrLevel(line), Source: "engine:" + string(w.role), Message: line})

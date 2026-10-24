@@ -43,7 +43,9 @@ type voicesState struct {
 	voiceGrid   ui.GridState
 	deleteVoice string // id the delete confirmation asks about
 	deleteOpen  bool
-	edit        *voiceEdit // the profile editor; nil when closed
+	deleteUsage *voiceUsage     // where it is used, once known (voices_delete.go)
+	undoing     map[string]bool // deleted voices whose Undo runs: their trash stays
+	edit        *voiceEdit      // the profile editor; nil when closed
 
 	clone   cloneState
 	design  designState
@@ -54,6 +56,7 @@ type voicesState struct {
 	// without saving it. Both "" / nil: the model's own voices.
 	studioVoice string
 	studioClip  *clipRef
+	studioGone  string // the Studio's voice deleted last (Undo restores it)
 
 	// voiceJobs are the takes the voice pages generate, by take id;
 	// voiceWork the other engine jobs they wait for, by owner.
@@ -100,6 +103,9 @@ func (a *app) openVoices(lib *library) {
 	a.openGallery(lib)
 	a.design.reset()
 	mygo.App.OnOpenFile(func(path string) { a.post(func() { a.openVoiceFile(path) }) })
+	a.undoing = map[string]bool{}
+	svc := lib.svc.Voices
+	a.background(func() { svc.PurgeTrash(context.Background()) }) // voices_delete.go: an earlier run's deletes
 	a.loadVoices()
 }
 
@@ -110,7 +116,7 @@ func (a *app) loadVoices() {
 		vs, err := svc.List(context.Background(), core.VoiceQuery{})
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not read the voices: %v", err))
+				a.toastWarn(i18n.T("Could not read the voices: %v", err))
 				return
 			}
 			// Keep voices that events added while the list was read.
@@ -151,7 +157,10 @@ func (a *app) voiceChanged(ev core.VoiceChanged) {
 			a.edit = nil
 		}
 		if a.studioVoice == ev.Voice.ID {
-			a.studioVoice = ""
+			// Never another voice in silence (#108): the Studio says so,
+			// and Undo puts it back.
+			a.studioVoice, a.studioGone = "", ev.Voice.ID
+			a.toastWarn(i18n.T("“%s” was the Studio's voice: choose another one there.", ev.Voice.Name))
 		}
 		if a.design.linked == ev.Voice.ID {
 			a.design.linked = ""
@@ -161,6 +170,9 @@ func (a *app) voiceChanged(ev core.VoiceChanged) {
 		a.voices[i] = ev.Voice
 	default:
 		a.voices = append(a.voices, ev.Voice)
+		if a.studioGone == ev.Voice.ID && a.studioVoice == "" && a.studioClip == nil { // its delete undone
+			a.studioVoice = ev.Voice.ID
+		}
 	}
 	sortVoices(a.voices)
 	if a.edit != nil && a.edit.id == ev.Voice.ID {

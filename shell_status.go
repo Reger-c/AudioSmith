@@ -24,6 +24,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/services"
 )
 
@@ -227,12 +228,12 @@ func (a *app) noticeCentre(c *ui.Context) {
 					a.notices[i].Read = true
 				}
 				notes := a.notes
-				a.async(func() { notes.MarkRead(context.Background(), "") })
+				a.async(func() { oplog.Err("notifications.read", notes.MarkRead(context.Background(), "")) })
 			}
 			if ghostButton(c.Key("notices-clear"), i18n.T("Clear")).Disabled(len(a.notices) == 0).Clicked() {
 				a.notices = nil
 				notes := a.notes
-				a.async(func() { notes.Clear(context.Background()) })
+				a.async(func() { oplog.Err("notifications.clear", notes.Clear(context.Background())) })
 			}
 		})
 		if len(a.notices) == 0 {

@@ -409,7 +409,7 @@ func (a *app) loadTakes() {
 		takes, err := svc.List(context.Background(), core.TakeQuery{})
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not read the history: %v", err))
+				a.toastWarn(i18n.T("Could not read the history: %v", err))
 				return
 			}
 			// Keep takes that events added while the list was read.
@@ -496,14 +496,14 @@ func (a *app) takeCreated(t core.Take) {
 	// A preview already playing goes on; the file plays next time.
 	if a.autoplay && !a.previewStarted() {
 		if err := a.pl.Toggle(t.ID, a.takeStore.AudioPath(t)); err != nil {
-			a.toast(i18n.T("Could not play: %v", err))
+			a.toastWarn(i18n.T("Could not play: %v", err))
 		}
 	}
 }
 
 func (a *app) play(t *core.Take) {
 	if err := a.pl.Toggle(t.ID, a.takeStore.AudioPath(*t)); err != nil {
-		a.toast(i18n.T("Could not play: %v", err))
+		a.toastWarn(i18n.T("Could not play: %v", err))
 	}
 }
 
@@ -516,7 +516,7 @@ func (a *app) deleteClip(t *core.Take) {
 	svc := a.lib.svc.Takes
 	a.background(func() {
 		if err := svc.Delete(context.Background(), id); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not delete: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not delete: %v", err)) })
 		}
 	})
 }

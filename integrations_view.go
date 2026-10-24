@@ -165,7 +165,7 @@ func (a *app) saveBlock(blk integBlock) {
 	if a.win == nil {
 		if integSaveDir != "" {
 			if err := saveSnippet(filepath.Join(integSaveDir, blk.File), blk.Code); err != nil {
-				a.toast(i18n.T("Could not save: %v", err))
+				a.toastWarn(i18n.T("Could not save: %v", err))
 				return
 			}
 			a.toast(i18n.T("Saved"))
@@ -180,7 +180,7 @@ func (a *app) saveBlock(blk integBlock) {
 		err = saveSnippet(path, blk.Code)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not save: %v", err))
+				a.toastWarn(i18n.T("Could not save: %v", err))
 				return
 			}
 			a.toast(i18n.T("Saved"))

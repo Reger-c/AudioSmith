@@ -217,7 +217,7 @@ func (a *app) removeTwilioAccount() {
 		a.post(func() {
 			a.callHasTok = false
 			if err != nil && !errors.Is(err, hub.ErrNoKeychain) {
-				a.toast(i18n.T("Could not remove the token: %v", err))
+				a.toastWarn(i18n.T("Could not remove the token: %v", err))
 			}
 		})
 	})
@@ -479,7 +479,7 @@ func (a *app) previewPhone() {
 			}
 			w.previewPath = path
 			if err := a.pl.Toggle("phone-preview", path); err != nil {
-				a.toast(i18n.T("Could not play: %v", err))
+				a.toastWarn(i18n.T("Could not play: %v", err))
 			}
 		})
 	})

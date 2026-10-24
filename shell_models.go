@@ -25,6 +25,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/actnowkit/models"
 )
 
@@ -246,7 +247,7 @@ func (a *app) cancelDownload(e catalog.Entry) {
 		return // cancelled when Submit returns the id
 	}
 	sched, id := a.lib.sched, m.jobID
-	a.async(func() { sched.Cancel(context.Background(), id) })
+	a.async(func() { oplog.Err("job.cancel.ask", sched.Cancel(context.Background(), id), "id", id) })
 }
 
 func (a *app) verifyModel(e catalog.Entry) {
@@ -309,9 +310,9 @@ func (a *app) deleteModel(e catalog.Entry, scope models.Scope) {
 			names := a.familyNames(append(slices.Clone(r.Decision.Users), r.Decision.LoadedBy...))
 			switch {
 			case busy:
-				a.toast(busyText(holder)) // models_removed.go
+				a.toastWarn(busyText(holder)) // models_removed.go
 			case err != nil:
-				a.toast(i18n.T("Could not delete %s: %v", modelRef(e), err))
+				a.toastWarn(i18n.T("Could not delete %s: %v", modelRef(e), err))
 			case !r.Deleted:
 				// Other apps use it: removed from AudioSmith only.
 				a.logs.Append(core.LogEntry{Source: "hub", Message: "removed " + e.Repo + " from AudioSmith; files kept: used by " + strings.Join(r.Kept, ", ")})
@@ -405,7 +406,7 @@ func (a *app) acceptLicenceAs(e catalog.Entry, then func(), forFamily bool) {
 		list, _ := gate.List(context.Background())
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not save the acceptance: %v", err))
+				a.toastWarn(i18n.T("Could not save the acceptance: %v", err))
 				return
 			}
 			a.accepted = list

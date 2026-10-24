@@ -77,7 +77,7 @@ func (a *app) saveEncodedAs(name, format string, write func(dst string) error) {
 			err := write(dst)
 			a.post(func() {
 				if err != nil {
-					a.toast(i18n.T("Export failed: %v", err))
+					a.toastWarn(i18n.T("Export failed: %v", err))
 				} else {
 					a.toast(i18n.T("Saved %s", filepath.Base(dst)))
 				}

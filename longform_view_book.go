@@ -195,6 +195,6 @@ func (a *app) setCover(p *lfPage, src string) {
 				return
 			}
 		}
-		a.post(func() { a.toast(i18n.T("Can't use this cover: %v", err)) })
+		a.post(func() { a.toastWarn(i18n.T("Can't use this cover: %v", err)) })
 	})
 }

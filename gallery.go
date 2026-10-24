@@ -60,7 +60,7 @@ func (a *app) openGallery(lib *library) {
 		favs, err := gallery.LoadFavorites(context.Background(), store)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not read the favorites: %v", err))
+				a.toastWarn(i18n.T("Could not read the favorites: %v", err))
 			}
 			g.favs = favs
 			g.favVer++
@@ -106,7 +106,7 @@ func (a *app) toggleFavorite(id string) {
 		_, err := favs.Toggle(context.Background(), id)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not save the favorite: %v", err))
+				a.toastWarn(i18n.T("Could not save the favorite: %v", err))
 			}
 			g.favVer++
 		})
@@ -141,7 +141,7 @@ func (a *app) previewArchetype(arch gallery.Archetype) {
 		return
 	}
 	if err := a.pl.PlayPreview(p.id, p.data, p.path, 0); err != nil {
-		a.toast(err.Error())
+		a.toastWarn(err.Error())
 	}
 }
 
@@ -182,7 +182,7 @@ func (a *app) useArchetypeThen(arch gallery.Archetype, done func(*core.Voice)) {
 		a.post(func() {
 			g.using = false
 			if err != nil {
-				a.toast(i18n.T("Could not create that voice: %v", err))
+				a.toastWarn(i18n.T("Could not create that voice: %v", err))
 				return
 			}
 			a.voiceChanged(core.VoiceChanged{Voice: saved})

@@ -18,6 +18,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/gallery"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/settings"
 )
 
@@ -75,7 +76,7 @@ func (a *app) removeYtDlp() {
 	path := a.prefs.Dubbing.YtDlp
 	a.updateSettings(func(s *settings.Settings) { s.Dubbing.URLImport, s.Dubbing.YtDlp = false, "" })
 	if path != "" && filepath.Dir(path) == a.ytdlpDir() {
-		a.background(func() { os.Remove(path) })
+		a.background(func() { oplog.Err("file.remove", os.Remove(path), "file", filepath.Base(path)) })
 	}
 }
 

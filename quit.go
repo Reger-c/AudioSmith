@@ -25,6 +25,8 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/hehehai/AudioSmith/internal/oplog"
 )
 
 // The bounds (variables: tests shorten them).
@@ -36,14 +38,26 @@ var (
 
 // willQuit runs in OnWillQuit, on the main thread.
 func (a *app) willQuit(h *engineHost) {
+	a.quitStart = time.Now()
+	oplog.Info("app.quit", "phase", "will-quit")
 	// family_coord.go: the family's runtime file goes first, the engines'
 	// last updates are not written after it.
 	a.quitFamilyRuntime()
 	if a.dubSvc != nil {
 		a.dubSvc.CancelProbes() // yt-dlp asked about a link (#106): its process group goes with it
 	}
-	a.flushForQuit()
-	h.Stop()
+	timed("flush", a.flushForQuit)()
+	timed("engines+jobs", h.Stop)()
+}
+
+// timed is fn, which logs how long it took as a step of the quit (#108,
+// #104's bounds): "quit.step step=engines ms=812".
+func timed(name string, fn func()) func() {
+	return func() {
+		start := time.Now()
+		fn()
+		oplog.Info("quit.step", "step", name, "ms", time.Since(start))
+	}
 }
 
 // flushForQuit writes the pending drafts and the dub editor's queued
@@ -76,27 +90,36 @@ func (a *app) flushForQuit() {
 // quitSteps closes what the app holds besides the engines (OnQuit, via
 // quit): the I/O steps side by side, bounded. Main thread.
 func (a *app) quitSteps() {
+	if a.quitStart.IsZero() { // a quit without OnWillQuit
+		a.quitStart = time.Now()
+	}
 	var steps []func()
 	if stop := a.apiStopper(); stop != nil {
-		steps = append(steps, stop)
+		steps = append(steps, timed("api", stop))
 	}
 	if svc, gw := a.callSvc, a.callGW; svc != nil {
-		steps = append(steps, func() {
+		steps = append(steps, timed("calls", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), quitStepLimit)
 			defer cancel()
 			svc.Close(ctx)
 			gw.Close(ctx)
-		})
+		}))
 	}
 	if fam := a.fam; fam != nil {
-		steps = append(steps, fam.Close)
+		steps = append(steps, timed("family", fam.Close))
 	}
 	if h := a.eng; h != nil {
-		steps = append(steps, h.Stop) // done in OnWillQuit already, unless the quit skipped it
+		steps = append(steps, timed("engines", h.Stop)) // done in OnWillQuit already, unless the quit skipped it
 	}
 	if !runBounded(quitStepLimit, steps...) {
 		log.Printf("quit: closing took over %s; going on", quitStepLimit)
 	}
+	// The last line before the logs close.
+	total := time.Duration(0)
+	if !a.quitStart.IsZero() {
+		total = time.Since(a.quitStart)
+	}
+	oplog.Info("app.quit", "phase", "done", "ms", total)
 	// After the steps above, which may still notify and log.
 	var last []func()
 	if a.notes != nil {

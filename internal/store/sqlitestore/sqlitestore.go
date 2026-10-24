@@ -8,6 +8,7 @@
 //	audiosmith.db.bak-<v>   copy taken before migrating from version v
 //	clips/                  take audio (store.Takes.AudioDir)
 //	voices/<id>/            voice profile blobs (store.Voices.VoiceDir)
+//	trash/voices/<id>/      deleted voices until Undo is over (services.Voices)
 //
 // The schema lives in migrations/NNN_*.sql; PRAGMA user_version records
 // the last one applied. Open migrates in one transaction per migration,

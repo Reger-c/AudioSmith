@@ -223,3 +223,21 @@ var LaneSlots = map[Lane]int{
 	LaneNet:    3,
 	LaneCPU:    2,
 }
+
+// actorKey is the context key of WithActor.
+type actorKey struct{}
+
+// WithActor marks ctx as a request of who ("api", "mcp", "quit"…): a job
+// cancelled with it records who in its Err.Data ({"by": who}).
+func WithActor(ctx context.Context, who string) context.Context {
+	return context.WithValue(ctx, actorKey{}, who)
+}
+
+// ActorOf is who WithActor marked ctx for, or "".
+func ActorOf(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	who, _ := ctx.Value(actorKey{}).(string)
+	return who
+}

@@ -300,7 +300,7 @@ func (a *app) startModelsMove(p modelsMove) {
 	sched := a.lib.sched
 	a.async(func() {
 		if _, err := sched.Submit(context.Background(), spec); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not move the models: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not move the models: %v", err)) })
 		}
 	})
 }
@@ -332,7 +332,7 @@ func (a *app) modelsMoveUpdated(j jobs.Job) {
 		_ = json.Unmarshal(j.Params, &p)
 		a.toast(i18n.T("Move cancelled. The models moved so far are in %s; AudioSmith uses them again once the others are there too.", p.To))
 	case j.Err != nil:
-		a.toast(i18n.T("Could not move the models: %v", j.Err.Message))
+		a.toastWarn(i18n.T("Could not move the models: %v", j.Err.Message))
 	}
 	a.refreshModels()
 	a.refreshFamily()

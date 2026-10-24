@@ -25,6 +25,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/actnowkit/activity"
 )
@@ -323,13 +324,13 @@ func (a *app) stopActivity(kind string, ids []string) {
 	switch {
 	case strings.HasPrefix(kind, services.OwnerLongform) && a.lib != nil && a.lib.svc != nil:
 		svc := a.lib.svc.Longform
-		a.background(func() { svc.Stop(ctx, id) })
+		a.background(func() { oplog.Err("job.stop.ask", svc.Stop(ctx, id), "id", id) })
 	case strings.HasPrefix(kind, services.DubOwner) && a.dubSvc != nil:
 		svc := a.dubSvc
-		a.background(func() { svc.Cancel(ctx, id) })
+		a.background(func() { oplog.Err("job.cancel.ask", svc.Cancel(ctx, id), "id", id) })
 	case strings.HasPrefix(kind, services.WorkflowOwner) && a.wfSvc != nil:
 		svc := a.wfSvc
-		a.background(func() { svc.Cancel(ctx, id) })
+		a.background(func() { oplog.Err("job.cancel.ask", svc.Cancel(ctx, id), "id", id) })
 	default:
 		for _, jid := range ids {
 			if j, ok := a.jobList[jid]; ok {

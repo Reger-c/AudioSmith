@@ -336,7 +336,7 @@ func (a *app) wfDuplicateID(id string) {
 		w, _, err := svc.Get(context.Background(), id)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not open the workflow: %v", err))
+				a.toastWarn(i18n.T("Could not open the workflow: %v", err))
 				return
 			}
 			a.wf = w

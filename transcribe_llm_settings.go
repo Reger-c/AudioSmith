@@ -130,7 +130,7 @@ func (a *app) saveKey(id, key string) {
 	cfg := a.providerConfig(id)
 	pr, err := cfg.Resolve()
 	if err != nil {
-		a.toast(i18n.T("Could not save the key: %v", err))
+		a.toastWarn(i18n.T("Could not save the key: %v", err))
 		return
 	}
 	item := keychainItem(pr.SecretName())
@@ -153,7 +153,7 @@ func (a *app) saveKey(id, key string) {
 		a.post(func() {
 			switch {
 			case err != nil:
-				a.toast(i18n.T("Could not save the key: %v", err))
+				a.toastWarn(i18n.T("Could not save the key: %v", err))
 			case key == "":
 				a.llmForm.hasKey[id] = false
 				a.toast(i18n.T("Key removed"))

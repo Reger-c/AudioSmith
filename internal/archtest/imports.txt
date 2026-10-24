@@ -15,6 +15,7 @@ api                      dsp/wav
 api                      engine/proto
 api                      jobs
 api                      lang
+api                      oplog
 api                      services
 api                      settings
 api                      translate
@@ -93,11 +94,13 @@ dub/dubtest              text
 engine                   core
 engine                   engine/proto
 engine                   jobs
+engine                   logs
 
 engine/enginetest        engine/proto
 
 family                   catalog
 family                   engine/proto
+family                   logs
 family                   settings
 
 gallery                  voicedesign
@@ -107,6 +110,7 @@ gallery/persona          voicedesign
 
 hub                      catalog
 hub                      jobs
+hub                      logs
 
 licence                  catalog
 licence                  core
@@ -119,10 +123,14 @@ logs                     core
 mcp                      api
 mcp                      catalog
 mcp                      core
+mcp                      oplog
 mcp                      services
 mcp                      voicedesign
 
 notify                   core
+
+oplog                    core
+oplog                    jobs
 
 services                 core
 services                 dialogue
@@ -145,6 +153,7 @@ services                 gallery/persona
 services                 i18n
 services                 jobs
 services                 lang
+services                 oplog
 services                 store
 services                 telephony
 services                 text

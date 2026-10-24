@@ -16,6 +16,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
 	"github.com/hehehai/AudioSmith/internal/licence"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 )
 
 // startTake asks TakeService for the take whose recipe is t (its id
@@ -130,7 +131,7 @@ func (a *app) cancel() {
 
 func (a *app) cancelJob(id string) {
 	sched := a.eng.sched
-	a.async(func() { sched.Cancel(context.Background(), id) })
+	a.async(func() { oplog.Err("job.cancel.ask", sched.Cancel(context.Background(), id), "id", id) })
 }
 
 // jobUpdated applies an update of the Studio's job; it runs on the main thread.

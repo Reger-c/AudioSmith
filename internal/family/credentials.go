@@ -36,6 +36,8 @@ import (
 	"strings"
 
 	"github.com/hehehai/actnowkit/credentials"
+
+	"github.com/hehehai/AudioSmith/internal/logs"
 	actnow "github.com/hehehai/actnowkit/family"
 )
 
@@ -122,6 +124,12 @@ var ErrSharedGone = errors.New("the shared key was deleted")
 // own item; "" when there is none. ErrSharedGone when the shared key the
 // ref names was deleted.
 func (k *Keys) Secret(ctx context.Context, s Slot) (string, error) {
+	secret, err := k.secret(ctx, s)
+	logs.AddSecret(secret) // never in a log line (#108)
+	return secret, err
+}
+
+func (k *Keys) secret(ctx context.Context, s Slot) (string, error) {
 	if v := sharedVendor(s); v != "" {
 		secret, err := k.shared(ctx, v)
 		switch {
@@ -140,6 +148,7 @@ func (k *Keys) Secret(ctx context.Context, s Slot) (string, error) {
 // deleted (its metadata, or its Keychain item, is gone).
 func (k *Keys) shared(ctx context.Context, v string) (string, error) {
 	secret, err := k.Shared.Secret(ctx, v)
+	logs.AddSecret(secret)
 	switch {
 	case errors.Is(err, credentials.ErrMissing):
 		return "", ErrSharedGone

@@ -39,7 +39,7 @@ var (
 func (a *app) openTray() {
 	t, err := mygo.NewTray(mygo.TrayOptions{Icon: trayIcon, IconIsTemplate: true, ToolTip: "AudioSmith"})
 	if err != nil {
-		a.toast(i18n.T("The menu bar icon could not be made: %v", err))
+		a.toastWarn(i18n.T("The menu bar icon could not be made: %v", err))
 		return
 	}
 	a.dictTray.tray = t

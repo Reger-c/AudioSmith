@@ -388,6 +388,12 @@ func (s *Calls) RecordingPath(c Call) string {
 
 // Delete removes a call that has ended, and its recording.
 func (s *Calls) Delete(ctx context.Context, id string) error {
+	err := s.delete(ctx, id)
+	logDelete(ctx, "call", id, "", err)
+	return err
+}
+
+func (s *Calls) delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	_, live := s.live[id]
 	s.mu.Unlock()

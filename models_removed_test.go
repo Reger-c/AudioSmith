@@ -35,7 +35,7 @@ func countToasts(a *app, tt *ui.Tester, s string) int {
 	tt.Frame()
 	n := 0
 	for _, m := range append(slices.Clone(a.toasts), tt.Texts()...) {
-		if strings.Contains(m, s) {
+		if strings.Contains(m, s) && !strings.HasPrefix(m, "toast ") { // not the logs panel's line (#108)
 			n++
 		}
 	}

@@ -287,7 +287,7 @@ func (a *app) dubMirror() {
 		a.post(func() {
 			switch {
 			case err != nil:
-				a.toast(i18n.T("Could not read the audio: %v", err))
+				a.toastWarn(i18n.T("Could not read the audio: %v", err))
 			case res.Measured < dub.MirrorMinLines:
 				a.toast(i18n.T("Not enough clear speech to mirror the delivery."))
 			case len(res.Applied) == 0:
@@ -393,7 +393,10 @@ func (a *app) dubVoiceLabel(ref string) string {
 	if v := a.findVoice(ref); v != nil {
 		return v.Name
 	}
-	return i18n.T("Missing voice")
+	if strings.Contains(ref, ":") {
+		return i18n.T("Missing voice") // a preset or gallery voice this version lacks
+	}
+	return voiceGone() // a saved voice deleted since (voices_delete.go)
 }
 
 // --- glossary ----------------------------------------------------------------------------
@@ -462,7 +465,7 @@ func (a *app) dubExtractTerms() {
 		a.post(func() {
 			a.dubGloss.extracting = false
 			if err != nil {
-				a.toast(i18n.T("Could not find terms: %v", err))
+				a.toastWarn(i18n.T("Could not find terms: %v", err))
 				return
 			}
 			if len(cands) == 0 {
@@ -548,7 +551,7 @@ func (a *app) dubImportSubtitles() {
 		data, err := os.ReadFile(paths[0])
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not read the file: %v", err))
+				a.toastWarn(i18n.T("Could not read the file: %v", err))
 				return
 			}
 			a.dubImportSubtitleText(decodeText(data))

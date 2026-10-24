@@ -34,6 +34,18 @@ func (s *Projects) Get(ctx context.Context, id string) (core.Project, error) {
 
 // Save creates (empty ID) or updates a project, keeping its creation time.
 func (s *Projects) Save(ctx context.Context, p core.Project) (core.Project, error) {
+	var oldTitle string
+	if p.ID != "" {
+		if old, err := s.store.Get(ctx, p.ID); err == nil {
+			oldTitle = old.Title
+		}
+	}
+	saved, err := s.save(ctx, p)
+	logSave(ctx, string(p.Kind), p.ID == "", oldTitle, saved.ID, saved.Title, err)
+	return saved, err
+}
+
+func (s *Projects) save(ctx context.Context, p core.Project) (core.Project, error) {
 	p.Title = strings.TrimSpace(p.Title)
 	if p.Title == "" {
 		return p, fmt.Errorf("project: no title: %w", core.ErrInvalid)
@@ -73,6 +85,7 @@ func (s *Projects) Delete(ctx context.Context, id string) error {
 		err = s.store.Delete(ctx, id)
 	}
 	s.mu.Unlock()
+	logDelete(ctx, firstNonEmpty(string(p.Kind), "project"), id, p.Title, err)
 	if err != nil {
 		return err
 	}

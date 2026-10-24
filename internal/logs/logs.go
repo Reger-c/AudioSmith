@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/core"
-	"github.com/hehehai/actnowkit/redact"
 )
 
 // Options configure a Ring.
@@ -91,9 +90,10 @@ func (r *Ring) Append(e core.LogEntry) {
 	if e.Level == "" {
 		e.Level = core.SeverityInfo
 	}
-	// Keys, tokens and proxy passwords never reach the panel, the files
+	// Keys, tokens and proxy passwords (and the home folder's path, as
+	// "~") never reach the panel, the files
 	// or a diagnostic bundle (family spec §13, audit S5/S10).
-	e.Message = redact.Text(strings.TrimRight(e.Message, "\r\n"))
+	e.Message = Redact(strings.TrimRight(e.Message, "\r\n"))
 	r.mu.Lock()
 	r.seq++
 	e.Seq = r.seq

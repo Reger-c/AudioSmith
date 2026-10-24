@@ -337,7 +337,7 @@ func (a *app) itemActions(c *ui.Context, it store.LibraryItem) {
 			reveal = book
 			if playToggle(c.Key("play"), a.pl.Playing(id), i18n.T("Play"), i18n.T("Pause")).Clicked() {
 				if err := a.pl.Toggle(id, book); err != nil {
-					a.toast(i18n.T("Can't play: %v", err))
+					a.toastWarn(i18n.T("Can't play: %v", err))
 				}
 			}
 		}

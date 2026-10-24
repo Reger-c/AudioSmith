@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hehehai/AudioSmith/internal/oplog"
 )
 
 // Request headers of the API.
@@ -80,9 +82,32 @@ func (s *Server) guard(lan bool, port int) http.Handler {
 		}
 		if acc != accessPublic {
 			if err := s.authorize(lan, r, acc); err != nil {
+				if isStateChanging(r.Method) {
+					oplog.Warn("api.denied", "method", r.Method, "path", r.URL.Path, "lan", lan, "error", err)
+				}
 				writeError(w, err)
 				return
 			}
+		}
+		if isStateChanging(r.Method) && r.URL.Path != "/mcp" { // MCP logs its tools (internal/mcp)
+			start, sw := time.Now(), &statusWriter{ResponseWriter: w}
+			w = sw
+			who := "api"
+			if lan {
+				who = "lan"
+			}
+			r = r.WithContext(oplog.WithActor(r.Context(), who))
+			defer func() {
+				st := sw.status
+				if st == 0 {
+					st = http.StatusOK
+				}
+				log := oplog.Info
+				if st >= 400 {
+					log = oplog.Warn
+				}
+				log("api.call", "method", r.Method, "path", r.URL.Path, "via", who, "status", st, "ms", time.Since(start))
+			}()
 		}
 		via := ViaLoopback
 		if lan {
@@ -265,3 +290,32 @@ func NewKey() string {
 	}
 	return "as-" + string(b)
 }
+
+// statusWriter records the status of a response (the operations log's
+// api.call line); Flush and Unwrap keep streaming and hijacking working.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	if w.status == 0 {
+		w.status = code
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }

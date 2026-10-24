@@ -27,6 +27,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/icons"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/text"
 	"github.com/hehehai/AudioSmith/internal/text/markup"
@@ -230,7 +231,7 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 		}
 		if playToggle(c.Key("ra-play"), a.pl.Playing(id), i18n.T("Play chapter"), i18n.T("Pause")).Clicked() {
 			if err := a.pl.Toggle(id, ch.File); err != nil {
-				a.toast(i18n.T("Can't play: %v", err))
+				a.toastWarn(i18n.T("Can't play: %v", err))
 			}
 		}
 	})
@@ -251,7 +252,7 @@ func (a *app) readAlongView(c *ui.Context, p *lfPage, r *lfRender) {
 	seek := func(sec float64) {
 		if a.pl.Current() != id {
 			if err := a.pl.Toggle(id, ch.File); err != nil {
-				a.toast(i18n.T("Can't play: %v", err))
+				a.toastWarn(i18n.T("Can't play: %v", err))
 				return
 			}
 		}
@@ -348,7 +349,7 @@ func (a *app) alignChapter(p *lfPage, r *lfRender, i int) {
 		if _, err := sched.Submit(context.Background(), spec); err != nil {
 			a.post(func() {
 				delete(p.ra.aligning, i)
-				a.toast(i18n.T("Could not align: %v", err))
+				a.toastWarn(i18n.T("Could not align: %v", err))
 			})
 		}
 	})
@@ -363,7 +364,7 @@ func (a *app) alignDone(j jobs.Job) {
 			}
 			delete(p.ra.aligning, i)
 			if j.State != jobs.StateSucceeded {
-				a.toast(i18n.T("Could not align: %s", jobErrorText(j.Err)))
+				a.toastWarn(i18n.T("Could not align: %s", jobErrorText(j.Err)))
 				return
 			}
 			var res proto.AlignResult
@@ -376,7 +377,7 @@ func (a *app) alignDone(j jobs.Job) {
 				return
 			}
 			path, data := alignedPath(ch.File), j.Result
-			a.background(func() { os.WriteFile(path, data, 0o644) })
+			a.background(func() { oplog.Err("file.write", os.WriteFile(path, data, 0o644), "file", baseName(path)) })
 			return
 		}
 	}

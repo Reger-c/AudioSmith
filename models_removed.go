@@ -478,7 +478,7 @@ func (a *app) cleanRemoved() {
 		a.post(func() {
 			a.cleaning, a.removedLeft, a.removedKnown = false, ls, true
 			if err != nil {
-				a.toast(i18n.T("Could not clean up: %v", err))
+				a.toastWarn(i18n.T("Could not clean up: %v", err))
 				return
 			}
 			msg := "cleaned up removed models: " + mb(freed)
@@ -489,7 +489,7 @@ func (a *app) cleanRemoved() {
 			a.toast(i18n.T("Freed %s", mb(freed)))
 			for _, l := range kept {
 				if l.Busy {
-					a.toast(busyText(l.BusyBy))
+					a.toastWarn(busyText(l.BusyBy))
 					break
 				}
 			}

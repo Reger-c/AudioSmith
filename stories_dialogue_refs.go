@@ -62,7 +62,7 @@ func (a *app) dialogueRefStatus(c *ui.Context, ref string, locked bool) {
 	v := a.findVoice(ref)
 	switch {
 	case v == nil:
-		caption(c, i18n.T("Missing voice"))
+		caption(c, voiceGone()) // voices_delete.go
 	case v.Kind == core.VoiceBuiltin:
 		caption(c, i18n.T("A short sample in this voice is made first."))
 	case a.refMaking(v.ID) != nil:

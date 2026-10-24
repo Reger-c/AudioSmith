@@ -135,7 +135,7 @@ func (a *app) wfLoad() {
 		a.post(func() {
 			a.wfLoaded = true
 			if err != nil {
-				a.toast(i18n.T("Could not read the workflows: %v", err))
+				a.toastWarn(i18n.T("Could not read the workflows: %v", err))
 				return
 			}
 			a.wfList = list
@@ -158,7 +158,7 @@ func (a *app) wfOpen(id string) {
 		}
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not open the workflow: %v", err))
+				a.toastWarn(i18n.T("Could not open the workflow: %v", err))
 				return
 			}
 			a.wfShow(w, run, active)
@@ -331,7 +331,7 @@ func (a *app) wfRename(id, name string) {
 			_, err = svc.Save(ctx, w)
 		}
 		if err != nil {
-			a.post(func() { a.toast(i18n.T("Could not rename the workflow: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not rename the workflow: %v", err)) })
 		}
 	})
 }
@@ -341,7 +341,7 @@ func (a *app) wfDelete(id string) {
 	svc := a.wfSvc
 	a.background(func() {
 		if err := svc.Delete(context.Background(), id); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not delete the workflow: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not delete the workflow: %v", err)) })
 		}
 	})
 }

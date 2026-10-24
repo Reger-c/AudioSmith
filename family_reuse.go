@@ -139,7 +139,7 @@ func (a *app) useModel(e catalog.Entry) {
 		_, err := fam.Reuse(context.Background(), hub, family.EntryClaims(hub, e))
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not use %s: %v", modelRef(e), err))
+				a.toastWarn(i18n.T("Could not use %s: %v", modelRef(e), err))
 				return
 			}
 			a.logs.Append(core.LogEntry{Source: "hub", Message: "using " + e.Repo + " (installed by another app)"})

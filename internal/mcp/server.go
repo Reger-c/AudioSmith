@@ -45,6 +45,7 @@ import (
 
 	"github.com/hehehai/AudioSmith/internal/api"
 	"github.com/hehehai/AudioSmith/internal/core"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 )
 
 // Options configure a Server.
@@ -112,6 +113,7 @@ func New(o Options) *Server {
 		&sdk.ServerOptions{Instructions: Instructions})
 	s.addTools()
 	s.addResources()
+	s.srv.AddReceivingMiddleware(logTools)
 	s.handler = sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return s.srv },
 		&sdk.StreamableHTTPOptions{SessionTimeout: 30 * time.Minute, MaxRequestBodyBytes: 64 << 20})
 	return s
@@ -335,4 +337,54 @@ func firstNonEmpty(xs ...string) string {
 		}
 	}
 	return ""
+}
+
+// readOnlyTool reports whether a tool only reads: its calls are not
+// logged.
+func readOnlyTool(name string) bool {
+	for _, p := range []string{"list_", "get_", "check_", "search_", "describe_"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// logTools logs the calls of the tools that change something (#108):
+// the tool, who called (mcp, or mcp-lan for a LAN client), the outcome
+// and the time. Their services see "mcp" as who asked.
+func logTools(next sdk.MethodHandler) sdk.MethodHandler {
+	return func(ctx context.Context, method string, req sdk.Request) (sdk.Result, error) {
+		call, ok := req.(*sdk.CallToolRequest)
+		if method != "tools/call" || !ok || call.Params == nil || readOnlyTool(call.Params.Name) {
+			return next(ctx, method, req)
+		}
+		who := "mcp"
+		if call.Extra != nil && strings.HasPrefix(call.Extra.Header.Get(api.HeaderVia), api.ViaLAN) {
+			who = "mcp-lan"
+		}
+		start := time.Now()
+		res, err := next(oplog.WithActor(ctx, who), method, req)
+		kv := []any{"tool", call.Params.Name, "via", who, "ms", time.Since(start)}
+		switch r, _ := res.(*sdk.CallToolResult); {
+		case err != nil:
+			oplog.Warn("mcp.call", append(kv, "error", err)...)
+		case r != nil && r.IsError:
+			oplog.Warn("mcp.call", append(kv, "error", toolErrorText(r))...)
+		default:
+			oplog.Info("mcp.call", kv...)
+		}
+		return res, err
+	}
+}
+
+// toolErrorText is the start of a failed tool's text: its error code
+// and message.
+func toolErrorText(r *sdk.CallToolResult) string {
+	for _, c := range r.Content {
+		if t, ok := c.(*sdk.TextContent); ok {
+			return t.Text
+		}
+	}
+	return "error"
 }

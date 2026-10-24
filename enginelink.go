@@ -288,7 +288,7 @@ func (a *app) unload() {
 		_, err := sup.Call(ctx, proto.RoleGPU, "", proto.MethodModelsUnload, proto.UnloadParams{}, nil)
 		post(func() {
 			if err != nil {
-				a.toast(i18n.T("Engine: %s", err.Error()))
+				a.toastWarn(i18n.T("Engine: %s", err.Error()))
 				return
 			}
 			a.loaded, a.loadedModel = nil, ""
@@ -306,7 +306,7 @@ func (a *app) flushEngine() {
 		_, err := sup.Call(ctx, proto.RoleGPU, "", proto.MethodFlush, proto.Empty{}, nil)
 		post(func() {
 			if err != nil {
-				a.toast(i18n.T("Engine: %s", err.Error()))
+				a.toastWarn(i18n.T("Engine: %s", err.Error()))
 				return
 			}
 			a.toast(i18n.T("Cache cleared"))

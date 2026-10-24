@@ -27,7 +27,7 @@ func (a *app) wfExportAll() {
 			files, err := svc.ExportAll(context.Background(), id, dir, "")
 			a.post(func() {
 				if err != nil {
-					a.toast(i18n.T("Could not export: %v", err))
+					a.toastWarn(i18n.T("Could not export: %v", err))
 					return
 				}
 				a.toast(i18n.N(len(files), "Exported %d file.", "Exported %d files.", len(files)))
@@ -86,7 +86,7 @@ func (a *app) wfScriptFiles(node string, paths []string) {
 		}
 		a.post(func() {
 			if len(failed) > 0 {
-				a.toast(i18n.T("Could not read %s.", strings.Join(failed, ", ")))
+				a.toastWarn(i18n.T("Could not read %s.", strings.Join(failed, ", ")))
 			}
 			if len(scripts) == 0 || a.wfLocked() || a.wfNode(node) == nil {
 				return

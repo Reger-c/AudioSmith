@@ -302,7 +302,7 @@ func (a *app) wfOutputRow(c *ui.Context, j int, o services.WorkflowOutput) {
 						}
 					}
 					if err := a.pl.Toggle(id, src); err != nil {
-						a.toast(i18n.T("Can't play: %v", err))
+						a.toastWarn(i18n.T("Can't play: %v", err))
 					}
 				}
 			}
@@ -489,7 +489,7 @@ func (a *app) wfCancel() {
 	svc, id := a.wfSvc, a.wf.ID
 	a.background(func() {
 		if err := svc.Cancel(context.Background(), id); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not stop the run: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not stop the run: %v", err)) })
 		}
 	})
 }

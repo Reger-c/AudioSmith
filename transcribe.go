@@ -137,7 +137,7 @@ func (a *app) loadTranscripts() {
 		l, err := svc.List(context.Background(), core.TranscriptQuery{})
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not read the transcripts: %v", err))
+				a.toastWarn(i18n.T("Could not read the transcripts: %v", err))
 				return
 			}
 			for _, t := range a.trList { // added by events while reading
@@ -253,7 +253,7 @@ func (a *app) selectTranscript(id string) {
 				return
 			}
 			if err != nil {
-				a.toast(i18n.T("Could not read the transcript: %v", err))
+				a.toastWarn(i18n.T("Could not read the transcript: %v", err))
 				return
 			}
 			a.trDetail = &t
@@ -274,7 +274,7 @@ func (a *app) updateTranscript(fn func(*core.Transcript)) {
 	svc := a.trSvc
 	a.async(func() {
 		if _, err := svc.Update(context.Background(), id, fn); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not save the transcript: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not save the transcript: %v", err)) })
 		}
 	})
 }
@@ -345,7 +345,7 @@ func (a *app) deleteTranscript(id string) {
 		err := svc.Delete(context.Background(), id)
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not delete the transcript: %v", err))
+				a.toastWarn(i18n.T("Could not delete the transcript: %v", err))
 				return
 			}
 			a.toast(i18n.T("Transcript deleted"))

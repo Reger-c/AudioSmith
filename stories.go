@@ -178,7 +178,7 @@ func (a *app) importStoryFrom(p *lfPage, path string) {
 		a.post(func() {
 			p.importing = false
 			if err != nil {
-				a.toast(bookImportError(path, err))
+				a.toastWarn(bookImportError(path, err))
 				return
 			}
 			s := d.Script()

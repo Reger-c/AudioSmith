@@ -80,7 +80,7 @@ func (a *app) cleanOrphans() {
 			if err != nil {
 				log.Printf("storage: clean up orphans: %v", err)
 				if name, busy := hub.Holder(err); busy {
-					a.toast(busyText(name))
+					a.toastWarn(busyText(name))
 				}
 			}
 			a.toast(i18n.T("Freed %s", mb(freed)))

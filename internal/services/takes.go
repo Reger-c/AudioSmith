@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -490,19 +489,6 @@ func (s *Takes) Check(ctx context.Context, id string) (core.Take, error) {
 	return t, nil
 }
 
-// ExportAs writes a take's audio to dst as a WAV of bits (16, 24 or 32
-// float; 0 copies the file as it is). 16 bits get TPDF dither.
-func (s *Takes) ExportAs(ctx context.Context, id, dst string, bits int) error {
-	if bits == 0 {
-		return s.Export(ctx, id, dst)
-	}
-	t, err := s.store.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	return convertWAV(ctx, s.store.AudioPath(t), dst, bits)
-}
-
 func (s *Takes) Add(ctx context.Context, t core.Take) (core.Take, error) {
 	if t.File == "" || filepath.Base(t.File) != t.File {
 		return t, fmt.Errorf("add take: file %q: %w", t.File, core.ErrInvalid)
@@ -521,7 +507,9 @@ func (s *Takes) Add(ctx context.Context, t core.Take) (core.Take, error) {
 }
 
 func (s *Takes) Delete(ctx context.Context, id string) error {
-	if err := s.store.Delete(ctx, id); err != nil {
+	err := s.store.Delete(ctx, id)
+	logDelete(ctx, "take", id, "", err)
+	if err != nil {
 		return err
 	}
 	s.bus.Publish(core.TakeDeleted{ID: id})
@@ -542,58 +530,4 @@ func (s *Takes) SetStarred(ctx context.Context, id string, starred bool) error {
 	}
 	s.bus.Publish(core.TakeUpdated{Take: t})
 	return nil
-}
-
-// Export streams the take's audio into dst through a temporary file
-// beside it, renamed into place when complete.
-func (s *Takes) Export(ctx context.Context, id, dst string) error {
-	t, err := s.store.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	return copyFile(ctx, s.store.AudioPath(t), dst)
-}
-
-func copyFile(ctx context.Context, src, dst string) (err error) {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*.part")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			out.Close()
-			os.Remove(out.Name())
-		}
-	}()
-	if _, err = io.Copy(out, ctxReader{ctx, in}); err != nil {
-		return err
-	}
-	if err = out.Sync(); err != nil {
-		return err
-	}
-	if err = out.Close(); err != nil {
-		return err
-	}
-	if err = os.Chmod(out.Name(), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(out.Name(), dst)
-}
-
-// ctxReader stops a copy when its context ends.
-type ctxReader struct {
-	ctx context.Context
-	r   io.Reader
-}
-
-func (c ctxReader) Read(p []byte) (int, error) {
-	if err := c.ctx.Err(); err != nil {
-		return 0, errors.Join(core.ErrCancelled, err)
-	}
-	return c.r.Read(p)
 }

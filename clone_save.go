@@ -62,7 +62,7 @@ func (a *app) clonePortrait(path string) {
 		}
 		a.post(func() {
 			if err != nil {
-				a.toast(portraitErrorText(err))
+				a.toastWarn(portraitErrorText(err))
 				return
 			}
 			a.clone.portrait, a.clone.portraitBmp = png, bmp
@@ -198,7 +198,7 @@ func (a *app) cloneSave() {
 			if err != nil {
 				s.saving = false
 				os.Remove(original)
-				a.toast(i18n.T("Could not save the voice profile: %v", err))
+				a.toastWarn(i18n.T("Could not save the voice profile: %v", err))
 				return
 			}
 			v.RefSeconds = secs
@@ -223,7 +223,7 @@ func (a *app) cloneSaveFiles(v core.Voice, files core.VoiceFiles, gen int) {
 				s.saving = false
 			}
 			if err != nil {
-				a.toast(i18n.T("Could not save the voice profile: %v", err))
+				a.toastWarn(i18n.T("Could not save the voice profile: %v", err))
 				return
 			}
 			if s.replaceFor != "" {
@@ -249,7 +249,7 @@ func (a *app) cloneUseOnce() {
 	text, style, name := strings.TrimSpace(s.transcript), s.style, s.srcName
 	a.cloneSelection(func(path string, _ float64, err error) {
 		if err != nil {
-			a.toast(i18n.T("Could not use the clip: %v", err))
+			a.toastWarn(i18n.T("Could not use the clip: %v", err))
 			return
 		}
 		a.studioClip = &clipRef{Path: path, Text: text, Name: name, Style: style}

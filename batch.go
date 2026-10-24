@@ -18,6 +18,7 @@ import (
 	"github.com/hehehai/AudioSmith/internal/dub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
 	"github.com/hehehai/AudioSmith/internal/jobs"
+	"github.com/hehehai/AudioSmith/internal/oplog"
 	"github.com/hehehai/AudioSmith/internal/services"
 	"github.com/hehehai/AudioSmith/internal/store"
 )
@@ -72,7 +73,7 @@ func (a *app) loadBatch() {
 		a.post(func() {
 			b := &a.batch
 			if err != nil {
-				a.toast(i18n.T("Could not read the batch queue: %v", err))
+				a.toastWarn(i18n.T("Could not read the batch queue: %v", err))
 				return
 			}
 			b.settings, b.items, b.loaded, b.watch = bs, items, true, w
@@ -138,7 +139,7 @@ func (a *app) batchJobUpdated(j jobs.Job) {
 			a.toast(i18n.T("Exported %s", filepath.Base(res.Output)))
 		case jobs.StateFailed, jobs.StateCancelled, jobs.StateInterrupted:
 			delete(b.exports, j.ID)
-			a.toast(dubErrorText(j.Err))
+			a.toastWarn(dubErrorText(j.Err))
 		}
 		_ = pid
 		return
@@ -209,7 +210,7 @@ func (a *app) batchSetSettings(fn func(*services.BatchSettings)) {
 	svc := a.dubSvc
 	a.background(func() {
 		if err := svc.SetBatchSettings(context.Background(), bs); err != nil {
-			a.post(func() { a.toast(i18n.T("Could not save the batch settings: %v", err)) })
+			a.post(func() { a.toastWarn(i18n.T("Could not save the batch settings: %v", err)) })
 		}
 	})
 }
@@ -249,7 +250,7 @@ func (a *app) batchEnqueue() {
 // batchCancel cancels a queued project.
 func (a *app) batchCancel(id string) {
 	svc := a.dubSvc
-	a.async(func() { svc.Cancel(context.Background(), id) })
+	a.async(func() { oplog.Err("batch.cancel", svc.Cancel(context.Background(), id), "id", id) })
 }
 
 // batchRetry runs a project again from where it stopped.
@@ -257,7 +258,7 @@ func (a *app) batchRetry(id string) {
 	svc := a.dubSvc
 	a.async(func() {
 		if err := svc.Retry(context.Background(), id); err != nil {
-			a.post(func() { a.toast(err.Error()) })
+			a.post(func() { a.toastWarn(err.Error()) })
 		}
 	})
 }
@@ -282,7 +283,7 @@ func (a *app) batchExport(id, lang string) {
 			jid, err := svc.ExportJob(context.Background(), req)
 			a.post(func() {
 				if err != nil {
-					a.toast(err.Error())
+					a.toastWarn(err.Error())
 					return
 				}
 				a.batch.exports[jid] = id
@@ -323,7 +324,7 @@ func (a *app) batchWatch(dir string) {
 		w := svc.Watch()
 		a.post(func() {
 			if err != nil {
-				a.toast(i18n.T("Could not watch the folder: %v", err))
+				a.toastWarn(i18n.T("Could not watch the folder: %v", err))
 				return
 			}
 			a.batch.watch = w
