@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -203,6 +204,14 @@ func (a *app) registerMoveModels() {
 			}
 			report(jobs.Progress{Stage: "moving", Fraction: frac, Message: msg, Bytes: mp.Bytes, TotalBytes: mp.TotalBytes})
 		}
+		// The models it moves are looked for there too until every one is
+		// (#101 M2): a move cancelled, skipped or interrupted part-way
+		// leaves some in each folder. Moving again finishes it.
+		if filepath.Clean(p.To) != filepath.Clean(p.From) {
+			if err := lib.settings.Update(ctx, func(s *settings.Settings) { s.Models.MovingTo = p.To }); err != nil {
+				return nil, err
+			}
+		}
 		var out modelsMoveResult
 		var moved []models.Ref
 		// Twice: a download that finished meanwhile is moved too.
@@ -232,6 +241,7 @@ func (a *app) registerMoveModels() {
 			// Every model is there: follow the family's folder.
 			err := lib.settings.Update(ctx, func(s *settings.Settings) {
 				s.Models.CacheDir = p.Value
+				s.Models.MovingTo = ""
 				s.Family.SetFollows(famset.KeyModelsRoot, true)
 				delete(s.Family.OtherValue, famset.KeyModelsRoot)
 			})
@@ -283,8 +293,10 @@ func (a *app) planModelsMove() {
 // startModelsMove submits the move job.
 func (a *app) startModelsMove(p modelsMove) {
 	params, _ := json.Marshal(modelsMoveParams{From: p.From, To: p.To, Value: p.Value})
+	// Idempotent: a move the app quit or crashed in goes on at the next
+	// start (what moved already is reused).
 	spec := jobs.Spec{Kind: kindMoveModels, Lane: jobs.LaneNet, Priority: jobs.PriorityInteractive, Params: params,
-		Title: i18n.T("Move models"), Owner: "family:models"}
+		Title: i18n.T("Move models"), Owner: "family:models", Idempotent: true}
 	sched := a.lib.sched
 	a.async(func() {
 		if _, err := sched.Submit(context.Background(), spec); err != nil {

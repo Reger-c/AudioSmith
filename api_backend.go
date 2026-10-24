@@ -109,12 +109,12 @@ func (b *apiBackend) Status() api.Status {
 func (b *apiBackend) Settings() settings.Settings { return b.lib.settings.Get() }
 
 func (b *apiBackend) Models(ctx context.Context) ([]api.Model, error) {
-	cache := modelCache(b.lib.settings.Get())
+	caches := modelCaches(b.lib.settings.Get())
 	accepted, _ := b.lib.licences.List(ctx)
 	var out []api.Model
 	for _, e := range catalog.Builtin().Entries {
 		m := api.Model{Entry: e}
-		if loc, err := hub.Status(cache, e); err == nil {
+		if loc, err := hub.StatusIn(caches, e); err == nil {
 			m.Downloaded = loc.State == hub.Downloaded
 		}
 		m.LicenceNeeded = licence.Required(e) != nil && !licence.Covers(accepted, e)

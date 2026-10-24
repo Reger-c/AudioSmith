@@ -139,6 +139,10 @@ type Models struct {
 	// ("actnow:vendor.huggingface", family spec §8.4); "" = AudioSmith's
 	// own Keychain item only.
 	HFCredentialRef string `json:"hfCredentialRef,omitempty"`
+	// MovingTo is the target of a move of the models that has not
+	// finished (cancelled, skipped, interrupted): the models it moved are
+	// there, so they are looked for there too (#101 M2). "" = none.
+	MovingTo string `json:"movingTo,omitempty"`
 }
 
 // Engine: resource limits.

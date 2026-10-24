@@ -17,6 +17,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/hehehai/AudioSmith/internal/catalog"
 	"github.com/hehehai/AudioSmith/internal/family"
 	"github.com/hehehai/AudioSmith/internal/hub"
 	"github.com/hehehai/AudioSmith/internal/i18n"
@@ -254,7 +255,7 @@ func TestMoveModelsToFamilyFolder(t *testing.T) {
 		}
 	}
 	a.postQueue = nil
-	if a.prefs.Models.CacheDir != to || !a.prefs.Family.Follows(famset.KeyModelsRoot) || a.prefs.Family.OtherValue[famset.KeyModelsRoot] {
+	if a.prefs.Models.CacheDir != to || a.prefs.Models.MovingTo != "" || !a.prefs.Family.Follows(famset.KeyModelsRoot) || a.prefs.Family.OtherValue[famset.KeyModelsRoot] {
 		t.Fatalf("after the move: cache %q, %+v", a.prefs.Models.CacheDir, a.prefs.Family)
 	}
 	for _, c := range mine {
@@ -285,6 +286,42 @@ func TestMoveModelsToFamilyFolder(t *testing.T) {
 	tt.Frame()
 	if tt.HasText("Move models…") {
 		t.Error("the banner stayed")
+	}
+}
+
+// #101 M2: while a move of the models has not finished (cancelled, a
+// model skipped, the app quit), what it moved is still found: in the old
+// folder or in the move's target.
+func TestModelFoundDuringUnfinishedMove(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	ctx := context.Background()
+	from := modelCache(a.prefs)
+	var repo string
+	for _, e := range catalog.Builtin().Entries {
+		if _, err := a.lib.modelSnapshot(ctx, e.Repo); err == nil && len(e.Aux) == 0 {
+			repo = e.Repo
+			break
+		}
+	}
+	if repo == "" {
+		t.Fatal("no downloaded model")
+	}
+	to := filepath.Join(t.TempDir(), "Shared models")
+	os.MkdirAll(to, 0o755)
+	if err := os.Rename(hub.RepoDir(from, repo), hub.RepoDir(to, repo)); err != nil { // what the move did before it stopped
+		t.Fatal(err)
+	}
+	if _, err := a.lib.modelSnapshot(ctx, repo); err == nil {
+		t.Fatal("found without the move's target")
+	}
+	a.updateSettings(func(s *settings.Settings) { s.Models.MovingTo = to })
+	dir, err := a.lib.modelSnapshot(ctx, repo)
+	if err != nil || !strings.HasPrefix(dir, to) {
+		t.Fatalf("snapshot %q %v", dir, err)
+	}
+	e := entryFor(repo)
+	if l, err := a.lib.hub().Status(ctx, e); err != nil || l.State != hub.Downloaded {
+		t.Errorf("the models page's status: %+v %v", l, err)
 	}
 }
 

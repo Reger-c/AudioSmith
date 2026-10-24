@@ -84,6 +84,11 @@ func (s *Dubs) Run(ctx context.Context, id string, req RunRequest) (map[string]s
 	if s.cfg.Scheduler == nil {
 		return nil, fmt.Errorf("dub: no job queue: %w", core.ErrUnsupported)
 	}
+	// Checking for a run and submitting one are one step (#101 M4): two
+	// callers (the UI and the API, the batch queue) would otherwise both
+	// start a pipeline writing the same files.
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
 	p, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -99,14 +104,21 @@ func (s *Dubs) Run(ctx context.Context, id string, req RunRequest) (map[string]s
 	if len(nodes) == 0 {
 		return map[string]string{}, nil
 	}
-	ids, err := s.cfg.Scheduler.SubmitGraph(ctx, nodes)
-	if err != nil {
-		return nil, err
-	}
-	s.Update(ctx, id, func(p *dub.Project) error {
+	// The run is recorded before its jobs start (#101 L12): a run whose
+	// stages all end before a later Update would keep Run set for good,
+	// and look interrupted.
+	prev := p.Run
+	if _, err := s.Update(ctx, id, func(p *dub.Project) error {
 		p.Run = &dub.Run{Through: req.Through, Langs: req.Langs, At: s.cfg.Now(), Batch: req.Batch}
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
+	ids, err := s.cfg.Scheduler.SubmitGraph(ctx, nodes)
+	if err != nil {
+		s.Update(context.WithoutCancel(ctx), id, func(p *dub.Project) error { p.Run = prev; return nil })
+		return nil, err
+	}
 	return ids, nil
 }
 

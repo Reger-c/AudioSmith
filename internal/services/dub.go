@@ -218,7 +218,11 @@ type DubsConfig struct {
 type Dubs struct {
 	cfg   DubsConfig
 	mu    sync.Mutex // serializes read-modify-write of projects
+	runMu sync.Mutex // serializes starting runs and deleting (#101 M4, M3)
 	batch batch
+	// deleteWait bounds how long Delete waits for a project's cancelled
+	// jobs to end (0 = 15 s).
+	deleteWait time.Duration
 }
 
 // NewDubs builds the service and registers its executors.
@@ -361,9 +365,17 @@ func (s *Dubs) Update(ctx context.Context, id string, fn func(*dub.Project) erro
 	return p.Clone(), nil
 }
 
-// Delete cancels a project's jobs and removes it with its files.
+// Delete cancels a project's jobs, waits for them to end, and removes
+// the project with its files. A job still running after the wait (one
+// that does not heed its cancel) makes it ErrBusy: removing the folder
+// under it would leave a stray one behind, or break the job (#101 M3).
 func (s *Dubs) Delete(ctx context.Context, id string) error {
+	s.runMu.Lock() // no run starts meanwhile
+	defer s.runMu.Unlock()
 	s.Cancel(ctx, id)
+	if err := s.awaitStopped(ctx, id); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	err := s.cfg.Store.Delete(ctx, id)
 	s.mu.Unlock()
@@ -379,19 +391,55 @@ func (s *Dubs) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// Active lists a project's unfinished jobs.
+// awaitStopped waits, at most deleteWait, until none of a project's jobs
+// is waiting, queued or running.
+func (s *Dubs) awaitStopped(ctx context.Context, id string) error {
+	limit := s.deleteWait
+	if limit == 0 {
+		limit = 15 * time.Second
+	}
+	deadline := time.Now().Add(limit)
+	for {
+		active, err := s.Active(ctx, id)
+		if err != nil {
+			return err
+		}
+		if len(active) == 0 {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("dub %s: %s is still stopping, try again in a moment: %w", id, active[0].Title, core.ErrBusy)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+// activeStates are the states of jobs that still run, or will.
+var activeStates = []jobs.State{jobs.StateWaiting, jobs.StateQueued, jobs.StateRunning}
+
+// Active lists a project's unfinished jobs: waiting, queued or running.
+// Interrupted ones are not: they do not run again without a Retry, and a
+// project should not look busy because of them (#101 H2).
 func (s *Dubs) Active(ctx context.Context, id string) ([]jobs.Job, error) {
 	if s.cfg.Scheduler == nil {
 		return nil, nil
 	}
-	return s.cfg.Scheduler.List(ctx, jobs.Filter{Owner: DubOwner + id})
+	return s.cfg.Scheduler.List(ctx, jobs.Filter{Owner: DubOwner + id, States: activeStates})
 }
 
-// Cancel cancels a project's unfinished jobs and forgets its run.
+// Cancel cancels a project's unfinished jobs (interrupted ones too) and
+// forgets its run.
 func (s *Dubs) Cancel(ctx context.Context, id string) error {
-	active, err := s.Active(ctx, id)
-	if err != nil {
-		return err
+	var active []jobs.Job
+	if s.cfg.Scheduler != nil {
+		var err error
+		if active, err = s.cfg.Scheduler.List(ctx, jobs.Filter{Owner: DubOwner + id}); err != nil {
+			return err
+		}
 	}
 	var errs []error
 	for _, j := range active {

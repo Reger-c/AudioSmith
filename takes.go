@@ -114,7 +114,7 @@ func openLibrary(dataDir, cacheDir string, opts ...libraryOptions) (*library, er
 	}
 	core.On(bus, func(ev settings.Changed) {
 		m, n := ev.Old.Models, ev.New.Models
-		if !slices.Equal(m.Endpoints, n.Endpoints) || m.CacheDir != n.CacheDir || m.Proxy != n.Proxy {
+		if !slices.Equal(m.Endpoints, n.Endpoints) || m.CacheDir != n.CacheDir || m.MovingTo != n.MovingTo || m.Proxy != n.Proxy {
 			l.resetHub()
 		}
 	})
@@ -241,6 +241,16 @@ func modelCache(s settings.Settings) string {
 	return hub.CacheDir()
 }
 
+// modelCaches are the folders models are looked for in: the model folder,
+// then the target of a move that did not finish (#101 M2).
+func modelCaches(s settings.Settings) []string {
+	dirs := []string{modelCache(s)}
+	if to := s.Models.MovingTo; to != "" && filepath.Clean(to) != filepath.Clean(dirs[0]) {
+		dirs = append(dirs, to)
+	}
+	return dirs
+}
+
 // hub is the downloader for the current settings (folder, endpoints, proxy).
 func (l *library) hub() *hub.Client {
 	l.hubMu.Lock()
@@ -248,7 +258,7 @@ func (l *library) hub() *hub.Client {
 	if l.hubCli == nil {
 		s := l.settings.Get()
 		m := s.Models
-		o := hub.Options{CacheDir: modelCache(s), Endpoints: downloadEndpoints(s), Proxy: m.Proxy, Token: func() string { return hubToken(l.sharedHFToken()) }}
+		o := hub.Options{CacheDir: modelCache(s), AlsoIn: modelCaches(s)[1:], Endpoints: downloadEndpoints(s), Proxy: m.Proxy, Token: func() string { return hubToken(l.sharedHFToken()) }}
 		l.familyOptions(&o)
 		l.hubCli = hub.New(o)
 	}
@@ -280,7 +290,7 @@ func entryFor(repo string) catalog.Entry {
 // the engine executors fill it into the job as it starts (engines run
 // offline: they load only what the hub downloaded).
 func (l *library) modelSnapshot(ctx context.Context, repo string) (string, error) {
-	loc, err := hub.Status(modelCache(l.settings.Get()), entryFor(repo))
+	loc, err := hub.StatusIn(modelCaches(l.settings.Get()), entryFor(repo))
 	if err != nil {
 		return "", err
 	}
@@ -293,7 +303,7 @@ func (l *library) modelSnapshot(ctx context.Context, repo string) (string, error
 // auxSnapshots are the snapshot directories of the auxiliary repos of a
 // model (engine.ExecutorOptions.AuxPaths).
 func (l *library) auxSnapshots(ctx context.Context, repo string) map[string]string {
-	return hub.AuxSnapshots(modelCache(l.settings.Get()), entryFor(repo))
+	return hub.AuxSnapshotsIn(modelCaches(l.settings.Get()), entryFor(repo))
 }
 
 // modelReady is services.Config.Ready.

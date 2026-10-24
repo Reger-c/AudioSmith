@@ -94,6 +94,9 @@ func (DownloadProgress) Topic() string { return "model.download" }
 // Options configure a Downloader.
 type Options struct {
 	CacheDir string
+	// AlsoIn are folders Status also finds models in, after CacheDir (an
+	// unfinished move's target, #101 M2). Downloads go to CacheDir.
+	AlsoIn []string
 	// Endpoints are raced on the first request; the fastest healthy one
 	// wins ("https://huggingface.co", "https://hf-mirror.com"). Empty =
 	// $HF_ENDPOINT, else DefaultEndpoints.

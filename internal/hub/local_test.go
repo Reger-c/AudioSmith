@@ -82,3 +82,40 @@ func TestAuxSnapshots(t *testing.T) {
 		t.Errorf("aux snapshots %v", got)
 	}
 }
+
+// #101 M2: a move that stopped part-way leaves a model's repos in either
+// folder: StatusIn and AuxSnapshotsIn find each in the folder that has it.
+func TestStatusInAcrossFolders(t *testing.T) {
+	put := func(dir, repo string, weights bool) {
+		r := RepoDir(dir, repo)
+		os.MkdirAll(filepath.Join(r, "blobs"), 0o755)
+		os.MkdirAll(filepath.Join(r, "snapshots", testCommit), 0o755)
+		os.MkdirAll(filepath.Join(r, "refs"), 0o755)
+		os.WriteFile(filepath.Join(r, "refs", "main"), []byte(testCommit), 0o644)
+		os.WriteFile(filepath.Join(r, "blobs", "c"), []byte("{}"), 0o644)
+		os.Symlink("../../blobs/c", filepath.Join(r, "snapshots", testCommit, "config.json"))
+		if weights {
+			os.WriteFile(filepath.Join(r, "blobs", "w"), []byte("weights"), 0o644)
+			os.Symlink("../../blobs/w", filepath.Join(r, "snapshots", testCommit, "model.safetensors"))
+		}
+	}
+	from, to := t.TempDir(), t.TempDir()
+	e := catalog.Entry{Repo: "acme/m", Aux: []catalog.Aux{{Repo: "acme/g2p"}}}
+	put(to, "acme/m", true)      // moved
+	put(from, "acme/g2p", false) // not yet
+	if l, _ := Status(from, e); l.State == Downloaded {
+		t.Fatal("the old folder alone has the whole model")
+	}
+	l, err := StatusIn([]string{from, to}, e)
+	if err != nil || l.State != Downloaded || !strings.HasPrefix(l.Snapshot, to) {
+		t.Fatalf("across folders: %+v %v", l, err)
+	}
+	aux := AuxSnapshotsIn([]string{from, to}, e)
+	if !strings.HasPrefix(aux["acme/g2p"], from) {
+		t.Errorf("aux %v", aux)
+	}
+	c := New(Options{CacheDir: from, AlsoIn: []string{to}})
+	if l, _ := c.Status(t.Context(), e); l.State != Downloaded {
+		t.Errorf("client: %+v", l)
+	}
+}

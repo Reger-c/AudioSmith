@@ -36,19 +36,43 @@ func commitOf(repoDir string, e catalog.Entry) string {
 
 // Status reports what of e is on disk, from the files alone (no network).
 func (c *Client) Status(ctx context.Context, e catalog.Entry) (Local, error) {
-	return Status(c.opts.CacheDir, e)
+	return StatusIn(append([]string{c.opts.CacheDir}, c.opts.AlsoIn...), e)
 }
 
 // Status is Client.Status for a cache directory. An entry whose
 // auxiliary repos are not all there is Partial, and its Missing lists
 // them as "<repo>:".
 func Status(cacheDir string, e catalog.Entry) (Local, error) {
-	l, err := statusOne(cacheDir, e, true)
+	return StatusIn([]string{cacheDir}, e)
+}
+
+// StatusIn is Status across folders, the first one first: a move of the
+// models that did not finish leaves each repo in one or the other
+// (#101 M2). Each repo counts from the first folder that has it
+// downloaded, else from the first folder.
+func StatusIn(dirs []string, e catalog.Entry) (Local, error) {
+	one := func(e catalog.Entry, weights bool) (Local, error) {
+		var first Local
+		for i, d := range dirs {
+			l, err := statusOne(d, e, weights)
+			if err != nil {
+				return l, err
+			}
+			if l.State == Downloaded {
+				return l, nil
+			}
+			if i == 0 {
+				first = l
+			}
+		}
+		return first, nil
+	}
+	l, err := one(e, true)
 	if err != nil {
 		return l, err
 	}
 	for _, a := range e.Aux {
-		al, err := statusOne(cacheDir, auxEntry(e, a), false)
+		al, err := one(auxEntry(e, a), false)
 		if err != nil {
 			return l, err
 		}
@@ -67,11 +91,20 @@ func Status(cacheDir string, e catalog.Entry) (Local, error) {
 // cacheDir at their pinned commits (repo id → directory), those that are
 // there: the engine loads them from these (proto.ParamAuxPaths).
 func AuxSnapshots(cacheDir string, e catalog.Entry) map[string]string {
+	return AuxSnapshotsIn([]string{cacheDir}, e)
+}
+
+// AuxSnapshotsIn is AuxSnapshots across folders (StatusIn), the first one
+// first.
+func AuxSnapshotsIn(dirs []string, e catalog.Entry) map[string]string {
 	out := map[string]string{}
 	for _, a := range e.Aux {
-		rev := commitOf(RepoDir(cacheDir, a.Repo), auxEntry(e, a))
-		if hasSnapshot(cacheDir, a.Repo, rev) {
-			out[a.Repo] = filepath.Join(RepoDir(cacheDir, a.Repo), "snapshots", rev)
+		for _, d := range dirs {
+			rev := commitOf(RepoDir(d, a.Repo), auxEntry(e, a))
+			if hasSnapshot(d, a.Repo, rev) {
+				out[a.Repo] = filepath.Join(RepoDir(d, a.Repo), "snapshots", rev)
+				break
+			}
 		}
 	}
 	return out
