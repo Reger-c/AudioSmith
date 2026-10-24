@@ -23,6 +23,9 @@ package main
 //   - Free disk space: diskFree reports snapDiskFree.
 //   - TCP ports: freePort gives snapPortBase, snapPortBase+1, … (the calls
 //     gateway shows its address).
+//   - Randomness: crypto/rand is seeded (testing/cryptotest), so the IDs
+//     core.NewID makes (jobs and takes in the operations log's lines,
+//     #108) are the same in every run.
 //
 // A new snapshot test calls runSnapshots and makes its directories with
 // testDir and its ports with freePort.
@@ -34,6 +37,7 @@ import (
 	"runtime"
 	"syscall"
 	"testing"
+	"testing/cryptotest"
 	"testing/synctest"
 	"time"
 
@@ -105,6 +109,7 @@ func pinSnapshots(t *testing.T, bubble bool, body func(t *testing.T, out string)
 	savedFree := diskFree
 	diskFree = func(string) int64 { return snapDiskFree }
 	defer func() { diskFree = savedFree }()
+	cryptotest.SetGlobalRandom(t, 109)
 	snap = &snapState{root: root, bubble: bubble}
 	defer func() { snap = nil }()
 	if !bubble {
