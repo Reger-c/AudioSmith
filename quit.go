@@ -46,6 +46,7 @@ func (a *app) willQuit(h *engineHost) {
 // flushForQuit writes the pending drafts and the dub editor's queued
 // saves, before anything waits on jobs. Main thread.
 func (a *app) flushForQuit() {
+	a.flushLongform() // longform_compile.go: hands a pending draft to Drafts, flushed below
 	var steps []func()
 	if a.lib != nil && a.lib.svc != nil && a.lib.svc.Drafts != nil {
 		drafts := a.lib.svc.Drafts
