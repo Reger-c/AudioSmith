@@ -77,7 +77,7 @@ jobs:
       - name: Test
         run: CGO_ENABLED=0 go test ./...
 
-      # The main package and internal/services take over go test's default
+      # The app (./app) and internal/services take over go test's default
       # 10 minutes under -race on the hosted runner.
       - name: Race
         run: CGO_ENABLED=1 go test -race -timeout 30m ./...
@@ -87,7 +87,7 @@ jobs:
 
       - name: Snapshots
         run: |
-          AUDIOSMITH_SNAPSHOTS="$RUNNER_TEMP/shots" go test -run TestSnapshots .
+          AUDIOSMITH_SNAPSHOTS="$RUNNER_TEMP/shots" go test -run TestSnapshots ./app
           ls "$RUNNER_TEMP/shots" | wc -l
 
       - uses: actions/upload-artifact@v4

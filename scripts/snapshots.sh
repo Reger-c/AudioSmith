@@ -27,13 +27,20 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="${SNAP_TMP:-/tmp/audiosmith-snapcheck-${USER:-$(id -u)}-$(basename "$root")}"
 
+# main_pkg SRC_DIR: the app's package in a checkout, ./app (refactor
+# B13), or . in a commit from before it moved, so check can compare with
+# those too.
+main_pkg() {
+	if [ -f "$1/app/main.go" ]; then echo ./app; else echo .; fi
+}
+
 render() { # render SRC_DIR OUT_DIR
 	local src="$1" out="$2"
 	rm -rf "$out"
 	mkdir -p "$out"
 	echo "rendering $(git -C "$src" rev-parse --short HEAD)$(git -C "$src" diff --quiet HEAD -- . 2>/dev/null || echo '+changes') into $out" >&2
 	(cd "$src" && AUDIOSMITH_SNAPSHOTS="$out" nice -n 19 env GOMAXPROCS=4 CGO_ENABLED=0 \
-		go test -count=1 -timeout 30m -run TestSnapshots . >&2)
+		go test -count=1 -timeout 30m -run TestSnapshots "$(main_pkg "$src")" >&2)
 	echo "$(find "$out" -type f | wc -l) files" >&2
 }
 

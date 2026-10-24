@@ -57,7 +57,7 @@ setup)
   remote "set -e; cd '$MAC_DIR'; mkdir -p engine out home tmp
     rsync -a --delete ~/'$ENGINE_FROM'/ engine/
     export PATH=/opt/homebrew/bin:\$PATH GOTOOLCHAIN=auto GOPROXY=\${MAC_GOPROXY:-https://goproxy.cn,direct}
-    nice -n 10 go test -c -o curate.test . && ls -la curate.test engine/audiosmith-engine"
+    nice -n 10 go test -c -o curate.test ./app && ls -la curate.test engine/audiosmith-engine"
   ;;
 refs | pick | clone | asr | smoke)
   run_stage "$stage"

@@ -37,7 +37,7 @@ if [[ "${1:-}" != "--encode-only" ]]; then
     rm -rf $REMOTE && mkdir -p $REMOTE/home
     cd '$MAC_DIR'
     HOME=$REMOTE/home AUDIOSMITH_E2E=1 AUDIOSMITH_PREVIEW_DIR=$REMOTE AUDIOSMITH_PREVIEW_ONLY='${PREVIEW_ONLY:-}' AUDIOSMITH_PREVIEW_SEED='${PREVIEW_SEED:-}' \
-      go test -run TestVoicePreviewsE2E -count=1 -v -timeout 1h ."
+      go test -run TestVoicePreviewsE2E -count=1 -v -timeout 1h ./app"
   rm -rf "$TMP" && mkdir -p "$TMP"
   rsync -a --include '*.wav' --include report.md --exclude '*' "$HOST:$REMOTE/" "$TMP/"
   ssh "$HOST" "rm -rf $REMOTE"

@@ -15,5 +15,5 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 [[ -n "${SKIP_BUILD:-}" ]] || scripts/build-engine.sh
-AUDIOSMITH_E2E=1 AUDIOSMITH_SMOKE="${1:-all}" go test -run 'TestModelSmoke' -v -count=1 -timeout "${TIMEOUT:-4h}" . 2>&1 |
+AUDIOSMITH_E2E=1 AUDIOSMITH_SMOKE="${1:-all}" go test -run 'TestModelSmoke' -v -count=1 -timeout "${TIMEOUT:-4h}" ./app 2>&1 |
   grep --line-buffered -vE '^=== (RUN|PAUSE|CONT)' | tee /tmp/audiosmith-smoke.log
