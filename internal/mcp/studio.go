@@ -28,11 +28,13 @@ var StudioTools = []string{"get_job", "cancel_job", "list_projects", "list_takes
 	"create_dub", "get_dub", "run_dub", "edit_dub", "export_dub", "batch_dub", "list_batch",
 	"search_voices", "use_gallery_voice", "export_audio", "export_transcript", "list_workflows", "run_workflow"}
 
-// local refuses callers that may not touch this Mac's files (LAN
-// clients with the PIN only).
-func (s *Server) local(req *sdk.CallToolRequest) error {
-	if c := s.caller(req); !c.trusted() {
-		return errors.New(api.CodeUnauthorized + ": this tool reads and writes files on the Mac: call it on the Mac, or with the API key")
+// local refuses callers that may not touch this Mac's files or its voice
+// library (LAN clients with the PIN only).
+func (s *Server) local(req *sdk.CallToolRequest) error { return s.caller(req).local() }
+
+func (c caller) local() error {
+	if !c.trusted() {
+		return errors.New(api.CodeUnauthorized + ": this tool reads and writes files or the voice library on the Mac: call it on the Mac, or with the API key")
 	}
 	return nil
 }

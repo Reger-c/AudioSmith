@@ -152,7 +152,7 @@ func TestAgentSkill(t *testing.T) {
 				if d := fm["description"]; d == "" || len([]rune(d)) > 1024 || !strings.Contains(d, "AudioSmith") || !strings.Contains(d, "TTS") || !strings.Contains(d, "SRT") {
 					t.Errorf("%s %s: description %q", lang, slug, d)
 				}
-				for _, w := range []string{"http://127.0.0.1:4000/health", "http://127.0.0.1:4000/mcp", "port 4000", "Narrator, Ann", "/Users/me/AudioSmith/mcp",
+				for _, w := range []string{"http://127.0.0.1:4000/health", "http://127.0.0.1:4000/mcp", "port 4000", `"Narrator", "Ann"`, "/Users/me/AudioSmith/mcp",
 					"open -a AudioSmith", "consent: true", "timestamps: true", `output: "file"`, "voice://{id}", "history://recent", "127.0.0.1",
 					"licence_required", "needs_reference", "/v1/audio/speech", "response_format=srt", "confirm: true", "wait_seconds: 30",
 					"confirm_required", "busy", "job_id", "longform:…", "dub:…", "workflow:…", "reference/tools.md", `format: "m4b"`,
@@ -231,7 +231,7 @@ func TestAgentSkill(t *testing.T) {
 				if hasClient := strings.Contains(s, "X-AudioSmith-Client: "+ag.Client+"'"); hasClient != (ag.Client != "") {
 					t.Errorf("%s: client header %v", slug, hasClient)
 				}
-				if bound := strings.Contains(s, "Your own voice: Narrator."); lang == "en" && bound != (slug == "claude-code") {
+				if bound := strings.Contains(s, `Your own voice: "Narrator".`); lang == "en" && bound != (slug == "claude-code") {
 					t.Errorf("%s: the bound voice", slug)
 				}
 				if strings.Contains(s, "as-SECRET") {

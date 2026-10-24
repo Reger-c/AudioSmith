@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Security
+- Voice names are cleaned wherever they come in (imported .asvoice and .ovsvoice files, the Local API, MCP, the app, Discover voices): line breaks and control characters become spaces, and a name keeps at most 80 characters. Names saved earlier are cleaned the next time they are saved.
+- The agents' skill and setup prompt list voice names as data (quoted, cut short), not as text an agent could take for instructions.
+- MCP voice cloning and design work only from this Mac (or with the API key), like the Local API's; over the LAN, a voice's audio is its sample, never the reference recording.
+- Built with Go 1.27.3 (security fixes in Go's standard library).
+
 ## 0.4.0-beta.6 — 2026-10-23
 
 ### The window in the ActNow family's layout

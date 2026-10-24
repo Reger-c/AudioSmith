@@ -88,7 +88,7 @@ func (s *Voices) Save(ctx context.Context, v core.Voice) (core.Voice, error) {
 }
 
 func validVoice(v *core.Voice) error {
-	v.Name = strings.TrimSpace(v.Name)
+	v.Name = core.CleanName(v.Name)
 	if v.Name == "" {
 		return fmt.Errorf("voice: no name: %w", core.ErrInvalid)
 	}

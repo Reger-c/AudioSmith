@@ -1,6 +1,6 @@
 module github.com/hehehai/AudioSmith
 
-go 1.27.1
+go 1.27.3
 
 tool github.com/egoist/mygo/cmd/mygo
 
