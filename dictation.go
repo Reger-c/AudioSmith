@@ -135,7 +135,18 @@ type dictSession struct {
 	need     *catalog.Entry
 	cancel   context.CancelFunc // clean-up and insertion
 	warming  bool               // clean-up waits for the language model to load
+	// The model: release ends the hold on the engine's models (#109, from
+	// the start to the end); loading: the transcription waits for the
+	// model to load (unloaded after a long pause), said in the pill once
+	// it takes longer than dictLoadingAfter (slow).
+	release func()
+	loading bool
+	slow    bool
 }
+
+// dictLoadingAfter is how long a transcription may wait for its model
+// before the pill says 「正在加载模型…」 (a warm one takes about 0.2 s).
+const dictLoadingAfter = 500 * time.Millisecond
 
 // openDictation sets dictation's defaults; connectDictation adds the OS
 // side when the app is ready.
@@ -324,6 +335,9 @@ func (s *dictSession) status() string {
 	case dictListening:
 		return i18n.T("Listening…")
 	case dictTranscribing:
+		if s.loading && s.slow {
+			return i18n.T("Loading model…")
+		}
 		return s.stage
 	case dictCleaning:
 		if s.warming {

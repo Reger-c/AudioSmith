@@ -48,10 +48,19 @@ final class ModelStore: @unchecked Sendable {
     }
 
     /// Drops model (all when nil) and returns what was dropped. A model a
-    /// job is using stays alive until the job ends.
-    func unload(_ model: String?) -> [String] {
+    /// job is using stays alive until the job ends. With idleAtLeast
+    /// (seconds) only models no job uses and unused that long are dropped:
+    /// the app's supervisor decides from engine.stats, and a job may have
+    /// taken the model since. MLX's buffer cache is cleared after, so the
+    /// weights' memory goes back to the system.
+    func unload(_ model: String?, idleAtLeast: Double? = nil) -> [String] {
         lock.lock()
-        let ids = resident.keys.filter { model == nil || model == "" || $0 == model }.sorted()
+        let now = Date()
+        let ids = resident.filter { id, r in
+            guard model == nil || model == "" || id == model else { return false }
+            guard let idle = idleAtLeast, idle > 0 else { return true }
+            return r.inUse == 0 && now.timeIntervalSince(r.lastUsed) >= idle
+        }.keys.sorted()
         for id in ids { resident[id] = nil }
         lock.unlock()
         if !ids.isEmpty { MLX.Memory.clearCache() }

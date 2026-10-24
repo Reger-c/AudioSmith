@@ -198,9 +198,14 @@ type LoadResult struct {
 	Capabilities []string `json:"capabilities,omitempty"` // catalog capability names
 }
 
-// UnloadParams frees one model, or all with Model "".
+// UnloadParams frees one model, or all with Model "". With IdleAtLeast
+// (seconds) only models no job uses and unused for at least that long
+// are dropped (the supervisor's idle and budget unloads: a model a job
+// took since its last engine.stats stays); 0 drops them whatever (a
+// model a job uses stays alive until the job ends).
 type UnloadParams struct {
-	Model string `json:"model,omitempty"`
+	Model       string  `json:"model,omitempty"`
+	IdleAtLeast float64 `json:"idleAtLeast,omitempty"`
 }
 
 // UnloadResult lists what was unloaded.

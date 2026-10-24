@@ -82,6 +82,7 @@ type worker struct {
 	ready    chan struct{} // closed when the current start succeeded or failed
 	restarts []time.Time   // automatic restarts within the window
 	timer    *time.Timer   // the pending automatic restart
+	holds    int           // Hold calls not released: its models stay
 }
 
 // proc is one engine process.

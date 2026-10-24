@@ -178,6 +178,15 @@ func (a *app) connectShell(logDir string) {
 	}
 	mygo.App.OnOpenURL(func(u string) { a.post(func() { a.openURL(u) }) })
 	oplog.Info("app.start", "version", mygo.App.Version(), "pid", os.Getpid())
+	logSettingsMigrations(a.lib.settings.Migrations())
+}
+
+// logSettingsMigrations logs the stored settings the start migrated
+// (settings.Open), e.g. #109's idle limit 0 → 30 minutes.
+func logSettingsMigrations(ms []settings.Migration) {
+	for _, m := range ms {
+		oplog.Info("settings.migrate", "field", m.Field, "from", m.From, "to", m.To)
+	}
 }
 
 // navigate goes to a router path ("/models"); it does nothing when that

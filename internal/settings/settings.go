@@ -20,7 +20,15 @@ import (
 
 // Version is the schema version Defaults writes. Bump it when a field's
 // meaning changes and migrate older documents in Migrate.
-const Version = 1
+//
+//   - 2 (#109): Models.AutoUnload defaults to 30 minutes; a version-1
+//     document's 0 was the old default (the UI could not tell it from a
+//     choice), so it becomes 30 once.
+const Version = 2
+
+// DefaultAutoUnload is the idle limit of a new install, in minutes
+// (Models.AutoUnload).
+const DefaultAutoUnload = 30
 
 // Settings is the whole document. Zero values must be valid (they are what
 // a field added in a newer version reads as in an older document, before
@@ -133,8 +141,10 @@ type Models struct {
 	Endpoints []string `json:"endpoints"` // mirrors to race; nil = default
 	// Proxy for downloads: "" = automatic (environment, then the macOS
 	// system proxy), "direct", or a proxy URL (hub.Options.Proxy).
-	Proxy      string `json:"proxy,omitempty"`
-	AutoUnload int    `json:"autoUnload"` // minutes idle before unloading a model; 0 = never
+	Proxy string `json:"proxy,omitempty"`
+	// AutoUnload is the minutes a model stays loaded unused before it is
+	// unloaded, on every engine worker (dictation's included); 0 = never.
+	AutoUnload int `json:"autoUnload"`
 	// HFCredentialRef names the ActNow family's shared Hugging Face token
 	// ("actnow:vendor.huggingface", family spec §8.4); "" = AudioSmith's
 	// own Keychain item only.
@@ -176,6 +186,7 @@ func Defaults() Settings {
 		Version:    Version,
 		Appearance: Appearance{Theme: "system", Scale: 1},
 		Studio:     Studio{Autoplay: true},
+		Models:     Models{AutoUnload: DefaultAutoUnload},
 	}
 	defaultsM2(&s)
 	defaultsAPI(&s) // M5: api.go
@@ -185,15 +196,35 @@ func Defaults() Settings {
 // Migrate upgrades a stored document to Version, filling fields added
 // since with their defaults. Unknown fields are dropped.
 func Migrate(data []byte) (Settings, error) {
+	s, _, err := migrate(data)
+	return s, err
+}
+
+// Migration is a change Migrate made to a stored value, for the
+// operations log: the setting's JSON path, the value before and after.
+type Migration struct {
+	Field    string
+	From, To any
+}
+
+// migrate is Migrate, also listing the stored values it changed.
+func migrate(data []byte) (Settings, []Migration, error) {
 	s := Defaults()
 	if len(data) == 0 {
-		return s, nil
+		return s, nil, nil
 	}
+	s.Version = 0 // what the document says
 	if err := json.Unmarshal(data, &s); err != nil {
-		return Defaults(), err
+		return Defaults(), nil, err
 	}
+	var done []Migration
 	migrateM7(data, &s)
-	// Version 1 is the first; later versions add their steps here.
+	// A document without a version is version 1 (the first).
+	if s.Version < 2 && s.Models.AutoUnload == 0 {
+		// Version 2: 0 ("never") was the default nobody chose.
+		s.Models.AutoUnload = DefaultAutoUnload
+		done = append(done, Migration{Field: "models.autoUnload", From: 0, To: DefaultAutoUnload})
+	}
 	if s.Appearance.Scale == 0 {
 		s.Appearance.Scale = 1
 	}
@@ -201,7 +232,7 @@ func Migrate(data []byte) (Settings, error) {
 		s.Appearance.Theme = "system"
 	}
 	s.Version = Version
-	return s, nil
+	return s, done, nil
 }
 
 // Changed is published after an update is saved. Topic "settings.changed".

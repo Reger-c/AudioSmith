@@ -37,6 +37,8 @@ type Store struct {
 	update sync.Mutex // serializes Update: read, save, swap
 	mu     sync.RWMutex
 	cur    Settings
+
+	migrated []Migration // what Open's migration changed (Migrations)
 }
 
 var _ Service = (*Store)(nil)
@@ -45,7 +47,9 @@ var _ Service = (*Store)(nil)
 // Store that saves there. publish (may be nil) receives Changed after each
 // saved update; main wires it to the core.Bus. A document that does not
 // decode is replaced by the defaults at the next update: Open returns the
-// Store with defaults and the error, for the log.
+// Store with defaults and the error, for the log. A migration that
+// changed stored values is saved at once, so it runs once: a later
+// choice (say "never" again) is the user's (Migrations lists it).
 func Open(ctx context.Context, docs Documents, publish func(Changed)) (*Store, error) {
 	s := &Store{docs: docs, publish: publish, cur: Defaults()}
 	data, ok, err := docs.Get(ctx, Key)
@@ -55,12 +59,28 @@ func Open(ctx context.Context, docs Documents, publish func(Changed)) (*Store, e
 	if !ok {
 		return s, nil
 	}
-	cur, err := Migrate(data)
+	cur, done, err := migrate(data)
 	s.cur = normalize(cur)
 	if err != nil {
 		return s, fmt.Errorf("settings: %w", err)
 	}
+	if len(done) > 0 {
+		out, err := json.MarshalIndent(s.cur, "", "  ")
+		if err == nil {
+			err = docs.Put(ctx, Key, out)
+		}
+		if err != nil {
+			return s, fmt.Errorf("settings: saving the migrated settings: %w", err)
+		}
+		s.migrated = done
+	}
 	return s, nil
+}
+
+// Migrations lists the stored values Open migrated (and saved); nil when
+// none. The app logs them.
+func (s *Store) Migrations() []Migration {
+	return slices.Clone(s.migrated)
 }
 
 // NewMemory returns a Store with the defaults that keeps them in memory:

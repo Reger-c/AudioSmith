@@ -40,7 +40,6 @@ type settingsForm struct {
 	proxy           string // custom proxy
 	cacheDir        string
 	memoryGB        float64
-	autoUnload      float64
 	defaultModel    string // label
 	autoplaySetting bool
 
@@ -279,7 +278,6 @@ func (a *app) loadSettingsForm() {
 	}
 	f.autoplaySetting = s.Studio.Autoplay
 	f.memoryGB = s.Engine.MemoryBudgetGB
-	f.autoUnload = float64(s.Models.AutoUnload)
 }
 
 // loadTokenInfo finds which HF token downloads use, in the background

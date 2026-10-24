@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/hehehai/AudioSmith/internal/engine/proto"
@@ -100,6 +101,29 @@ func (s *supervisor) SetIdleUnload(d time.Duration) {
 	go s.evict()
 }
 
+// Hold keeps the models of roles resident until release (Supervisor).
+func (s *supervisor) Hold(roles ...proto.Role) (release func()) {
+	s.mu.Lock()
+	for _, r := range roles {
+		if w := s.workers[r]; w != nil {
+			w.holds++
+		}
+	}
+	s.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			for _, r := range roles {
+				if w := s.workers[r]; w != nil {
+					w.holds = max(w.holds-1, 0)
+				}
+			}
+			s.mu.Unlock()
+		})
+	}
+}
+
 func sameModels(a, b []proto.LoadedModel) bool {
 	return slices.EqualFunc(a, b, func(x, y proto.LoadedModel) bool { return x.Model == y.Model })
 }
@@ -144,7 +168,8 @@ type candidate struct {
 }
 
 // resident sums the resident models of the ready workers (as their last
-// engine.stats said) and lists the idle ones, the longest idle first.
+// engine.stats said) and lists the idle ones, the longest idle first. A
+// held worker's models (Hold) are counted but never listed: they stay.
 func (s *supervisor) resident() (total int64, idle []candidate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -155,7 +180,7 @@ func (s *supervisor) resident() (total int64, idle []candidate) {
 		}
 		for _, m := range w.status.Stats.Models {
 			total += m.Bytes
-			if m.IdleSeconds > 0 {
+			if m.IdleSeconds > 0 && w.holds == 0 {
 				idle = append(idle, candidate{w.role, m})
 			}
 		}
@@ -197,15 +222,23 @@ func (s *supervisor) evict() {
 	}
 }
 
-// unload asks c's worker to drop its model (a model a job is using stays
-// alive until the job ends: nothing is interrupted) and takes it off the
-// worker's stats. It reports whether the engine did.
+// unload asks c's worker to drop its model if it is still idle: not in
+// use, and unused for at least as long as its last engine.stats said
+// (a job may have taken it since; the engine checks, under its lock).
+// The engine then clears MLX's buffer cache, so the memory goes back to
+// the system. A dropped model leaves the worker's stats. It reports
+// whether the engine dropped it.
 func (s *supervisor) unload(c candidate, why string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	_, err := s.Call(ctx, c.role, "", proto.MethodModelsUnload, proto.UnloadParams{Model: c.m.Model}, nil)
+	raw, err := s.Call(ctx, c.role, "", proto.MethodModelsUnload, proto.UnloadParams{Model: c.m.Model, IdleAtLeast: c.m.IdleSeconds}, nil)
 	cancel()
 	if err != nil {
 		s.cfg.Logf("engine %s: unloading %s: %v", c.role, c.m.Model, err)
+		return false
+	}
+	var res proto.UnloadResult
+	if json.Unmarshal(raw, &res) == nil && res.Unloaded != nil && !slices.Contains(res.Unloaded, c.m.Model) {
+		s.cfg.Logf("engine %s: kept %s: used again since", c.role, c.m.Model)
 		return false
 	}
 	s.cfg.Logf("engine %s: unloaded %s (idle %.0f s) %s", c.role, c.m.Model, c.m.IdleSeconds, why)

@@ -142,13 +142,38 @@ func (a *app) engineSettings(c *ui.Context) {
 				a.updateSettings(func(s *settings.Settings) { s.Engine.MemoryBudgetGB = gb })
 			}
 		})
-		settingRow(c, "unload", i18n.T("Unload idle models"), i18n.T("Minutes without use before a model leaves memory; 0 keeps it."), func() {
-			if numberInput(c.Key("unload-input"), &a.autoUnload, 0, 240, 5, numOpts{Label: i18n.T("Unload idle models"), Width: px(t, 120)}) {
-				m := int(a.autoUnload)
-				a.updateSettings(func(s *settings.Settings) { s.Models.AutoUnload = m })
+		settingRow(c, "unload", i18n.T("Unload idle models"), i18n.T("Frees memory; a model loads again when next used (the first dictation may take about a second longer)."), func() {
+			labels, mins := unloadChoices(a.prefs.Models.AutoUnload)
+			cur := labels[slices.Index(mins, a.prefs.Models.AutoUnload)]
+			if ui.Select(c.Key("unload-select"), &cur, labels).Label(i18n.T("Unload idle models")).Width(px(t, 160)).Changed() {
+				if i := slices.Index(labels, cur); i >= 0 {
+					m := mins[i]
+					a.updateSettings(func(s *settings.Settings) { s.Models.AutoUnload = m })
+				}
 			}
 		})
 	})
+}
+
+// unloadMinutes are the idle limits offered, in minutes (#109); 0 = never.
+var unloadMinutes = []int{5, 15, 30, 60, 0}
+
+// unloadChoices labels the idle limits offered, with cur among them (a
+// limit set before the choices, or through the API, keeps its own).
+func unloadChoices(cur int) (labels []string, mins []int) {
+	mins = slices.Clone(unloadMinutes)
+	if !slices.Contains(mins, cur) {
+		i := slices.IndexFunc(mins, func(m int) bool { return m == 0 || m > cur })
+		mins = slices.Insert(mins, i, cur)
+	}
+	for _, m := range mins {
+		if m == 0 {
+			labels = append(labels, i18n.T("Never"))
+			continue
+		}
+		labels = append(labels, i18n.T("After %d minutes", m))
+	}
+	return labels, mins
 }
 
 func (a *app) studioSettings(c *ui.Context) {

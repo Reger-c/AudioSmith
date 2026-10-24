@@ -400,6 +400,9 @@ public struct LoadResult: Codable, Sendable {
 
 public struct UnloadParams: Codable, Sendable {
     public var model: String?
+    /// Seconds: drop only models no job uses and unused for at least this
+    /// long (the app's idle and budget unloads); nil drops them whatever.
+    public var idleAtLeast: Double?
 }
 
 public struct UnloadResult: Codable, Sendable {

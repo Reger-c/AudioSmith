@@ -32,6 +32,13 @@ func (a *app) dictStart(target dictation.Target, hold bool) {
 	out := filepath.Join(a.lib.store.Dir(), "dictation", core.NewID(time.Now())+".wav")
 	s := &dictSession{gen: gen, target: target, phase: dictStarting, hold: hold, pressed: time.Now(), out: out, level: -120}
 	a.dict = s
+	// Its models stay loaded until it ends, however long the user speaks
+	// (#109): the recogniser, and the language model that cleans up.
+	if a.prefs.Dictation.Cleanup {
+		s.release = a.holdModels(proto.RoleListen, proto.RoleGPU)
+	} else {
+		s.release = a.holdModels(proto.RoleListen)
+	}
 	if a.dictSys.Microphone() == dictation.PermissionDenied || a.dictSys.Microphone() == dictation.PermissionRestricted {
 		a.dictFail(s, i18n.T("AudioSmith may not use the microphone. Allow it in System Settings → Privacy & Security → Microphone."))
 		a.dictShow()
@@ -70,11 +77,14 @@ func (a *app) dictStart(target dictation.Target, hold bool) {
 }
 
 // dictPreload loads the dictation model while the user speaks, so the
-// transcription does not wait for it (a models.load job, skipped when the
-// model is resident or not downloaded).
+// transcription does not wait for it (a models.load job on the listen
+// worker, skipped when the model is resident there or not downloaded).
+// After a long pause the idle limit has unloaded it (#109): the press
+// starts the load, and the transcription waits for it behind the load in
+// the listen lane; the recording is kept meanwhile.
 func (a *app) dictPreload() {
 	e := a.dictModel()
-	if e.Repo == "" || e.Repo == a.loadedModel || containsString(a.loaded, e.Repo) || a.engState != engineReady {
+	if e.Repo == "" || a.listenHas(e.Repo) || a.engState != engineReady {
 		return
 	}
 	if ready, known := a.modelOnDisk(e); known && !ready {
@@ -84,9 +94,38 @@ func (a *app) dictPreload() {
 	sched := a.lib.sched
 	a.async(func() {
 		sched.Submit(context.Background(), jobs.Spec{Kind: proto.KindFor(proto.RoleListen, proto.MethodModelsLoad), Lane: jobs.LaneListen, Priority: jobs.PriorityInteractive,
-			Params: params, Title: i18n.T("Load model"), Owner: "dictation:load"})
+			Params: params, Title: i18n.T("Load model"), Owner: dictLoadOwner})
 	})
 }
+
+// listenHas reports whether the listen worker has model resident, as its
+// last engine.stats said.
+func (a *app) listenHas(model string) bool {
+	for _, w := range a.workers {
+		if w.Role == proto.RoleListen && w.State == engine.WorkerReady && w.Stats != nil {
+			for _, m := range w.Stats.Models {
+				if m.Model == model {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// dictLoadPending reports whether dictation's model load (dictPreload)
+// is queued or runs.
+func (a *app) dictLoadPending() bool {
+	for _, j := range a.jobList {
+		if j.Owner == dictLoadOwner && (j.State == jobs.StateQueued || j.State == jobs.StateWaiting || j.State == jobs.StateRunning) {
+			return true
+		}
+	}
+	return false
+}
+
+// dictLoadOwner owns dictation's model loads.
+const dictLoadOwner = "dictation:load"
 
 func containsString(l []string, s string) bool {
 	for _, x := range l {
@@ -111,8 +150,15 @@ func (a *app) dictStop() {
 		return
 	}
 	s.phase, s.stage = dictTranscribing, i18n.T("Transcribing…")
+	s.loading = a.dictLoadPending()
 	a.dictCue(dictStopEvent)
 	a.dictRefresh()
+	a.dictAfter(dictLoadingAfter, func() {
+		if a.dict == s && s.phase == dictTranscribing {
+			s.slow = true
+			a.dictRefresh()
+		}
+	})
 	rec := s.rec
 	a.stopRecording(rec, func(res proto.CaptureResult, err error) {
 		if a.dict != s || s.phase != dictTranscribing {
@@ -183,12 +229,15 @@ func (a *app) dictJobUpdated(u jobs.Job) bool {
 	s.jobID = u.ID
 	switch u.State {
 	case jobs.StateWaiting, jobs.StateQueued:
+		// Behind dictation's own model load: the model is loading.
+		s.loading = a.dictLoadPending()
 		s.stage = i18n.T("Waiting for the engine…")
+		if s.loading {
+			s.stage = i18n.T("Transcribing…")
+		}
 	case jobs.StateRunning:
 		s.stage = i18n.T("Transcribing…")
-		if u.Progress.Stage == "loading" {
-			s.stage = i18n.T("Loading model…")
-		}
+		s.loading = u.Progress.Stage == "loading"
 	case jobs.StateSucceeded:
 		var res services.TranscribeResult
 		json.Unmarshal(u.Result, &res)
@@ -337,6 +386,10 @@ func (a *app) dictEnd(s *dictSession, phase dictPhase, note string) {
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
+	}
+	if s.release != nil {
+		s.release() // its models may be unloaded again after the idle limit
+		s.release = nil
 	}
 	s.phase, s.note = phase, note
 	a.dictEscape(false)

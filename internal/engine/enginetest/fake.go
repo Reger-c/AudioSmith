@@ -257,7 +257,10 @@ func (f *fakeEngine) handle(m proto.Message) {
 		m.DecodeParams(&p)
 		f.mu.Lock()
 		res := proto.UnloadResult{Unloaded: []string{}}
-		for model := range f.models {
+		for model, used := range f.models {
+			if p.IdleAtLeast > 0 && (len(f.running) > 0 || time.Since(used).Seconds() < p.IdleAtLeast) {
+				continue // in use, or used since (as the engine's ModelStore)
+			}
 			if p.Model == "" || p.Model == model {
 				delete(f.models, model)
 				res.Unloaded = append(res.Unloaded, model)

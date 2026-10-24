@@ -1689,7 +1689,7 @@
   "Microphone: %s": "麦克风：%s",
   "Minimap": "缩略图",
   "Minimize": "最小化",
-  "Minutes without use before a model leaves memory; 0 keeps it.": "模型闲置多少分钟后从内存中卸载；0 表示一直保留。",
+  "Frees memory; a model loads again when next used (the first dictation may take about a second longer).": "释放内存；下次使用时自动重新加载（听写的第一句可能慢约 1 秒）",
   "Mirror source delivery": "模仿原声语气",
   "Mirrors never receive your token; gated models always come from huggingface.co.": "镜像永远不会收到你的令牌；需授权的模型始终从 huggingface.co 下载。",
   "Mirrors only (hf-mirror.com, mirror.actnow.dev)": "仅镜像（hf-mirror.com、mirror.actnow.dev）",
@@ -3134,7 +3134,7 @@
   "Unknown type %s.": "未知类型 %s。",
   "Unknown voice “%s”: the default voice reads it.": "未知音色“%s”：将由默认音色朗读。",
   "Unload": "卸载",
-  "Unload idle models": "卸载闲置模型",
+  "Unload idle models": "空闲时卸载模型",
   "Unload the model": "卸载模型",
   "Unlock": "解锁",
   "Unlock this voice?": "解锁这个音色？",
@@ -3670,5 +3670,7 @@
   "Restored “%s”": "已恢复“%s”",
   "It is used in %[2]s%[3]s. After it is deleted, choose another voice there.": "它在%[2]s%[3]s中使用。删除后，那里需要重新选择音色。",
   "A voice it uses was deleted: choose another one.": "它用到的一个音色已被删除：请另选一个。",
-  "“%s” was the Studio's voice: choose another one there.": "“%s”是工作室正在用的音色：请在工作室另选一个。"
+  "“%s” was the Studio's voice: choose another one there.": "“%s”是工作室正在用的音色：请在工作室另选一个。",
+  "Never": "从不",
+  "After %d minutes": "%d 分钟后"
 }

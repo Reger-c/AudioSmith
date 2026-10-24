@@ -58,6 +58,14 @@ type fakeEngine struct {
 	callErr  map[string]*proto.Error // method → error to answer with
 	levels   []proto.LevelParams     // sent by capture.start (job id filled in)
 	captures map[string]chan struct{}
+	holds    []proto.Role // Hold calls not released
+}
+
+// held lists the roles held (fakeSup.Hold) now.
+func (f *fakeEngine) held() []proto.Role {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.holds)
 }
 
 func newFakeEngine() *fakeEngine {
@@ -244,6 +252,23 @@ func (s fakeSup) Stop()                         {}
 func (s fakeSup) SetMemoryBudget(n int64)       { s.f.budget = n }
 func (s fakeSup) SetIdleUnload(d time.Duration) { s.f.idle = d }
 func (s fakeSup) SetCacheDir(dir string)        { s.f.cacheDir = dir }
+
+func (s fakeSup) Hold(roles ...proto.Role) func() {
+	s.f.mu.Lock()
+	s.f.holds = append(s.f.holds, roles...)
+	s.f.mu.Unlock()
+	held := slices.Clone(roles)
+	return func() {
+		s.f.mu.Lock()
+		defer s.f.mu.Unlock()
+		for _, r := range held {
+			if i := slices.Index(s.f.holds, r); i >= 0 {
+				s.f.holds = slices.Delete(s.f.holds, i, i+1)
+			}
+		}
+		held = nil
+	}
+}
 
 func (s fakeSup) Restart(proto.Role) error {
 	s.f.restarts++

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Idle models leave memory
+- Models you have not used for 30 minutes are now unloaded, dictation's speech model included, so AudioSmith gives the memory back to your Mac. They load again by themselves when next used: the first dictation after a long pause may take about a second longer, and the pill says “Loading model…” while it waits. Nothing you record is lost.
+- Settings → Models & network → Memory: “Unload idle models” offers after 5, 15, 30 or 60 minutes, or Never. If you had never changed it, it moves from Never to 30 minutes once; a choice you made is kept.
+- A model is never unloaded while a job uses it, during a dictation or during a live call; the 30 minutes count from its last use.
+
 ## 0.4.0-beta.7 — 2026-10-24
 
 ### Dub timeline: zoom and pan

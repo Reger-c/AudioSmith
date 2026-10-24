@@ -67,6 +67,7 @@ type callsState struct {
 
 	callList   []store.CallRecord        // recent calls
 	callFull   map[string]*services.Call // calls read or followed, by id
+	callHolds  map[string]func()         // live calls' holds on the engine's models (model_holds.go)
 	callLoaded bool
 	callSel    string // the call shown
 	callTab    int    // narrow windows: 0 new call, 1 the call
@@ -299,6 +300,7 @@ func (a *app) selectCall(id string) {
 
 // callChanged follows a call's changes.
 func (a *app) callChanged(ev services.CallChanged) {
+	a.holdForCall(ev.ID, !ev.Deleted && ev.Call != nil && ev.Call.Live())
 	if ev.Deleted {
 		delete(a.callFull, ev.ID)
 		for i, r := range a.callList {

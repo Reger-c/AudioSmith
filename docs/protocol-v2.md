@@ -89,7 +89,7 @@ Unknown members must be ignored by both sides, so optional fields can be added w
    - Without a path, the engine resolves the repo in `hello.cacheDir` (it sets `HF_HUB_CACHE` to it). A repo counts as present when `<cacheDir>/mlx-audio/<owner>_<name>/config.json` exists or `<cacheDir>/models--<owner>--<name>/snapshots/` has a non-empty snapshot.
    - Without a path, a job loads the repo's snapshot only when there is exactly one (non-empty, not `<commit>.incomplete`); with several it fails with `model_path_required`. The cache is shared with other apps (the ActNow family spec §7.1), which may keep another commit of the same repo there, so the engine never picks one.
    - Any model job may also carry `auxPaths` (`{repo id: snapshot directory}`, Go `proto.ParamAuxPaths`): the snapshots of the model's auxiliary repos at their pinned commits (Kokoro's G2P repos, Chatterbox's S3 tokenizer, Whisper's tokenizer), which the executors fill with the path (`hub.AuxSnapshots`): the engine job kinds (`engine.RegisterExecutors`) and the app's own engine calls (renders' `tts.synthesize`, transcripts, dub and workflow steps: `engine.Executor` / `KindExecutor` with `ExecutorOptions.AuxPaths`). mlx-audio-swift finds those repos by id in its folders `mlx-audio/<owner>_<name>` (`…_tokenizer_only` for Whisper's tokenizer); the engine links them to these snapshots before the job (`AuxLinks.swift`), so another app's commit of the repo is never used. A directory that is not there fails the job with `model_not_downloaded` (`data.model` is the auxiliary repo).
-   - The engine keeps several models resident (`AUDIOSMITH_MAX_MODELS`, least recently used first out). The supervisor polls `engine.stats` while jobs run and after each, and unloads the least recently used idle models when all workers' models together exceed `engine.Config.MemoryBudget`.
+   - The engine keeps several models resident (`AUDIOSMITH_MAX_MODELS`, least recently used first out). The supervisor polls `engine.stats` while jobs run and after each, and unloads the least recently used idle models when all workers' models together exceed `engine.Config.MemoryBudget`. It also unloads, on every worker (the listen worker's dictation model included), models idle for longer than `engine.Config.IdleUnload` (setting `models.autoUnload`, 30 minutes by default since #109; 0 = never); `Supervisor.Hold(roles…)` keeps a worker's models while a dictation records or a call is live.
 
 ## 5. Requests
 
@@ -143,7 +143,7 @@ The result confirms or extends the catalogue entry: sample rate, the voices and 
 
 ### `models.unload` (control)
 
-Takes `{model}` to unload one model, or `{}` to unload all. Returns `{unloaded:[…]}`.
+Takes `{model}` to unload one model, or `{}` to unload all. Returns `{unloaded:[…]}`. With `idleAtLeast` (seconds) only models no job uses and unused for at least that long are dropped: the supervisor's idle and budget unloads send the idle time their last `engine.stats` showed, so a model a job took since stays (`unloaded` then lacks it). After dropping a model the engine clears MLX's buffer cache.
 
 ### `models.loaded` (control)
 

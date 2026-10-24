@@ -54,6 +54,7 @@ func (s *apiTestSup) Restart(proto.Role) error    { return nil }
 func (s *apiTestSup) SetMemoryBudget(int64)       {}
 func (s *apiTestSup) SetIdleUnload(time.Duration) {}
 func (s *apiTestSup) SetCacheDir(string)          {}
+func (s *apiTestSup) Hold(...proto.Role) func()   { return func() {} }
 func (s *apiTestSup) Stop()                       {}
 func (s *apiTestSup) Call(ctx context.Context, role proto.Role, id, method string, params any, notify func(proto.Message)) (json.RawMessage, error) {
 	if method == proto.MethodMediaProbe {

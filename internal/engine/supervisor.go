@@ -152,6 +152,12 @@ type Supervisor interface {
 	SetMemoryBudget(bytes int64)
 	// SetIdleUnload changes Config.IdleUnload at run time.
 	SetIdleUnload(d time.Duration)
+	// Hold keeps the models of roles resident until release is called
+	// (once; more calls do nothing): the supervisor unloads none of them,
+	// for the idle limit, the budget or the ActNow family, while
+	// something uses them between jobs (a dictation that records, a live
+	// call). Holds of a role add up.
+	Hold(roles ...proto.Role) (release func())
 	// SetCacheDir changes Config.CacheDir; it applies to the workers
 	// started (or restarted) after the call.
 	SetCacheDir(dir string)

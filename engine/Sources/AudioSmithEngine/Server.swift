@@ -219,7 +219,7 @@ final class Server: @unchecked Sendable {
                 out.result(id, LoadedResult(models: store?.loaded() ?? []))
             case Method.modelsUnload:
                 let p = try msg.decodeParams(UnloadParams.self)
-                out.result(id, UnloadResult(unloaded: store?.unload(p.model) ?? []))
+                out.result(id, UnloadResult(unloaded: store?.unload(p.model, idleAtLeast: p.idleAtLeast) ?? []))
             case Method.modelsLoad:
                 let p = try msg.decodeParams(LoadParams.self)
                 guard !p.model.isEmpty else { throw EngineError.badRequest("Missing model") }
