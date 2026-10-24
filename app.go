@@ -98,7 +98,23 @@ func (a *app) async(fn func()) {
 		fn()
 		return
 	}
-	go fn()
+	go func() {
+		defer recoverLog("background work") // quit.go: a panic is logged, not a crash
+		fn()
+	}()
+}
+
+// background runs fn on a goroutine; in tests (no window) it runs fn at
+// once, so views see its results without waiting.
+func (a *app) background(fn func()) {
+	if a.win == nil {
+		fn()
+		return
+	}
+	go func() {
+		defer recoverLog("background work") // quit.go: a panic is logged, not a crash
+		fn()
+	}()
 }
 
 // toast shows msg (already translated) as a toast.

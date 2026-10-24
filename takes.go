@@ -402,16 +402,6 @@ func (a *app) openTakes(lib *library) {
 	a.restoreStudioDraft()
 }
 
-// background runs fn on a goroutine; in tests (no window) it runs fn at
-// once, so views see its results without waiting.
-func (a *app) background(fn func()) {
-	if a.win == nil {
-		fn()
-		return
-	}
-	go fn()
-}
-
 // loadTakes reads the snapshot in the background.
 func (a *app) loadTakes() {
 	svc := a.lib.svc.Takes

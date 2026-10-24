@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -453,7 +454,19 @@ func (s *Sched) outbox() {
 			cancel()
 		}
 		if s.opts.Publish != nil {
-			s.opts.Publish(Updated{Job: it.job, Chunk: it.chunk})
+			s.publish(Updated{Job: it.job, Chunk: it.chunk})
 		}
 	}
+}
+
+// publish calls Publish; a subscriber that panics is logged, and the
+// outbox goes on with the next update (#101 L11: it stopped every job
+// update, and crashed the app).
+func (s *Sched) publish(u Updated) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.opts.Logf("jobs: publishing %s: panic: %v\n%s", u.Job.ID, r, debug.Stack())
+		}
+	}()
+	s.opts.Publish(u)
 }

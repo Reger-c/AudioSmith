@@ -1,6 +1,8 @@
 package core
 
 import (
+	"log"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -85,9 +87,20 @@ func (b *Bus) Publish(ev Event) {
 	b.mu.Unlock()
 	for _, s := range subs {
 		if !s.dead.Load() && s.matches(topic) {
-			s.fn(ev)
+			deliver(s.fn, ev)
 		}
 	}
+}
+
+// deliver calls one subscriber; a panic in it is logged, and the other
+// subscribers still get the event (#101 L11).
+func deliver(fn func(Event), ev Event) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("bus: a subscriber of %s panicked: %v\n%s", ev.Topic(), r, debug.Stack())
+		}
+	}()
+	fn(ev)
 }
 
 func (s *subscription) matches(topic string) bool {
