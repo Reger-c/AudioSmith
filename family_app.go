@@ -146,13 +146,6 @@ func (a *app) startFamily(dataDir string) {
 	}()
 }
 
-// closeFamily stops listening to the family directory (at quit).
-func (a *app) closeFamily() {
-	if a.fam != nil {
-		a.fam.Close()
-	}
-}
-
 // familyInputs are what AudioSmith's manifest says, from the settings.
 func familyInputs(s settings.Settings, version, dataDir string) family.Inputs {
 	return family.Inputs{

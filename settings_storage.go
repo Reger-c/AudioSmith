@@ -41,6 +41,7 @@ type storageState struct {
 	moveTo     string
 	moveErr    string
 	moveCancel context.CancelFunc
+	moveStage  string // moveChecking, moveCopying, moveRollingBack
 
 	resetAsk   string // "settings" | "everything": the confirmation shown
 	resetText  string // typed confirmation
@@ -223,35 +224,39 @@ func (a *app) clearCaches() {
 
 // startMove copies the data folder to dir/AudioSmith (or dir, when it is
 // called AudioSmith or empty), then restarts to finish (storage_move.go).
+// Checking the target, measuring the folder, stopping the Local API and
+// removing a failed copy all run in the background (#101 M8): a data
+// folder of many GB took seconds on the main thread. The dialog shows
+// what is being done meanwhile.
 func (a *app) startMove(dir string) {
-	from := a.dataDir()
-	to := dir
-	if filepath.Base(dir) != "AudioSmith" {
-		if ents, err := os.ReadDir(dir); err != nil || len(ents) > 0 {
-			to = filepath.Join(dir, "AudioSmith")
-		}
-	}
-	if filepath.Clean(to) == filepath.Clean(a.home()) && from != a.home() {
-		// Back to the default folder: it keeps location.json.
-	} else if err := checkMoveTarget(from, to); err != nil {
-		a.toast(i18n.T("Cannot move there: %v", err))
+	if a.moving {
 		return
 	}
 	if len(a.activeJobs()) > 0 {
 		a.toast(i18n.T("Wait for the jobs in progress to finish, or cancel them, before moving the data."))
 		return
 	}
-	need, _ := treeSize(context.Background(), from, nil)
-	if free := diskFree(filepath.Dir(to)); free > 0 && free < need+need/20+(256<<20) {
-		a.toast(i18n.T("Not enough space there: %s needed, %s free.", humanBytes(need), humanBytes(free)))
-		return
-	}
-	_, existed := os.Stat(to)
+	from, home := a.dataDir(), a.home()
+	stopAPI := a.apiStopper()
 	ctx, cancel := context.WithCancel(context.Background())
-	a.moving, a.moveTo, a.moveErr, a.moveDone, a.moveTotal, a.moveCancel = true, to, "", 0, need, cancel
-	a.stopAPI() // nothing new arrives while the files copy
-	home := a.home()
+	a.moving, a.moveTo, a.moveErr, a.moveDone, a.moveTotal, a.moveCancel = true, dir, "", 0, 0, cancel
+	a.moveStage = moveChecking
 	a.background(func() {
+		to, need, msg := planMove(ctx, from, dir, home)
+		if msg != "" || ctx.Err() != nil {
+			a.post(func() {
+				a.moving, a.moveCancel, a.moveStage = false, nil, ""
+				if msg != "" && ctx.Err() == nil {
+					a.toast(msg)
+				}
+			})
+			return
+		}
+		_, existed := os.Stat(to)
+		if stopAPI != nil {
+			stopAPI() // nothing new arrives while the files copy
+		}
+		a.post(func() { a.moveTo, a.moveTotal, a.moveStage = to, need, moveCopying })
 		skip := func(rel string) bool { return skipData(rel, true) }
 		err := copyTree(ctx, from, to, skip, func(done, total int64) {
 			a.post(func() { a.moveDone, a.moveTotal = done, total })
@@ -259,15 +264,18 @@ func (a *app) startMove(dir string) {
 		if err == nil {
 			err = writeJSON(filepath.Join(home, moveFile), pendingMove{From: from, To: to})
 		}
+		if err != nil {
+			a.post(func() { a.moveCancel, a.moveStage = nil, moveRollingBack })
+			if existed != nil && to != home { // created by the move: roll back
+				os.RemoveAll(to)
+			} else {
+				removeDataExcept(to)
+			}
+		}
 		a.post(func() {
-			a.moveCancel = nil
+			a.moveCancel, a.moveStage = nil, ""
 			if err != nil {
 				a.moving = false
-				if existed != nil && to != home { // created by the move: roll back
-					os.RemoveAll(to)
-				} else {
-					removeDataExcept(to)
-				}
 				if ctx.Err() == nil {
 					a.moveErr = i18n.T("The data was not moved: %v", err)
 				}
@@ -277,6 +285,35 @@ func (a *app) startMove(dir string) {
 			appRelaunch() // the start finishes the move (resolveDataDir)
 		})
 	})
+}
+
+// What the move dialog says it does besides copying.
+const (
+	moveChecking    = "checking"
+	moveCopying     = "copying"
+	moveRollingBack = "rolling back"
+)
+
+// planMove picks the folder a move to dir copies into and checks it: the
+// target, and the room the data needs there. It returns the target, the
+// size to copy, or why not (translated). Any goroutine.
+func planMove(ctx context.Context, from, dir, home string) (to string, need int64, msg string) {
+	to = dir
+	if filepath.Base(dir) != "AudioSmith" {
+		if ents, err := os.ReadDir(dir); err != nil || len(ents) > 0 {
+			to = filepath.Join(dir, "AudioSmith")
+		}
+	}
+	if filepath.Clean(to) == filepath.Clean(home) && from != home {
+		// Back to the default folder: it keeps location.json.
+	} else if err := checkMoveTarget(from, to); err != nil {
+		return "", 0, i18n.T("Cannot move there: %v", err)
+	}
+	need, _ = treeSize(ctx, from, nil)
+	if free := diskFree(filepath.Dir(to)); free > 0 && free < need+need/20+(256<<20) {
+		return "", 0, i18n.T("Not enough space there: %s needed, %s free.", humanBytes(need), humanBytes(free))
+	}
+	return to, need, ""
 }
 
 // restartAPI starts the Local API again after a move that did not happen.
@@ -366,9 +403,12 @@ func (a *app) eraseAll() {
 	cache, home, logs := modelCache(a.prefs), a.home(), a.logDir
 	accounts := a.keychainAccounts()
 	a.resetAsk = ""
-	a.stopAPI()
+	stopAPI := a.apiStopper()
 	fam := a.hubClient().Options().Family
 	a.background(func() {
+		if stopAPI != nil {
+			stopAPI()
+		}
 		if models {
 			// Not what other ActNow apps may use (spec §7.6 step 3).
 			freed, kept, err := hub.RemoveLeftovers(context.Background(), cache, catalogRepos(), fam)
@@ -582,8 +622,19 @@ func (a *app) storageDialogs(c *ui.Context) {
 			if a.moveTotal > 0 {
 				frac = float64(a.moveDone) / float64(a.moveTotal)
 			}
-			ui.Progress(c, frac)
-			ui.Text(c, fmt.Sprintf("%s / %s", humanBytes(a.moveDone), humanBytes(a.moveTotal))).FontSize(px(t, 12)).TextColor(t.TextMuted)
+			if a.moveStage == moveCopying || a.moveStage == "" {
+				ui.Progress(c, frac)
+			} else {
+				ui.Progress(c, -1)
+			}
+			status := fmt.Sprintf("%s / %s", humanBytes(a.moveDone), humanBytes(a.moveTotal))
+			switch a.moveStage {
+			case moveChecking:
+				status = i18n.T("Measuring the data folder…")
+			case moveRollingBack:
+				status = i18n.T("Removing the partial copy…")
+			}
+			ui.Text(c, status).FontSize(px(t, 12)).TextColor(t.TextMuted)
 			ui.Row(c).Justify(ui.End).Children(func() {
 				if ui.Button(c.Key("st-move-cancel"), i18n.T("Cancel")).Disabled(a.moveCancel == nil).Clicked() && a.moveCancel != nil {
 					a.moveCancel()

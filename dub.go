@@ -63,7 +63,7 @@ type dubState struct {
 	dubHist   dub.History
 	dubJobs   map[string]jobs.Job // unfinished jobs of the open project, by id
 	dubSaving int                 // saves in flight; the saved copy is adopted at 0
-	dubSaveQ  chan func()         // saves, in order (nil in tests: they run at once)
+	dubSaveQ  *saveQueue          // saves, in order (nil in tests: they run at once); quit.go
 	dubStale  *dub.Project        // a saved copy that arrived while saves were in flight
 
 	dubStep         int    // the step shown (dubSteps)
@@ -171,13 +171,7 @@ func (a *app) openDubs(lib *library) {
 		},
 	})
 	if a.win != nil {
-		q := make(chan func(), 256)
-		a.dubSaveQ = q
-		go func() {
-			for fn := range q {
-				fn()
-			}
-		}()
+		a.dubSaveQ = newSaveQueue()
 	}
 	core.On(lib.bus, func(ev services.DubChanged) { a.post(func() { a.dubChanged(ev) }) })
 	core.On(lib.bus, func(u jobs.Updated) {
@@ -428,7 +422,7 @@ func (a *app) dubSave(fn func(*dub.Project)) {
 		work()
 		return
 	}
-	a.dubSaveQ <- work
+	a.dubSaveQ.push(work)
 }
 
 // dubSettings changes the open project's settings.

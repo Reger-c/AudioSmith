@@ -107,16 +107,15 @@ func (a *app) toast(msg string) {
 }
 
 // quit releases what the app holds; it runs in App.OnQuit.
+// The main thread's own parts go first; quitSteps (quit.go) then closes
+// the Local API, calls, the family, the engines (unless OnWillQuit did),
+// the notifications and the logs, bounded, off the main thread.
 func (a *app) quit() {
 	a.pl.Stop()
-	a.stopAPI()        // M5: api.go (thread #20)
 	a.closeDictation() // M2: dictation.go
 	a.closeDubs()      // M4: dub.go
-	a.closeCalls()     // M6b: calls.go (thread #23)
-	a.closeFamily()    // family_app.go (thread #72)
 	a.closeUpdates()   // updates.go
 	// family_coord.go: OnWillQuit did it already; for quits without it.
 	a.quitFamilyRuntime()
-	a.eng.Stop()
-	a.closeShell()
+	a.quitSteps()
 }

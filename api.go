@@ -150,15 +150,29 @@ func (a *app) applyAPI() {
 	})
 }
 
-// stopAPI closes the servers and removes the port file; it runs on quit.
+// stopAPI closes the servers and removes the port file, waiting up to
+// 2 s for the requests in progress (tests; the app uses apiStopper off
+// the main thread).
 func (a *app) stopAPI() {
-	if a.apiSrv == nil {
-		return
+	if stop := a.apiStopper(); stop != nil {
+		stop()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	a.apiSrv.Close(ctx)
-	os.Remove(a.apiPortFile())
+}
+
+// apiStopper returns what stopAPI does, to run on any goroutine; nil
+// when no server was made. Main thread.
+func (a *app) apiStopper() func() {
+	srv := a.apiSrv
+	if srv == nil {
+		return nil
+	}
+	portFile := a.apiPortFile()
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		srv.Close(ctx)
+		os.Remove(portFile)
+	}
 }
 
 // apiBaseURL is the loopback URL clients use (the configured port, even

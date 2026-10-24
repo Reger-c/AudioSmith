@@ -303,11 +303,16 @@ func (l *library) modelReady(ctx context.Context, repo string) error {
 }
 
 // close writes pending drafts, waits for takes being saved and closes the store.
+// Bounded (#101 L6): it runs on the main thread at quit.
 func (l *library) close() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), quitStepLimit)
 	defer cancel()
-	if err := l.svc.Close(ctx); err != nil {
-		log.Printf("library: %v", err)
+	if !waitFor(func() {
+		if err := l.svc.Close(ctx); err != nil {
+			log.Printf("library: %v", err)
+		}
+	}, quitStepLimit+time.Second) {
+		log.Printf("library: closing the services took over %s; going on", quitStepLimit)
 	}
 	if err := l.store.Close(); err != nil {
 		log.Printf("library: %v", err)

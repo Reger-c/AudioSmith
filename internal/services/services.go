@@ -14,6 +14,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -150,7 +151,26 @@ func New(cfg Config) *Services {
 
 // Close writes pending drafts, stops listening to the bus and waits for
 // takes being saved. The store stays open: its owner closes it after.
+//
+// Drafts go first: they are the user's edits. The waits for renders and
+// takes in progress end with ctx (#101 L6); what still runs then is left.
 func (s *Services) Close(ctx context.Context) error {
-	s.Longform.Close()
-	return errors.Join(s.drafts.Close(ctx), s.takes.Close())
+	derr := s.drafts.Close(ctx)
+	var errs []error
+	for _, c := range []struct {
+		what  string
+		close func()
+	}{{"longform", s.Longform.Close}, {"takes", func() { s.takes.Close() }}} {
+		done := make(chan struct{})
+		go func() {
+			c.close()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			errs = append(errs, fmt.Errorf("closing %s: %w", c.what, ctx.Err()))
+		}
+	}
+	return errors.Join(append([]error{derr}, errs...)...)
 }

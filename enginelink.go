@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -77,20 +78,28 @@ type engineHost struct {
 func (h *engineHost) Path() string { return h.bin }
 
 // Stop interrupts the running jobs (they re-run or wait for Retry at the
-// next start) and shuts the engines down.
+// next start) and shuts the engines down, side by side: an engine that
+// exits ends the engine jobs too. It runs on the main thread at quit, so
+// it waits at most quitStopLimit (quit.go): the scheduler bounds its own
+// wait for executors that ignore their cancel, the supervisor kills the
+// engines that do not exit.
 func (h *engineHost) Stop() {
 	h.stop.Do(func() {
-		done := make(chan struct{})
-		go func() {
-			if h.sched != nil {
-				h.sched.Close()
-			}
-			close(done)
-		}()
-		if h.sup != nil {
-			h.sup.Stop()
+		var steps []func()
+		if h.sched != nil {
+			sched := h.sched
+			steps = append(steps, func() {
+				if err := sched.Close(); err != nil {
+					log.Printf("jobs: %v", err)
+				}
+			})
 		}
-		<-done
+		if h.sup != nil {
+			steps = append(steps, h.sup.Stop)
+		}
+		if !runBounded(quitStopLimit, steps...) {
+			log.Printf("engine: stopping took over %s; going on", quitStopLimit)
+		}
 	})
 }
 
@@ -191,7 +200,8 @@ func (a *app) connectEngine(h *engineHost) {
 		// scheduler records the interrupted jobs in.
 		// The family's runtime file goes first: the engines' last updates
 		// are not written after it (family_coord.go).
-		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.quitFamilyRuntime(); h.Stop() })
+		// Pending edits are written before (quit.go).
+		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.willQuit(h) })
 	}
 	h.sup = withMediaTools(h.sup, a.mediaTool) // M7a: ffmpeg behind the media methods (ffmpeg_engine.go)
 	engine.RegisterExecutors(h.sched, h.sup, engine.ExecutorOptions{

@@ -173,14 +173,6 @@ func (a *app) connectShell(logDir string) {
 	mygo.App.OnOpenURL(func(u string) { a.post(func() { a.openURL(u) }) })
 }
 
-// closeShell waits for the notifications to be saved and flushes the
-// logs; it runs on quit. Downloads are jobs: the scheduler stops them,
-// and they resume at the next start.
-func (a *app) closeShell() {
-	a.notes.Close()
-	a.logs.Close()
-}
-
 // navigate goes to a router path ("/models"); it does nothing when that
 // page shows already. "/settings/general" opens the settings dialog at
 // that section, over the page, and "/settings" at the section shown last;

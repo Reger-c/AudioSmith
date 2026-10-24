@@ -1019,6 +1019,8 @@
   "Download size": "下载大小",
   "Download source and proxy": "下载源与代理",
   "Download the latest version from actnow.dev": "从 actnow.dev 下载最新版本",
+  "Measuring the data folder…": "正在统计数据文件夹大小…",
+  "Removing the partial copy…": "正在删除未完成的副本…",
   "This copy was built on this Mac and can't update itself, so the options below are off. Copies downloaded from actnow.dev update themselves.": "这是在本机构建的副本，不能自动更新，所以下面的选项不可用。从 actnow.dev 下载的版本会自动更新。",
   "Download the model first (Models).": "请先下载模型（模型页）。",
   "Download the watermark model in Models first.": "请先在“模型”中下载水印模型。",
