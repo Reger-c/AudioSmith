@@ -148,7 +148,6 @@ func TestDubRunRecordedBeforeJobs(t *testing.T) {
 func TestDubDeleteWaitsForStage(t *testing.T) {
 	e := newDubEnv(t, 3)
 	p := e.create(t, nil)
-	var stopped atomic.Bool
 	release := make(chan struct{})
 	ignore := atomic.Bool{}
 	e.dubs.cfg.Translator = func(ctx context.Context, _ dub.Settings) (translate.Translator, error) {
@@ -158,7 +157,6 @@ func TestDubDeleteWaitsForStage(t *testing.T) {
 			<-ctx.Done()
 			time.Sleep(150 * time.Millisecond) // winding down
 		}
-		stopped.Store(true)
 		return nil, context.Canceled
 	}
 	running := func(ids map[string]string) {
@@ -192,7 +190,6 @@ func TestDubDeleteWaitsForStage(t *testing.T) {
 
 	// A stage that stops: Delete returns after it did.
 	ignore.Store(false)
-	stopped.Store(false)
 	e.dubs.deleteWait = 0
 	ids, err = e.dubs.Run(ctx, p.ID, RunRequest{Through: dub.StageMix})
 	if err != nil {
@@ -202,7 +199,9 @@ func TestDubDeleteWaitsForStage(t *testing.T) {
 	if err := e.dubs.Delete(ctx, p.ID); err != nil {
 		t.Fatal(err)
 	}
-	if !stopped.Load() {
+	// (The stage may end before it asks for the translator: its job's
+	// end is what Delete waits for.)
+	if j, _ := e.sched.Get(ctx, ids["translate:es"]); j.State == jobs.StateRunning {
 		t.Error("deleted while the stage still ran")
 	}
 	if _, err := os.Stat(e.dubs.Dir(p.ID)); !os.IsNotExist(err) {
