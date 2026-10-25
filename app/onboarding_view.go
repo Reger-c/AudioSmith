@@ -287,7 +287,9 @@ func (a *app) obModels(c *ui.Context) {
 	if a.sys != nil {
 		rec = recommendPack(a.sys.MemoryGB())
 	}
-	if a.obPack == "" && a.prefs.Setup.Pack == "" {
+	// The recommended pack is the default only until the user chooses:
+	// "Download models later" is an empty pack, which must stick.
+	if !a.obPicked && a.prefs.Setup.Pack == "" {
 		a.obPack = rec
 	}
 	if a.obSurveyFor != a.obPack {
@@ -332,7 +334,7 @@ func (a *app) obModels(c *ui.Context) {
 			})
 		})
 		if card.Clicked() {
-			a.obPack = p.id
+			a.obPack, a.obPicked = p.id, true
 		}
 	}
 	none := ui.ButtonBase(c.Key("ob-pack-none")).Padding(px(t, sp2), px(t, sp4)).Radius(px(t, radiusCard)).Label(i18n.T("Download models later")).
@@ -350,7 +352,7 @@ func (a *app) obModels(c *ui.Context) {
 		}
 	})
 	if none.Clicked() {
-		a.obPack = ""
+		a.obPack, a.obPicked = "", true
 	}
 	if a.obPack != "" {
 		_, missing, _ := a.packSizes(a.obPack)

@@ -45,6 +45,7 @@
 - Errors that were dropped silently in background work (cancelling jobs, export records, notifications, files the app writes or removes…) are logged.
 
 ### Fixes
+- Setup: "Download models later" did nothing (issue #1): the wizard put the recommended pack back on the next frame, so the wizard went on with it. The choice now sticks.
 - Studio and Audiobook script editors: the last character of a line was cut in half at the right edge on the Mac (a Chinese comma or full stop measured half as wide on its own as within its line). Lines now wrap where they are drawn.
 - Importing a video from a link shows its real progress (percent, size, time left) on the page, in the footer and on the sidebar card, with the video's title; Stop on the card and Cancel in the footer really stop it (yt-dlp's helper process kept downloading before), and activity cards no longer show an empty bar.
 - A copy built on the Mac says, in Settings → About → Software updates, why it cannot update itself, with a link to the download page.

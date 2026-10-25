@@ -27,6 +27,7 @@ type onboardingState struct {
 	obOpen    bool
 	obStep    int    // 0 this Mac, 1 models, 2 privacy, 3 dictation
 	obPack    string // the pack chosen; "" = none
+	obPicked  bool   // the user chose a pack or none: the recommended one is no longer the default
 	obFree    int64  // free space on the model folder's disk
 	obChecked bool   // the system check ran
 	obKeep    int    // history: 0 every take, 1 the last 1000, 2 the last 200
@@ -139,7 +140,7 @@ func (a *app) packSizes(id string) (total, missing int64, names []string) {
 
 // openOnboarding opens the wizard at its first step.
 func (a *app) openOnboarding() {
-	a.obOpen, a.obStep, a.obChecked = true, 0, false
+	a.obOpen, a.obStep, a.obChecked, a.obPicked = true, 0, false, false
 	a.loadSysInfo()
 	a.refreshModels()
 	if !a.ffScanned {
@@ -147,7 +148,7 @@ func (a *app) openOnboarding() {
 		a.scanFFmpeg()
 	}
 	if a.prefs.Setup.Pack != "" {
-		a.obPack = a.prefs.Setup.Pack
+		a.obPack, a.obPicked = a.prefs.Setup.Pack, true
 	}
 	switch n := a.prefs.Studio.KeepTakes; {
 	case n == 0:

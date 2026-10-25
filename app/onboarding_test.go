@@ -207,3 +207,39 @@ func TestPacksFollowTheLanguage(t *testing.T) {
 		}
 	}
 }
+
+// TestOnboardingLaterStays: "Download models later" is an empty pack; a
+// frame must not put the recommended pack back (issue #1: the choice
+// looked dead, and the wizard went on with the recommended pack).
+func TestOnboardingLaterStays(t *testing.T) {
+	stubMachine(t, 16, true)
+	a, eng, _ := newTestApp(t)
+	delete(eng.executors, hub.KindDownload)
+	tt := ui.NewTester(a.view, 1100, 800)
+	a.openOnboarding()
+	tt.Frame()
+	tt.Frame()
+	if err := tt.Click("Continue"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.obPack != "balanced" {
+		t.Fatalf("the recommended pack is the default: %q", a.obPack)
+	}
+	if err := tt.Click("Download models later"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		tt.Frame()
+	}
+	if a.obPack != "" {
+		t.Fatalf("after 'Download models later' the pack is %q, not none", a.obPack)
+	}
+	if err := tt.Click("Quality"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.obPack != "quality" {
+		t.Fatalf("choosing a pack after none: %q", a.obPack)
+	}
+}
